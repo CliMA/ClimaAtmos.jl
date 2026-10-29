@@ -386,6 +386,12 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     status quo, 0: Approach A2 scalar displacement attenuation, 1: Approach B
     upper-tail truncation, 2: Approach A2+B, 3: Approach A2′ full vertical
     displacement attenuation) [-].
+  - `cloud_fraction_closure_mode`: Cloud fraction closure formulation
+    (0: status-quo hybrid closure C = q_c / (α σ_S), 1: Φ-Gaussian tail with
+    effective saturation deficit C = normal_cdf(z_c), 2: Φ-hybrid bounded with
+    exact truncated normal CDF and in-cloud condensate lower bound) [-].
+  - `cloud_fraction_qc_in_min`: Minimum physical in-cloud condensate density
+    threshold q_c,in,min used in Φ-type cloud fraction closures [kg/kg].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -424,6 +430,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_closure_mode::FT
     cloud_fraction_use_delta_sub_split::FT
     sgs_quadrature_nodes::FT
+    cloud_fraction_closure_mode::FT
+    cloud_fraction_qc_in_min::FT
 end
 
 """

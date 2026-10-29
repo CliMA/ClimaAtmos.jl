@@ -1259,6 +1259,34 @@ updrafts is excluded from the environment average. `c = c_hi = Inf` returns
 end
 
 """
+    truncated_displacement_cloud_fraction(mu_S, sigma_S, c, c_hi = c)
+
+Truncated-displacement cloud fraction `P(S > 0) = I₀ / Z` on `[-c, c_hi]`, matching
+`truncated_displacement_condensate`. When `c` and `c_hi` are infinite, returns
+`normal_cdf(mu_S / max(sigma_S, ϵ_numerics(FT)))`.
+"""
+@inline function truncated_displacement_cloud_fraction(mu_S, sigma_S, c, c_hi = c)
+    FT = typeof(mu_S)
+    c_hi_eff = min(FT(c), FT(c_hi))
+    if !(isfinite(c) | isfinite(c_hi_eff))
+        return normal_cdf(FT(mu_S) / max(FT(sigma_S), ϵ_numerics(FT)))
+    end
+    c_finite = ifelse(isfinite(c), c, one(c))
+    c_hi_finite = ifelse(isfinite(c_hi_eff), c_hi_eff, FT(c_finite))
+    Φ_neg_c = ifelse(isfinite(c), FT(normal_cdf(-c_finite)), zero(FT))
+    Z = ifelse(
+        c_hi_eff == FT(c),
+        FT(one(c) - 2 * normal_cdf(-c_finite)),
+        normal_cdf(c_hi_finite) - Φ_neg_c,
+    )
+    σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
+    a_lo = ifelse(isfinite(c), -FT(c_finite), FT(-Inf))
+    a = clamp(-mu_S / σ, a_lo, c_hi_finite)
+    I₀ = normal_cdf(-a) - normal_cdf(-c_hi_finite)
+    return clamp(I₀ / max(Z, ϵ_numerics(FT)), zero(FT), one(FT))
+end
+
+"""
     equilibrium_condensate(mu_S, sigma_S, lin, curv, c)
 
 Equilibrium condensate the SGS closures relax toward: the truncated-displacement
@@ -1655,38 +1683,44 @@ end
 
 Augmented saturation-excess standard deviation
 
-    σ_aug = max(sqrt((α · σ_S)² + σ_abs²), ϵ_numerics(FT))
+    σ_aug = max(sqrt((α · σ_S)² + (ε_rel · δ_sub)² + σ_abs²), ϵ_numerics(FT))
 
 for the non-equilibrium condensate cloud-fraction closure, floored at
 `ϵ_numerics(FT)`.
 """
 @inline function _sgs_augmented_sigma(mu_S, sigma_S, α, floor)
     FT = typeof(mu_S)
-    (; σ_abs) = floor
+    (; σ_abs, ε_rel) = floor
     σ_var = FT(α) * FT(sigma_S)
-    return max(sqrt(σ_var^2 + FT(σ_abs)^2), ϵ_numerics(FT))
+    δ_sub = max(zero(FT), -FT(mu_S))
+    σ_floor_sq = (FT(ε_rel) * δ_sub)^2 + FT(σ_abs)^2
+    return max(sqrt(σ_var^2 + σ_floor_sq), ϵ_numerics(FT))
 end
 
 """
-    _compute_cloud_fraction(
-        q_c, mu_S, sigma_S, α, floor,
-        lin = zero(mu_S), curv = zero(mu_S), c = oftype(mu_S, 3),
+    _compute_cloud_fraction_from_q_c_eq(
+        q_c, mu_S, sigma_S, α, floor, q_c_eq, c = Inf32, c_hi = c,
     )
 
-Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
-relation `C = z·Φ(z) + φ(z)` (`_compute_z`) for the normalized condensate
+Diagnose environmental cloud fraction `CF` from prognostic condensate `q_c`,
+saturation excess `mu_S`, variance `sigma_S`, fidelity `α`, floor parameters `floor`,
+and equilibrium condensate `q_c_eq`.
 
-    C = min(q_c, q_c_eq) / σ_aug + max(0, q_c − q_c_eq) / √(σ_aug² + δ_sub²),
+Controlled by `floor.closure_mode`:
 
-with augmented width `σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)`,
-subsaturation deficit `δ_sub = max(0, −μ_S)`, and equilibrium condensate
-`q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c)`.
+  - `0`: Standard hybrid closure using normalized condensate inversion with
+    augmented variance `σ_aug` (`_sgs_augmented_sigma`).
+  - `1`: Φ-type Gaussian tail closure with effective saturation deficit. Evaluates
+    `cf_raw = normal_cdf(_compute_z(C_norm))` from α-free environmental PDF width
+    `σ_pdf = max(sqrt(σ_S² + σ_abs²), ϵ_numerics)` and non-equilibrium width
+    `σ_neq = ifelse(use_delta_sub_split, √(σ_pdf² + δ_sub²), σ_pdf)`, with
+    in-cloud condensate lower bound `cf = cf_raw · q_c / (q_c + cf_raw · q_in_min)`.
+  - `2`: Φ-type closure with exact truncated normal CDF `P(S > 0)` and in-cloud
+    condensate lower bound.
 
-Equilibrium condensate `min(q_c, q_c_eq)` supported by the subdomain's own
-saturation-excess fluctuations is normalized by `σ_aug`, whereas detrained or
-residual non-equilibrium condensate `max(0, q_c − q_c_eq)` in subsaturated air
-is normalized by `√(σ_aug² + δ_sub²)` (or `σ_aug` when use_delta_sub_split is false).
-Where `q_c ≤ q_c_eq` or `μ_S ≥ 0`, `C` reduces to `q_c / σ_aug`.
+`ᶜcloud_fraction` represents the diagnostic radiative and overlap cloud cover
+(satisfying `q_c / CF = q_c / cf_raw + q_in_min ≥ q_in_min`), whereas 1M microphysics
+quadrature conserves `q_c` independently through `λ_lagrange`.
 """
 @inline function _compute_cloud_fraction_from_q_c_eq(
     q_c::Real,
@@ -1695,14 +1729,67 @@ Where `q_c ≤ q_c_eq` or `μ_S ≥ 0`, `C` reduces to `q_c / σ_aug`.
     α::Real,
     floor,
     q_c_eq::Real,
+    c::Real = oftype(mu_S, Inf32),
+    c_hi::Real = c,
 )
     FT = typeof(mu_S)
-    σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)
-    q_c_eq_part = min(FT(q_c), FT(q_c_eq))
-    q_c_neq_part = max(zero(FT), FT(q_c) - FT(q_c_eq))
-    δ_sub = max(zero(FT), -FT(mu_S))
-    σ_neq = ifelse(floor.use_delta_sub_split, sqrt(σ_aug^2 + δ_sub^2), σ_aug)
-    return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
+    q_c_FT = FT(q_c)
+    if floor.closure_mode == 1
+        # Mode 1: Φ-Gaussian tail with effective saturation deficit (α-free)
+        q_c_FT <= zero(FT) && return zero(FT)
+        σ_pdf = max(sqrt(FT(sigma_S)^2 + FT(floor.σ_abs)^2), ϵ_numerics(FT))
+        δ_sub = max(zero(FT), -FT(mu_S))
+        σ_neq = ifelse(floor.use_delta_sub_split, sqrt(σ_pdf^2 + δ_sub^2), σ_pdf)
+        q_c_eq_FT = FT(q_c_eq)
+        q_c_neq = max(zero(FT), q_c_FT - q_c_eq_FT)
+        C_norm = q_c_eq_FT / σ_pdf + q_c_neq / σ_neq
+        z_c = _compute_z(C_norm)
+        cf_raw = normal_cdf(z_c)
+        q_in_min = max(zero(FT), FT(floor.qc_in_min))
+        denom = q_c_FT + q_in_min * cf_raw
+        cf = ifelse(
+            q_c_FT > zero(FT) && denom > zero(FT),
+            clamp(cf_raw * q_c_FT / max(denom, floatmin(FT)), zero(FT), one(FT)),
+            zero(FT),
+        )
+        return cf
+    elseif floor.closure_mode == 2
+        # Mode 2: Φ-type closure with exact truncated normal CDF P(S > 0) (α-free)
+        q_c_FT <= zero(FT) && return zero(FT)
+        σ_pdf = max(sqrt(FT(sigma_S)^2 + FT(floor.σ_abs)^2), ϵ_numerics(FT))
+        δ_sub = max(zero(FT), -FT(mu_S))
+        σ_neq = ifelse(floor.use_delta_sub_split, sqrt(σ_pdf^2 + δ_sub^2), σ_pdf)
+        q_c_eq_FT = FT(q_c_eq)
+        q_c_neq = max(zero(FT), q_c_FT - q_c_eq_FT)
+        cf_pdf = truncated_displacement_cloud_fraction(FT(mu_S), σ_pdf, c, c_hi)
+        cf_raw = if q_c_neq > zero(FT)
+            z_pdf = normal_cdf_inv(clamp(cf_pdf, ϵ_numerics(FT), one(FT) - eps(FT)))
+            G_pdf = ifelse(
+                cf_pdf > ϵ_numerics(FT),
+                max(zero(FT), z_pdf * cf_pdf + exp(-z_pdf^2 / 2) / sqrt(FT(2) * FT(π))),
+                zero(FT),
+            )
+            max(cf_pdf, normal_cdf(_compute_z(G_pdf + q_c_neq / σ_neq)))
+        else
+            cf_pdf
+        end
+        q_in_min = max(zero(FT), FT(floor.qc_in_min))
+        denom = q_c_FT + q_in_min * cf_raw
+        cf = ifelse(
+            q_c_FT > zero(FT) && denom > zero(FT),
+            clamp(cf_raw * q_c_FT / max(denom, floatmin(FT)), zero(FT), one(FT)),
+            zero(FT),
+        )
+        return cf
+    else
+        # Mode 0: Status-quo hybrid closure with augmented sigma
+        σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)
+        q_c_eq_part = min(q_c_FT, FT(q_c_eq))
+        q_c_neq_part = max(zero(FT), q_c_FT - FT(q_c_eq))
+        δ_sub = max(zero(FT), -FT(mu_S))
+        σ_neq = ifelse(floor.use_delta_sub_split, sqrt(σ_aug^2 + δ_sub^2), σ_aug)
+        return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
+    end
 end
 
 @inline function _compute_cloud_fraction(
@@ -1732,6 +1819,8 @@ end
         α,
         floor,
         q_c_eq,
+        c,
+        c_hi,
     )
 end
 
@@ -1777,12 +1866,47 @@ end
 """
     CloudFractionFloorParams{FT}
 
-Augmented-`σ` floor parameters for `_sgs_augmented_sigma` and
-`_compute_cloud_fraction`, bundled into one isbits broadcast scalar.
+Augmented-`σ` floor and cloud fraction closure parameters for `_sgs_augmented_sigma`
+and `_compute_cloud_fraction_from_q_c_eq`, bundled into one isbits broadcast scalar.
 """
-Base.@kwdef struct CloudFractionFloorParams{FT}
-    use_delta_sub_split::Bool = true
+struct CloudFractionFloorParams{FT}
+    use_delta_sub_split::Bool
+    closure_mode::Int
+    ε_rel::FT
     σ_abs::FT
+    qc_in_min::FT
+end
+
+function CloudFractionFloorParams(;
+    use_delta_sub_split::Bool = true,
+    closure_mode::Int = 0,
+    ε_rel = 0,
+    σ_abs::FT,
+    qc_in_min = 1.5e-5,
+) where {FT}
+    return CloudFractionFloorParams{FT}(
+        use_delta_sub_split,
+        closure_mode,
+        FT(ε_rel),
+        σ_abs,
+        FT(qc_in_min),
+    )
+end
+
+function CloudFractionFloorParams{FT}(;
+    use_delta_sub_split::Bool = true,
+    closure_mode::Int = 0,
+    ε_rel = 0,
+    σ_abs = 0,
+    qc_in_min = 1.5e-5,
+) where {FT}
+    return CloudFractionFloorParams{FT}(
+        use_delta_sub_split,
+        closure_mode,
+        FT(ε_rel),
+        FT(σ_abs),
+        FT(qc_in_min),
+    )
 end
 Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
 
@@ -1793,7 +1917,10 @@ Build the `CloudFractionFloorParams` bundle from the model parameter set.
 """
 cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
     use_delta_sub_split = (CAP.cloud_fraction_use_delta_sub_split(params) > 0),
+    closure_mode = Int(CAP.cloud_fraction_closure_mode(params)),
+    ε_rel = CAP.cloud_fraction_eps_rel(params),
     σ_abs = CAP.cloud_fraction_sigma_abs(params),
+    qc_in_min = CAP.cloud_fraction_qc_in_min(params),
 )
 
 """
@@ -2139,25 +2266,34 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         )
         DataLayouts.foreach_point(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜdisp_S,
-        ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜdisp_S
+            ᶜc_hi,
+        ) do ᶜsgs_moments,
+        ᶜcloud_fraction,
+        ᶜq_c,
+        ᶜmu_S,
+        ᶜsigma_S,
+        ᶜq_c_eq,
+        ᶜα,
+        ᶜdisp_S,
+        ᶜc_hi
             @. ᶜsgs_moments = _compute_sgs_moments_from_eq(
                 ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜα, $(not_quad),
             )
             @. ᶜcloud_fraction = _compute_cloud_fraction_from_q_c_eq(
-                ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq,
+                ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq, $(c), ᶜc_hi,
             )
         end
     else
         @. ᶜq_c_eq =
             truncated_displacement_condensate(ᶜmu_S, ᶜsigma_S, $(c), ᶜc_hi)
         DataLayouts.foreach_point(
-            ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα,
-        ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα
+            ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi,
+        ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi
             @. ᶜsgs_moments = _compute_sgs_moments_from_eq(
                 ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜα, $(not_quad),
             )
             @. ᶜcloud_fraction = _compute_cloud_fraction_from_q_c_eq(
-                ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq,
+                ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq, $(c), ᶜc_hi,
             )
         end
     end
@@ -2388,10 +2524,10 @@ NVTX.@annotate function set_cloud_fraction!(
     @. ᶜq_c_eq =
         truncated_displacement_condensate(ᶜmu_S, ᶜsigma_S, $(c), ᶜc_hi)
     DataLayouts.foreach_point(
-        ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα,
-    ) do ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα
+        ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi,
+    ) do ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi
         @. ᶜcloud_fraction = _compute_cloud_fraction_from_q_c_eq(
-            ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq,
+            ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq, $(c), ᶜc_hi,
         )
     end
 

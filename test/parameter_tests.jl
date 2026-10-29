@@ -133,6 +133,8 @@ end
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
         @test CAP.sgs_quadrature_nodes(sq) == FT(8)
+        @test CAP.cloud_fraction_closure_mode(sq) == FT(0)
+        @test CAP.cloud_fraction_qc_in_min(sq) == FT(1.5e-5)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,

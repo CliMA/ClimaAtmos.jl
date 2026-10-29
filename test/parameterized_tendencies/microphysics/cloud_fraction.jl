@@ -827,6 +827,192 @@ floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
                 @test α_B < FT(0.05)
             end
         end
+
+        @testset "Task 1A: ε_rel subsaturation toggle in _sgs_augmented_sigma" begin
+            for FT in (Float32, Float64)
+                mu_S = FT(-0.002)
+                sigma_S = FT(0.001)
+                α = FT(1.0)
+                σ_abs = FT(1e-7)
+
+                floor_eps0 = CA.CloudFractionFloorParams{FT}(;
+                    use_delta_sub_split = true,
+                    closure_mode = 0,
+                    ε_rel = FT(0),
+                    σ_abs,
+                )
+                floor_eps05 = CA.CloudFractionFloorParams{FT}(;
+                    use_delta_sub_split = true,
+                    closure_mode = 0,
+                    ε_rel = FT(0.05),
+                    σ_abs,
+                )
+
+                σ_aug_0 = CA._sgs_augmented_sigma(mu_S, sigma_S, α, floor_eps0)
+                σ_aug_05 = CA._sgs_augmented_sigma(mu_S, sigma_S, α, floor_eps05)
+
+                # When ε_rel = 0, (ε_rel · δ_sub)² is 0
+                @test σ_aug_0 ≈ sqrt((α * sigma_S)^2 + σ_abs^2) rtol = FT(1e-6)
+                # When ε_rel = 0.05 and mu_S < 0, augmented sigma is larger
+                δ_sub = -mu_S
+                @test σ_aug_05 ≈ sqrt((α * sigma_S)^2 + (FT(0.05) * δ_sub)^2 + σ_abs^2) rtol =
+                    FT(1e-6)
+                @test σ_aug_05 > σ_aug_0
+            end
+        end
+
+        @testset "Task 1B: Φ-type cloud fraction closure modes" begin
+            for FT in (Float32, Float64)
+                mu_S = FT(-0.001)
+                sigma_S = FT(0.002)
+                α = FT(0.8)
+                σ_abs = FT(1e-7)
+                qc_in_min = FT(1.5e-5)
+                qc_eq = CA.equilibrium_condensate(mu_S, sigma_S, FT(0), FT(0), FT(Inf32))
+
+                floor_m0 = CA.CloudFractionFloorParams{FT}(;
+                    closure_mode = 0, σ_abs, qc_in_min,
+                )
+                floor_m1 = CA.CloudFractionFloorParams{FT}(;
+                    closure_mode = 1, σ_abs, qc_in_min,
+                )
+                floor_m2 = CA.CloudFractionFloorParams{FT}(;
+                    closure_mode = 2, σ_abs, qc_in_min,
+                )
+
+                # 1. Zero condensate limit: qc = 0 => CF = 0 in Mode 1 & 2, < eps(FT) in Mode 0
+                @test CA._compute_cloud_fraction_from_q_c_eq(
+                    FT(0),
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m0,
+                    qc_eq,
+                ) < eps(FT)
+                @test CA._compute_cloud_fraction_from_q_c_eq(
+                    FT(0),
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m1,
+                    qc_eq,
+                ) == FT(0)
+                @test CA._compute_cloud_fraction_from_q_c_eq(
+                    FT(0),
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m2,
+                    qc_eq,
+                ) == FT(0)
+
+                # 2. Monotonicity: ∂CF/∂qc > 0
+                qc_vals = [FT(1e-6), FT(1e-5), FT(5e-5), FT(1e-4), qc_eq, FT(2) * qc_eq]
+                cf1_vals = [
+                    CA._compute_cloud_fraction_from_q_c_eq(
+                        q,
+                        mu_S,
+                        sigma_S,
+                        α,
+                        floor_m1,
+                        qc_eq,
+                    ) for q in qc_vals
+                ]
+                cf2_vals = [
+                    CA._compute_cloud_fraction_from_q_c_eq(
+                        q,
+                        mu_S,
+                        sigma_S,
+                        α,
+                        floor_m2,
+                        qc_eq,
+                    ) for q in qc_vals
+                ]
+                for i in 1:(length(qc_vals) - 1)
+                    @test cf1_vals[i + 1] > cf1_vals[i]
+                    @test cf2_vals[i + 1] > cf2_vals[i]
+                end
+
+                # 3. In-cloud condensate lower bound: qc / CF >= qc_in_min
+                for q in qc_vals
+                    cf1 = CA._compute_cloud_fraction_from_q_c_eq(
+                        q,
+                        mu_S,
+                        sigma_S,
+                        α,
+                        floor_m1,
+                        qc_eq,
+                    )
+                    cf2 = CA._compute_cloud_fraction_from_q_c_eq(
+                        q,
+                        mu_S,
+                        sigma_S,
+                        α,
+                        floor_m2,
+                        qc_eq,
+                    )
+                    @test q / cf1 >= qc_in_min - eps(FT)
+                    @test q / cf2 >= qc_in_min - eps(FT)
+                end
+
+                # 4. Continuity across qc = qc_eq (kink only, |ΔCF| -> 0 as δ -> 0)
+                δ = FT(1e-7)
+                cf1_minus = CA._compute_cloud_fraction_from_q_c_eq(
+                    qc_eq - δ,
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m1,
+                    qc_eq,
+                )
+                cf1_plus = CA._compute_cloud_fraction_from_q_c_eq(
+                    qc_eq + δ,
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m1,
+                    qc_eq,
+                )
+                @test abs(cf1_plus - cf1_minus) < FT(1e-4)
+
+                cf2_minus = CA._compute_cloud_fraction_from_q_c_eq(
+                    qc_eq - δ,
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m2,
+                    qc_eq,
+                )
+                cf2_plus = CA._compute_cloud_fraction_from_q_c_eq(
+                    qc_eq + δ,
+                    mu_S,
+                    sigma_S,
+                    α,
+                    floor_m2,
+                    qc_eq,
+                )
+                # Tolerates 2-step Newton iteration residual (~3.5e-4) in _compute_z
+                @test abs(cf2_plus - cf2_minus) < FT(5e-4)
+
+                # 5. Analytical equivalence between Mode 1 and Mode 2 at σ_abs = 0, c = Inf, curv = 0
+                floor_m1_equiv = CA.CloudFractionFloorParams{FT}(;
+                    closure_mode = 1, σ_abs = FT(0), qc_in_min,
+                )
+                floor_m2_equiv = CA.CloudFractionFloorParams{FT}(;
+                    closure_mode = 2, σ_abs = FT(0), qc_in_min,
+                )
+                for q in [FT(1e-6), FT(1e-5), FT(5e-5), FT(1e-4), qc_eq]
+                    cf1_eq = CA._compute_cloud_fraction_from_q_c_eq(
+                        q, mu_S, sigma_S, α, floor_m1_equiv, qc_eq, FT(Inf32), FT(Inf32),
+                    )
+                    cf2_eq = CA._compute_cloud_fraction_from_q_c_eq(
+                        q, mu_S, sigma_S, α, floor_m2_equiv, qc_eq, FT(Inf32), FT(Inf32),
+                    )
+                    # Tolerates 2-step Newton iteration residual in _compute_z
+                    @test cf1_eq ≈ cf2_eq atol = (FT == Float32 ? FT(1e-4) : FT(5e-5))
+                end
+            end
+        end
     end
 
 end
