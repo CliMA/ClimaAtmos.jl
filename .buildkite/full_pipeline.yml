@@ -171,12 +171,12 @@ steps:
 
       - label: ":wavy_dash: Orographic gravity wave: Base flux calculation unit test"
         retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl --job_id ogw_baseflux"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":wavy_dash: Orographic gravity wave: 3D calculation unit test"
         retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl --job_id ogw_3d"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
 
       - label: ":wavy_dash: Orographic gravity wave: Drag unit test"
@@ -186,7 +186,7 @@ steps:
 
       - label: ":wavy_dash: Orographic gravity wave: Regression test reproducing Garner 2005"
         retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl --job_id garner2005"
         artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
       # NOTE: the Beres source-spectrum + heating unit tests are pure-function,
@@ -893,22 +893,14 @@ steps:
         agents:
           slurm_mem: 16GB
 
+      # Only the sphere and the column restart on the GPU. The sphere covers
+      # the device-side checkpoint write and read, and the column is the only
+      # CUDA run of a column model in CI.
       - label: ":computer: Restart: Using manytests, sphere, GPU"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid sphere
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
-
-      - label: ":computer: Restart: Using manytests, box, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite test/restart.jl --manytests true
-          --grid box
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -944,8 +936,8 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 32G
 
-      # Each rank compiles the model for the GPU, which takes about 40 minutes
-      # before the first checkpoint is written. Soft-fail when the agent is lost.
+      # Each rank compiles the model for the GPU, so the job takes about 30
+      # minutes. Soft-fail when the agent is lost.
       - label: ":computer: Restart 2-process MPI, GPU"
         command: >
           srun julia --color=yes --project=.buildkite test/restart.jl
@@ -967,16 +959,6 @@ steps:
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         agents:
           slurm_mem: 16GB
-
-      - label: ":computer: Restart: Using AtmosSimulation, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
 
       #- label: ":computer: Restart: Using AtmosSimulation manytests"
       #  command: >
@@ -1380,6 +1362,7 @@ steps:
           julia --color=yes --project=.buildkite perf/invalidations.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
           --config_file $PERF_CONFIG_PATH/bm_default.yml
+          --job_id invalidations
         artifact_paths: "invalidations/*"
         agents:
           slurm_mem: 24GB
