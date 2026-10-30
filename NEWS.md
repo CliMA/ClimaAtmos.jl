@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.17
+-------
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
   cadence from `t_end` rather than `t_end - dt`, so a run ending exactly on a
   threshold (1 hour, 1 day, 30 days, 90 days) gets that threshold's cadence
@@ -18,23 +21,26 @@ main
 
 - ![][badge-✨feature/enhancement] add 1M microphysics options
   `rain_autoconversion: KK2000` and `cloud_liquid_rain_accretion: KK2000`.
-
-0.42.16
--------
-- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default.
-- Update to CloudMicrophysics 0.47.
-- ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
-  reader was left to a GC finalizer; under MPI, closing the file is collective, so a
-  finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
-  4–8 GPUs while `build_cache` set up the DSS buffers).
-- 1M cloud-liquid condensation / evaporation can now run through an
-  SGS-integrated implicit source. Selected by
+- ![][badge-✨feature/enhancement] 1M cloud-liquid condensation / evaporation can now
+  run through an SGS-integrated implicit source. Selected by
   `cloud_liquid_formation: ImplicitCloudLiquidFormation`, which routes CM's
   instantaneous `conv_q_vap_to_q_lcl` rate through
   `_add_implicit_lcl_condensation_*` with a `−dtγ / (τ_cond · Γₗ)` Jacobian
   diagonal and a forward-Euler updraft predictor.
   `cloud_liquid_formation: CloudLiquidFormation` (default) keeps the
   explicit bulk-averaged tendency; `~` disables condensation.
+
+0.42.16
+-------
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  (`snow_terminal_velocity: Chen2022`); `toml/prognostic_edmfx_1M.toml` sets
+  `snow_apparent_density` to 200 kg/m³. 1M configs that do not load that TOML use
+  the ClimaParams value.
+- Update to CloudMicrophysics 0.47.
+- ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
+  reader was left to a GC finalizer; under MPI, closing the file is collective, so a
+  finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
+  4–8 GPUs while `build_cache` set up the DSS buffers).
 - ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
   in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
   scaled by the effective-thickness factor `χ` of the in-cloud condensate

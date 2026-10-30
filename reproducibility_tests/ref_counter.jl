@@ -1,4 +1,4 @@
-448
+449
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+449
+- Release v0.42.17: SurfaceFluxes v1.5.1 -> v1.6.0, ClimaCore v1.0.4 -> v1.0.6.
+
 448
 - 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
   via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
