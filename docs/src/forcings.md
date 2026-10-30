@@ -246,6 +246,7 @@ topography and the explicit solver.
 | GABLS                         |                                          |                              | ``f = 1.39 \times 10^{-4}`` s⁻¹  |                                        |
 | Larcform1                     |                                          |                              | ``f = 1.432 \times 10^{-4}`` s⁻¹ | Polar-night insolation                 |
 | ISDAC                         | yes                                      |                              |                                  | Analytic nudging, prescribed radiation |
+| MPACE                         | yes                                      | yes                          | ``f = 1.37 \times 10^{-4}`` s⁻¹  | Time-varying insolation                |
 | TRMM-LBA                      |                                          |                              |                                  | Prescribed radiative heating           |
 | Soares, GATE III, SimplePlume |                                          |                              |                                  | None                                   |
 | GCM, ARM VARANAL, reanalysis  | `Subsidence()` term                      | `HorizontalAdvection()` term |                                  | Nudging, vertical fluctuation          |

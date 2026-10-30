@@ -389,6 +389,30 @@ steps:
           slurm_mem: 35GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":genie: Prognostic EDMF: Mixed-phase Arctic Sc (ISDAC)"
+        retry: *retry_policy
+        key: prognostic_edmfx_isdac_column
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_isdac_column.yml
+          --job_id prognostic_edmfx_isdac_column
+        artifact_paths: "prognostic_edmfx_isdac_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMF: Mixed-phase Arctic Sc (M-PACE)"
+        retry: *retry_policy
+        key: prognostic_edmfx_mpace_column
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_mpace_column.yml
+          --job_id prognostic_edmfx_mpace_column
+        artifact_paths: "prognostic_edmfx_mpace_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":chart_with_upwards_trend: SCM intercomparison plots"
         retry: *retry_policy
         depends_on:
@@ -406,6 +430,10 @@ steps:
             allow_failure: true
           - step: prognostic_edmfx_trmm_column
             allow_failure: true
+          - step: prognostic_edmfx_isdac_column
+            allow_failure: true
+          - step: prognostic_edmfx_mpace_column
+            allow_failure: true
         command: |
           for JOB in \
             prognostic_edmfx_soares_column \
@@ -414,7 +442,9 @@ steps:
             prognostic_edmfx_dycoms_rf01_column \
             prognostic_edmfx_dycoms_rf02_column \
             prognostic_edmfx_rico_column \
-            prognostic_edmfx_trmm_column; do
+            prognostic_edmfx_trmm_column \
+            prognostic_edmfx_isdac_column \
+            prognostic_edmfx_mpace_column; do
             mkdir -p $$JOB/output_active/nc_files
             tar xf $$JOB/output_active/nc_files.tar -C $$JOB/output_active/nc_files 2>/dev/null || true
           done

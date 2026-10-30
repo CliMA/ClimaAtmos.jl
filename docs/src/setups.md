@@ -134,6 +134,7 @@ ClimaAtmos.Setups.GATE_III
 ClimaAtmos.Setups.DYCOMS
 ClimaAtmos.Setups.TRMM_LBA
 ClimaAtmos.Setups.ISDAC
+ClimaAtmos.Setups.MPACE
 ClimaAtmos.Setups.Larcform1
 ClimaAtmos.Setups.SimplePlume
 ClimaAtmos.Setups.PrecipitatingColumn

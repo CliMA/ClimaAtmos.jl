@@ -76,6 +76,33 @@ end
     @test atmos.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
     @test atmos.surface.temperature isa
           CA.SurfaceConditions.AnalyticTemperature
+
+    config_mpace = CA.AtmosConfig(
+        Dict("config" => "column", "initial_condition" => "MPACE"),
+        job_id = "test_setup_components_mpace",
+    )
+    params_mpace = CA.ClimaAtmosParameters(config_mpace)
+    thermo_params_mpace = CA.Parameters.thermodynamics_params(params_mpace)
+    FT_mpace = eltype(thermo_params_mpace)
+    setup_mpace =
+        CA.get_setup_type(config_mpace.parsed_args, thermo_params_mpace)
+    grid_mpace =
+        CA.get_grid(config_mpace.parsed_args, params_mpace, config_mpace.comms_ctx)
+    atmos_mpace =
+        CA.get_atmos(config_mpace, params_mpace, grid_mpace; setup_type = setup_mpace)
+
+    @test setup_mpace isa CA.Setups.MPACE
+    @test atmos_mpace.subsidence isa CA.LargeScaleSubsidence
+    @test atmos_mpace.ls_adv isa CA.LargeScaleAdvection
+    @test !isnothing(atmos_mpace.scm_coriolis)
+    @test atmos_mpace.insolation isa CA.TimeVaryingInsolation
+    @test atmos_mpace.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
+    @test atmos_mpace.surface.temperature isa
+          CA.SurfaceConditions.AnalyticTemperature
+    @test setup_mpace.profiles.p(FT_mpace(0)) ≈ FT_mpace(101000) rtol = 1e-5
+    @test setup_mpace.profiles.θ(FT_mpace(0)) ≈ FT_mpace(269.2) rtol = 1e-5
+    @test setup_mpace.profiles.q_tot(FT_mpace(0)) ≈
+          FT_mpace(1.95e-3 / (1 + 1.95e-3)) rtol = 1e-5
 end
 
 @testset "Smagorinsky-Lilly axes options" begin

@@ -367,19 +367,20 @@ z_km = if has_ref
     ref_z ./ 1e3
 else
     # Get z from the first available sim variable
-    _z_ax = nothing
-    for sn in ("thetaa", "hus", "clw")
-        path = sim_nc_path(sn)
-        isfile(path) || continue
-        try
-            ds = NCDataset(path)
-            _z_ax = ds["z"][:] ./ 1e3
-            close(ds)
-            break
-        catch
+    let _z_ax = nothing
+        for sn in ("thetaa", "hus", "clw")
+            path = sim_nc_path(sn)
+            isfile(path) || continue
+            try
+                ds = NCDataset(path)
+                _z_ax = ds["z"][:] ./ 1e3
+                close(ds)
+                break
+            catch
+            end
         end
+        isnothing(_z_ax) ? [0.0, 3.0] : _z_ax  # fallback range
     end
-    isnothing(_z_ax) ? [0.0, 3.0] : _z_ax  # fallback range
 end
 
 function make_profile_ax(pos, xlabel, title)
