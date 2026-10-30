@@ -27,6 +27,8 @@ import NCDatasets: NCDataset
 import CairoMakie
 import Statistics: mean, std
 
+include(joinpath(@__DIR__, "scm_literature_references.jl"))
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 s = ArgParseSettings()
 #! format: off
@@ -60,7 +62,8 @@ end
 
 
 # ── Resolve reference NC via artifact if --ref_nc not given ──────────────────
-if isempty(ref_nc_path)
+lit_ref = literature_reference(case_name)
+if isempty(ref_nc_path) && isnothing(lit_ref)
     artifact_name = "pycles_scm_les_data"
     try
         # Use find_artifacts_toml to walk up to the repo-root Artifacts.toml,
@@ -80,7 +83,12 @@ if isempty(ref_nc_path)
 end
 
 # ── Reference data ────────────────────────────────────────────────────────────
-has_ref = !isempty(ref_nc_path) && isfile(ref_nc_path)
+has_nc_ref = !isempty(ref_nc_path) && isfile(ref_nc_path)
+has_lit_ref = !has_nc_ref && !isnothing(lit_ref)
+has_ref = has_nc_ref || has_lit_ref
+ref_label = has_lit_ref ? lit_ref.label : "PyCLES"
+ref_nsigma = has_lit_ref ? lit_ref.nsigma : 2.0
+combine_ice_snow = has_lit_ref && lit_ref.combine_ice_snow
 
 # Initialise ref variables to nothing so downstream code can check has_ref
 ref_t = nothing
@@ -92,6 +100,8 @@ ref_qt = nothing;
 ref_qt_s = nothing
 ref_ql = nothing;
 ref_ql_s = nothing
+ref_q_tot_ice = nothing;
+ref_q_tot_ice_s = nothing
 ref_aup = nothing;
 ref_aup_s = nothing
 ref_wup = nothing;
@@ -111,16 +121,39 @@ ref_umean_s = nothing
 ref_vmean = nothing;
 ref_vmean_s = nothing
 ref_lwp = nothing
+ref_lwp_s = nothing
 ref_rwp = nothing
 ref_iwp_ts = nothing
 ref_swp_ts = nothing
+ref_tot_iwp = nothing
+ref_tot_iwp_s = nothing
 ref_t_h = nothing
 ref_t_avg_end = nothing
 ref_t_start_avg = nothing
 
 LAST_N_HOURS = 3.0
 
-if has_ref
+# Sniff ClimaAtmos t_end from any available profile file (before opening ref).
+function _sim_t_end(sim_dir)
+    isempty(sim_dir) && return nothing
+    !isdir(sim_dir) && return nothing
+    # Try a handful of common profile names to find the first available file.
+    for sn in ("thetaa", "hus", "ta", "wa", "ua")
+        p = joinpath(sim_dir, "$(sn)_10m_inst.nc")
+        if isfile(p)
+            try
+                ds = NCDataset(p)
+                t = ds["time"][end]
+                close(ds)
+                return Float64(t)
+            catch
+            end
+        end
+    end
+    return nothing
+end
+
+if has_nc_ref
     println("Loading reference: $ref_nc_path")
     ref_ds = NCDataset(ref_nc_path)
     prof = ref_ds.group["profiles"]
@@ -139,27 +172,6 @@ if has_ref
     # Averaging window: last LAST_N_HOURS of the run, anchored at the ClimaAtmos
     # t_end when sim data is available.  This ensures both sides average the same
     # absolute time period even when PyCLES ran longer than ClimaAtmos.
-
-    # Sniff ClimaAtmos t_end from any available profile file (before opening ref).
-    function _sim_t_end(sim_dir)
-        isempty(sim_dir) && return nothing
-        !isdir(sim_dir) && return nothing
-        # Try a handful of common profile names to find the first available file.
-        for sn in ("thetaa", "hus", "ta", "wa", "ua")
-            p = joinpath(sim_dir, "$(sn)_10m_inst.nc")
-            if isfile(p)
-                try
-                    ds = NCDataset(p)
-                    t = ds["time"][end]
-                    close(ds)
-                    return Float64(t)
-                catch
-                end
-            end
-        end
-        return nothing
-    end
-
     _atmos_t_end = _sim_t_end(sim_dir_path)
 
     # Anchor the PyCLES window at the ClimaAtmos t_end (if known and earlier than
@@ -240,6 +252,49 @@ if has_ref
     ref_swp_ts = haskey(ts_grp, "swp") ? ts_grp["swp"][:] .* 1e3 : nothing  # g/m²
 
     close(ref_ds)
+elseif has_lit_ref
+    println("Loading digitized literature reference for $case_name: $(lit_ref.label)")
+    ref_t = lit_ref.t
+    ref_z = lit_ref.z
+    ref_t_h = lit_ref.t_h
+    _atmos_t_end = _sim_t_end(sim_dir_path)
+    ref_t_end = ref_t[end]
+    ref_t_avg_end = isnothing(_atmos_t_end) ? ref_t_end : min(ref_t_end, _atmos_t_end)
+    ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
+
+    ref_thetali = lit_ref.thetali
+    ref_thetali_s = lit_ref.thetali_s
+    ref_qt = lit_ref.qt
+    ref_qt_s = lit_ref.qt_s
+    ref_ql = lit_ref.ql
+    ref_ql_s = lit_ref.ql_s
+    ref_q_tot_ice = lit_ref.q_tot_ice
+    ref_q_tot_ice_s = lit_ref.q_tot_ice_s
+    ref_aup = lit_ref.aup
+    ref_aup_s = lit_ref.aup_s
+    ref_wup = lit_ref.wup
+    ref_wup_s = lit_ref.wup_s
+    ref_tke = lit_ref.tke
+    ref_tke_s = lit_ref.tke_s
+    ref_cf = lit_ref.cf
+    ref_cf_s = lit_ref.cf_s
+    ref_qr = lit_ref.qr
+    ref_qr_s = lit_ref.qr_s
+    ref_qi = lit_ref.qi
+    ref_qi_s = lit_ref.qi_s
+    ref_qs = lit_ref.qs
+    ref_qs_s = lit_ref.qs_s
+    ref_umean = lit_ref.umean
+    ref_umean_s = lit_ref.umean_s
+    ref_vmean = lit_ref.vmean
+    ref_vmean_s = lit_ref.vmean_s
+    ref_lwp = lit_ref.lwp
+    ref_lwp_s = lit_ref.lwp_s
+    ref_rwp = lit_ref.rwp
+    ref_iwp_ts = lit_ref.iwp_ts
+    ref_swp_ts = lit_ref.swp_ts
+    ref_tot_iwp = lit_ref.tot_iwp
+    ref_tot_iwp_s = lit_ref.tot_iwp_s
 else
     @warn "No reference data available; plotting ClimaAtmos data only."
 end
@@ -302,6 +357,39 @@ function load_and_avg(short_name; scale = 1.0)
     end
 end
 
+# Returns (z_m, mean, std) of the sum of two profiles averaged over
+# [ref_t_avg_end - LAST_N_HOURS, ref_t_avg_end].
+function load_and_avg_sum(sn1, sn2; scale = 1.0)
+    p1 = sim_nc_path(sn1)
+    p2 = sim_nc_path(sn2)
+    if !isfile(p1) && !isfile(p2)
+        return nothing, nothing, nothing
+    elseif !isfile(p2)
+        return load_and_avg(sn1; scale)
+    elseif !isfile(p1)
+        return load_and_avg(sn2; scale)
+    end
+    try
+        ds1 = NCDataset(p1)
+        t_ax = ds1["time"][:]
+        z_ax = ds1["z"][:]
+        d1 = ds1[sn1][:, :] .* scale
+        close(ds1)
+        ds2 = NCDataset(p2)
+        d2 = ds2[sn2][:, :] .* scale
+        close(ds2)
+        data = d1 .+ d2
+        t0 = ref_t_avg_end - LAST_N_HOURS * 3600.0
+        mask = (t_ax .>= t0) .& (t_ax .<= ref_t_avg_end)
+        sum(mask) == 0 && (mask = t_ax .>= t_ax[end] / 2)
+        w = data[mask, :]
+        return z_ax, mean(w, dims = 1)[1, :], std(w, dims = 1)[1, :]
+    catch e
+        @warn "Could not load summed profile $sn1 + $sn2: $e"
+        return nothing, nothing, nothing
+    end
+end
+
 # Returns (t_h, values) for a scalar timeseries clipped to ref_t_avg_end;
 # nothing-tuple if unavailable.
 function load_ts(short_name; scale = 1.0)
@@ -318,6 +406,20 @@ function load_ts(short_name; scale = 1.0)
         @warn "Could not load timeseries $short_name: $e"
         return nothing, nothing
     end
+end
+
+function load_ts_sum(sn1, sn2; scale = 1.0)
+    t1, y1 = load_ts(sn1; scale)
+    t2, y2 = load_ts(sn2; scale)
+    if isnothing(t1) && isnothing(t2)
+        return nothing, nothing
+    elseif isnothing(t2)
+        return t1, y1
+    elseif isnothing(t1)
+        return t2, y2
+    end
+    n = min(length(t1), length(t2))
+    return t1[1:n], y1[1:n] .+ y2[1:n]
 end
 
 # Running mean + std over a centred ±WINDOW_H/2 window
@@ -340,19 +442,19 @@ end
 # panels (first 4 × 2 cols, u/v panel spans remaining 4 cols); Row 3
 # timeseries panels (×4) each span 3 cols.
 
-const REF_COLOR = "#e07b39"   # orange – PyCLES
-const V_REF_COLOR = "#c0392b"   # red    – PyCLES v
+const REF_COLOR = "#e07b39"   # orange – Reference (PyCLES or Literature)
+const V_REF_COLOR = "#c0392b"   # red    – Reference v
 const SIM_COLOR = "#2e6da4"   # blue   – ClimaAtmos
-const V_SIM_COLOR = "#27ae60"   # green  – ClimaAtmos v
+const V_SIM_COLOR = "#27ae60"   # green  – ClimaAtmos v (and q_s / SWP in combined-ice mode)
 const LWIDTH = 2.5
 
 # Determine subtitle for the figure header
 _subtitle = if has_sim && has_ref
-    "ClimaAtmos (blue) vs PyCLES (orange)"
+    "ClimaAtmos (blue) vs $ref_label (orange)"
 elseif has_sim
-    "ClimaAtmos only (no PyCLES reference)"
+    "ClimaAtmos only (no reference)"
 else
-    "PyCLES reference only"
+    "$ref_label reference only"
 end
 
 fig = CairoMakie.Figure(size = (1900, 1050))
@@ -406,8 +508,13 @@ ax1 = make_profile_ax(fig[1, 1:2], "θ_l (K)", "Liq-ice pot. temperature")
 ax2 = make_profile_ax(fig[1, 3:4], "q_t (g/kg)", "Total water")
 ax3 = make_profile_ax(fig[1, 5:6], "q_l (g/kg)", "Liquid cloud water")
 ax4 = make_profile_ax(fig[1, 7:8], "q_r (g/kg)", "Rain water")
-ax5 = make_profile_ax(fig[1, 9:10], "q_i (g/kg)", "Cloud ice")
-ax6 = make_profile_ax(fig[1, 11:12], "q_s (g/kg)", "Snow")
+if combine_ice_snow
+    ax5 = make_profile_ax(fig[1, 9:10], "q_i, q_s (g/kg)", "Cloud ice & snow")
+    ax6 = make_profile_ax(fig[1, 11:12], "q_i + q_s (g/kg)", "Total ice (q_i + q_s)")
+else
+    ax5 = make_profile_ax(fig[1, 9:10], "q_i (g/kg)", "Cloud ice")
+    ax6 = make_profile_ax(fig[1, 11:12], "q_s (g/kg)", "Snow")
+end
 
 # Row 2: dynamics + turbulence (first 4 panels × 2 cols; u/v panel × 4 cols)
 ax7 = make_profile_ax(fig[2, 1:2], "a_up (–)", "Updraft area fraction")
@@ -419,13 +526,18 @@ ax12 = make_profile_ax(fig[2, 9:12], "u, v (m/s)", "Horiz. translational velocit
 # Row 3: water path timeseries (3 cols each)
 ax13 = make_ts_ax(fig[3, 1:3], "LWP (g/m²)", "Liquid water path")
 ax14 = make_ts_ax(fig[3, 4:6], "RWP (g/m²)", "Rain water path")
-ax15 = make_ts_ax(fig[3, 7:9], "IWP (g/m²)", "Ice water path")
-ax16 = make_ts_ax(fig[3, 10:12], "SWP (g/m²)", "Snow water path")
+if combine_ice_snow
+    ax15 = make_ts_ax(fig[3, 7:9], "IWP, SWP (g/m²)", "Ice & snow water paths")
+    ax16 = make_ts_ax(fig[3, 10:12], "IWP + SWP (g/m²)", "Total ice water path")
+else
+    ax15 = make_ts_ax(fig[3, 7:9], "IWP (g/m²)", "Ice water path")
+    ax16 = make_ts_ax(fig[3, 10:12], "SWP (g/m²)", "Snow water path")
+end
 
 # ── Drawing helpers ───────────────────────────────────────────────────────────
 # Profile shading band (polygon, horizontal at each z level)
 function profile_band!(ax, mu, sig, z, color; nsigma = 2, alpha = 0.25)
-    isnothing(mu) && return
+    (isnothing(mu) || isnothing(sig)) && return
     lo = mu .- nsigma .* sig
     hi = mu .+ nsigma .* sig
     xs = vcat(lo, reverse(hi))
@@ -436,26 +548,26 @@ end
 
 # Timeseries shading band (standard orientation)
 function ts_band!(ax, t, mu, sig, color; nsigma = 2, alpha = 0.25)
+    (isnothing(mu) || isnothing(sig)) && return
     CairoMakie.band!(ax, t, mu .- nsigma .* sig, mu .+ nsigma .* sig;
         color = (color, alpha))
 end
 
-function ref_line!(ax, x, z; label = "PyCLES", color = REF_COLOR, kw...)
+function ref_line!(ax, x, z; label = ref_label, color = REF_COLOR, kw...)
     CairoMakie.lines!(ax, x, z; color, linewidth = LWIDTH, label, kw...)
 end
 function sim_line!(ax, x, z; label = "ClimaAtmos", color = SIM_COLOR, kw...)
     CairoMakie.lines!(ax, x, z; color, linewidth = LWIDTH, label, kw...)
 end
-function ref_ts_line!(ax, t, y; label = "PyCLES")
+function ref_ts_line!(ax, t, y; label = ref_label)
     CairoMakie.lines!(ax, t, y; color = REF_COLOR, linewidth = LWIDTH, label)
 end
-function sim_ts_line!(ax, t, y; label = "ClimaAtmos")
-    CairoMakie.lines!(ax, t, y; color = SIM_COLOR, linewidth = LWIDTH, label)
+function sim_ts_line!(ax, t, y; label = "ClimaAtmos", color = SIM_COLOR)
+    CairoMakie.lines!(ax, t, y; color, linewidth = LWIDTH, label)
 end
 
-# ── PyCLES profiles ───────────────────────────────────────────────────────────
+# ── Reference profiles & timeseries ───────────────────────────────────────────
 if has_ref
-    # Core (always present across all cases)
     for (ax, mu, sig) in [
         (ax1, ref_thetali, ref_thetali_s),
         (ax2, ref_qt, ref_qt_s),
@@ -463,48 +575,68 @@ if has_ref
         (ax7, ref_aup, ref_aup_s),
         (ax8, ref_wup, ref_wup_s),
         (ax9, ref_tke, ref_tke_s),
+        (ax10, ref_cf, ref_cf_s),
+        (ax4, ref_qr, ref_qr_s),
     ]
-        profile_band!(ax, mu, sig, z_km, REF_COLOR)
+        isnothing(mu) && continue
+        profile_band!(ax, mu, sig, z_km, REF_COLOR; nsigma = ref_nsigma)
         ref_line!(ax, mu, z_km)
     end
 
-    # Optional (may be absent — silently skip)
-    for (ax, mu, sig) in [
-        (ax10, ref_cf, ref_cf_s),
-        (ax4, ref_qr, ref_qr_s),
-        (ax5, ref_qi, ref_qi_s),
-        (ax6, ref_qs, ref_qs_s),
-    ]
-        isnothing(mu) && continue
-        profile_band!(ax, mu, sig, z_km, REF_COLOR)
-        ref_line!(ax, mu, z_km)
+    if combine_ice_snow
+        if !isnothing(ref_q_tot_ice)
+            profile_band!(ax6, ref_q_tot_ice, ref_q_tot_ice_s, z_km, REF_COLOR; nsigma = ref_nsigma)
+            ref_line!(ax6, ref_q_tot_ice, z_km)
+        end
+    else
+        for (ax, mu, sig) in [
+            (ax5, ref_qi, ref_qi_s),
+            (ax6, ref_qs, ref_qs_s),
+        ]
+            isnothing(mu) && continue
+            profile_band!(ax, mu, sig, z_km, REF_COLOR; nsigma = ref_nsigma)
+            ref_line!(ax, mu, z_km)
+        end
     end
 
     # u & v: separate solid lines with distinct colors per component
     if !isnothing(ref_umean)
-        profile_band!(ax12, ref_umean, ref_umean_s, z_km, REF_COLOR)
-        ref_line!(ax12, ref_umean, z_km; label = "u  PyCLES")
+        profile_band!(ax12, ref_umean, ref_umean_s, z_km, REF_COLOR; nsigma = ref_nsigma)
+        ref_line!(ax12, ref_umean, z_km; label = "u  $ref_label")
     end
     if !isnothing(ref_vmean)
-        profile_band!(ax12, ref_vmean, ref_vmean_s, z_km, V_REF_COLOR)
-        ref_line!(ax12, ref_vmean, z_km; label = "v  PyCLES", color = V_REF_COLOR)
+        profile_band!(ax12, ref_vmean, ref_vmean_s, z_km, V_REF_COLOR; nsigma = ref_nsigma)
+        ref_line!(ax12, ref_vmean, z_km; label = "v  $ref_label", color = V_REF_COLOR)
     end
 
-    # PyCLES timeseries — clipped to the shared run-end anchor (raw, no smoothing)
+    # Reference timeseries — clipped to the shared run-end anchor
     ref_ts_mask = ref_t .<= ref_t_avg_end
     ref_t_h_plot = ref_t_h[ref_ts_mask]
-    ref_ts_line!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask])
+    if !isnothing(ref_lwp)
+        if !isnothing(ref_lwp_s)
+            ts_band!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask], ref_lwp_s[ref_ts_mask], REF_COLOR; nsigma = ref_nsigma)
+        end
+        ref_ts_line!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask])
+    end
 
     if !isnothing(ref_rwp)
         ref_ts_line!(ax14, ref_t_h_plot, ref_rwp[ref_ts_mask])
     end
 
-    if !isnothing(ref_iwp_ts)
-        ref_ts_line!(ax15, ref_t_h_plot, ref_iwp_ts[ref_ts_mask])
-    end
-
-    if !isnothing(ref_swp_ts)
-        ref_ts_line!(ax16, ref_t_h_plot, ref_swp_ts[ref_ts_mask])
+    if combine_ice_snow
+        if !isnothing(ref_tot_iwp)
+            if !isnothing(ref_tot_iwp_s)
+                ts_band!(ax16, ref_t_h_plot, ref_tot_iwp[ref_ts_mask], ref_tot_iwp_s[ref_ts_mask], REF_COLOR; nsigma = ref_nsigma)
+            end
+            ref_ts_line!(ax16, ref_t_h_plot, ref_tot_iwp[ref_ts_mask])
+        end
+    else
+        if !isnothing(ref_iwp_ts)
+            ref_ts_line!(ax15, ref_t_h_plot, ref_iwp_ts[ref_ts_mask])
+        end
+        if !isnothing(ref_swp_ts)
+            ref_ts_line!(ax16, ref_t_h_plot, ref_swp_ts[ref_ts_mask])
+        end
     end
 end
 
@@ -515,8 +647,6 @@ if has_sim
         (ax2, "hus", 1e3),
         (ax3, "clw", 1e3),
         (ax4, "husra", 1e3),
-        (ax5, "cli", 1e3),
-        (ax6, "hussn", 1e3),
         (ax7, "arup", 1.0),
         (ax8, "waup", 1.0),
         (ax9, "tke", 1.0),
@@ -525,6 +655,36 @@ if has_sim
         isnothing(z_s) && continue
         profile_band!(ax, mu_s, sig_s, z_s ./ 1e3, SIM_COLOR)
         sim_line!(ax, mu_s, z_s ./ 1e3)
+    end
+
+    if combine_ice_snow
+        # ax5: two lines from ClimaAtmos (q_i and q_s)
+        _z_qi, _mu_qi, _sig_qi = load_and_avg("cli"; scale = 1e3)
+        if !isnothing(_z_qi)
+            profile_band!(ax5, _mu_qi, _sig_qi, _z_qi ./ 1e3, SIM_COLOR)
+            sim_line!(ax5, _mu_qi, _z_qi ./ 1e3; label = "q_i  ClimaAtmos", color = SIM_COLOR)
+        end
+        _z_qs, _mu_qs, _sig_qs = load_and_avg("hussn"; scale = 1e3)
+        if !isnothing(_z_qs)
+            profile_band!(ax5, _mu_qs, _sig_qs, _z_qs ./ 1e3, V_SIM_COLOR)
+            sim_line!(ax5, _mu_qs, _z_qs ./ 1e3; label = "q_s  ClimaAtmos", color = V_SIM_COLOR)
+        end
+        # ax6: sum q_i + q_s from ClimaAtmos compared against paper reference
+        _z_qis, _mu_qis, _sig_qis = load_and_avg_sum("cli", "hussn"; scale = 1e3)
+        if !isnothing(_z_qis)
+            profile_band!(ax6, _mu_qis, _sig_qis, _z_qis ./ 1e3, SIM_COLOR)
+            sim_line!(ax6, _mu_qis, _z_qis ./ 1e3)
+        end
+    else
+        for (ax, sn, scale) in [
+            (ax5, "cli", 1e3),
+            (ax6, "hussn", 1e3),
+        ]
+            z_s, mu_s, sig_s = load_and_avg(sn; scale)
+            isnothing(z_s) && continue
+            profile_band!(ax, mu_s, sig_s, z_s ./ 1e3, SIM_COLOR)
+            sim_line!(ax, mu_s, z_s ./ 1e3)
+        end
     end
 
     # Cloud fraction: ClimaAtmos outputs % → convert to 0–1 fraction
@@ -541,6 +701,7 @@ if has_sim
         profile_band!(ax12, _mu_u, _sig_u, _z_u ./ 1e3, SIM_COLOR)
         sim_line!(ax12, _mu_u, _z_u ./ 1e3; label = "u  ClimaAtmos")
     end
+    _z_v, _sig_v_tmp = nothing, nothing
     _z_v, _mu_v, _sig_v = load_and_avg("va")
     if !isnothing(_z_v)
         profile_band!(ax12, _mu_v, _sig_v, _z_v ./ 1e3, V_SIM_COLOR)
@@ -551,17 +712,33 @@ if has_sim
     for (ax, sn) in [
         (ax13, "lwp"),
         (ax14, "rwp"),
-        (ax15, "iwp"),
-        (ax16, "swp"),
     ]
         t_s, y_s = load_ts(sn; scale = 1e3)
         isnothing(t_s) && continue
         sim_ts_line!(ax, t_s, y_s)
     end
+
+    if combine_ice_snow
+        t_i, y_i = load_ts("iwp"; scale = 1e3)
+        !isnothing(t_i) && sim_ts_line!(ax15, t_i, y_i; label = "IWP  ClimaAtmos", color = SIM_COLOR)
+        t_sn, y_sn = load_ts("swp"; scale = 1e3)
+        !isnothing(t_sn) && sim_ts_line!(ax15, t_sn, y_sn; label = "SWP  ClimaAtmos", color = V_SIM_COLOR)
+        t_tot, y_tot = load_ts_sum("iwp", "swp"; scale = 1e3)
+        !isnothing(t_tot) && sim_ts_line!(ax16, t_tot, y_tot)
+    else
+        for (ax, sn) in [
+            (ax15, "iwp"),
+            (ax16, "swp"),
+        ]
+            t_s, y_s = load_ts(sn; scale = 1e3)
+            isnothing(t_s) && continue
+            sim_ts_line!(ax, t_s, y_s)
+        end
+    end
 end
 
 # ── X-axis limits ─────────────────────────────────────────────────────────────
-# Helper: set xlims from a dataset's mean ± 2σ with a margin
+# Helper: set xlims from a dataset's mean ± nsigma*σ with a margin
 function set_xlims_from!(ax, mu, sig; nsigma = 2, margin_frac = 0.05)
     isnothing(mu) && return
     lo = minimum(mu .- nsigma .* sig)
@@ -570,8 +747,18 @@ function set_xlims_from!(ax, mu, sig; nsigma = 2, margin_frac = 0.05)
     CairoMakie.xlims!(ax, lo - m, hi + m)
 end
 
-# Core axes: PyCLES-limited when available
-if has_ref
+function set_xlims_union!(ax, series_list; margin_frac = 0.05)
+    valid = [(mu, sig, nsig) for (mu, sig, nsig) in series_list if !isnothing(mu) && !isnothing(sig)]
+    isempty(valid) && return
+    lo = minimum(minimum(mu .- nsig .* sig) for (mu, sig, nsig) in valid)
+    hi = maximum(maximum(mu .+ nsig .* sig) for (mu, sig, nsig) in valid)
+    m = max(margin_frac * (hi - lo), 1e-6)
+    CairoMakie.xlims!(ax, lo - m, hi + m)
+end
+
+# Core axes: PyCLES-limited when PyCLES NC is used; union of ref and ClimaAtmos
+# when digitized literature reference is used.
+if has_nc_ref
     for (ax, mu, sig) in [
         (ax1, ref_thetali, ref_thetali_s),
         (ax2, ref_qt, ref_qt_s),
@@ -583,15 +770,38 @@ if has_ref
         set_xlims_from!(ax, mu, sig)
     end
 
-    # Cloud fraction: PyCLES-limited when present, else ClimaAtmos
     if !isnothing(ref_cf)
         set_xlims_from!(ax10, ref_cf, ref_cf_s)
     end
+elseif has_lit_ref
+    for (ax, mu_r, sig_r, sn, scale) in [
+        (ax1, ref_thetali, ref_thetali_s, "thetaa", 1.0),
+        (ax2, ref_qt, ref_qt_s, "hus", 1e3),
+        (ax3, ref_ql, ref_ql_s, "clw", 1e3),
+        (ax7, ref_aup, ref_aup_s, "arup", 1.0),
+        (ax8, ref_wup, ref_wup_s, "waup", 1.0),
+        (ax9, ref_tke, ref_tke_s, "tke", 1.0),
+        (ax10, ref_cf, ref_cf_s, "cl", 1e-2),
+    ]
+        _, mu_s, sig_s = has_sim ? load_and_avg(sn; scale) : (nothing, nothing, nothing)
+        set_xlims_union!(ax, [(mu_r, sig_r, ref_nsigma), (mu_s, sig_s, 2.0)])
+    end
 end
 
-# Optional axes (rain/ice/snow): xlims from ClimaAtmos data, which is more
-# meaningful than PyCLES zeros (warm cases, missing vars, etc.)
-if has_sim
+# Optional axes (rain/ice/snow)
+if combine_ice_snow
+    if has_sim
+        _, mu_r, sig_r = load_and_avg("husra"; scale = 1e3)
+        isnothing(mu_r) || set_xlims_from!(ax4, mu_r, sig_r)
+        _, mu_qi, sig_qi = load_and_avg("cli"; scale = 1e3)
+        _, mu_qs, sig_qs = load_and_avg("hussn"; scale = 1e3)
+        set_xlims_union!(ax5, [(mu_qi, sig_qi, 2.0), (mu_qs, sig_qs, 2.0)])
+        _, mu_qis, sig_qis = load_and_avg_sum("cli", "hussn"; scale = 1e3)
+        set_xlims_union!(ax6, [(ref_q_tot_ice, ref_q_tot_ice_s, ref_nsigma), (mu_qis, sig_qis, 2.0)])
+    elseif has_ref
+        set_xlims_from!(ax6, ref_q_tot_ice, ref_q_tot_ice_s; nsigma = ref_nsigma)
+    end
+elseif has_sim
     for (ax, sn, scale) in [
         (ax4, "husra", 1e3),
         (ax5, "cli", 1e3),
@@ -602,33 +812,34 @@ if has_sim
     end
 end
 
-# u/v axis: union of PyCLES and ClimaAtmos ranges (both in absolute frame).
-let uv_data = Tuple{Vector{Float64}, Vector{Float64}}[]
-    !isnothing(ref_umean) && push!(uv_data, (ref_umean, ref_umean_s))
-    !isnothing(ref_vmean) && push!(uv_data, (ref_vmean, ref_vmean_s))
+# u/v axis: union of reference and ClimaAtmos ranges (both in absolute frame).
+let uv_data = Tuple{Vector{Float64}, Vector{Float64}, Float64}[]
+    !isnothing(ref_umean) && push!(uv_data, (ref_umean, ref_umean_s, ref_nsigma))
+    !isnothing(ref_vmean) && push!(uv_data, (ref_vmean, ref_vmean_s, ref_nsigma))
     if has_sim
         _, mu_u, sig_u = load_and_avg("ua")
         _, mu_v, sig_v = load_and_avg("va")
-        !isnothing(mu_u) && push!(uv_data, (mu_u, sig_u))
-        !isnothing(mu_v) && push!(uv_data, (mu_v, sig_v))
+        !isnothing(mu_u) && push!(uv_data, (mu_u, sig_u, 2.0))
+        !isnothing(mu_v) && push!(uv_data, (mu_v, sig_v, 2.0))
     end
-    if !isempty(uv_data)
-        all_lo = minimum(minimum(v .- 2 .* s) for (v, s) in uv_data)
-        all_hi = maximum(maximum(v .+ 2 .* s) for (v, s) in uv_data)
-        m = max(0.05 * (all_hi - all_lo), 1e-6)
-        CairoMakie.xlims!(ax12, all_lo - m, all_hi + m)
-    end
+    set_xlims_union!(ax12, uv_data)
 end
 
 # ── Legend ────────────────────────────────────────────────────────────────────
 # Only add legends to axes that have labelled content
-try
-    CairoMakie.axislegend(ax1; position = :rt, labelsize = 9)
-catch
-end
-try
-    CairoMakie.axislegend(ax12; position = :lt, labelsize = 8)
-catch
+for (ax, pos, lsize) in [
+    (ax1, :rt, 8),
+    (ax5, :rt, 8),
+    (ax12, :lt, 8),
+    (ax15, :rt, 8),
+]
+    if (ax === ax5 || ax === ax15) && !combine_ice_snow
+        continue
+    end
+    try
+        CairoMakie.axislegend(ax; position = pos, labelsize = lsize)
+    catch
+    end
 end
 
 CairoMakie.save(out_path, fig)
