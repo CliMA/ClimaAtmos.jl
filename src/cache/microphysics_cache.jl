@@ -863,6 +863,10 @@ function update_updraft_microphysics_tendency_cache!(
     (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
+    # Carried into the kernel in the type, so the parameters fold to literals
+    # there instead of being read from a struct per point.
+    dev = ClimaComms.device(Y.c)
+    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     nsubs = mp1m.n_substeps
     for j in 1:n_mass_flux_subdomains(tm)
         ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
@@ -870,7 +874,7 @@ function update_updraft_microphysics_tendency_cache!(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dtγ, nsubs,
+            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
         )
     end
     return nothing
