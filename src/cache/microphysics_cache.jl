@@ -755,6 +755,16 @@ function update_implicit_microphysics_cache!(
     else
         set_precipitation_velocities!(Y, p, mm, tm)
     end
+    # Refresh `ᶜsgs_moments` from the current Newton iterate when the implicit
+    # 1M condensation source is active: `λ_lagrange` follows
+    # `q_c = q_lcl + q_icl`, which Newton moves. `microphysics_1m_implicit_params`
+    # is nulled for 2M/2MP3, so guard the whole block on `1M`.
+    if mm isa NonEquilibriumMicrophysics1M &&
+       !isnothing(
+        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
+    )
+        set_sgs_moments_and_cloud_fraction!(Y, p)
+    end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end
@@ -970,10 +980,14 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
-    (; dt) = p
+    # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
+    # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
+    dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
+    # `microphysics_1m_params` strips condensation (built with
+    # `cloud_liquid_formation = nothing` in `create_parameters.jl`).
     cmp = CAP.microphysics_1m_params(p.params)
 
     # Get specific humidities
@@ -1014,7 +1028,9 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
-    (; dt) = p
+    # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
+    # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
+    dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed

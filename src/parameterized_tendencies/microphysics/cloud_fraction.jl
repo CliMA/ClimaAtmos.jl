@@ -1047,7 +1047,7 @@ function set_sgs_microphysics_timescale!(
     ᶜq_icl,
     ::NonEquilibriumMicrophysics1M,
 )
-    cmp = CAP.microphysics_1m_params(p.params)
+    cmp = CAP.cloud_liquid_formation_1m_params(p.params)
     @. ᶜτ_mp = sgs_microphysics_timescale(
         thp,
         ᶜT,

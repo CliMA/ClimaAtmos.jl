@@ -100,7 +100,7 @@ include("../test_helpers.jl")
             ᶜq_liq⁰,
             ᶜq_ice⁰,
         )
-        cmp = CAP.microphysics_1m_params(p.params)
+        cmp = CAP.cloud_liquid_formation_1m_params(p.params)
         ᶜλ = @. CA.cloud_species_flux_blend(
             ᶜl_mix,
             Y.c.ρtke / Y.c.ρ,

@@ -91,8 +91,8 @@ Any process that is not passed keeps its default, so
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` and `cloud_liquid_freezing`
-override the `CMP.Microphysics1MOptions` defaults.
+`get_microphysics_1m_options`). `cloud_ice_formation` overrides the
+`CMP.Microphysics1MOptions` default.
 
 # Fields
 
@@ -101,6 +101,9 @@ override the `CMP.Microphysics1MOptions` defaults.
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
+    `cloud_liquid_formation` may be `nothing`, `CMP.CloudLiquidFormation()`
+    (explicit via CM's bulk tendency), or `ImplicitCloudLiquidFormation()`
+    (implicit via `_add_implicit_lcl_condensation_*`).
 
 # Examples
 
@@ -125,8 +128,13 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # `cloud_ice_formation` overrides the CloudMicrophysics default
-        # (`ConstantTimescale`) so that these defaults match `default_config.yml`
+        # Override CM's `ConstantTimescale` ice formation default to match
+        # `default_config.yml`. `cloud_liquid_formation` keeps CM's default
+        # (`CloudLiquidFormation()`, explicit via CM's bulk tendency); passing
+        # `ImplicitCloudLiquidFormation()` here routes it through the implicit
+        # source. `create_parameters.jl` translates the choice into the
+        # matching `cloud_liquid_formation` on `microphysics_1m_params` (bulk)
+        # and `microphysics_1m_implicit_params` (implicit).
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
@@ -134,6 +142,27 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
+
+"""
+    ImplicitCloudLiquidFormation()
+
+Marker that selects the implicit cloud-liquid condensation / evaporation path
+(`_add_implicit_lcl_condensation_*`) for 1M microphysics. Stored in
+`NonEquilibriumMicrophysics1M.processes.cloud_liquid_formation` as a sibling
+of CM's `CMP.CloudLiquidFormation`, which selects the explicit bulk-averaged
+path. `create_parameters.jl` translates the choice into the matching
+`cloud_liquid_formation` on `microphysics_1m_params` (bulk) and
+`microphysics_1m_implicit_params` (implicit); `_split_cloud_liquid_formation`
+guarantees the two are mutually exclusive, so CM's `BulkMicrophysicsTendencies`
+does not also average condensation.
+
+Picking this path moves condensation out of CM's joint vapor-exchange solve
+and heating-rate limiter — see the "Implicit cloud-liquid condensation" section
+in `docs/src/microphysics.md` for the thermodynamic consequences and the
+Jacobian / predictor formulas Newton uses to recover the implicit answer.
+Temporary scaffolding toward a fully-coupled implicit microphysics solver.
+"""
+struct ImplicitCloudLiquidFormation end
 
 """
     NonEquilibriumMicrophysics2M
@@ -2735,7 +2764,17 @@ function AtmosModel(
     spaces = get_spaces(grid)
     FT = Spaces.undertype(spaces.center_space)
 
-    params = isnothing(params) ? ClimaAtmosParameters(FT) : params
+    # Thread the caller's microphysics_model so default params pick up its 1M
+    # process selections; otherwise they silently fall back to the defaults.
+    params =
+        isnothing(params) ?
+        ClimaAtmosParameters(
+            FT;
+            microphysics_model = get(
+                kwargs, :microphysics_model,
+                get(defaults, :microphysics_model, nothing),
+            ),
+        ) : params
     eltype(params) == FT || error(
         "Float-type mismatch: the grid is $FT but `params` is " *
         "$(eltype(params)). Use `ClimaAtmosParameters($FT)`.",

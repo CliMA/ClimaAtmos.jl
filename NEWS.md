@@ -15,6 +15,14 @@ main
   reader was left to a GC finalizer; under MPI, closing the file is collective, so a
   finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
   4–8 GPUs while `build_cache` set up the DSS buffers).
+- 1M cloud-liquid condensation / evaporation can now run through an
+  SGS-integrated implicit source. Selected by
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation`, which routes CM's
+  instantaneous `conv_q_vap_to_q_lcl` rate through
+  `_add_implicit_lcl_condensation_*` with a `−dtγ / (τ_cond · Γₗ)` Jacobian
+  diagonal and a forward-Euler updraft predictor.
+  `cloud_liquid_formation: CloudLiquidFormation` (default) keeps the
+  explicit bulk-averaged tendency; `~` disables condensation.
 - ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
   in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
   scaled by the effective-thickness factor `χ` of the in-cloud condensate

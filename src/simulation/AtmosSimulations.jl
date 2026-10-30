@@ -395,7 +395,9 @@ function AtmosSimulation(
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, resolved_steady_state_velocity,
+        Y, model, params, dt, start_date, resolved_steady_state_velocity;
+        ode_algo = ode_config,
+        update_cache_every,
     )
 
     # Combine all callbacks

@@ -98,9 +98,29 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    # Two 1M parameter sets: `bulk` carries `CloudLiquidFormation` iff the user
+    # selected it (CM's bulk averages condensation); `implicit` carries
+    # `CloudLiquidFormation` iff the user selected `ImplicitCloudLiquidFormation`
+    # (the implicit source `_add_implicit_lcl_condensation_*` runs). At most one
+    # of them is non-`nothing`.
+    _mp1m_opts = microphysics_1m_options(microphysics_model)
+    # When no 1M model is passed, fall back to CM's `CloudLiquidFormation()`
+    # (the explicit bulk-tendency default) so consumers that read either 1M
+    # mp still find a finite condensation timescale.
+    _clf =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.cloud_liquid_formation :
+        CM.Parameters.CloudLiquidFormation()
+    _bulk_clf, _implicit_clf = _split_cloud_liquid_formation(_clf)
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
-        microphysics_1m_options(microphysics_model)...,
+        _mp1m_opts...,
+        cloud_liquid_formation = _bulk_clf,
+    )
+    microphysics_1m_implicit_params = microphys_1m_parameters(
+        toml_dict;
+        _mp1m_opts...,
+        cloud_liquid_formation = _implicit_clf,
     )
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
@@ -110,9 +130,13 @@ function ClimaAtmosParameters(
     if !isnothing(microphysics_model)
         microphysics_model isa EquilibriumMicrophysics0M ||
             (microphysics_0m_params = nothing)
-        microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-            (microphysics_1m_params = nothing)
+        if !(
+            microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        )
+            microphysics_1m_params = nothing
+            microphysics_1m_implicit_params = nothing
+        end
         microphysics_model isa
         Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
             (microphysics_2m_params = nothing)
@@ -121,6 +145,7 @@ function ClimaAtmosParameters(
     end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
+    MP1MI = typeof(microphysics_1m_implicit_params)
     MP2M = typeof(microphysics_2m_params)
     MP2MP3 = typeof(microphysics_2mp3_params)
 
@@ -155,6 +180,7 @@ function ClimaAtmosParameters(
         MPC,
         MP0M,
         MP1M,
+        MP1MI,
         MP2M,
         MP2MP3,
         SFP,
@@ -176,6 +202,7 @@ function ClimaAtmosParameters(
         microphysics_cloud_params,
         microphysics_0m_params,
         microphysics_1m_params,
+        microphysics_1m_implicit_params,
         microphysics_2m_params,
         microphysics_2mp3_params,
         surface_fluxes_params,
@@ -282,6 +309,19 @@ function microphysics_1m_options(
         (pn => getproperty(processes, pn) for pn in propertynames(processes))...
     )
 end
+
+"""
+    _split_cloud_liquid_formation(clf)
+
+Translate the user-selected `cloud_liquid_formation` option into the pair
+`(bulk, implicit)` of CM-recognised values threaded into
+`microphysics_1m_params` and `microphysics_1m_implicit_params`.
+"""
+_split_cloud_liquid_formation(::Nothing) = (nothing, nothing)
+_split_cloud_liquid_formation(clf::CM.Parameters.CloudLiquidFormation) =
+    (clf, nothing)
+_split_cloud_liquid_formation(::ImplicitCloudLiquidFormation) =
+    (nothing, CM.Parameters.CloudLiquidFormation())
 
 """
     microphys_1m_parameters(FT; options_kwargs...)

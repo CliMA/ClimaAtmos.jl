@@ -597,38 +597,29 @@ end
 end
 
 """
-    _sum_1m_over_sgs(scheme, sgs_quad, cmp, thp, ρ, T, w,
-                     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-                     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-                     β_precip, σ_S, S_star, λ_eq, args)
+    _sum_over_conditional_sgs(make_evaluator, thp, ρ, T, mu_S, σ_S,
+                              λ_lagrange, λ_eq, α, q_c,
+                              T′T′, q′q′, corr_Tq, β_precip, S_star, sgs_quad)
 
-Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
-conditional-moment node rule (the arguments are those of
-`microphysics_tendencies_1m`, with the condensate and precipitation clamped
-non-negative and the shaft threshold `S_star` set).
-
-The nodes are placed by `conditional_rule` at the conditional moments of `S′`
-on the intervals between the cloud edges `−λ_lagrange/α` and `−λ_eq` and the
-shaft edge `S_star`, with the temperature regressed on `S′`
-(`sgs_temperature_regression`) and split at the freezing point where its
-spread at fixed `S′` straddles it (`sum_over_conditional_nodes`). The rule
-integrates the piecewise-linear condensates exactly; the multiplier and slope
-of the actual condensate are scaled by the common factor that makes the node
-mean of `max(0, λ + α S′)` equal `q_c` to rounding, which leaves the cloud
-edge `−λ/α` and the cloud fraction unchanged. The shaft fraction is the node
-weight of the shaft from the nodes' own flags
-(`conditional_rule_shaft_fraction`), so the placement conserves the cell-mean
-precipitation exactly for any `a_p` (the shaft is bounded below by
-`precip_frac_floor`).
+Shared conditional-moment integration driver. Builds the `conditional_rule`
+with cloud edges `−λ_lagrange/α`, `−λ_eq` and the shaft edge
+`t_p = β_precip > 0 ? S_star : Inf`; rescales `(λ_lagrange, α)` by the common
+factor `s` that makes the node mean of `max(0, λ + α S′)` equal `q_c` to
+rounding; computes the shaft fraction (`1` when `β_precip = 0`) and the
+`TemperatureSpread` with `β_T`-regressed temperature spread at fixed `S′`;
+calls `make_evaluator(s·λ_lagrange, s·α_safe, shaft_frac)` to build the
+caller's evaluator with the scaled parameters, and returns the sum via
+`sum_over_conditional_nodes`. Shared by `_sum_1m_over_sgs` (explicit bulk
+tendency) and `_sum_cond_over_sgs` (implicit condensation).
 """
-@inline function _sum_1m_over_sgs(
-    scheme, sgs_quad, cmp, thp, ρ, T, w,
-    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-    β_precip, σ_S, S_star, λ_eq, args,
+@inline function _sum_over_conditional_sgs(
+    make_evaluator,
+    thp, ρ, T, mu_S, σ_S,
+    λ_lagrange, λ_eq, α, q_c,
+    T′T′, q′q′, corr_Tq,
+    β_precip, S_star, sgs_quad,
 )
     FT = typeof(ρ)
-    q_c = q_lcl + q_icl
     α_safe = max(FT(α), ϵ_numerics(FT))
     t_a = -FT(λ_lagrange) / α_safe
     t_e = -FT(λ_eq)
@@ -650,18 +641,43 @@ precipitation exactly for any `a_p` (the shaft is bounded below by
         conditional_rule_shaft_fraction(rule),
         one(FT),
     )
-    evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ, w,
-        q_rai, q_sno, λ,
-        ξ_liq, ξ_ice, q_lcl, q_icl,
-        s * FT(λ_lagrange), λ_eq, mu_S, s * α_safe,
-        β_precip, shaft_frac, dt, nsubs, args,
-    )
     spread = TemperatureSpread(
         thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
         FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
     )
+    evaluator = make_evaluator(s * FT(λ_lagrange), s * α_safe, shaft_frac)
     return sum_over_conditional_nodes(evaluator, rule, spread)
+end
+
+"""
+    _sum_1m_over_sgs(scheme, sgs_quad, cmp, thp, ρ, T, w,
+                     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+                     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+                     β_precip, σ_S, S_star, λ_eq, args)
+
+Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF using
+`_sum_over_conditional_sgs`. The rule integrates the piecewise-linear
+condensates exactly; the node weight of the shaft
+(`conditional_rule_shaft_fraction`) conserves the cell-mean precipitation
+exactly for any `a_p` (bounded below by `precip_frac_floor`).
+"""
+@inline function _sum_1m_over_sgs(
+    scheme, sgs_quad, cmp, thp, ρ, T, w,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, λ_eq, args,
+)
+    return _sum_over_conditional_sgs(
+        (λ_scaled, α_scaled, shaft_frac) -> Microphysics1MEvaluator(
+            scheme, cmp, thp, ρ, w,
+            q_rai, q_sno, λ,
+            ξ_liq, ξ_ice, q_lcl, q_icl,
+            λ_scaled, λ_eq, mu_S, α_scaled,
+            β_precip, shaft_frac, dt, nsubs, args,
+        ),
+        thp, ρ, T, mu_S, σ_S, λ_lagrange, λ_eq, α, q_lcl + q_icl,
+        T′T′, q′q′, corr_Tq, β_precip, S_star, sgs_quad,
+    )
 end
 
 """

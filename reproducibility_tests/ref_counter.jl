@@ -1,4 +1,4 @@
-447
+448
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+448
+- 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
+  via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
+  routes it through an SGS-integrated implicit source with a
+  `−dtγ / (τ_cond · Γₗ)` Jacobian diagonal.
+
 447
 - Snow falls at the Chen et al. (2022) speed by default;
   `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 200.

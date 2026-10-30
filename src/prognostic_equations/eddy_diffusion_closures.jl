@@ -1285,7 +1285,9 @@ function add_cloud_species_diffusionᵥ!(
     ᶜscratch,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
+    # The Damköhler blend needs the condensation timescale regardless of
+    # which path integrates condensation; pick whichever 1M mp carries it.
+    cmp = CAP.cloud_liquid_formation_1m_params(p.params)
     c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
     (; ᶜl_mix, ᶜp) = p.precomputed
     ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch

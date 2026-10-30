@@ -642,6 +642,33 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     update_updraft_microphysics_tendency_cache!(
         Y, p, microphysics_model, turbconv_model, dtγ,
     )
+
+    # Implicit condensation source: evaluated at the transport state (before the
+    # explicit sources below change it). Stage-averaged along the adiabat as
+    # Δq_lcl = τ·S·(1−exp(−dtγ/τ)) — what CM's bulk averaging would produce if
+    # condensation were the only process in the window. Reduces to dtγ·S for
+    # dtγ ≪ τ, saturates at (q_v − q_sat)/Γ_cp for dtγ ≫ τ.
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        mp = CAP.microphysics_1m_implicit_params(p.params)
+        if !isnothing(mp.processes.cloud_liquid_formation)
+            thp = CAP.thermodynamics_params(p.params)
+            τ_cond = CAP.condensation_evaporation_timescale(p.params)
+            for j in 1:n_mass_flux_subdomains(turbconv_model)
+                sgsʲ = Y.c.sgsʲs.:($j)
+                MatrixFields.has_field(sgsʲ, @name(q_lcl)) || continue
+                ᶜTʲ = p.precomputed.ᶜTʲs.:($j)
+                ᶜρʲ = p.precomputed.ᶜρʲs.:($j)
+                ᶜq_tot_nonnegʲ = p.precomputed.ᶜq_tot_nonnegʲs.:($j)
+                @. sgsʲ.q_lcl +=
+                    τ_cond * (1 - exp(-dtγ / τ_cond)) *
+                    _cm_condensation_rate(
+                        mp, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
+                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
+                    )
+            end
+        end
+    end
+
     # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs`; a pair
     # with either name missing is skipped.
     condensate_sources = (
@@ -661,6 +688,7 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
             @. χ += dtγ * S
         end
     end
+
     return nothing
 end
 

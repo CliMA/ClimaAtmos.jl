@@ -578,8 +578,12 @@ accessors generated at the bottom of this module, e.g.
     activation, and the aerosol-ML coefficients.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
-  - `microphysics_1m_params`: `CloudMicrophysics` 1-moment parameters, or
-    `nothing`.
+  - `microphysics_1m_params`: 1-moment parameters with
+    `cloud_liquid_formation = nothing` (bulk tendency never averages
+    condensation), or `nothing`.
+  - `microphysics_1m_implicit_params`: 1-moment parameters with the user's
+    `cloud_liquid_formation`, consumed by the implicit condensation source,
+    or `nothing`.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
     or `nothing`.
   - `microphysics_2mp3_params`: `CloudMicrophysics` 2-moment plus P3-ice
@@ -653,6 +657,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MPC,
     MP0M,
     MP1M,
+    MP1MI,
     MP2M,
     MP2MP3,
     SFP,
@@ -673,6 +678,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
+    microphysics_1m_implicit_params::MP1MI
     microphysics_2m_params::MP2M
     microphysics_2mp3_params::MP2MP3
     surface_fluxes_params::SFP
@@ -807,6 +813,23 @@ end
 # the sub-parameter sets, which the loops above delegate through.
 for var in fieldnames(ClimaAtmosParameters)
     @eval $var(ps::ACAP) = ps.$var
+end
+
+"""
+    cloud_liquid_formation_1m_params(ps)
+
+Return whichever of the two 1M parameter sets carries CM's
+`CloudLiquidFormation`, so consumers that need the condensation timescale
+(regardless of which path integrates it) can dispatch uniformly through
+CM's `τ_vap_to_q_lcl`. Falls back to `microphysics_1m_params` when neither
+is active (both carry `nothing` and the CM dispatch returns `Inf`).
+"""
+function cloud_liquid_formation_1m_params(ps::ACAP)
+    imp = microphysics_1m_implicit_params(ps)
+    if !isnothing(imp) && !isnothing(imp.processes.cloud_liquid_formation)
+        return imp
+    end
+    return microphysics_1m_params(ps)
 end
 
 end
