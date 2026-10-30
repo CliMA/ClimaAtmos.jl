@@ -176,8 +176,9 @@ function get_setup_type(parsed_args, thermo_params)
         # Read the cfsite group into steady in-memory profiles, then drive it
         # through the generic ForcingFromFile path. Defaults give an interactive
         # Monin-Obukhov surface with the file's `ts` and the constant insolation
-        # carried in the data (matching the former GCMDrivenInsolation).
-        data = ColumnDatasets.GCMColumnData.read_cfsite(
+        # carried in the data (matching the former GCMDrivenInsolation). Lists
+        # of files or cfsites give one group per column.
+        data = ColumnDatasets.GCMColumnData.read_cfsite.(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"];
             thermo_params,
@@ -188,6 +189,10 @@ function get_setup_type(parsed_args, thermo_params)
         isnothing(varanal_file) && error(
             "initial_condition `ARMVARANAL` requires `external_forcing_file` \
              to point at an ARM VARANAL file",
+        )
+        varanal_file isa AbstractVector && error(
+            "`external_forcing_file` must be one path for ARMVARANAL. Only \
+             ForcingFromFile and GCM read one file per column",
         )
         start_date = parsed_args["start_date"]
         FT = eltype(thermo_params)
@@ -232,7 +237,7 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         return Setups.ForcingFromFile(
-            era5_dataset(parsed_args, FT),
+            era5_datasets(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
@@ -242,7 +247,7 @@ function get_setup_type(parsed_args, thermo_params)
              to point at a column forcing file",
         )
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            ColumnDatasets.ColumnDataset.(external_forcing_file),
             parsed_args["start_date"],
         )
     elseif ic_name == "WeatherModel"
@@ -472,7 +477,8 @@ end
     get_grid(parsed_args, params, context)
 
 Build the computational grid selected by the `config` key: `"sphere"` gives a
-`SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
+`SphereGrid`, `"column"` a `ColumnGrid` (or a `MultiColumnGrid` of `n_columns`
+columns when `n_columns` is not 1), `"box"` a `BoxGrid`, and `"plane"` a
 `PlaneGrid`.
 
 All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
@@ -521,7 +527,9 @@ function get_grid(parsed_args, params, context)
             kwargs...,
         )
     elseif config == "column"
-        ColumnGrid(FT; context, kwargs...)
+        n_columns = parsed_args["n_columns"]
+        n_columns == 1 ? ColumnGrid(FT; context, kwargs...) :
+        MultiColumnGrid(FT; context, n_columns, kwargs...)
     elseif config == "box"
         BoxGrid(
             FT;

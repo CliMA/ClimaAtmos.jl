@@ -36,17 +36,17 @@ function DecayingProfile(;
     return DecayingProfile(perturb, thermo_params)
 end
 
-_temperature_perturbation(coord::Geometry.LatLongZPoint{FT}) where {FT} =
+_temperature_perturbation(coord::Geometry.LatLongZPoint{FT}, ::Val{true}) where {FT} =
     FT(0.1) * sind(coord.long) * (coord.z < 5000)
-_temperature_perturbation(coord::Geometry.XZPoint{FT}) where {FT} =
+_temperature_perturbation(coord::Geometry.XZPoint{FT}, _) where {FT} =
     FT(0.1) * sin(coord.x) * (coord.z < 5000)
-_temperature_perturbation(coord::Geometry.XYZPoint{FT}) where {FT} =
+_temperature_perturbation(coord::Geometry.XYZPoint{FT}, _) where {FT} =
     FT(0.1) * sin(coord.x) * (coord.z < 5000)
 # TODO: Is this a good default?
-_temperature_perturbation(::Geometry.AbstractPoint{FT}) where {FT} =
+_temperature_perturbation(::Geometry.AbstractPoint{FT}, _) where {FT} =
     FT(0)
 
-function center_initial_condition(setup::DecayingProfile, local_geometry, params)
+function center_initial_condition(setup::DecayingProfile, local_geometry, params, sphere)
     FT = eltype(params)
     # A setup constructed without `params` or `thermo_params` stores `nothing`
     # and takes the thermodynamics parameters of the simulation.
@@ -61,7 +61,7 @@ function center_initial_condition(setup::DecayingProfile, local_geometry, params
     (; z) = local_geometry.coordinates
     T, p = temp_profile(thermo_params, z)
     if setup.perturb
-        T += _temperature_perturbation(local_geometry.coordinates)
+        T += _temperature_perturbation(local_geometry.coordinates, sphere)
     end
 
     return physical_state(; T, p)

@@ -656,8 +656,9 @@ the `ReanalysisTimeVarying` case; `monthly = true` selects the
 monthly-averaged-diurnal file (one repeating day) used by the
 `ReanalysisMonthlyAveragedDiurnal` forcing.
 
-The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: the config getters
-just call it and hand the result to `ForcingFromFile` / `ExternalDrivenTVForcing`.
+The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: `era5_datasets`
+calls it once per site, and the config getters hand the result to
+`ForcingFromFile` / `ExternalDrivenTVForcing`.
 """
 function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
     path =
@@ -696,6 +697,23 @@ function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
         end
     end
     return ColumnDatasets.ColumnDataset(path)
+end
+
+"""
+    era5_datasets(parsed_args, FT; monthly = false)
+
+`era5_dataset` of every column: one `ColumnDataset` when `site_latitude`
+and `site_longitude` are numbers, and otherwise a vector with one per column,
+broadcasting the two keys against each other. Columns at the same site share a
+dataset.
+"""
+function era5_datasets(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
+    by_site = Dict()
+    site_dataset(latitude, longitude) = get!(by_site, (latitude, longitude)) do
+        site = Dict("site_latitude" => latitude, "site_longitude" => longitude)
+        era5_dataset(merge(parsed_args, site), FT; monthly)
+    end
+    return site_dataset.(parsed_args["site_latitude"], parsed_args["site_longitude"])
 end
 
 """

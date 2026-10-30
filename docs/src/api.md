@@ -44,6 +44,7 @@ ClimaAtmos.Presets.aquaplanet
 ```@docs
 ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
+ClimaAtmos.MultiColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
 ```
@@ -422,6 +423,7 @@ ARM VARANAL and GCM cfsite converters. See the
 ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
 ClimaAtmos.ColumnDatasets.InMemoryColumnData
+ClimaAtmos.ColumnDatasets.PerColumnDatasets
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile
@@ -444,7 +446,6 @@ ClimaAtmos.ColumnDatasets.column_timevaryinginputs
 ClimaAtmos.ColumnDatasets.surface_timevaryinginputs
 ClimaAtmos.ColumnDatasets.time_interpolation_method
 ClimaAtmos.ColumnDatasets.periodic_calendar_method
-ClimaAtmos.ColumnDatasets.extrapolation_bc
 ClimaAtmos.ColumnDatasets.preprocess
 ```
 

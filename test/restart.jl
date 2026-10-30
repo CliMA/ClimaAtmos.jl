@@ -214,7 +214,7 @@ if MANYTESTS
     # step per grid.
     available_grids =
         comms_ctx isa ClimaComms.SingletonCommsContext ?
-        ["sphere", "box", "column"] : ["sphere", "box"]
+        ["sphere", "box", "column", "multicolumn"] : ["sphere", "box"]
     grids = if isempty(GRIDS)
         available_grids
     else
@@ -272,7 +272,8 @@ if MANYTESTS
                         "check_nan_every" => 3,
                         "log_progress" => false,
                         "microphysics_model" => mp_model,
-                        "config" => grid,
+                        "config" => grid == "multicolumn" ? "column" : grid,
+                        "n_columns" => grid == "multicolumn" ? 2 : 1,
                         "topography" => topography,
                         "turbconv" => turbconv_mode,
                         "dt" => "1secs",
