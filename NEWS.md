@@ -3,6 +3,18 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
+  cadence from `t_end` rather than `t_end - dt`, so a run ending exactly on a
+  threshold (1 hour, 1 day, 30 days, 90 days) gets that threshold's cadence
+  instead of the next finer one. Because the output period also sets the compute
+  schedule, `longrun_{dry,moist}_baroclinic_wave_he60` (`t_end: "30days"`,
+  `dt: "30secs"`) were computing every default diagnostic every step for daily
+  output; they now write ten-daily output sampled six-hourly. Runs of exactly one
+  day (e.g. `held_suarez_equil`, `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_dycoms_rf02_column`) now write one daily average instead of
+  hourly ones, and runs of exactly one hour write one hourly average instead of
+  none. Because `t_end` is relative to `start_date`, the cadence is also stable
+  across a restart.
 
 - ![][badge-✨feature/enhancement] add 1M microphysics options
   `rain_autoconversion: KK2000` and `cloud_liquid_rain_accretion: KK2000`.
