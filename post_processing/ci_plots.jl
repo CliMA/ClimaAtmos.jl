@@ -1496,15 +1496,19 @@ function make_plots(
     reduction_avg = "average"
     reduction_inst = "inst"
 
-    available_periods_avg = collect(
-        ClimaAnalysis.available_periods(
-            simdirs[1];
-            short_name = short_names[1],
-            reduction = reduction_avg,
-        ),
-    )
-    period_avg =
-        available_periods_avg[argmin(CA.time_to_seconds.(available_periods_avg))]
+    # Resolved per simdir and per variable: the default averaging period follows
+    # `t_end`, so the bundles being compared need not share one, and variables
+    # averaged only through the YAML `diagnostics` list keep their own period.
+    function period_avg(simdir, short_name)
+        periods = collect(
+            ClimaAnalysis.available_periods(
+                simdir;
+                short_name,
+                reduction = reduction_avg,
+            ),
+        )
+        return periods[argmin(CA.time_to_seconds.(periods))]
+    end
 
     available_periods_inst = collect(
         ClimaAnalysis.available_periods(
@@ -1536,7 +1540,12 @@ function make_plots(
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
             vars = map(
                 short_name ->
-                    get(simdir; short_name, reduction = reduction_avg, period = period_avg),
+                    get(
+                        simdir;
+                        short_name,
+                        reduction = reduction_avg,
+                        period = period_avg(simdir, short_name),
+                    ),
                 name_tuple,
             )
             return vars
