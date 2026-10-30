@@ -209,7 +209,7 @@ including the per-subdomain microphysics process rates. Prepend one to a case
 configuration:
 
 ```bash
-julia +1.11 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
+julia +1.13 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
 ```
 
 Later `--config_file` arguments win on conflicting keys; see

@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.11'
+          - '1.13'
         # Ubuntu only. `main` then exercises the required jobs that gate a 
         # pull request, so the workflow badge means "the required checks are 
         # green". 
