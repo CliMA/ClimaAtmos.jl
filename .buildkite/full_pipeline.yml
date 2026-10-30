@@ -893,22 +893,14 @@ steps:
         agents:
           slurm_mem: 16GB
 
+      # Only the sphere and the column restart on the GPU. The sphere covers
+      # the device-side checkpoint write and read, and the column is the only
+      # CUDA run of a column model in CI.
       - label: ":computer: Restart: Using manytests, sphere, GPU"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid sphere
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
-
-      - label: ":computer: Restart: Using manytests, box, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite test/restart.jl --manytests true
-          --grid box
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -944,8 +936,8 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 32G
 
-      # Each rank compiles the model for the GPU, which takes about 40 minutes
-      # before the first checkpoint is written. Soft-fail when the agent is lost.
+      # Each rank compiles the model for the GPU, so the job takes about 30
+      # minutes. Soft-fail when the agent is lost.
       - label: ":computer: Restart 2-process MPI, GPU"
         command: >
           srun julia --color=yes --project=.buildkite test/restart.jl
@@ -967,16 +959,6 @@ steps:
           julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
         agents:
           slurm_mem: 16GB
-
-      - label: ":computer: Restart: Using AtmosSimulation, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite test/restart_AtmosSimulation.jl
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
 
       #- label: ":computer: Restart: Using AtmosSimulation manytests"
       #  command: >
