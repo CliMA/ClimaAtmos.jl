@@ -216,7 +216,7 @@ foreach_gs_tracer(Yₜ, Base.materialize(ᶜspecific_gs_tracers(Y))) do ᶜρχ�
 end
 ```
 """
-foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
+@inline foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
     unrolled_foreach(gs_tracer_names(Y_or_similar_values[1])) do ρχ_name
         ρχ_or_χ_fields = unrolled_map(Y_or_similar_values) do value
             field = value isa Fields.Field ? value : value.c
