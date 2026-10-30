@@ -17,8 +17,8 @@ Always read the ClimaAtmos-specific guide before working in this repository:
 
 ## Local norms
 
-- Prefer Julia 1.11.x for local work. GitHub CI runs every test group on 1.11 and only `infrastructure` on 1.10.
-- For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
+- Prefer Julia 1.13.x for local work. GitHub CI runs every test group on 1.13 and only `infrastructure` on 1.10.
+- For runtime validation, prefer `julia +1.13 --project=.buildkite .buildkite/ci_driver.jl ...`.
 - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
 - Match existing style: explicit names, narrow imports, comments that explain why.
@@ -27,7 +27,7 @@ Always read the ClimaAtmos-specific guide before working in this repository:
   commit message, and in `NEWS.md` when behavior changes.
 - Follow the software design patterns in [docs/dev-guides/architecture/software_design_patterns.md](docs/dev-guides/architecture/software_design_patterns.md) for new code and refactor toward them when touching existing code.
 - Format code before committing. CI checks formatting via the `prek` hook in [.github/workflows/run-prek.yml](.github/workflows/run-prek.yml), which runs JuliaFormatter from the version-pinned [.dev/format/Project.toml](.dev/format/Project.toml) environment (currently `=2.10.1`). Match CI with either `prek run julia-formatter --all-files` or the pinned env directly: `julia --startup-file=no --project=.dev/format -e 'using Pkg; Pkg.instantiate(io=devnull); using JuliaFormatter; format(ARGS)' .`. Avoid `julia -e 'using JuliaFormatter; format(\".\")'` from your global environment — `Pkg.add("JuliaFormatter")` installs v2 by default and a mismatched version produces a different diff.
-- Build the docs with `julia +1.11 --project=docs docs/make.jl`. `docs/Manifest.toml`
+- Build the docs with `julia +1.13 --project=docs docs/make.jl`. `docs/Manifest.toml`
   is gitignored, so a local copy goes stale as dependencies move; refresh it the
   way [docs.yml](.github/workflows/docs.yml) does — `Pkg.develop(PackageSpec(path="."))`
   then `Pkg.instantiate()` in the `docs` environment — before concluding that a

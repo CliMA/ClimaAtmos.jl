@@ -47,6 +47,7 @@ import ClimaAnalysis:
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
+import OrderedCollections: OrderedDict
 
 using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
@@ -363,7 +364,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     if !isempty(times)
         output_spectrum =
             zeros((length(times), num_output, length(var.dims[dim3])))
-        dims = Dict(time => times)
+        dims = OrderedDict(time => times)
         dim_attributes = Dict(time => var.dim_attributes[time])
         for index in 1:length(times)
             spectrum_data, _wave_numbers, _spherical, mesh_info =
@@ -375,7 +376,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
                 ]
         end
     else
-        dims = Dict{String, Vector{FT}}()
+        dims = OrderedDict{String, Vector{FT}}()
         dim_attributes = Dict{String, Dict{String, String}}()
         output_spectrum = zeros((num_output, length(var.dims[dim3])))
         spectrum_data, _wave_numbers, _spherical, mesh_info =
