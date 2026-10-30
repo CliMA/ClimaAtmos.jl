@@ -6,6 +6,11 @@ main
 
 0.42.17
 -------
+- ![][badge-💥breaking] Update to ClimaDiagnostics v0.4. NetCDF diagnostics no
+  longer have `date` and `date_bnds`, and `time` is in seconds since
+  `start_date`. Time-reduced diagnostics no longer include the initial state,
+  and the times saved for the `DictWriter` and `HDF5Writer` are saved at the
+  start of the output window.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
   cadence from `t_end` rather than `t_end - dt`, so a run ending exactly on a
   threshold (1 hour, 1 day, 30 days, 90 days) gets that threshold's cadence
@@ -244,11 +249,6 @@ main
   uses the same heat capacity as the gradient of the draft moist static energy,
   the energy the diagnosed environment absorbs from draft diffusion is exactly
   the enthalpy of the dry air that the diffusing water displaces.
-- ![][badge-💥breaking] Update to ClimaDiagnostics v0.4. NetCDF diagnostics no
-  longer have `date` and `date_bnds`, and `time` is in seconds since
-  `start_date`. Time-reduced diagnostics no longer include the initial state,
-  and the times saved for the `DictWriter` and `HDF5Writer` are saved at the
-  start of the output window.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter
