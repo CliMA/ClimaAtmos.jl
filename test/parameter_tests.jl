@@ -305,31 +305,36 @@ end
 
 @testset "0M precipitation evaporation parameters" begin
     m0 = CA.EquilibriumMicrophysics0M()
+    override = Dict(
+        "precipitation_evaporation_coefficient" => 1.36e-4,
+        "precipitation_evaporation_rh_crit" => 0.85,
+        "precipitation_evaporation_area_fraction" => 0.5,
+        "precipitation_evaporation_flux_scale" => 4e-3,
+        "precipitation_evaporation_exponent" => 0.6,
+    )
+    override_toml(FT) = CP.create_toml_dict(
+        FT;
+        override_file = Dict(
+            k => Dict("value" => v, "type" => "float") for (k, v) in override
+        ),
+    )
     for FT in (Float32, Float64)
-        # The ClimaParams defaults switch evaporation off: no evaporation
-        # parameters are built, and the coefficient is logged as used.
-        toml_dict = CP.create_toml_dict(FT)
-        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
-        @test isnothing(CAP.microphysics_0m_params(params).evaporation)
-        @test isbits(CAP.microphysics_0m_params(params))
-        @test "ClimaAtmos" in
-              toml_dict.data["precipitation_evaporation_coefficient"]["used_in"]
+        # Option off (the default): no evaporation parameters are built and
+        # none is read, even with a positive coefficient in the TOML.
+        for toml_dict in (CP.create_toml_dict(FT), override_toml(FT))
+            params =
+                CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+            @test isnothing(CAP.microphysics_0m_params(params).evaporation)
+            @test isbits(CAP.microphysics_0m_params(params))
+        end
 
-        override = Dict(
-            "precipitation_evaporation_coefficient" => 1.36e-4,
-            "precipitation_evaporation_rh_crit" => 0.85,
-            "precipitation_evaporation_area_fraction" => 0.5,
-            "precipitation_evaporation_flux_scale" => 4e-3,
-            "precipitation_evaporation_exponent" => 0.6,
+        # Option on: the evaporation parameters come from the TOML.
+        toml_dict = override_toml(FT)
+        params = CA.ClimaAtmosParameters(
+            toml_dict;
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
         )
-        toml_dict = CP.create_toml_dict(
-            FT;
-            override_file = Dict(
-                k => Dict("value" => v, "type" => "float") for
-                (k, v) in override
-            ),
-        )
-        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
         evaporation = CAP.microphysics_0m_params(params).evaporation
         @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
         @test isbits(CAP.microphysics_0m_params(params))
@@ -341,5 +346,44 @@ end
         for name in keys(override)
             @test "CloudMicrophysics" in toml_dict.data[name]["used_in"]
         end
+
+        # Option on with the default coefficient (0) is an error.
+        @test_throws ErrorException CA.ClimaAtmosParameters(
+            CP.create_toml_dict(FT);
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
+        )
+        # The option is only valid with 0M microphysics.
+        @test_throws ErrorException CA.ClimaAtmosParameters(
+            override_toml(FT);
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            precipitation_evaporation_0m = true,
+        )
     end
+
+    # The option is read from the YAML config.
+    function config_0m(option)
+        mktemp() do path, io
+            write(
+                io,
+                """
+      [precipitation_evaporation_coefficient]
+      value = 1.36e-4
+      """,
+            )
+            flush(io)
+            config = CA.AtmosConfig(
+                Dict(
+                    "toml" => [path],
+                    "microphysics_model" => "0M",
+                    "precipitation_evaporation_0m" => option,
+                ),
+                job_id = "parameter_test_0m_evaporation",
+            )
+            CAP.microphysics_0m_params(CA.ClimaAtmosParameters(config))
+        end
+    end
+    @test isnothing(config_0m(nothing).evaporation)
+    @test config_0m("Kessler").evaporation.k_E === Float32(1.36e-4)  # default FLOAT_TYPE
+    @test_throws ErrorException config_0m("NotAnOption")
 end

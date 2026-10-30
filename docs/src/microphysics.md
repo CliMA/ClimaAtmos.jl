@@ -20,9 +20,12 @@ The equilibrium 0-moment option does not introduce any microphysics variables be
 The cloud condensate and phase partitioning are diagnosed using saturation adjustment
 and the 0-moment microphysics provides a sink on total water due to precipitation.
 Precipitation is immediately removed from the computational domain, except for the part
-that evaporates or sublimates below cloud. This evaporation is off by default
-(`precipitation_evaporation_coefficient = 0`) and on when the coefficient is positive,
-in which case the other `precipitation_evaporation_*` parameters are read; a top-down
+that evaporates or sublimates below cloud. This evaporation is a model option, set
+in the YAML config with `precipitation_evaporation_0m: "Kessler"` (default `~`, off;
+the option is only valid with `microphysics_model: "0M"`). When it is on, the
+`precipitation_evaporation_*` parameters are read from the parameter TOML, and
+`precipitation_evaporation_coefficient` must be set to a positive value there
+(its ClimaParams default is 0, and the run errors if it is not positive); a top-down
 column scan then returns part of the falling flux to vapor, limited by the flux and by
 wet-bulb cooling.
 With `PrognosticEDMFX`, updraft condensate precipitates on its own timescale,

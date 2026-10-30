@@ -30,7 +30,7 @@ tm_pedmfx(params) = (;
     ),
 )
 
-const EVAP_ON = Dict(
+const EVAP_COEFFICIENT = Dict(
     "precipitation_evaporation_coefficient" =>
         Dict("value" => 5.44e-4, "type" => "float"),
 )
@@ -38,11 +38,13 @@ const EVAP_ON = Dict(
 """
 Build a 0M column (optionally with PrognosticEDMFX) with a cloudy layer at
 3-6 km (q_tot = 1.5 q_sat) over dry air (q_tot = 0.4 q_sat), and set all
-precomputed quantities.
+precomputed quantities. The TOML always sets a positive evaporation coefficient;
+`evaporation` turns the `precipitation_evaporation_0m` option on.
 """
-function build(edmf::Bool; overrides = Dict())
+function build(edmf::Bool; evaporation = false)
     params = CA.ClimaAtmosParameters(
-        CP.create_toml_dict(FT; override_file = overrides),
+        CP.create_toml_dict(FT; override_file = EVAP_COEFFICIENT);
+        precipitation_evaporation_0m = evaporation,
     )
     model = CA.AtmosModel(
         grid;
@@ -86,7 +88,7 @@ getd(name, Y, p) = Base.materialize(
     for edmf in (false, true)
         @testset "PrognosticEDMFX = $edmf" begin
             (Y0, p0) = build(edmf)
-            (Y1, p1) = build(edmf; overrides = EVAP_ON)
+            (Y1, p1) = build(edmf; evaporation = true)
             @test parent(Y0) == parent(Y1)
             @test isnothing(CAP.microphysics_0m_params(p0.params).evaporation)
             @test !isnothing(CAP.microphysics_0m_params(p1.params).evaporation)

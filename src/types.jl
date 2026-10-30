@@ -45,6 +45,16 @@ Equilibrium (saturation-adjustment) moisture with a 0-moment precipitation sink.
 Only `ρq_tot` is prognostic; cloud liquid and ice are diagnosed by saturation
 adjustment, and condensate in excess of a threshold is removed instantaneously.
 Selected by `microphysics_model: "0M"`. Requires `use_sgs_quadrature: true`.
+
+Optional processes are config keys that select which 0-moment parameter sets are
+built (see `microphysics_0m_parameters`); `~` (null) disables the process:
+
+| Process                                  | Config key                     | Variants                 |
+|:---------------------------------------- |:------------------------------ |:------------------------ |
+| below-cloud evaporation of precipitation | `precipitation_evaporation_0m` | `Kessler`, `~` (default) |
+
+With `Kessler`, the `precipitation_evaporation_*` parameters are read from the
+parameter TOML, and `precipitation_evaporation_coefficient` must be positive.
 """
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 

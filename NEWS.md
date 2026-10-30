@@ -4,15 +4,19 @@ ClimaAtmos.jl Release Notes
 main
 ----
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
-  sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`, off
-  unless `precipitation_evaporation_coefficient > 0`; the other
-  `precipitation_evaporation_*` parameters are read only then), and, with
-  `PrognosticEDMFX`, a separate updraft precipitation timescale
-  `precipitation_timescale_updraft_ratio * precipitation_timescale` (ratio 1
-  by default, so behavior is unchanged). Requires ClimaParams 1.3.2 and the
-  next breaking CloudMicrophysics release (compat `0.48.0` is a placeholder
+  sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`),
+  turned on with the new config option `precipitation_evaporation_0m: "Kessler"`
+  (default `~`, off; valid only with `microphysics_model: "0M"`). With the
+  option on, `precipitation_evaporation_coefficient` must be set to a positive
+  value in the parameter TOML (its ClimaParams default, 0, is an error), and the
+  other `precipitation_evaporation_*` parameters are read; with it off none of
+  them are read. With `PrognosticEDMFX`, a separate updraft precipitation
+  timescale `precipitation_timescale_updraft_ratio * precipitation_timescale`
+  (ratio 1 by default, so behavior is unchanged). Requires ClimaParams 1.3.2 and
+  the next breaking CloudMicrophysics release (compat `0.48.0` is a placeholder
   until that release is tagged). New diagnostics `prevap`, `tnhusevp` and
-  `prup`. The TRMM 0M EDMF column job turns evaporation on.
+  `prup`. The TRMM 0M EDMF column job turns evaporation on
+  (`precipitation_evaporation_0m: "Kessler"`, coefficient 1.36e-4 in its TOML).
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.
