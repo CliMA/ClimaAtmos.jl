@@ -1326,23 +1326,32 @@ end
 """
     set_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
-Compute the surface fluxes of rain and snow and the column-integrated
-precipitation energy tendency. Returns `nothing`.
+Compute the surface fluxes of rain and snow, the energy they carry, and the
+column-integrated precipitation energy tendency. Returns `nothing`.
 
 Mutates `p.precomputed.surface_rain_flux` and `p.precomputed.surface_snow_flux`
-[kg/m²/s], and `p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The
-sign convention is upward-positive, so all three are negative when precipitation
-reaches the surface.
+[kg/m²/s], `p.precomputed.surface_rain_energy_flux` and
+`p.precomputed.surface_snow_energy_flux` [W/m²], and
+`p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The sign convention
+is upward-positive, so all are negative when precipitation reaches the surface.
+The rain and snow energy fluxes sum to `col_integrated_precip_energy_tendency`.
+Rain includes sedimenting cloud liquid and snow includes sedimenting cloud ice.
 
 Dispatch on `microphysics_model`:
 
   - `EquilibriumMicrophysics0M`: the fluxes are column integrals of the
-    density-weighted `q_tot` sink `ᶜρ_dq_tot_dt`, partitioned into rain and snow by
-    the freezing temperature.
+    density-weighted `q_tot` and `e_tot` sinks `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`,
+    partitioned into rain and snow by the freezing temperature.
   - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: the fluxes
     are evaluated at the bottom cell face from the level-1 specific humidities and
     terminal velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
     extrapolation of density to the surface. Uses `p.scratch` scalars.
+    The rain energy flux is the rain mass
+    flux times the level-1 liquid internal energy plus geopotential,
+    `Iₗ(T) + Φ`; the snow energy flux is the remainder of the total. With
+    `PrognosticEDMFX` the rain energy uses the grid-mean temperature, so the
+    rain/snow split is approximate while their sum stays exact. Uses `p.scratch`
+    scalars.
   - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
     `ρq_rim`, and `ρb_rim` are not yet accounted for.
   - Default: no-op.
@@ -1360,6 +1369,7 @@ function set_precipitation_surface_fluxes!(
     (; ᶜT) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; surface_rain_energy_flux, surface_snow_energy_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
 
     # update total column energy source for surface energy balance
@@ -1375,6 +1385,11 @@ function set_precipitation_surface_fluxes!(
     ᶜ3d_snow = @. lazy(ifelse(ᶜT < T_freeze, ᶜρ_dq_tot_dt, FT(0)))
     Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)
     Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow)
+    # energy carried by rain and snow, partitioned in the same way
+    ᶜ3d_rain_energy = @. lazy(ifelse(ᶜT >= T_freeze, ᶜρ_de_tot_dt, FT(0)))
+    ᶜ3d_snow_energy = @. lazy(ifelse(ᶜT < T_freeze, ᶜρ_de_tot_dt, FT(0)))
+    Operators.column_integral_definite!(surface_rain_energy_flux, ᶜ3d_rain_energy)
+    Operators.column_integral_definite!(surface_snow_energy_flux, ᶜ3d_snow_energy)
     return nothing
 end
 function set_precipitation_surface_fluxes!(
@@ -1383,8 +1398,11 @@ function set_precipitation_surface_fluxes!(
     microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; surface_rain_energy_flux, surface_snow_energy_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ, ᶜT) = p.precomputed
+    (; ᶜΦ) = p.core
+    thp = CAP.thermodynamics_params(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -1424,10 +1442,15 @@ function set_precipitation_surface_fluxes!(
         Fields.field_values(Fields.level(ᶜwₕhₜ.components.data.:1, 1)),
         sfc_space,
     )
+    sfc_T = sfc_lev(ᶜT)
+    sfc_Φ = sfc_lev(ᶜΦ)
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
+    @. surface_rain_energy_flux = surface_rain_flux * (Iₗ(thp, sfc_T) + sfc_Φ)
+    @. surface_snow_energy_flux =
+        col_integrated_precip_energy_tendency - surface_rain_energy_flux
 
     return nothing
 end

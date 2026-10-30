@@ -50,6 +50,14 @@ function test_precipitation_setup!(Y, p, expected_vars)
     for var_name in expected_vars
         @test var_name ∈ propertynames(p.precomputed)
     end
+
+    # The rain and snow energy fluxes partition the total precipitation energy flux
+    (; surface_rain_energy_flux, surface_snow_energy_flux) = p.precomputed
+    pet = p.precomputed.col_integrated_precip_energy_tendency
+    @test all(isfinite, parent(surface_rain_energy_flux))
+    @test all(isfinite, parent(surface_snow_energy_flux))
+    @test parent(surface_rain_energy_flux) .+ parent(surface_snow_energy_flux) ≈
+          parent(pet) rtol = sqrt(eps(FT)) atol = sqrt(eps(FT))
 end
 
 function test_microphysics_tendency!(ᶜYₜ, Y, p)
@@ -103,7 +111,8 @@ end
         # Expected cache variables for 0-moment
         expected_vars = (
             :ᶜmp_tendency, :ᶜρ_dq_tot_dt, :ᶜρ_de_tot_dt,
-            :surface_rain_flux, :surface_snow_flux, :ᶜwₕhₜ,
+            :surface_rain_flux, :surface_snow_flux,
+            :surface_rain_energy_flux, :surface_snow_energy_flux, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -220,7 +229,8 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
+            :surface_rain_energy_flux, :surface_snow_energy_flux,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -273,7 +283,8 @@ end
     #     expected_vars = (
     #         :ᶜmp_tendency,
     #         :surface_rain_flux, :surface_snow_flux,
-    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₕhₜ,
+    #         :surface_rain_energy_flux, :surface_snow_energy_flux,
+    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₜqₜ, :ᶜwₕhₜ,
     #     )
     #     test_precipitation_setup!(Y, p, expected_vars)
     #
@@ -318,7 +329,8 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
+            :surface_rain_energy_flux, :surface_snow_energy_flux,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
