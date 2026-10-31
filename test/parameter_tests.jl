@@ -281,3 +281,33 @@ end
         ) > power_tv(:q_rai, FT(1), FT(1e-4))
     end
 end
+
+@testset "Estimated Inversion Strength inhomogeneity parameters and helpers" begin
+    for FT in (Float32, Float64)
+        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        @test CAP.cloud_inhomogeneity_eis_coeff(sq) == zero(FT)
+
+        # Marine inversion column has higher EIS than unstable tropical column.
+        eis_sc = CA.compute_wb06_eis_from_bot_700(
+            FT(101300),
+            FT(290),
+            FT(0.80),
+            FT(15),
+            FT(286),
+            FT(3000),
+        )
+        eis_cu = CA.compute_wb06_eis_from_bot_700(
+            FT(101300),
+            FT(301),
+            FT(0.80),
+            FT(15),
+            FT(282),
+            FT(3100),
+        )
+        @test eis_sc > eis_cu
+        @test CA.eis_inhomogeneity_exponent(eis_cu, FT(0.68)) == one(FT)
+        @test FT(0.15) <=
+              CA.eis_inhomogeneity_exponent(eis_sc, FT(0.68)) <
+              one(FT)
+    end
+end

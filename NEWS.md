@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Modulate the liquid-cloud shortwave subgrid
+  effective-thickness exponent in high-EIS boundary-layer regimes by Wood and
+  Bretherton (2006) Estimated Inversion Strength (`cloud_inhomogeneity_eis_coeff`,
+  `eis_inhomogeneity_exponent`, `compute_column_eis_field!`) in `solve_fluxes!`.
 - ![][badge-✨feature/enhancement] Mass-flux-weight 1M rain and snow terminal
   velocities across the subgrid precipitation shaft
   (`shaft_weighted_terminal_velocity`) when `sgs_precip_incloud_fraction > 0`,
