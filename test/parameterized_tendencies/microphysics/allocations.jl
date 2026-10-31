@@ -270,6 +270,119 @@ function _allocs_integrate_sgs_functor(quad, ::Type{FT}) where {FT}
     )
 end
 
+function _allocs_edmfx_vel!(Y, p)
+    (; turbconv_model, microphysics_model) = p.atmos
+    CA.set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
+    return @allocated CA.set_precipitation_velocities!(
+        Y, p, microphysics_model, turbconv_model,
+    )
+end
+
+function _allocs_edmfx_ed!(ᶜYₜ, Y, p)
+    FT = eltype(Y)
+    (; turbconv_model) = p.atmos
+    CA.edmfx_entr_detr_tendency!(ᶜYₜ, Y, p, FT(0), turbconv_model)
+    return @allocated CA.edmfx_entr_detr_tendency!(
+        ᶜYₜ, Y, p, FT(0), turbconv_model,
+    )
+end
+
+function _allocs_edmfx_sweep!(Y, p)
+    FT = eltype(Y)
+    sgs_tracers = (
+        CA.MatrixFields.@name(mse),
+        CA.MatrixFields.@name(q_tot),
+        CA.MatrixFields.@name(q_lcl),
+        CA.MatrixFields.@name(q_icl),
+        CA.MatrixFields.@name(q_rai),
+        CA.MatrixFields.@name(q_sno),
+    )
+    CA._sweep_sgs_updraft_tracers!(Y, p, FT(100), sgs_tracers)
+    return @allocated CA._sweep_sgs_updraft_tracers!(
+        Y, p, FT(100), sgs_tracers,
+    )
+end
+
+function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
+    return mktemp() do toml_path, io
+        if enable_shaft_and_support
+            write(
+                io,
+                """
+                [sgs_precip_incloud_fraction]
+                value = 0.75
+                type = "float"
+                [sgs_precip_fraction_floor]
+                value = 0.2
+                type = "float"
+                [edmf_tail_entr_weight]
+                value = 0.5
+                type = "float"
+                [edmf_buoyancy_clear_env_weight]
+                value = 0.5
+                type = "float"
+                [edmf_shallow_support_height_scale]
+                value = 2200.0
+                type = "float"
+                """,
+            )
+        else
+            write(
+                io,
+                """
+                [sgs_precip_incloud_fraction]
+                value = 0.0
+                type = "float"
+                [edmf_tail_entr_weight]
+                value = 0.0
+                type = "float"
+                [edmf_buoyancy_clear_env_weight]
+                value = 0.0
+                type = "float"
+                [edmf_shallow_support_height_scale]
+                value = 0.0
+                type = "float"
+                """,
+            )
+        end
+        flush(io)
+        config = CA.AtmosConfig(
+            Dict(
+                "initial_condition" => "Bomex",
+                "microphysics_model" => "1M",
+                "rain_terminal_velocity" => "Chen2022",
+                "snow_terminal_velocity" => "Chen2022",
+                "turbconv" => "prognostic_edmfx",
+                "edmfx_entr_model" => "Generalized",
+                "edmfx_detr_model" => "Generalized",
+                "edmfx_sgs_mass_flux" => true,
+                "edmfx_sgs_diffusive_flux" => true,
+                "edmfx_nh_pressure" => true,
+                "edmfx_filter" => true,
+                "prognostic_tke" => true,
+                "config" => "column",
+                "z_stretch" => false,
+                "use_sgs_quadrature" => true,
+                "sgs_distribution" => "gaussian",
+                "quadrature_order" => 3,
+                "toml" => [toml_path],
+                "output_default_diagnostics" => false,
+            ),
+            job_id = enable_shaft_and_support ? "alloc_1M_edmfx_on" :
+                     "alloc_1M_edmfx_off",
+        )
+        (; Y, p) = generate_test_simulation(config)
+        ᶜYₜ = zero(Y)
+        return (;
+            mp = test_microphysics_allocations!(ᶜYₜ, Y, p),
+            cache = test_cache_allocations!(Y, p),
+            vel = _allocs_edmfx_vel!(Y, p),
+            ed = _allocs_edmfx_ed!(ᶜYₜ, Y, p),
+            sweep = _allocs_edmfx_sweep!(Y, p),
+        )
+    end
+end
+
 # --- Tests ---
 
 @testset "Allocation Tests" begin
@@ -469,6 +582,16 @@ end
                 allocs = test_cache_allocations!(Y, p)
                 @test allocs == 0
             end
+        end
+
+        @testset "PrognosticEDMFX + 1-moment + subgrid shaft + shallow support" begin
+            allocs_off = _measure_edmfx_allocs(false)
+            allocs_on = _measure_edmfx_allocs(true)
+            @test allocs_on.mp == 0
+            @test allocs_on.vel <= allocs_off.vel
+            @test allocs_on.ed <= allocs_off.ed
+            @test allocs_on.sweep <= allocs_off.sweep
+            @test allocs_on.cache <= allocs_off.cache
         end
     end
 

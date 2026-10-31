@@ -774,8 +774,13 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
         Fields.field_values(Fields.level(ᶜadvection_factor, 1))
 
     w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    H_sup = FT(CAP.edmf_shallow_support_height_scale(p.params))
     use_tail_entr =
-        (w_tail > zero(FT)) && hasproperty(p.precomputed, :ᶜT′T′)
+        (w_tail > zero(FT)) &&
+        MatrixFields.has_field(p.precomputed, @name(ᶜT′T′))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.coordinate_field(p.core.surface_ct3_unit).z
+    ᶜw_tail = @. lazy(shallow_support_weight(w_tail, ᶜz, z_sfc, H_sup))
 
     for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
@@ -831,7 +836,7 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
                     @. ᶜnumerator +=
                         ᶜentrʲ * tail_entrainment_Δmse(
                             thermo_params,
-                            w_tail,
+                            ᶜw_tail,
                             ᶜT⁰,
                             ᶜq_tot_nonneg⁰,
                             ᶜq_liq⁰,
@@ -848,7 +853,7 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
                     @. ᶜnumerator +=
                         ᶜentrʲ * tail_entrainment_Δq_tot(
                             thermo_params,
-                            w_tail,
+                            ᶜw_tail,
                             ᶜT⁰,
                             ᶜq_tot_nonneg⁰,
                             ᶜq_liq⁰,

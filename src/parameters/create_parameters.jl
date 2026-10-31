@@ -660,6 +660,9 @@ function SGSQuadratureParameters(
         # buoyancy reference density (`ᶜupdraft_reference_density`): 0 uses the
         # grid-mean density.
         edmf_buoyancy_clear_env_weight = FT(0),
+        # Height scale [m] over which `edmf_tail_entr_weight` and
+        # `edmf_buoyancy_clear_env_weight` decay above the surface (`0` = off).
+        edmf_shallow_support_height_scale = FT(0),
         # Subsaturated-environment tail partitioning
         # (`_materialize_env_tail_partition!`, `_env_subsat_cu_switch`):
         # upper-tail truncation at the updraft quantile (`c_tail = 0` disables

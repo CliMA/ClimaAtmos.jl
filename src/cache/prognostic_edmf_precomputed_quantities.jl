@@ -391,12 +391,16 @@ place; with `0M` or `2M` microphysics the weight is ignored.
 """
 function ᶜupdraft_reference_density(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
-    c_b = CAP.edmf_buoyancy_clear_env_weight(p.params)
-    (c_b > 0 && microphysics_model isa NonEquilibriumMicrophysics1M) ||
+    FT = eltype(p.params)
+    c_b = FT(CAP.edmf_buoyancy_clear_env_weight(p.params))
+    (c_b > zero(FT) && microphysics_model isa NonEquilibriumMicrophysics1M) ||
         return Y.c.ρ
+    H_sup = FT(CAP.edmf_shallow_support_height_scale(p.params))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.coordinate_field(p.core.surface_ct3_unit).z
+    ᶜc_b = @. lazy(shallow_support_weight(c_b, ᶜz, z_sfc, H_sup))
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    FT = eltype(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜρq_e = p.scratch.ᶜtemp_scalar_9
     @. ᶜρq_e = Y.c.ρq_lcl
@@ -408,11 +412,11 @@ function ᶜupdraft_reference_density(Y, p)
         TD.air_density(
             thermo_params,
             ᶜT -
-            FT(c_b) * L_v * max(0, ᶜρq_e) / Y.c.ρ /
+            ᶜc_b * L_v * max(0, ᶜρq_e) / Y.c.ρ /
             TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
             ᶜp,
             ᶜq_tot_nonneg,
-            max(0, ᶜq_liq - FT(c_b) * max(0, ᶜρq_e) / Y.c.ρ),
+            max(0, ᶜq_liq - ᶜc_b * max(0, ᶜρq_e) / Y.c.ρ),
             ᶜq_ice,
         ),
     )

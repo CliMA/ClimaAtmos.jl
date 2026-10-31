@@ -643,6 +643,19 @@ end
 @inline tail_entrainment_Δq_tot(args...) = tail_entrainment_increments(args...)[2]
 
 """
+    shallow_support_weight(w0, z, z_sfc, H_scale)
+
+Gaussian height-tapered weight `w0 exp(−((z − z_sfc) / H_scale)²)` [-]; returns
+`w0` unattenuated when `H_scale ≤ 0`.
+"""
+@inline function shallow_support_weight(w0, z, z_sfc, H_scale)
+    H_scale > zero(H_scale) || return w0
+    dz = z - z_sfc
+    r = max(zero(dz), dz) / H_scale
+    return w0 * exp(-r * r)
+end
+
+"""
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
@@ -667,6 +680,73 @@ The generic method is a no-op; the `PrognosticEDMFX` method mutates
 """
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
+@inline function _apply_tail_entr_mse_qtot!(
+    Yₜ,
+    Y,
+    p,
+    ::Val{j},
+    ᶜentrʲ,
+    ᶜturb_entrʲ,
+    ᶜmse⁰,
+    ᶜq_tot⁰,
+    w_tail,
+    H_sup,
+    turbconv_model,
+) where {j}
+    MatrixFields.has_field(p.precomputed, @name(ᶜT′T′)) ||
+        error("edmf_tail_entr_weight > 0 requires SGS covariances")
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; dt) = p
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+        p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.coordinate_field(p.core.surface_ct3_unit).z
+    ᶜw_tail = @. lazy(shallow_support_weight(w_tail, ᶜz, z_sfc, H_sup))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+    ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+    ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+    @. Yₜ.c.sgsʲs.:($$j).mse +=
+        ᶜentrʲ * (
+            ᶜmse⁰ +
+            tail_entrainment_Δmse(
+                thermo_params,
+                ᶜw_tail,
+                ᶜT⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+                ᶜT′T′,
+                ᶜq′q′,
+                ᶜcorr_Tq,
+                ᶜρa⁰,
+                ᶜρaʲ,
+                ᶜentrʲ,
+                dt,
+            ) - ᶜmseʲ
+        ) + ᶜturb_entrʲ * (ᶜmse⁰ - ᶜmseʲ)
+    @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+        ᶜentrʲ * (
+            ᶜq_tot⁰ +
+            tail_entrainment_Δq_tot(
+                thermo_params,
+                ᶜw_tail,
+                ᶜT⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+                ᶜT′T′,
+                ᶜq′q′,
+                ᶜcorr_Tq,
+                ᶜρa⁰,
+                ᶜρaʲ,
+                ᶜentrʲ,
+                dt,
+            ) - ᶜq_totʲ
+        ) + ᶜturb_entrʲ * (ᶜq_tot⁰ - ᶜq_totʲ)
+    return nothing
+end
+
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
@@ -683,15 +763,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜlg = Fields.local_geometry_field(Y.c)
     FT = eltype(p.params)
     w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
-    use_tail_entr = w_tail > 0
-    if use_tail_entr
-        hasproperty(p.precomputed, :ᶜT′T′) ||
-            error("edmf_tail_entr_weight > 0 requires SGS covariances")
-        thermo_params = CAP.thermodynamics_params(p.params)
-        (; dt) = p
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
-            p.precomputed
-    end
+    H_sup = FT(CAP.edmf_shallow_support_height_scale(p.params))
+    use_tail_entr = w_tail > zero(FT)
 
     for j in 1:n
         ᶜentrʲ = @. lazy(
@@ -710,26 +783,19 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             # Dynamical entrainment draws from the environment's tail
             # (`tail_entrainment_increments`); turbulent entrainment, a two-way
             # exchange outside the ρa equation, keeps the environment mean.
-            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            @. Yₜ.c.sgsʲs.:($$j).mse +=
-                ᶜentrʲ * (
-                    ᶜmse⁰ +
-                    tail_entrainment_Δmse(
-                        thermo_params, w_tail, ᶜT⁰,
-                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
-                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
-                    ) - ᶜmseʲ
-                ) + ᶜturb_entrʲ * (ᶜmse⁰ - ᶜmseʲ)
-            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-                ᶜentrʲ * (
-                    ᶜq_tot⁰ +
-                    tail_entrainment_Δq_tot(
-                        thermo_params, w_tail, ᶜT⁰,
-                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
-                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
-                    ) - ᶜq_totʲ
-                ) + ᶜturb_entrʲ * (ᶜq_tot⁰ - ᶜq_totʲ)
+            _apply_tail_entr_mse_qtot!(
+                Yₜ,
+                Y,
+                p,
+                Val(j),
+                ᶜentrʲ,
+                ᶜturb_entrʲ,
+                ᶜmse⁰,
+                ᶜq_tot⁰,
+                w_tail,
+                H_sup,
+                turbconv_model,
+            )
         else
             @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
 
@@ -739,7 +805,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
         # Auto-discovered SGS tracers (microphysics species and any
         # user-defined passive tracers)
-        for χ_name in sgs_tracer_names(Y)
+        MatrixFields.unrolled_foreach(sgs_tracer_names(Y)) do χ_name
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
