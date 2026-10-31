@@ -35,6 +35,14 @@ main
   effective-thickness exponent by Wood and Bretherton (2006) Estimated Inversion
   Strength (`cloud_inhomogeneity_eis_coeff`, `compute_column_eis_field!`) in
   `solve_fluxes!`.
+- ![][badge-🔥behavioralΔ] Default `cloud_liquid_formation` to
+  `ImplicitCloudLiquidFormation` and `update_cache_every` to `stage` in
+  `default_config.yml` and `NonEquilibriumMicrophysics1M()`, set
+  `condensation_evaporation_timescale = 10` and recalibrated 1M EDMFX parameters
+  for implicit condensation and `Chen2022` snow sedimentation in
+  `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`,
+  and set `z_elem = 79, dz_bottom = 28.0` in `amip_target.yml` and
+  `longrun_aquaplanet_allsky_progedmf_1M.yml`.
 
 0.42.17
 -------

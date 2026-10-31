@@ -1,4 +1,6 @@
 ode_algo: "ARS222"
+z_elem: 79
+dz_bottom: 28.0
 dt: "120secs"
 t_end: "120days"
 dt_save_state_to_disk: "30days"

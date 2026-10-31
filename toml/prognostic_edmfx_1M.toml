@@ -17,7 +17,57 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.001, 1e5]
+value = [0.007, 400.0]
+
+[edmf_tail_entr_weight]
+value = 0.5
+type = "float"
+
+[edmf_buoyancy_clear_env_weight]
+value = 0.5
+type = "float"
+
+[sgs_cloud_species_constant_timescales]
+value = 1.0
+type = "float"
+
+[sgs_env_autoconversion_updraft_velocity_weight]
+value = 1.0
+type = "float"
+
+[sgs_env_autoconversion_detrained_velocity]
+value = 0.11
+type = "float"
+
+[sgs_env_updraft_tail_truncation_coeff]
+value = 3.5
+type = "float"
+
+[sgs_env_subsat_rh_transition]
+value = 0.03
+type = "float"
+
+[sgs_env_subsat_gamma_crit]
+value = 0.0115
+type = "float"
+
+[sgs_liquid_uniform_fraction]
+value = 0.0
+type = "float"
+
+[sgs_ice_uniform_fraction]
+value = 0.0
+type = "float"
+
+[cloud_fraction_eps_rel]
+value = 0.03
+
+[cloud_fraction_steepness_scale]
+value = 1.85
+
+[cloud_inhomogeneity_eis_coeff]
+value = 0.5
+type = "float"
 
 [entr_inv_tau]
 value = 0
@@ -53,10 +103,37 @@ value = 1
 value = 8.0
 
 [condensation_evaporation_timescale]
-value = 100
+value = 10
 
 [sublimation_deposition_timescale]
-value = 100
+value = 155
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 0.000185
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform_scale]
+value = 3.2
+
+[rain_autoconversion_timescale]
+value = 520
+
+[rain_autoconversion_timescale_stratiform_scale]
+value = 2.4
+
+[rain_autoconversion_velocity_scale]
+value = 0.12
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+value = 2.1e-5
+
+[cloud_ice_number_max]
+value = 240000.0
+
+[cloud_ice_number_temperature_fit_prefactor]
+value = 1000.0
+
+[snow_autoconversion_timescale]
+value = 1200
 
 [snow_apparent_density]
 value = 200.0

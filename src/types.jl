@@ -49,6 +49,27 @@ Selected by `microphysics_model: "0M"`. Requires `use_sgs_quadrature: true`.
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 
 """
+    ImplicitCloudLiquidFormation()
+
+Marker that selects the implicit cloud-liquid condensation / evaporation path
+(`_add_implicit_lcl_condensation_*`) for 1M microphysics. Stored in
+`NonEquilibriumMicrophysics1M.processes.cloud_liquid_formation` as a sibling
+of CM's `CMP.CloudLiquidFormation`, which selects the explicit bulk-averaged
+path. `create_parameters.jl` translates the choice into the matching
+`cloud_liquid_formation` on `microphysics_1m_params` (bulk) and
+`microphysics_1m_implicit_params` (implicit); `_split_cloud_liquid_formation`
+guarantees the two are mutually exclusive, so CM's `BulkMicrophysicsTendencies`
+does not also average condensation.
+
+Picking this path moves condensation out of CM's joint vapor-exchange solve
+and heating-rate limiter — see the "Implicit cloud-liquid condensation" section
+in `docs/src/microphysics.md` for the thermodynamic consequences and the
+Jacobian / predictor formulas Newton uses to recover the implicit answer.
+Temporary scaffolding toward a fully-coupled implicit microphysics solver.
+"""
+struct ImplicitCloudLiquidFormation end
+
+"""
     NonEquilibriumMicrophysics1M(;
         n_substeps = 3,
         n_substeps_quad = 2,
@@ -74,7 +95,7 @@ Any process that is not passed keeps its default, so
 
 | Process                         | Default variant                   |
 |:------------------------------- |:--------------------------------- |
-| `cloud_liquid_formation`        | `CloudLiquidFormation()`          |
+| `cloud_liquid_formation`        | `ImplicitCloudLiquidFormation()`  |
 | `cloud_ice_formation`           | `TemperatureDependentIceNumber()` |
 | `cloud_ice_melt`                | `CloudIceMelt()`                  |
 | `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`   |
@@ -91,8 +112,8 @@ Any process that is not passed keeps its default, so
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` overrides the
-`CMP.Microphysics1MOptions` default.
+`get_microphysics_1m_options`). `cloud_liquid_formation` and `cloud_ice_formation`
+override the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 
@@ -128,41 +149,19 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # Override CM's `ConstantTimescale` ice formation default to match
-        # `default_config.yml`. `cloud_liquid_formation` keeps CM's default
-        # (`CloudLiquidFormation()`, explicit via CM's bulk tendency); passing
-        # `ImplicitCloudLiquidFormation()` here routes it through the implicit
-        # source. `create_parameters.jl` translates the choice into the
-        # matching `cloud_liquid_formation` on `microphysics_1m_params` (bulk)
-        # and `microphysics_1m_implicit_params` (implicit).
+        # Override CM's `CloudLiquidFormation` and `ConstantTimescale` defaults
+        # to match `default_config.yml`. `create_parameters.jl` translates
+        # `cloud_liquid_formation` into the matching choice on
+        # `microphysics_1m_params` (bulk) and `microphysics_1m_implicit_params`
+        # (implicit).
         processes = CMP.Microphysics1MOptions(;
+            cloud_liquid_formation = ImplicitCloudLiquidFormation(),
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
-
-"""
-    ImplicitCloudLiquidFormation()
-
-Marker that selects the implicit cloud-liquid condensation / evaporation path
-(`_add_implicit_lcl_condensation_*`) for 1M microphysics. Stored in
-`NonEquilibriumMicrophysics1M.processes.cloud_liquid_formation` as a sibling
-of CM's `CMP.CloudLiquidFormation`, which selects the explicit bulk-averaged
-path. `create_parameters.jl` translates the choice into the matching
-`cloud_liquid_formation` on `microphysics_1m_params` (bulk) and
-`microphysics_1m_implicit_params` (implicit); `_split_cloud_liquid_formation`
-guarantees the two are mutually exclusive, so CM's `BulkMicrophysicsTendencies`
-does not also average condensation.
-
-Picking this path moves condensation out of CM's joint vapor-exchange solve
-and heating-rate limiter — see the "Implicit cloud-liquid condensation" section
-in `docs/src/microphysics.md` for the thermodynamic consequences and the
-Jacobian / predictor formulas Newton uses to recover the implicit answer.
-Temporary scaffolding toward a fully-coupled implicit microphysics solver.
-"""
-struct ImplicitCloudLiquidFormation end
 
 """
     NonEquilibriumMicrophysics2M

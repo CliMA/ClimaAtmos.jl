@@ -33,6 +33,8 @@ end
     # Defaults come from CloudMicrophysics, except where `default_config.yml`
     # picks another variant
     defaults = CA.NonEquilibriumMicrophysics1M()
+    @test defaults.processes.cloud_liquid_formation isa
+          CA.ImplicitCloudLiquidFormation
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
     @test defaults.processes.cloud_ice_formation isa
           CMP.TemperatureDependentIceNumber
