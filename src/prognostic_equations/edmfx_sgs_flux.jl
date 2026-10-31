@@ -68,14 +68,11 @@ function edmfx_sgs_mass_flux_tendency!(
 
         # Drafts
         for j in 1:n
-            ᶜsgsʲ = Y.c.sgsʲs.:($j)
-            ᶜχʲs = unrolled_map(
-                χ_name -> MatrixFields.get_field(ᶜsgsʲ, χ_name), χ_names,
-            )
             DataLayouts.foreach_column(
                 Yₜ.c, Y.c, ᶜρʲs.:($j), ᶠu³, ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶜh_tot,
-                ᶜsgsʲ, ᶜχʲs...,
-            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ, ᶜχʲs...
+                Y.c.sgsʲs.:($j),
+            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ
+                ᶜχʲs = unrolled_map(name -> MatrixFields.get_field(ᶜsgsʲ, name), χ_names)
                 ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
                 add_sgs_mass_flux_tendencies!(
                     Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ.mse, ᶜsgsʲ.q_tot,
@@ -90,8 +87,8 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
         ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
         DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s...,
-        ) do Yₜc, Yc, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s...
+            Yₜ.c, Y.c, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s,
+        ) do Yₜc, Yc, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s
             ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
             add_sgs_mass_flux_tendencies!(
                 Yₜc, Yc, ᶜρ⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰,
@@ -145,9 +142,7 @@ temporaries and it must stay inlined.
         # Effect of SGS water flux on (moist) air mass
         add_vertical_transport!(Yₜc.ρ, ᶠρ, ᶠu³_diff, ᶜa_scalar_q, dt, upwinding)
     end
-    MatrixFields.unrolled_foreach(
-        _unrolled_zip(ρχ_names, ᶜχ_subs),
-    ) do (ρχ_name, ᶜχ_sub)
+    MatrixFields.unrolled_foreach(map(tuple, ρχ_names, ᶜχ_subs)) do (ρχ_name, ᶜχ_sub)
         ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
         ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
         ᶜa_scalar_χ = @. (ᶜχ_sub - specific(ᶜρχ, Yc.ρ)) * ᶜa

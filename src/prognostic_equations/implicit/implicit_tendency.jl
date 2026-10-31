@@ -226,8 +226,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # One fused column loop for the center tendencies: the face density
     # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws...,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws...
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
 
         # Mass advection with zero flux through the top and bottom
@@ -250,7 +250,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
 
         MatrixFields.unrolled_foreach(
-            _unrolled_zip(sedimenting_names, ᶜws),
+            map(tuple, sedimenting_names, ᶜws),
         ) do (ρχ_name, ᶜw)
             ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
@@ -268,17 +268,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # The sponge is a lazy broadcast when active and a `NullBroadcasted`
     # otherwise, which cannot be sliced, so it is passed only when active.
     rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
-    rst_u₃_args = rst_u₃ isa NullBroadcasted ? () : (rst_u₃,)
     DataLayouts.foreach_column(
-        Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃_args...,
-    ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃s...
+        Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        rst_u₃ isa NullBroadcasted ? () : rst_u₃,
+    ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃
         add_implicit_u₃_tendency!(
             Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
             thermo_params, cp_d,
         )
-        MatrixFields.unrolled_foreach(rst_u₃s) do rst_u₃
-            @. Yₜf.u₃ += rst_u₃
-        end
+        rst_u₃ isa Tuple || @. Yₜf.u₃ += rst_u₃
         return nothing
     end
     return nothing

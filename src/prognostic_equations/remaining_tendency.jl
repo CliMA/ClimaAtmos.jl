@@ -138,7 +138,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 @. ᶜsgsʲₜ.mse -= ᶜβ_tr * (ᶜsgsʲ.mse - (ᶜh_tot - ᶜK))
                 @. ᶜsgsʲₜ.q_tot -= ᶜβ_tr * (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ))
                 MatrixFields.unrolled_foreach(
-                    _unrolled_zip(χ_names, ρχ_names),
+                    map(tuple, χ_names, ρχ_names),
                 ) do (χ_name, ρχ_name)
                     ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
                     ᶜsgs_χ = MatrixFields.get_field(ᶜsgsʲ, χ_name)

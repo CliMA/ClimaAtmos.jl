@@ -1826,19 +1826,17 @@ function set_quadrature_cloud_fraction!(
     floor = cloud_fraction_floor_params(p.params)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
-    nonequil_val = Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics)
     DataLayouts.foreach_column(
         ᶜcloud_fraction, c0, c1, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
-        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p)...,
+        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p),
     ) do ᶜcloud_fraction, c0, c1, Yc, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
-    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs
+    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
         @. ᶜcloud_fraction = _compute_cloud_fraction(
             $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
         )
         _edmf_weight_cloud_fraction!(
-            ᶜcloud_fraction, Yc, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρ_env,
-            turbconv_model, thermo_params, nonequil_val,
+            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
         )
         if aitken
             @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, ᶜcloud_fraction)
@@ -1871,7 +1869,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     c = equilibrium_condensate_truncation(p)
-    nonequil_val = Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics)
     # The displacement coefficients enter the loop as a field only when the
     # curvature-aware condensate is configured; otherwise `_disp_lin` and
     # `_disp_curv` of a scalar field give zeros, for which
@@ -1881,10 +1878,9 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     DataLayouts.foreach_column(
         ᶜsgs_moments, ᶜcloud_fraction, Y.c, ᶜρ_env, ᶜT_mean, ᶜq_mean,
         ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
-        _edmf_weighting_fields(Y, p)...,
+        _edmf_weighting_fields(Y, p),
     ) do ᶜsgs_moments, ᶜcloud_fraction, Yc, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-    ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
-    ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs
+    ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, drafts
         _sgs_moments_and_cloud_fraction_point!(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
             (@. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
@@ -1893,8 +1889,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             c, vthermo, thermo_params, sgs_quad, floor,
         )
         _edmf_weight_cloud_fraction!(
-            ᶜcloud_fraction, Yc, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρ_env,
-            turbconv_model, thermo_params, nonequil_val,
+            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
         )
         return nothing
     end
@@ -1945,8 +1940,7 @@ end
 
 """
     _edmf_weight_cloud_fraction!(
-        ᶜcloud_fraction, Yc, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρ_env,
-        turbconv_model, thermo_params, ::Val{nonequil},
+        ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
     )
 
 Column body of the EDMF cloud weighting in fused loops: scale the environment
@@ -1958,45 +1952,40 @@ precipitation); otherwise, it is the cached `ᶜq_liqʲs + ᶜq_iceʲs`. No-op w
 `PrognosticEDMFX`. The draft fields come from `_edmf_weighting_fields`.
 """
 @inline _edmf_weight_cloud_fraction!(
-    ᶜcloud_fraction, Yc, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρ_env,
-    turbconv_model, thermo_params, nonequil_val,
+    ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
 ) = nothing
 @inline function _edmf_weight_cloud_fraction!(
-    ᶜcloud_fraction, Yc, ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρ_env,
-    turbconv_model::PrognosticEDMFX, thermo_params, nonequil_val,
+    ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model::PrognosticEDMFX,
+    thermo_params,
 )
     ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
     @. ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ_env)
     unrolled_foreach(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
         @inline
         ᶜsgsʲ = Yc.sgsʲs.:($j)
-        ᶜq_lclʲ, ᶜq_iclʲ = _draft_cloud_condensate(
-            ᶜsgsʲ, ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), nonequil_val,
-        )
+        ᶜq_lclʲ, ᶜq_iclʲ =
+            haskey(drafts, :ᶜq_liqʲs) ?
+            (drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j)) :
+            (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl)
         @. ᶜcloud_fraction += updraft_cloudy_area(
-            thermo_params, max(0, ᶜq_lclʲ + ᶜq_iclʲ), ᶜsgsʲ.ρa, ᶜρʲs.:($$j),
+            thermo_params, max(0, ᶜq_lclʲ + ᶜq_iclʲ), ᶜsgsʲ.ρa, drafts.ᶜρʲs.:($$j),
         )
         return nothing
     end
     return nothing
 end
-@inline _draft_cloud_condensate(ᶜsgsʲ, ᶜq_liqʲ, ᶜq_iceʲ, ::Val{true}) =
-    (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl)
-@inline _draft_cloud_condensate(ᶜsgsʲ, ᶜq_liqʲ, ᶜq_iceʲ, ::Val{false}) =
-    (ᶜq_liqʲ, ᶜq_iceʲ)
 
 # The binary cloudy area of an updraft with non-negative cloud condensate `qʲ`.
 @inline updraft_cloudy_area(thermo_params, qʲ, ρaʲ, ρʲ) =
     ifelse(TD.has_condensate(thermo_params, qʲ), draft_area(ρaʲ, ρʲ), zero(qʲ))
 
 # The draft densities and cached draft condensate the EDMF cloud weighting reads in
-# fused loops, with grid-mean placeholders where the weighting reads none.
+# fused loops.
 function _edmf_weighting_fields(Y, p)
-    p.atmos.turbconv_model isa PrognosticEDMFX || return (Y.c.ρ, Y.c.ρ, Y.c.ρ)
+    p.atmos.turbconv_model isa PrognosticEDMFX || return (;)
     (; ᶜρʲs) = p.precomputed
-    p.atmos.microphysics_model isa NonEquilibriumMicrophysics &&
-        return (ᶜρʲs, ᶜρʲs, ᶜρʲs)
-    return (ᶜρʲs, p.precomputed.ᶜq_liqʲs, p.precomputed.ᶜq_iceʲs)
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics && return (; ᶜρʲs)
+    return (; ᶜρʲs, p.precomputed.ᶜq_liqʲs, p.precomputed.ᶜq_iceʲs)
 end
 
 """
@@ -2373,12 +2362,10 @@ With non-equilibrium microphysics, uses the prognostic cloud condensate
 (`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
 precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
 """
-_updraft_cloud_condensate(Y, p, j, microphysics_model) = _draft_cloud_condensate(
-    Y.c.sgsʲs.:($j),
-    p.precomputed.ᶜq_liqʲs.:($j),
-    p.precomputed.ᶜq_iceʲs.:($j),
-    Val(microphysics_model isa NonEquilibriumMicrophysics),
-)
+_updraft_cloud_condensate(Y, p, j, microphysics_model) =
+    microphysics_model isa NonEquilibriumMicrophysics ?
+    (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl) :
+    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
 
 """
     _updraft_cloud_condensate_and_area(Y, p, j, thermo_params, microphysics_model)

@@ -119,13 +119,12 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     is_edmf = turbconv_model isa PrognosticEDMFX
     do_mom_val, q_tot_val, edmf_val = Val(do_mom), Val(has_q_tot), Val(is_edmf)
 
-    # Absent fields are replaced by placeholders the loop never reads.
     DataLayouts.foreach_column(
         Yₜ.c,
         btt_h,
-        do_mom ? btt_uₕ : btt_h,
-        has_q_tot ? btt_q : btt_h,
-        is_edmf ? p.precomputed.ᶜρʲs.:(1) : Y.c.ρ,
+        something(btt_uₕ, ()),
+        something(btt_q, ()),
+        is_edmf ? p.precomputed.ᶜρʲs.:(1) : (),
     ) do Yₜc, btt_h, btt_uₕ, btt_q, ᶜρʲ
         if do_mom_val isa Val{true}
             @. Yₜc.uₕ -= btt_uₕ

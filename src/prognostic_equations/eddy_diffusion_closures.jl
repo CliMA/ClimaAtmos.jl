@@ -615,7 +615,7 @@ end
 """
     set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
 
-Column body of [`set_strain_rate_norm!`](@ref), shared with the fused EDMF
+Column body of `set_strain_rate_norm!`, shared with the fused EDMF
 closure loop.
 """
 @inline function set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)

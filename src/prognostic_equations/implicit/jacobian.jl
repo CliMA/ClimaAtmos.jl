@@ -144,9 +144,9 @@ function first_column_rescaling_arrays(Y, p, t)
     for block_key in Iterators.product(scalar_names, scalar_names)
         (block_row_name, block_column_name) = block_key
         block_row_Yₜ_values =
-            parent(MatrixFields.get_field(column_Yₜ, block_row_name))
+            vec(parent(MatrixFields.get_field(column_Yₜ, block_row_name)))
         block_column_Yₜ_values =
-            parent(MatrixFields.get_field(column_Yₜ, block_column_name))
+            vec(parent(MatrixFields.get_field(column_Yₜ, block_column_name)))
         safe_inverse = x -> iszero(x) || issubnormal(x) ? zero(x) : inv(x)
         rescaling_arrays[block_key] =
             Array(safe_inverse.(block_row_Yₜ_values) .* block_column_Yₜ_values')

@@ -69,13 +69,11 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # GPUs) rather than scratch fields, and the five broadcasts per species run in
     # the same kernel.
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws...,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws...
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
         ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
-        MatrixFields.unrolled_foreach(
-            _unrolled_zip(ρq_names, ᶜws),
-        ) do (ρq_name, ᶜw)
+        MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
             ᶜρq = MatrixFields.get_field(Yc, ρq_name)
             e_int_func = internal_energy_func(ρq_name)
             ᶜq = @. specific(ᶜρq, Yc.ρ)
@@ -121,12 +119,12 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         )
         isempty(sgs_microphysics_tracers) && return nothing
         q_names = unrolled_map(first, sgs_microphysics_tracers)
-        ᶜwʲs = unrolled_map(
-            ((_, wʲ_name, _),) -> MatrixFields.get_field(p.precomputed, wʲ_name),
-            sgs_microphysics_tracers,
-        )
-        ᶜws = unrolled_map(
-            ((_, _, w_name),) -> MatrixFields.get_field(p.precomputed, w_name),
+        # The updraft and grid-mean velocities of each species.
+        ᶜw_pairs = unrolled_map(
+            ((_, wʲ_name, w_name),) -> (
+                MatrixFields.get_field(p.precomputed, wʲ_name),
+                MatrixFields.get_field(p.precomputed, w_name),
+            ),
             sgs_microphysics_tracers,
         )
         # One fused column loop for the updraft and environment corrections of
@@ -134,9 +132,9 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         # specific energies are loop temporaries.
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
-            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜwʲs..., ᶜws...,
+            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
         ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
-        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜwʲs_and_ᶜws...
+        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
             ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
             ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
@@ -146,9 +144,8 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜuvw = @. Geometry.UVWVector(ᶜu)
             ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
             ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
-            ᶜwʲs_col, ᶜws_col = _split_halves(ᶜwʲs_and_ᶜws)
             MatrixFields.unrolled_foreach(
-                _unrolled_zip(q_names, _unrolled_zip(ᶜwʲs_col, ᶜws_col)),
+                map(tuple, q_names, ᶜw_pairs),
             ) do (q_name, (ᶜwʲ, ᶜw))
                 ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
                 ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))

@@ -306,17 +306,23 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # coefficients of the energy fluxes (see the docstring) of the grid mean and of
     # every updraft, in one column loop. The coefficients go to scratch fields,
     # since they multiply DSSed Laplacian gradients in the horizontal divergences
-    # below. Absent fields are replaced by placeholders the loop never reads.
+    # below.
     ᶜcp = p.scratch.ᶜtemp_scalar
     ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_2
     ᶜq_water = ᶜdiffusing_water_phases(Y, p)
+    drafts =
+        is_edmf ?
+        (;
+            ᶜcpʲs,
+            ᶜh_eff_minus_h_dʲs,
+            p.precomputed.ᶜTʲs,
+            p.precomputed.ᶜq_liqʲs,
+            p.precomputed.ᶜq_iceʲs,
+        ) : (;)
     DataLayouts.foreach_column(
-        Yₜ.c.uₕ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Y.c, ᶜT, ᶜΦ,
-        is_edmf ? ᶜcpʲs : ᶜcp, is_edmf ? ᶜh_eff_minus_h_dʲs : ᶜcp,
-        is_edmf ? p.precomputed.ᶜTʲs : ᶜT, is_edmf ? p.precomputed.ᶜq_liqʲs : ᶜT,
-        is_edmf ? p.precomputed.ᶜq_iceʲs : ᶜT, something(ᶜq_water, ())...,
-    ) do ᶜuₕₜ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Yc, ᶜT, ᶜΦ,
-    ᶜcpʲs, ᶜh_eff_minus_h_dʲs, ᶜTʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_water...
+        Yₜ.c.uₕ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Y.c, ᶜT, ᶜΦ, drafts,
+        something(ᶜq_water, ()),
+    ) do ᶜuₕₜ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Yc, ᶜT, ᶜΦ, drafts, ᶜq_water
         @. ᶜuₕₜ -= ν₄_vorticity * C12(ᶜ∇⁴u)
         if isempty(ᶜq_water)
             ᶜcp_diffusing!(ᶜcp, thermo_params, nothing)
@@ -327,12 +333,13 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         unrolled_foreach(draft_indices) do j
             @inline
             ᶜq_waterʲ = updraft_diffusing_water(
-                Yc.sgsʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
+                Yc.sgsʲs.:($j), drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j),
                 nonequilibrium_val,
             )
-            ᶜcp_diffusing!(ᶜcpʲs.:($j), thermo_params, ᶜq_waterʲ)
+            ᶜcp_diffusing!(drafts.ᶜcpʲs.:($j), thermo_params, ᶜq_waterʲ)
             ᶜh_eff_minus_h_d!(
-                ᶜh_eff_minus_h_dʲs.:($j), thermo_params, ᶜTʲs.:($j), ᶜq_waterʲ,
+                drafts.ᶜh_eff_minus_h_dʲs.:($j), thermo_params, drafts.ᶜTʲs.:($j),
+                ᶜq_waterʲ,
             )
             return nothing
         end
@@ -543,11 +550,9 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ((@name(q_lcl), (@name(n_lcl),)), (@name(q_icl), (@name(n_ice),))),
         ) : ()
 
-    # Absent fields are replaced by placeholders the loop never reads.
     if has_q_tot || n > 0
         DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜρq_tot_hyperdiff,
-            is_edmf ? ᶜq_tot_hyperdiffʲs : ᶜρq_tot_hyperdiff,
+            Yₜ.c, Y.c, ᶜρq_tot_hyperdiff, is_edmf ? ᶜq_tot_hyperdiffʲs : (),
         ) do Yₜc, Yc, ᶜρq_tot_hd, ᶜq_tot_hdʲs
             if q_tot_val isa Val{true}
                 @. Yₜc.ρq_tot -= ᶜρq_tot_hd

@@ -263,25 +263,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ρχ_name -> !(ρχ_name in (@name(ρe_tot), @name(ρq_tot))),
         gs_tracer_names(Y),
     )
-    draft_fields =
-        n > 0 ?
-        (
-            ᶠω¹²ʲs,
-            ntuple(j -> getproperty(ᶜuʲs, j), n)...,
-            ntuple(j -> getproperty(ᶜKʲs, j), n)...,
-            ntuple(j -> getproperty(ᶠKᵥʲs, j), n)...,
-        ) : ()
+    drafts = ntuple(
+        j -> (ᶠω¹²ʲs.:($j), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), Yₜ.f.sgsʲs.:($j).u₃),
+        n_val,
+    )
     deep_val = Val(!isnothing(ᶠf¹²)) # the Coriolis faces exist in a deep atmosphere
-    deep_fields = deep_val isa Val{true} ? (ᶠf¹²,) : ()
 
     # The tracer transports, the vector-invariant momentum advection and the TKE
     # transport in one fused column loop: the face density is a loop temporary
     # shared by every transport, and the vorticity is read from scratch once.
     DataLayouts.foreach_column(
-        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹²,
-        draft_fields..., deep_fields...,
-    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², rest...
-        n_drafts = val_value(n_val) # compile-time tuple offsets
+        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², drafts,
+        something(ᶠf¹², ()),
+    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², drafts, ᶠf¹²
         ᶜρ = Yc.ρ
         ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
 
@@ -294,22 +288,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
 
         # In a deep atmosphere, the vorticity carries the horizontal Coriolis term.
-        ᶠω¹²_tot =
-            deep_val isa Val{true} ? (@. lazy(rest[end] + ᶠω¹²)) : ᶠω¹²
+        ᶠω¹²_tot = deep_val isa Val{true} ? (@. lazy(ᶠf¹² + ᶠω¹²)) : ᶠω¹²
         ᶜu¹² = @. CT12(ᶜu)
         @. Yₜc.uₕ -=
             ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
             (ᶜf³ + ᶜω³) × ᶜu¹²
         @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
-        MatrixFields.unrolled_foreach(ntuple(Val, n_val)) do j_val
-            j = val_value(j_val)
-            ᶠω¹²ʲ = getproperty(rest[1], j)
+        MatrixFields.unrolled_foreach(drafts) do (ᶠω¹²ʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ)
             ᶠω¹²ʲ_tot =
-                deep_val isa Val{true} ? (@. lazy(rest[end] + ᶠω¹²ʲ)) : ᶠω¹²ʲ
-            ᶜuʲ = rest[1 + j]
-            ᶜKʲ = rest[1 + n_drafts + j]
-            ᶠKᵥʲ = rest[1 + 2 * n_drafts + j]
-            ᶠu₃ʲₜ = getproperty(Yₜf.sgsʲs, j).u₃
+                deep_val isa Val{true} ? (@. lazy(ᶠf¹² + ᶠω¹²ʲ)) : ᶠω¹²ʲ
             @. ᶠu₃ʲₜ -=
                 ᶠω¹²ʲ_tot × ᶠinterp(CT12(ᶜuʲ)) + ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
             return nothing
@@ -407,16 +394,14 @@ function edmfx_sgs_vertical_advection_tendency!(
                 (@name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
             ),
         ) : ()
-    sedimentation = (mass_sedimentation..., number_sedimentation...)
-    n_mass_val = Val(length(mass_sedimentation))
     mass_names = unrolled_map(first, mass_sedimentation)
     number_names = unrolled_map(first, number_sedimentation)
-    ᶜwʲs = unrolled_map(
-        ((_, wʲ_name, _),) -> MatrixFields.get_field(p.precomputed, wʲ_name),
-        sedimentation,
-    )
-    ᶜw_gss = unrolled_map(
-        ((_, _, w_gs_name),) -> MatrixFields.get_field(p.precomputed, w_gs_name),
+    # The updraft and grid-mean velocities of each species.
+    ᶜw_pairs(sedimentation) = unrolled_map(
+        ((_, wʲ_name, w_gs_name),) -> (
+            MatrixFields.get_field(p.precomputed, wʲ_name),
+            MatrixFields.get_field(p.precomputed, w_gs_name),
+        ),
         sedimentation,
     )
 
@@ -433,9 +418,9 @@ function edmfx_sgs_vertical_advection_tendency!(
         DataLayouts.foreach_column(
             Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶠu³ʲs.:($j),
             ᶜρ_diffʲs.:($j), ᶜgradᵥ_ᶠΦ, ᶜρʲs.:($j), ᶜTʲs.:($j), ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c,
-            ᶜwʲs..., ᶜw_gss...,
+            ᶜw_pairs(mass_sedimentation), ᶜw_pairs(number_sedimentation),
         ) do ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜgradᵥ_ᶠΦ, ᶜρʲ, ᶜTʲ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³,
-        Yc, ᶜws...
+        Yc, ᶜw_mass, ᶜw_number
             @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
 
             va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_q_tot_upwinding)
@@ -460,9 +445,6 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
             ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
             ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
-            ᶜwʲs_col, ᶜw_gss_col = _split_halves(ᶜws)
-            ᶜw_massʲs, ᶜw_numberʲs = _split_at(n_mass_val, ᶜwʲs_col)
-            ᶜw_mass_gss, ᶜw_number_gss = _split_at(n_mass_val, ᶜw_gss_col)
 
             # Sedimentation of the condensate masses. Each species' flux
             # convergence `vtt` is a source of ρaʲ (in the analytic ρa solve), so an
@@ -472,7 +454,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             # condensate carrying h_μ(T⁰) + Φ.
             ᶜsed_mass_source = @. zero(ᶜρʲ)
             MatrixFields.unrolled_foreach(
-                _unrolled_zip(mass_names, _unrolled_zip(ᶜw_massʲs, ᶜw_mass_gss)),
+                map(tuple, mass_names, ᶜw_mass),
             ) do (name, (ᶜwʲ, ᶜw_gs))
                 ᶜqʲ = MatrixFields.get_field(ᶜsgsʲ, name)
                 ᶜqʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)
@@ -505,10 +487,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             # Sedimentation of the 2M number concentrations, which do not change
             # the updraft mass.
             MatrixFields.unrolled_foreach(
-                _unrolled_zip(
-                    number_names,
-                    _unrolled_zip(ᶜw_numberʲs, ᶜw_number_gss),
-                ),
+                map(tuple, number_names, ᶜw_number),
             ) do (name, (ᶜwʲ, ᶜw_gs))
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, name)
                 ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)

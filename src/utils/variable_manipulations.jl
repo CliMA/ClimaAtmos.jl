@@ -1,7 +1,6 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
-import UnrolledUtilities:
-    StaticOneTo, unrolled_take, unrolled_drop, unrolled_partition, unrolled_foreach
+import UnrolledUtilities: StaticOneTo, unrolled_take, unrolled_foreach
 
 """
     specific(ρχ, ρ)
@@ -307,7 +306,8 @@ function sgs_weight_function(a, a_half)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)
     else
-        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+        # (`a_half` in the type of `a`, so that the weight has the type of `a`)
+        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - oftype(a, a_half)))))) / 2
     end
 end
 
@@ -619,27 +619,6 @@ composite types and the tuples may hold nested types such as
     ClimaCore.DataLayouts.unrolled_mapreduce(+, a, b) do an, bn
         add_auto_broadcasters(add_auto_broadcasters(an) * add_auto_broadcasters(bn))
     end
-end
-
-@inline _unrolled_zip(::Tuple{}, ::Tuple{}) = ()
-@inline _unrolled_zip(a::Tuple, b::Tuple) =
-    ((first(a), first(b)), _unrolled_zip(Base.tail(a), Base.tail(b))...)
-
-# The first and second halves of a tuple of even length, at constant indices.
-@inline function _split_halves(t::NTuple{N, Any}) where {N}
-    iseven(N) || error("_split_halves needs a tuple of even length")
-    return _split_at(Val(N ÷ 2), t)
-end
-
-# The first `K` elements of a tuple and the remaining elements, at constant indices.
-@inline _split_at(::Val{K}, t::Tuple) where {K} =
-    (unrolled_take(t, Val(K)), unrolled_drop(t, Val(K)))
-
-# The first `G` groups of `K` consecutive elements of a tuple, and the remaining
-# elements, at constant indices (for regrouping splatted column-loop arguments).
-@inline function _split_groups(::Val{K}, ::Val{G}, t::Tuple) where {K, G}
-    grouped, rest = _split_at(Val(K * G), t)
-    return (unrolled_partition(grouped, Val(K)), rest)
 end
 
 # Pointwise forms of `ᶜspecific_env_mse` and `ᶜspecific_env_value`, which take a

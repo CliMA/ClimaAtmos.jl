@@ -189,10 +189,16 @@ function set_precipitation_velocities!(
     # TODO: use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging
     # velocities over subdomains once negative subdomain mass issues are
     # resolved
+    species_names = (
+        (@name(q_lcl), @name(ρq_lcl)),
+        (@name(q_icl), @name(ρq_icl)),
+        (@name(q_rai), @name(ρq_rai)),
+        (@name(q_sno), @name(ρq_sno)),
+    )
     DataLayouts.foreach_column(
-        ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₕhₜ,
+        ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
         Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
-    ) do ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₕhₜ,
+    ) do ᶜw_pairs, ᶜwₕhₜ,
     Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰
         ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
@@ -202,15 +208,9 @@ function set_precipitation_velocities!(
         ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
         ᶜuvwʲs = unrolled_map(j -> (@. Geometry.UVWVector(ᶜuʲs.:($$j))), draft_indices)
 
-        species_tuples = (
-            (@name(q_lcl), @name(ρq_lcl), ᶜwₗ, ᶜwₗʲs),
-            (@name(q_icl), @name(ρq_icl), ᶜwᵢ, ᶜwᵢʲs),
-            (@name(q_rai), @name(ρq_rai), ᶜwᵣ, ᶜwᵣʲs),
-            (@name(q_sno), @name(ρq_sno), ᶜwₛ, ᶜwₛʲs),
-        )
         MatrixFields.unrolled_foreach(
-            species_tuples,
-        ) do (χ_name, ρχ_name, ᶜw, ᶜwʲs)
+            map(tuple, species_names, ᶜw_pairs),
+        ) do ((χ_name, ρχ_name), (ᶜw, ᶜwʲs))
             e_int_func = internal_energy_func(χ_name)
             ᶜρχ_gs = MatrixFields.get_field(Yc, ρχ_name)
             ᶜχ⁰ = @. specific_env_value(
@@ -760,10 +760,15 @@ function update_implicit_microphysics_cache!(
     # `q_c = q_lcl + q_icl`, which Newton moves. `microphysics_1m_implicit_params`
     # is nulled for 2M/2MP3, so guard the whole block on `1M`.
     if mm isa NonEquilibriumMicrophysics1M &&
+       hasproperty(p.precomputed, :ᶜsgs_moments) &&
        !isnothing(
-        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
-    )
-        set_sgs_moments_and_cloud_fraction!(Y, p)
+           CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
+       )
+        thermo_params = CAP.thermodynamics_params(p.params)
+        materialize = tm isa PrognosticEDMFX
+        env_state = cloud_env_state(Y, p, thermo_params; materialize)
+        set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
+        set_precip_fraction!(Y, p, env_state.ᶜq_precip)
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
