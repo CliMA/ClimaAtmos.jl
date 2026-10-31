@@ -336,7 +336,7 @@ end
 
 @testset "get_horizontal_tendencies coordinate order" begin
     # The same physical state on grids with ascending and descending coordinates must
-    # give the same tendencies; raw ERA5 latitude descends.
+    # give the same tendencies; protects against the problem that raw ERA5 latitude descends.
     FT = Float64
     temporary_dir = mktempdir()
     R = 6.371e6
