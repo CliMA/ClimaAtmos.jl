@@ -255,3 +255,43 @@ end
     end
     @test isnothing(CA.set_sw_cloud_optical_depth_factor!(Y, (; radiation = (;))))
 end
+
+@testset "Aerosol droplet activation closure" begin
+    FT = Float64
+    config = CA.AtmosConfig(
+        Dict(
+            "FLOAT_TYPE" => "Float64",
+            "toml" => [],
+        ),
+    )
+    params = CA.ClimaAtmosParameters(config)
+    cmc = CA.Parameters.microphysics_cloud_params(params)
+    N₀ = cmc.N_cloud_liquid_droplets
+    # Default calibration coefficients are zero, so any state returns N₀.
+    @test RRTMGPI.ml_N_cloud_liquid_droplets(cmc, 0.0, 0.0, 0.0, 0.0) ≈ N₀
+
+    # Positive calibration coefficients stay strictly positive in [N₀ / 3, 3 N₀]
+    # and equal N₀ at the reference state.
+    aml = cmc.aml
+    aml_active = merge(
+        aml,
+        (; α_dust = 0.04, α_seasalt = 0.12, α_SO4 = 0.18, α_q_liq = 0.09),
+    )
+    cmc_active = (;
+        liquid = cmc.liquid,
+        ice = cmc.ice,
+        aml = aml_active,
+        N_cloud_liquid_droplets = N₀,
+    )
+    @test RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        aml.c₀_dust,
+        aml.c₀_seasalt,
+        aml.c₀_SO4,
+        aml.q₀_liq,
+    ) ≈ N₀
+    N_zero = RRTMGPI.ml_N_cloud_liquid_droplets(cmc_active, 0.0, 0.0, 0.0, 0.0)
+    N_high = RRTMGPI.ml_N_cloud_liquid_droplets(cmc_active, 1.0, 1.0, 1.0, 1.0)
+    @test N₀ / 3 <= N_zero < N₀
+    @test N₀ < N_high <= 3 * N₀
+end
