@@ -1,5 +1,6 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
+import UnrolledUtilities: StaticOneTo, unrolled_take, unrolled_foreach
 
 """
     specific(ρχ, ρ)
@@ -32,7 +33,7 @@ sum exactly to the grid mean) where the area fraction is small.
     [kg/m³ × units of `χ`].
   - `ρa`: Density-area product of the SGS subdomain [kg/m³].
   - `turbconv_model`: Turbulence-convection model; supplies the regularization
-    parameter `a_half`.
+    parameter `a_half`. A number in its place is used as the weight `w`.
 
 # Returns
 
@@ -45,7 +46,9 @@ specific(ρχ, ρ) = ρχ / ρ
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
-    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    return specific(ρaχ, ρa, ρχ, ρ, sgs_weight_function(ρa / ρ, turbconv_model.a_half))
+end
+function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
     # If ρa is exactly zero, the weight is zero, making the first term NaN (0 * … / 0).
     # For negligible ρa the weight is also zero, and autodiff can still produce NaNs.
     # The ifelse handles both cases explicitly by returning the grid-mean value when ρa < eps.
@@ -303,7 +306,8 @@ function sgs_weight_function(a, a_half)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)
     else
-        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+        # (`a_half` in the type of `a`, so that the weight has the type of `a`)
+        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - oftype(a, a_half)))))) / 2
     end
 end
 
@@ -386,38 +390,20 @@ A lazy center `Field` with the environment value `χ⁰`.
 """
 function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
-
-    # Grid-scale density-weighted variable name, e.g., ρq_tot
-    ρχ_name = get_ρχ_name(χ_name)
-
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-
-    # environment density-area-weighted mse (`ρa⁰χ⁰`).
-    # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
-        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ ->
-                MatrixFields.get_field(sgsʲ, @name(ρa)) *
-                MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
-        )
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-
+        ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+        return @. lazy(
+            specific_env_value(χ_name, ᶜρχ, Y.c.ρ, Y.c.sgsʲs, ᶜρa⁰, turbconv_model),
+        )
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
+    else
+        error(
+            "Environment values need PrognosticEDMFX; got ",
+            nameof(typeof(turbconv_model)),
+        )
     end
-
-    return @. lazy(specific(
-        ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                   # ρa for environment
-        ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
-        turbconv_model,
-    ))
 end
 
 """
@@ -435,16 +421,14 @@ This is the pairing that lets an SGS tracer `χ` in `Y.c.sgsʲs.:(j)` find its
 grid-mean counterpart `ρχ` in `Y.c`; see the Passive Tracers page of the
 documentation.
 """
-function get_ρχ_name(χ_name)
-    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(χ_name))
-    child_name = MatrixFields.drop_first(χ_name)
-    ρχ_name =
-        (child_name == MatrixFields.@name()) ?
-        MatrixFields.FieldName(Symbol(:ρ, MatrixFields.extract_first(χ_name))) :
-        MatrixFields.append_internal_name(parent_name, get_ρχ_name(child_name))
+@inline get_ρχ_name(::MatrixFields.FieldName{name_chain}) where {name_chain} =
+    MatrixFields.FieldName(
+        unrolled_take(name_chain, Val(length(name_chain) - 1))...,
+        ρ_prefixed(last(name_chain)),
+    )
 
-    return ρχ_name
-end
+# Foldable, so that the name is a compile-time constant and calls in kernels compile.
+Base.@assume_effects :foldable ρ_prefixed(name::Symbol) = Symbol(:ρ, name)
 
 """
     get_χʲ_name_from_ρχ_name(ρχ_name)
@@ -536,7 +520,7 @@ Compute the specific moist static energy of the environment, `mse⁰` [J/kg].
 rather than `ᶜspecific_env_value`: the grid-scale density of moist static energy
 is reconstructed as `ρ mse = ρ (h_tot - K)` from the precomputed total specific
 enthalpy `ᶜh_tot` and specific kinetic energy `ᶜK`. Domain decomposition through
-`ᶜenv_value` then supplies the environment numerator and `ρa⁰` the denominator,
+`env_value` then supplies the environment numerator and `ρa⁰` the denominator,
 and the quotient is formed with the regularized `specific`.
 
 Only `PrognosticEDMFX` is supported; `EDOnlyEDMFX` throws, since its environment
@@ -556,20 +540,14 @@ function ᶜspecific_env_mse(Y, p)
     turbconv_model = p.atmos.turbconv_model
     (; ᶜK, ᶜh_tot) = p.precomputed
 
-    # grid-scale moist static energy density `ρ * mse`.
-    ᶜρmse = @. lazy(Y.c.ρ * (ᶜh_tot - ᶜK))
-
-    # environment density-area-weighted mse (`ρa⁰mse⁰`).
-    # Numerator: ρa⁰mse⁰ = ρmse - (Σ ρaʲ * mseʲ)
-
     if turbconv_model isa PrognosticEDMFX
-        ρa⁰mse⁰ = ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
-
-    return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰, ᶜρmse, Y.c.ρ, turbconv_model))
+    return @. lazy(
+        specific_env_mse(Y.c.ρ, Y.c.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model),
+    )
 end
 
 """
@@ -641,4 +619,30 @@ composite types and the tuples may hold nested types such as
     ClimaCore.DataLayouts.unrolled_mapreduce(+, a, b) do an, bn
         add_auto_broadcasters(add_auto_broadcasters(an) * add_auto_broadcasters(bn))
     end
+end
+
+# Pointwise forms of `ᶜspecific_env_mse` and `ᶜspecific_env_value`, which take a
+# precomputed `ρa⁰` (fused column loops use them directly).
+@inline function specific_env_mse(ρ, sgsʲs, h_tot, K, ρa⁰_val, turbconv_model)
+    ρmse = ρ * (h_tot - K)
+    ρa⁰mse⁰ = env_value(ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)
+    return specific(ρa⁰mse⁰, ρa⁰_val, ρmse, ρ, turbconv_model)
+end
+
+@inline function specific_env_value(
+    χ_name,
+    ρχ,
+    ρ,
+    sgsʲs,
+    ρa⁰_val,
+    turbconv_model,
+)
+    ρa⁰χ⁰ = env_value(
+        ρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        sgsʲs,
+    )
+    return specific(ρa⁰χ⁰, ρa⁰_val, ρχ, ρ, turbconv_model)
 end

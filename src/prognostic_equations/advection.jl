@@ -131,8 +131,8 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             # Auto-discovered SGS tracers (microphysics species and any
             # user-defined passive tracers)
             for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
                 @. ᶜχʲₜ -=
                     split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
                     ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
@@ -205,21 +205,20 @@ Reads `Y`, the core fields `ᶜf³` and `ᶠf¹²`, the precomputed `ᶜu`, `ᶠ
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model, prescribed_flow) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
-    advect_tke = use_prognostic_tke(turbconv_model)
+    n_val = Val(n)
+    advect_tke_val = Val(use_prognostic_tke(turbconv_model))
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶜf³, ᶠf¹²) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
-    (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
+    (; edmfx_mse_q_tot_upwinding) =
+        n > 0 || advect_tke_val isa Val{true} ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶜtke =
-        advect_tke ?
-        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) :
-        nothing
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
@@ -230,9 +229,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
-    for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
+    # The vertical curl and its copies for the drafts in one column loop.
+    if n > 0
+        DataLayouts.foreach_column(ᶠω¹², ᶠω¹²ʲs, Y.c.uₕ) do ᶠω¹², ᶠω¹²ʲs, ᶜuₕ
+            @. ᶠω¹² = ᶠcurlᵥ(ᶜuₕ)
+            ntuple(n_val) do j
+                ᶠω¹²ʲ = getproperty(ᶠω¹²ʲs, j)
+                @. ᶠω¹²ʲ = ᶠω¹²
+                return nothing
+            end
+            return nothing
+        end
+    else
+        @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
     end
     @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
     for j in 1:n
@@ -240,52 +249,64 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    ᶜρ = Y.c.ρ
-
-    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
-    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
-    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
-    # edmfx_sgs_mass_flux_tendency!.
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
-            @. ᶜρχₜ += vtt
-        end
-    end
     if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
-    if isnothing(ᶠf¹²)
-        # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    else
-        # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    end
+    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
+    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
+    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
+    # edmfx_sgs_mass_flux_tendency!.
+    tracer_names = unrolled_filter(
+        ρχ_name -> !(ρχ_name in (@name(ρe_tot), @name(ρq_tot))),
+        gs_tracer_names(Y),
+    )
+    drafts = ntuple(
+        j -> (ᶠω¹²ʲs.:($j), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), Yₜ.f.sgsʲs.:($j).u₃),
+        n_val,
+    )
+    deep_val = Val(!isnothing(ᶠf¹²)) # the Coriolis faces exist in a deep atmosphere
 
-    if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.ρtke += vtt
+    # The tracer transports, the vector-invariant momentum advection and the TKE
+    # transport in one fused column loop: the face density is a loop temporary
+    # shared by every transport, and the vorticity is read from scratch once.
+    DataLayouts.foreach_column(
+        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², drafts,
+        something(ᶠf¹², ()),
+    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², drafts, ᶠf¹²
+        ᶜρ = Yc.ρ
+        ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+
+        MatrixFields.unrolled_foreach(tracer_names) do ρχ_name
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+            add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            return nothing
+        end
+
+        # In a deep atmosphere, the vorticity carries the horizontal Coriolis term.
+        ᶠω¹²_tot = deep_val isa Val{true} ? (@. lazy(ᶠf¹² + ᶠω¹²)) : ᶠω¹²
+        ᶜu¹² = @. CT12(ᶜu)
+        @. Yₜc.uₕ -=
+            ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
+            (ᶜf³ + ᶜω³) × ᶜu¹²
+        @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
+        MatrixFields.unrolled_foreach(drafts) do (ᶠω¹²ʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ)
+            ᶠω¹²ʲ_tot =
+                deep_val isa Val{true} ? (@. lazy(ᶠf¹² + ᶠω¹²ʲ)) : ᶠω¹²ʲ
+            @. ᶠu₃ʲₜ -=
+                ᶠω¹²ʲ_tot × ᶠinterp(CT12(ᶜuʲ)) + ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
+            return nothing
+        end
+
+        if advect_tke_val isa Val{true} # advect_tke triggers allocations
+            ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+            add_vertical_transport!(Yₜc.ρtke, ᶠρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
+        end
+        return nothing
     end
 end
 
@@ -312,15 +333,16 @@ The fallback method is a no-op for turbulence-convection models other than
   - For `NonEquilibriumMicrophysics1M`/`NonEquilibriumMicrophysics2M`, the updraft
     microphysics species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and for 2M also `n_lcl`
     and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
-    via `updraft_sedimentation!`. The condensate mass tendencies are a source
+    via `updraft_sedimentation`. The condensate mass tendencies are a source
     of `ρaʲ` (`solve_sgs_ρa_implicit_stage_analytic!`), so `mse`, `q_tot`, and
     every SGS tracer also receive the dilution `-χ Σ_μ vtt_μ / ρaʲ` by the
     sedimented mass. This path supports a single updraft.
 
 Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, `ᶜTʲs`, `ᶜT⁰`, and
-sedimentation velocities, the core fields `ᶜgradᵥ_ᶠΦ` and `ᶜΦ`, and scratch
-space. `t` is unused. See the "PROPHET: Overview and Equations" page
-(`docs/src/prophet.md`) for the continuous equations. Returns `nothing`.
+sedimentation velocities, and the core fields `ᶜgradᵥ_ᶠΦ` and `ᶜΦ`, in one
+column loop per updraft. `t` is unused. See the "PROPHET: Overview and
+Equations" page (`docs/src/prophet.md`) for the continuous equations. Returns
+`nothing`.
 """
 edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -334,166 +356,151 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
-    (; ᶜgradᵥ_ᶠΦ) = p.core
+    (; ᶜgradᵥ_ᶠΦ, ᶜΦ, ᶠ∂ξ³∂x³) = p.core
+    (; microphysics_model) = p.atmos
 
     FT = eltype(p.params)
-    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    (one_FT, zero_FT, ε_area) = (one(FT), zero(FT), eps(FT)) # isbits captures for the loop body
+    thp = CAP.thermodynamics_params(p.params)
+    χ_names = sgs_tracer_names(Y)
+
+    # Sedimenting updraft species with their updraft and grid-mean terminal
+    # velocities: (species name, updraft velocity name, grid-mean velocity name).
+    # The condensate masses are a source of ρaʲ and dilute the updraft scalars;
+    # the number concentrations of 2M microphysics are not.
+    # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
+    # TODO - lazify ᶜwₗʲs computation. No need to cache it.
+    sediments_val = Val(
+        microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    )
+    mass_sedimentation =
+        sediments_val isa Val{true} ?
+        unrolled_filter(
+            ((name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), name),
+            (
+                (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+                (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+                (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
+                (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+            ),
+        ) : ()
+    number_sedimentation =
+        microphysics_model isa NonEquilibriumMicrophysics2M ?
+        unrolled_filter(
+            ((name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), name),
+            (
+                (@name(n_lcl), @name(ᶜwₙₗʲs.:(1)), @name(ᶜwₙₗ)),
+                (@name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
+            ),
+        ) : ()
+    mass_names = unrolled_map(first, mass_sedimentation)
+    number_names = unrolled_map(first, number_sedimentation)
+    # The updraft and grid-mean velocities of each species.
+    ᶜw_pairs(sedimentation) = unrolled_map(
+        ((_, wʲ_name, w_gs_name),) -> (
+            MatrixFields.get_field(p.precomputed, wʲ_name),
+            MatrixFields.get_field(p.precomputed, w_gs_name),
+        ),
+        sedimentation,
+    )
 
     for j in 1:n
-        ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-
-        # buoyancy term in mse equation
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
-            ᶜρ_diffʲs.:($$j) * ᶜgradᵥ_ᶠΦ
-
-        # Advective form advection of mse and q_tot with the updraft velocity
-        # Note: This allocates because the function is too long
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).mse,
-            edmfx_mse_q_tot_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).mse += va
-
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
-            edmfx_mse_q_tot_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
-
-        # Advective form advection of auto-discovered SGS tracers
-        # (microphysics species and any user-defined passive tracers)
-        # with the updraft velocity
-        for χ_name in sgs_tracer_names(Y)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                ᶜχʲ,
-                edmfx_tracer_upwinding,
-            )
-            @. ᶜχʲₜ += va
+        # TODO - make it work for multiple updrafts
+        if sediments_val isa Val{true} && j > 1
+            error("Below code doesn't work for multiple updrafts")
         end
 
-        if p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-            # TODO - make it work for multiple updrafts
-            if j > 1
-                error("Below code doesn't work for multiple updrafts")
+        # One fused column loop per updraft: buoyancy, vertical advection of mse,
+        # q_tot, and the tracers, and the sedimentation of the microphysics species.
+        # The updraft area, the inverse updraft density, the face density, and the
+        # per-species fluxes are loop temporaries rather than scratch fields.
+        DataLayouts.foreach_column(
+            Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶠu³ʲs.:($j),
+            ᶜρ_diffʲs.:($j), ᶜgradᵥ_ᶠΦ, ᶜρʲs.:($j), ᶜTʲs.:($j), ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c,
+            ᶜw_pairs(mass_sedimentation), ᶜw_pairs(number_sedimentation),
+        ) do ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜgradᵥ_ᶠΦ, ᶜρʲ, ᶜTʲ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³,
+        Yc, ᶜw_mass, ᶜw_number
+            @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
+
+            va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_q_tot_upwinding)
+            @. ᶜsgsʲₜ.mse += va
+
+            va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.q_tot, edmfx_mse_q_tot_upwinding)
+            @. ᶜsgsʲₜ.q_tot += va
+
+            MatrixFields.unrolled_foreach(χ_names) do χ_name
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                # (not `va`: assigning the enclosing body's name here would box it)
+                va_χ = vertical_advection(ᶠu³ʲ, ᶜχʲ, edmfx_tracer_upwinding)
+                @. ᶜχʲₜ += va_χ
             end
-            ᶜinv_ρ̂ = p.scratch.ᶜtemp_scalar_3
-            @. ᶜinv_ρ̂ = specific(
-                FT(1),
-                Y.c.sgsʲs.:($$j).ρa,
-                FT(0),
-                ᶜρʲs.:($$j),
-                turbconv_model,
-            )
-            thp = CAP.thermodynamics_params(p.params)
-            (; ᶜΦ) = p.core
+
+            sediments_val isa Val{true} || return nothing
+
+            ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
+            ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
+            ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+            ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
+            ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
+            ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
+
             # Sedimentation of the condensate masses. Each species' flux
-            # convergence `vtt` is a source of ρaʲ (in the analytic ρa solve),
-            # so an intensive updraft scalar χ receives its own source minus
-            # the dilution χ Σ_μ vtt_μ / ρaʲ by the sedimented mass. The mse
-            # source is the flux convergence of q_μ (h_μ(Tʲ) + Φ), with
-            # laterally entrained environment condensate carrying h_μ(T⁰) + Φ.
-            # TODO - lazify ᶜwₗʲs computation. No need to cache it.
-            ᶜsed_mass_source = p.scratch.ᶜtemp_scalar_5
-            @. ᶜsed_mass_source = 0
-            foreach_updraft_sedimentation(
-                Y,
-                p,
-                j,
-            ) do vtt, name, ᶜqʲ, ᶜwʲ, ᶜa, ᶠJ, ᶜρ⁰w⁰χ⁰
-                ᶜqʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), name)
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
-                @. ᶜsed_mass_source += vtt
-                h_cond_func = enthalpy_function(condensate_phase(name))
-                ᶜh_condʲ = @. lazy(h_cond_func(thp, ᶜTʲs.:($$j)) + ᶜΦ)
-                ᶜh_cond⁰ = @. lazy(h_cond_func(thp, ᶜT⁰) + ᶜΦ)
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    (@. lazy(ᶜqʲ * ᶜh_condʲ)),
-                    ᶠJ,
-                    (@. lazy(ᶜρ⁰w⁰χ⁰ * ᶜh_cond⁰)),
+            # convergence `vtt` is a source of ρaʲ (in the analytic ρa solve), so an
+            # intensive updraft scalar χ receives its own source minus the dilution
+            # χ Σ_μ vtt_μ / ρaʲ by the sedimented mass. The mse source is the flux
+            # convergence of q_μ (h_μ(Tʲ) + Φ), with laterally entrained environment
+            # condensate carrying h_μ(T⁰) + Φ.
+            ᶜsed_mass_source = @. zero(ᶜρʲ)
+            MatrixFields.unrolled_foreach(
+                map(tuple, mass_names, ᶜw_mass),
+            ) do (name, (ᶜwʲ, ᶜw_gs))
+                ᶜqʲ = MatrixFields.get_field(ᶜsgsʲ, name)
+                ᶜqʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)
+                ᶜρq_gs = MatrixFields.get_field(Yc, get_ρχ_name(name))
+                # Environment sedimentation flux density, the clamped residual of
+                # the grid-mean flux: ρ⁰w⁰q⁰ = max((w ρq - ρa wʲ qʲ) / (1 - a), 0)
+                ᶜρ⁰w⁰q⁰ = @. max(
+                    (ᶜw_gs * ᶜρq_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜqʲ) / max(1 - ᶜa, ε_area),
+                    zero_FT,
                 )
-                @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * vtt
+                vtt_q = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ, ᶜρ⁰w⁰q⁰)
+                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt_q
+                @. ᶜsgsʲₜ.q_tot += ᶜinv_ρ̂ * vtt_q
+                @. ᶜsed_mass_source += vtt_q
+                h_cond_func = enthalpy_function(condensate_phase(name))
+                ᶜqhʲ = @. ᶜqʲ * (h_cond_func(thp, ᶜTʲ) + ᶜΦ)
+                ᶜρ⁰w⁰qh⁰ = @. ᶜρ⁰w⁰q⁰ * (h_cond_func(thp, ᶜT⁰) + ᶜΦ)
+                vtt_h = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqhʲ, ᶜρ⁰w⁰qh⁰)
+                @. ᶜsgsʲₜ.mse += ᶜinv_ρ̂ * vtt_h
+                return nothing
             end
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜinv_ρ̂ * ᶜsed_mass_source * Y.c.sgsʲs.:($$j).mse
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜinv_ρ̂ * ᶜsed_mass_source * Y.c.sgsʲs.:($$j).q_tot
-            for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+            @. ᶜsgsʲₜ.mse -= ᶜinv_ρ̂ * ᶜsed_mass_source * ᶜsgsʲ.mse
+            @. ᶜsgsʲₜ.q_tot -= ᶜinv_ρ̂ * ᶜsed_mass_source * ᶜsgsʲ.q_tot
+            MatrixFields.unrolled_foreach(χ_names) do χ_name
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
                 @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜsed_mass_source * ᶜχʲ
             end
-        end
 
-        # Sedimentation of number concentrations for 2M microphysics
-        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-
-            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-            # TODO - make it work for multiple updrafts
-            if j > 1
-                error("Below code doesn't work for multiple updrafts")
-            end
-
-            # Sedimentation velocities for microphysics number concentrations
-            # (or any tracers that does not directly participate in variations of q_tot and mse)
-            # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
-            sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl), @name(ᶜwₙₗʲs.:(1)), @name(ᶜwₙₗ)),
-                (@name(c.sgsʲs.:(1).n_rai), @name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
-            )
-
-            # A closure stores a captured type as a `DataType`, so `eps(FT)`
-            # inside it dispatches at run time and allocates.
-            ε_area = eps(FT)
-            zero_FT = zero(FT)
+            # Sedimentation of the 2M number concentrations, which do not change
+            # the updraft mass.
             MatrixFields.unrolled_foreach(
-                sgs_microphysics_tracers,
-            ) do (χʲ_name, name, wʲ_name, w_gs_name)
-                MatrixFields.has_field(Y, χʲ_name) || return
-
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                # Environment sedimentation flux density: ρ⁰w⁰χ⁰
-                # Reconstructed from grid-mean: ρ̂⁰w⁰χ⁰ = w_GS·ρχ_GS − ρ̂¹w¹χ¹
-                # Then ρ⁰w⁰χ⁰ = ρ̂⁰w⁰χ⁰ / a⁰ = ρ̂⁰w⁰χ⁰ / (1 − a)
-                ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
-                ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
-                ᶜρ⁰w⁰χ⁰ = @. lazy(
-                    max(
-                        (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ) /
-                        max(1 - ᶜa, ε_area),
-                        zero_FT,
-                    ),
+                map(tuple, number_names, ᶜw_number),
+            ) do (name, (ᶜwʲ, ᶜw_gs))
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)
+                ᶜρχ_gs = MatrixFields.get_field(Yc, get_ρχ_name(name))
+                ᶜρ⁰w⁰χ⁰ = @. max(
+                    (ᶜw_gs * ᶜρχ_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ) / max(1 - ᶜa, ε_area),
+                    zero_FT,
                 )
-
-                # Flux form sedimentation of tracers
-                vtt = p.scratch.ᶜtemp_scalar_4
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    ᶜχʲ,
-                    ᶠJ,
-                    ᶜρ⁰w⁰χ⁰,
-                )
-                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
+                vtt_n = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜχʲ, ᶜρ⁰w⁰χ⁰)
+                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt_n
+                return nothing
             end
+            return nothing
         end
     end
 end
@@ -535,8 +542,9 @@ carry the same sedimentation flux.
   - `ᶠJ`: Face Jacobian (grid geometry).
   - `ᶜρ⁰w⁰χ⁰`: Environment sedimentation flux density `ρ⁰ w⁰ χ⁰`.
 
-Called from `edmfx_sgs_vertical_advection_tendency!` and
-`foreach_updraft_sedimentation`. Returns `nothing`.
+Called from `foreach_updraft_sedimentation`; the column loop of
+`edmfx_sgs_vertical_advection_tendency!` uses its column form,
+`updraft_sedimentation`. Returns `nothing`.
 """
 function updraft_sedimentation!(
     vtt,
@@ -568,6 +576,27 @@ function updraft_sedimentation!(
 end
 
 """
+    updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
+
+Column-loop form of `updraft_sedimentation!`: return the flux-form
+sedimentation tendency of the updraft tracer `ᶜχ` as a loop temporary, given
+the face updraft density `ᶠρ = ᶠinterp(ρʲ J) / ᶠJ` and the area gradient
+`∂a∂z = ᶜprecipdivᵥ(ᶠinterp(J) / ᶠJ ᶠtop_bias(a))`, which do not depend on the
+tracer and are computed once per column, and `p.core.ᶠ∂ξ³∂x³`. Called from the
+fused column loop of `edmfx_sgs_vertical_advection_tendency!`, so it must stay
+inlined.
+"""
+@inline function updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
+    ᶠwχ = @. ᶠtop_bias(-(ᶜw) * ᶜχ)
+    ᶠwaχ = @. ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
+    return @. ifelse(
+        ∂a∂z < 0,
+        -(ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠwaχ))) + ∂a∂z * ᶜρ⁰w⁰χ⁰),
+        -(ᶜa * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠwχ)))),
+    )
+end
+
+"""
     foreach_updraft_sedimentation(f, Y, p, j)
 
 Call `f(vtt, name, ᶜqʲ, ᶜwʲ, ᶜa, ᶠJ, ᶜρ⁰w⁰χ⁰)` for each sedimenting condensate
@@ -583,8 +612,7 @@ reconstructed from the grid-mean flux, `ρ̂⁰w⁰q⁰ = w ρq - ρ̂ʲwʲqʲ` 
 `ρ⁰w⁰q⁰ = max(ρ̂⁰w⁰q⁰ / (1 - a), 0)`. `vtt` is `p.scratch.ᶜtemp_scalar_4`,
 overwritten for each species, and `updraft_sedimentation!` writes
 `ᶠtemp_scalar`, `ᶠtemp_scalar_2`, and `ᶠtemp_scalar_3`. Supports a single
-updraft. Returns `nothing`. Called from `edmfx_sgs_vertical_advection_tendency!`
-and `updraft_sedimentation_rate!`.
+updraft. Returns `nothing`. Called from `updraft_sedimentation_rate!`.
 """
 function foreach_updraft_sedimentation(f, Y, p, j)
     j == 1 || error("Updraft sedimentation supports a single updraft")
@@ -652,7 +680,8 @@ positive, `∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a)`, so the lateral ter
 derivative is zero. The flux through each face comes from the cell above, so
 `ᶜM` is upper bidiagonal. `ᶜ∂a∂z` is the area gradient of
 `updraft_sedimentation!`. Writes `ᶠsed_tracer_advection` in `p.scratch`. Called from
-`update_sgs_advection_jacobian!` and `updraft_sedimentation_rate!`.
+`updraft_sedimentation_rate!`; the column loop of `update_sgs_advection_jacobian!`
+builds the same operator.
 """
 function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     (; ᶜρʲs) = p.precomputed
@@ -688,12 +717,12 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     @. ᶠsed_tracer_advection =
         DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
         ᶠtop_bias_matrix() *
-        DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
+        DiagonalMatrixRow(-(ᶜwʲ))
+    ᶠsed = @. lazy(DiagonalMatrixRow(CT3(p.core.ᶠ∂ξ³∂x³)) * ᶠsed_tracer_advection)
     @. ᶜM =
         dtγ * ifelse(ᶜ∂a∂z < 0,
-            -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
-            DiagonalMatrixRow(ᶜa),
-            -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
+            -(ᶜprecipdivᵥ_matrix()) * ᶠsed * DiagonalMatrixRow(ᶜa),
+            -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
         ) + DiagonalMatrixRow(ᶜlateral_coeff)
     return ᶜlateral_coeff
 end

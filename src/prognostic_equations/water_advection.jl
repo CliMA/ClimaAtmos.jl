@@ -4,7 +4,7 @@
 #####
 
 
-import ClimaCore: Fields
+import ClimaCore: DataLayouts, Fields
 
 """
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
@@ -41,51 +41,49 @@ the implicitly treated vertical transport. See the "Microphysics" page of the do
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     (; params) = p
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; ᶜu, ᶜT) = p.precomputed
     thp = CAP.thermodynamics_params(params)
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
 
-    microphysics_tracers = (
-        (@name(ρq_lcl), @name(ᶜwₗ)),
-        (@name(ρq_icl), @name(ᶜwᵢ)),
-        (@name(ρq_rai), @name(ᶜwᵣ)),
-        (@name(ρq_sno), @name(ᶜwₛ)),
+    microphysics_tracers = unrolled_filter(
+        ((ρq_name, _),) -> MatrixFields.has_field(Y.c, ρq_name),
+        (
+            (@name(ρq_lcl), @name(ᶜwₗ)),
+            (@name(ρq_icl), @name(ᶜwᵢ)),
+            (@name(ρq_rai), @name(ᶜwᵣ)),
+            (@name(ρq_sno), @name(ᶜwₛ)),
+        ),
     )
-    internal_energy_func(name) =
-        (name == @name(ρq_lcl) || name == @name(ρq_rai)) ? TD.internal_energy_liquid :
-        (name == @name(ρq_icl) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
-        nothing
+    isempty(microphysics_tracers) && return nothing
+    ρq_names = unrolled_map(first, microphysics_tracers)
+    ᶜws = unrolled_map(
+        ((_, w_name),) -> MatrixFields.get_field(p.precomputed, w_name),
+        microphysics_tracers,
+    )
 
-    ᶠρ = p.scratch.ᶠtemp_scalar
-    ᶜq = p.scratch.ᶜtemp_scalar
-    vtt = p.scratch.ᶜtemp_scalar_2
-    @. ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    MatrixFields.unrolled_foreach(microphysics_tracers) do (ρq_name, w_name)
-        MatrixFields.has_field(Y.c, ρq_name) || return
-
-        ᶜρq = MatrixFields.get_field(Y.c, ρq_name)
-        ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-        @. ᶜq = specific(ᶜρq, Y.c.ρ)
-        @. vtt =
-            -1 * ᶜprecipdivᵥ(
-                ᶠρ * ᶠtop_bias(
-                    Geometry.WVector(-(ᶜw)) * ᶜq,
-                ),
-            )
-        @. Yₜ.c.ρ += vtt
-        @. Yₜ.c.ρq_tot += vtt
-
-        e_int_func = internal_energy_func(ρq_name)
-        @. p.scratch.ᶜtemp_scalar_3 =
-            -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
-        @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
-            ᶠρ * ᶠtop_bias(
-                Geometry.WVector(p.scratch.ᶜtemp_scalar_3),
-            ),
-        )
+    # One fused column loop for all species: the face density and the per-species
+    # specific humidity and energy density are loop temporaries (registers on
+    # GPUs) rather than scratch fields, and the five broadcasts per species run in
+    # the same kernel.
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws
+        ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
+        ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
+        MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
+            ᶜρq = MatrixFields.get_field(Yc, ρq_name)
+            e_int_func = internal_energy_func(ρq_name)
+            ᶜq = @. specific(ᶜρq, Yc.ρ)
+            vtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq))))
+            @. Yₜc.ρ += vtt
+            @. Yₜc.ρq_tot += vtt
+            ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw)))
+            @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(ᶜρwe))))
+        end
+        return nothing
     end
 
     # For prognostic edmf, augment the energy tendencies with the additional energy contributions
@@ -109,60 +107,71 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
 
-        ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-        @. ᶜρ⁰ =
-            TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-
         # TODO the following code works for only one updraft
-        sgs_microphysics_tracers = (
-            (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-            (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-            (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-            (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+        sgs_microphysics_tracers = unrolled_filter(
+            ((q_name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
+            (
+                (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+                (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+                (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
+                (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+            ),
         )
-        MatrixFields.unrolled_foreach(sgs_microphysics_tracers) do (q_name, wʲ_name, w_name)
-            MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name) || return
-
-            ᶜqʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), q_name)
-            ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-            ᶜρq = MatrixFields.get_field(Y.c, get_ρχ_name(q_name))
-            ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-            ᶜuʲ = ᶜuʲs.:(1)
-
-            e_int_func = internal_energy_func(get_ρχ_name(q_name))
-            # Grid-mean specific energy carried by the sedimentation flux
-            # applied above (Φ is identical in all subdomains at a given
-            # level, so it cancels in the subdomain differences).
-            @. p.scratch.ᶜtemp_scalar_2 = e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜu))
-            # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
-            @. p.scratch.ᶜtemp_scalar_3 =
-                e_int_func(thp, ᶜTʲs.:(1)) + $(Kin(ᶜwʲ, ᶜuʲ)) -
-                p.scratch.ᶜtemp_scalar_2
-            @. Yₜ.c.ρe_tot -=
-                ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ * ᶠtop_bias(
-                        Geometry.WVector(-(ᶜwʲ)) *
-                        draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
-                        p.scratch.ᶜtemp_scalar_3,
-                    ),
+        isempty(sgs_microphysics_tracers) && return nothing
+        q_names = unrolled_map(first, sgs_microphysics_tracers)
+        # The updraft and grid-mean velocities of each species.
+        ᶜw_pairs = unrolled_map(
+            ((_, wʲ_name, w_name),) -> (
+                MatrixFields.get_field(p.precomputed, wʲ_name),
+                MatrixFields.get_field(p.precomputed, w_name),
+            ),
+            sgs_microphysics_tracers,
+        )
+        # One fused column loop for the updraft and environment corrections of
+        # all species; the subdomain face densities, the updraft area, and the
+        # specific energies are loop temporaries.
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
+            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
+        ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
+        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
+            ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+            ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
+            ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
+            ᶜρaʲ = Yc.sgsʲs.:(1).ρa
+            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            # The velocities are converted once for every species.
+            ᶜuvw = @. Geometry.UVWVector(ᶜu)
+            ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
+            ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
+            MatrixFields.unrolled_foreach(
+                map(tuple, q_names, ᶜw_pairs),
+            ) do (q_name, (ᶜwʲ, ᶜw))
+                ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
+                ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
+                e_int_func = internal_energy_func(get_ρχ_name(q_name))
+                # Grid-mean specific energy carried by the sedimentation flux
+                # applied above (Φ is identical in all subdomains at a given
+                # level, so it cancels in the subdomain differences).
+                ᶜe_gm = @. e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜuvw))
+                # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
+                ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
+                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
+                    CT3(ᶠ∂ξ³∂x³ * (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ))),
                 )
-            # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
-            # environment sedimentation velocity is not stored separately
-            # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
-            # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
-            # TODO: Update for when updraft area fraction is not necessarily
-            # small
-            @. p.scratch.ᶜtemp_scalar_3 =
-                e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜu⁰)) -
-                p.scratch.ᶜtemp_scalar_2
-            ᶜwaq⁰ = @. lazy((ᶜρq * ᶜw - Y.c.sgsʲs.:(1).ρa * ᶜqʲ * ᶜwʲ) / ᶜρ⁰)
-            @. Yₜ.c.ρe_tot -=
-                ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                        Geometry.WVector(-(ᶜwaq⁰)) *
-                        p.scratch.ᶜtemp_scalar_3,
-                    ),
+                # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
+                # environment sedimentation velocity is not stored separately
+                # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
+                # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
+                # TODO: Update for when updraft area fraction is not necessarily
+                # small
+                ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
+                ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
+                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
+                    CT3(ᶠ∂ξ³∂x³ * (ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰))),
                 )
+            end
+            return nothing
         end
     end
 

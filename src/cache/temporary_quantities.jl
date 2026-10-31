@@ -149,10 +149,6 @@ function temporary_quantities(Y, atmos)
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
         ), # ᶠω¹²ʲs
-        ᶜbidiagonal_adjoint_matrix_c3 = Fields.Field(
-            BidiagonalMatrixRow{typeof(C3(FT(0))')},
-            center_space,
-        ),
         ᶜtemp_bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜtemp_bdmr_2 = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜtemp_bdmr_3 = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -164,47 +160,17 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
-        sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
-        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}),
-        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{typeof(CT3(FT(0))')}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
-        ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
-        ᶠband_matrix_wvec = similar(
-            Y.f,
-            ClimaCore.MatrixFields.BandMatrixRow{
-                ClimaCore.Utilities.PlusHalf{Int64}(0),
-                1,
-                ClimaCore.Geometry.WVector{FT},
-            },
-        ),
         ᶠsed_tracer_advection = similar(
             Y.f,
             ClimaCore.MatrixFields.BandMatrixRow{
                 ClimaCore.Utilities.PlusHalf{Int64}(0),
                 1,
-                ClimaCore.Geometry.WVector{FT},
+                FT,
             },
         ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
-        ᶠbidiagonal_matrix_ct3xct12 = similar(
-            Y.f,
-            BidiagonalMatrixRow{
-                ClimaCore.Geometry.Tensor{
-                    2,
-                    FT,
-                    Tuple{
-                        ClimaCore.Geometry.Contravariant3Axis,
-                        ClimaCore.Geometry.Contravariant12Axis,
-                    },
-                    SMatrix{1, 2, FT, 2},
-                },
-            },
-        ),
-        ᶜadvection_matrix = similar(
-            Y.c,
-            BidiagonalMatrixRow{typeof(C3(FT(0))')},
-        ),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),

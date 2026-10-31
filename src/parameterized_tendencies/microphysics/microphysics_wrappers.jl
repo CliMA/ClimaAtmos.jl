@@ -466,6 +466,22 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
             (eval.q_rai, eval.q_sno, q_tot_eff)
         end
 
+    # When a quadrature node has zero condensate and precipitation and lies
+    # below both liquid and ice saturation, all 1M microphysics rates vanish;
+    # return zero directly instead of running the 5-substep 4x4 linear solver.
+    if isempty(eval.args) &&
+       no_1m_condensate(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
+        tps = _unwrapped(eval.tps)
+        T_freeze = TD.Parameters.T_freeze(tps)
+        T_icenuc = TD.Parameters.T_icenuc(tps)
+        q_smin =
+            (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
+            TD.q_vap_saturation(tps, T_hat, eval.ρ, TD.Ice())
+        if q_tot_node <= q_smin
+            return zero_1m_tendency(FT)
+        end
+    end
+
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
@@ -474,6 +490,19 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
         eval.dt, eval.nsubs, eval.args...,
     )
 end
+
+# The zero 1M tendency of the early exits for cells and quadrature nodes in which all
+# 1M rates vanish, and their shared test that no condensate or precipitation is present.
+@inline zero_1m_tendency(::Type{FT}) where {FT} =
+    (;
+        dq_lcl_dt = zero(FT),
+        dq_icl_dt = zero(FT),
+        dq_rai_dt = zero(FT),
+        dq_sno_dt = zero(FT),
+    )
+@inline no_1m_condensate(q_lcl, q_icl, q_rai, q_sno) =
+    (q_lcl <= zero(q_lcl)) & (q_icl <= zero(q_icl)) &
+    (q_rai <= zero(q_rai)) & (q_sno <= zero(q_sno))
 
 """
     microphysics_tendencies_1m(
@@ -515,7 +544,7 @@ sampling (`GridMeanSGS`) it is the grid-mean form.
   - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle`` [K²].
   - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle`` [(kg/kg)²].
   - `corr_Tq`: Correlation coefficient corr(T′, q′) [-], the per-cell
-    `p.precomputed.ᶜcorr_Tq` set by `set_tq_correlation!`.
+    `p.precomputed.ᶜcorr_Tq` set by `set_covariance_cache!`.
   - `λ_lagrange`: Lagrange multiplier from `ᶜsgs_moments`, precomputed to
     enforce `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
@@ -552,6 +581,20 @@ positive when a source of the corresponding tracer.
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
 )
+    FT = typeof(ρ)
+    # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
+    # return zero without running the substepped 4x4 linear solver.
+    if no_1m_condensate(q_lcl, q_icl, q_rai, q_sno)
+        tps = _unwrapped(thp)
+        q_smin = ifelse(
+            T >= TD.Parameters.T_freeze(tps),
+            TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
+            TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
+        )
+        if q_tot_nonneg < q_smin * (one(FT) - 2 * eps(FT))
+            return zero_1m_tendency(FT)
+        end
+    end
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp), ρ, T, w,
@@ -667,6 +710,23 @@ exactly for any `a_p` (bounded below by `precip_frac_floor`).
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
     β_precip, σ_S, S_star, λ_eq, args,
 )
+    FT = typeof(ρ)
+    # In a condensate- and precipitation-free cell with no equilibrium cloud
+    # (`λ_eq = -Inf`), every node has `q_c_eq_hat = 0` and `q_tot_node ≤ q_sat_hat`.
+    # Outside the mixed-phase temperature band (`T_icenuc < T_hat < T_freeze`),
+    # `q_smin = q_sat_hat`, so all 1M microphysics rates vanish at every node;
+    # return zero before building the 8-node conditional rule.
+    if isempty(args) &&
+       no_1m_condensate(q_lcl, q_icl, q_rai, q_sno) &
+       !isfinite(FT(λ_eq))
+        tps = _unwrapped(thp)
+        T_freeze = FT(TD.Parameters.T_freeze(tps))
+        T_icenuc = FT(TD.Parameters.T_icenuc(tps))
+        ΔT_max = 8 * sqrt(max(FT(T′T′), zero(FT)))
+        if (T - ΔT_max >= T_freeze) | (T + ΔT_max <= T_icenuc)
+            return zero_1m_tendency(FT)
+        end
+    end
     return _sum_over_conditional_sgs(
         (λ_scaled, α_scaled, shaft_frac) -> Microphysics1MEvaluator(
             scheme, cmp, thp, ρ, w,

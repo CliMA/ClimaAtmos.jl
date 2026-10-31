@@ -591,17 +591,25 @@ radiation; updrafts are typically absent in the stratosphere, where radiation ma
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
     (; turbconv_model) = p.atmos
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     # Apply radiation tendency to updrafts in prognostic EDMF. We use the
     # grid-mean radiation as an approximation for updraft radiation.
     # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts
     # are typically absent in the stratosphere where radiation is more important.
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs) = p.precomputed
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+    n = turbconv_model isa PrognosticEDMFX ? n_mass_flux_subdomains(turbconv_model) : 0
+    drafts = ntuple(j -> (p.precomputed.ᶜρʲs.:($j), Yₜ.c.sgsʲs.:($j).mse), Val(n))
+    # The grid-mean and updraft tendencies in one column loop, with the flux
+    # divergence evaluated once.
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        ᶠradiation_flux,
+        drafts,
+    ) do Yₜc, ᶠradiation_flux, drafts
+        ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜc.ρe_tot -= ᶜdiv_flux
+        MatrixFields.unrolled_foreach(drafts) do (ᶜρʲ, ᶜmseʲₜ)
+            @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
         end
+        return nothing
     end
     return nothing
 end
