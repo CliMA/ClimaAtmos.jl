@@ -200,21 +200,18 @@ function get_horizontal_tendencies(
     ᶜu = smooth_4D_era5(column_ds, "u", lon_index, lat_index)
     ᶜv = smooth_4D_era5(column_ds, "v", lon_index, lat_index)
 
-    # difference of a smoothed field across the site, from index - 1 to index + 1
-    # along the axis selected by the offsets
-    centered_diff(var, Δi, Δj) =
-        smooth_4D_era5(column_ds, var, lon_index + Δi, lat_index + Δj) .-
-        smooth_4D_era5(column_ds, var, lon_index - Δi, lat_index - Δj)
+    # differences of a smoothed field across the site, from index - 1 to index + 1
+    # along each axis
+    zonal_diff(var) =
+        smooth_4D_era5(column_ds, var, lon_index + 1, lat_index) .-
+        smooth_4D_era5(column_ds, var, lon_index - 1, lat_index)
+    meridional_diff(var) =
+        smooth_4D_era5(column_ds, var, lon_index, lat_index + 1) .-
+        smooth_4D_era5(column_ds, var, lon_index, lat_index - 1)
 
     # temperature and specific humidity advective tendency at center
-    tntha = -(
-        ᶜu .* centered_diff("t", 1, 0) ./ Δx .+
-        ᶜv .* centered_diff("t", 0, 1) ./ Δy
-    )
-    tnhusha = -(
-        ᶜu .* centered_diff("q", 1, 0) ./ Δx .+
-        ᶜv .* centered_diff("q", 0, 1) ./ Δy
-    )
+    tntha = -(ᶜu .* zonal_diff("t") ./ Δx .+ ᶜv .* meridional_diff("t") ./ Δy)
+    tnhusha = -(ᶜu .* zonal_diff("q") ./ Δx .+ ᶜv .* meridional_diff("q") ./ Δy)
 
     return tntha, tnhusha
 end
