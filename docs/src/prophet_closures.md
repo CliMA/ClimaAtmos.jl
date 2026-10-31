@@ -682,6 +682,9 @@ subdomain's own saturation-excess fluctuations is normalized by ``\sigma_{\mathr
 whereas non-equilibrium condensate ``\max(0, q_c - q_{c,\mathrm{eq}})`` in
 subsaturated air (such as condensate detrained from updrafts) is normalized by
 ``\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}`` (`_compute_cloud_fraction`).
+Under `PrognosticEDMFX`, the upper tail of the subsaturated environment's
+saturation-excess distribution occupied by mass-flux updrafts can also be
+truncated at quantile ``c_{\mathrm{hi}} \le c`` (`env_equilibrium_condensate`).
 That keeps subsaturated air with detrained or residual condensate patchy while
 allowing quiescent saturated decks to reach overcast. Microphysical rates are evaluated
 at each node and aggregated linearly, which preserves total water and total

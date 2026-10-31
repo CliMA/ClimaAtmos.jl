@@ -562,6 +562,87 @@ function turbulent_entrainment(turbconv_params, ᶜaʲ)
 end
 
 """
+    environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+
+Shift `(ΔT, Δq)` of the mean of the upper half `s′ > 0` of the environment's
+Gaussian subgrid `(T′, q′)` distribution relative to its mean, for the linear
+selector `s′ = α_T T′ + α_q q′`:
+
+    Δx = √(2/π) Cov(x′, s′) / σ_s,
+    σ_s² = α_T² σ_T² + 2 α_T α_q r σ_T σ_q + α_q² σ_q²,
+
+with `r` the T–q correlation (the conditional mean of a jointly Gaussian
+variable over a half-space). Returns zeros where the subgrid variance vanishes,
+so the environment mean is recovered as the variance goes to zero (fine grids).
+"""
+@inline function environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    FT = typeof(T′T′)
+    σ_T = sqrt(max(T′T′, zero(FT)))
+    σ_q = sqrt(max(q′q′, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+    cov_Ts = α_T * σ_T^2 + α_q * r * σ_T * σ_q
+    cov_qs = α_q * σ_q^2 + α_T * r * σ_T * σ_q
+    σ_s² = α_T * cov_Ts + α_q * cov_qs
+    has_variance = σ_s² > floatmin(FT)
+    k = sqrt(FT(2) / FT(π)) / sqrt(max(σ_s², floatmin(FT)))
+    return (
+        ifelse(has_variance, k * cov_Ts, zero(FT)),
+        ifelse(has_variance, k * cov_qs, zero(FT)),
+    )
+end
+
+"""
+    mse_selector_coefficients(thermo_params)
+
+Coefficients `(α_T, α_q) = (c_p, L_v)` of the moist-static-energy selector
+`s′ = α_T T′ + α_q q′` of the environment's subgrid tail.
+"""
+@inline mse_selector_coefficients(thermo_params) =
+    (TDP.cp_d(thermo_params), TDP.LH_v0(thermo_params))
+
+"""
+    tail_entrainment_increments(
+        thermo_params, w, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+        T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+    )
+
+Increments `(Δmse, Δq_tot)` of the air drawn in by the dynamical entrainment
+`entr` [1/s], relative to the environment mean, when a fraction `w` of it comes
+from the upper half of the environment's subgrid distribution in moist static
+energy (`environment_tail_shift`, `mse_selector_coefficients`).
+
+Both increments come from the same tail state `(T⁰ + w ΔT, q_tot⁰ + w Δq)`, and
+the moist static energy uses the model's enthalpy with the environment's
+condensate, so the entrained air is one realizable parcel. Realizability: the
+mass entrained in one step, `entr ρaʲ dt`, cannot exceed the tail's mass
+`ρa⁰ / 2`; beyond that the weight is reduced. Because the environment is
+diagnosed as grid mean minus updrafts, the environment gives up what the updraft
+entrains and total water and energy are conserved.
+"""
+@inline function tail_entrainment_increments(
+    thermo_params, w, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+    T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+)
+    FT = typeof(T⁰)
+    α_T, α_q = map(FT, mse_selector_coefficients(thermo_params))
+    ΔT, Δq = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    entrained_per_step = max(entr, zero(FT)) * max(ρaʲ, zero(FT)) * FT(dt)
+    w_eff =
+        FT(w) * min(
+            one(FT),
+            FT(0.5) * max(ρa⁰, zero(FT)) / max(entrained_per_step, floatmin(FT)),
+        )
+    q_tot_e = max(q_tot⁰ + w_eff * Δq, zero(FT))
+    T_e = T⁰ + w_eff * ΔT
+    Δmse =
+        TD.enthalpy(thermo_params, T_e, q_tot_e, q_liq⁰, q_ice⁰) -
+        TD.enthalpy(thermo_params, T⁰, q_tot⁰, q_liq⁰, q_ice⁰)
+    return (Δmse, q_tot_e - q_tot⁰)
+end
+@inline tail_entrainment_Δmse(args...) = tail_entrainment_increments(args...)[1]
+@inline tail_entrainment_Δq_tot(args...) = tail_entrainment_increments(args...)[2]
+
+"""
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
@@ -600,6 +681,17 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜlg = Fields.local_geometry_field(Y.c)
+    FT = eltype(p.params)
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    use_tail_entr = w_tail > 0
+    if use_tail_entr
+        hasproperty(p.precomputed, :ᶜT′T′) ||
+            error("edmf_tail_entr_weight > 0 requires SGS covariances")
+        thermo_params = CAP.thermodynamics_params(p.params)
+        (; dt) = p
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+            p.precomputed
+    end
 
     for j in 1:n
         ᶜentrʲ = @. lazy(
@@ -614,10 +706,36 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
-        @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
+        if use_tail_entr
+            # Dynamical entrainment draws from the environment's tail
+            # (`tail_entrainment_increments`); turbulent entrainment, a two-way
+            # exchange outside the ρa equation, keeps the environment mean.
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                ᶜentrʲ * (
+                    ᶜmse⁰ +
+                    tail_entrainment_Δmse(
+                        thermo_params, w_tail, ᶜT⁰,
+                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    ) - ᶜmseʲ
+                ) + ᶜturb_entrʲ * (ᶜmse⁰ - ᶜmseʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                ᶜentrʲ * (
+                    ᶜq_tot⁰ +
+                    tail_entrainment_Δq_tot(
+                        thermo_params, w_tail, ᶜT⁰,
+                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    ) - ᶜq_totʲ
+                ) + ᶜturb_entrʲ * (ᶜq_tot⁰ - ᶜq_totʲ)
+        else
+            @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+        end
 
         # Auto-discovered SGS tracers (microphysics species and any
         # user-defined passive tracers)

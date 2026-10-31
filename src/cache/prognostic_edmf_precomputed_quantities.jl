@@ -237,6 +237,51 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
 end
 
 """
+    ᶜupdraft_reference_density(Y, p)
+
+Lazy center field of the density to which updraft buoyancy is referenced.
+
+With `edmf_buoyancy_clear_env_weight = 0` (default) this is the grid-mean
+density `Y.c.ρ`. With weight `c_b ∈ (0, 1]`, a fraction `c_b` of the
+environment's cloud liquid is evaporated adiabatically before the density is
+evaluated: `T → T − c_b (L_v / c_pm) q_e`, `q_liq → q_liq − c_b q_e`, with
+`q_e = (ρq_lcl − Σⱼ ρaʲ q_lclʲ) / ρ ≥ 0` the environment cloud liquid per unit
+grid-mean mass and `q_tot` unchanged. In a cumulus regime the environment's
+subgrid condensation at cloud base warms the mean against which the updraft is
+compared; referencing buoyancy to the environment with that condensate
+evaporated preserves the updraft buoyancy relative to clear air. Ice is left in
+place; with `0M` or `2M` microphysics the weight is ignored.
+"""
+function ᶜupdraft_reference_density(Y, p)
+    (; microphysics_model, turbconv_model) = p.atmos
+    c_b = CAP.edmf_buoyancy_clear_env_weight(p.params)
+    (c_b > 0 && microphysics_model isa NonEquilibriumMicrophysics1M) ||
+        return Y.c.ρ
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜρq_e = p.scratch.ᶜtemp_scalar_9
+    @. ᶜρq_e = Y.c.ρq_lcl
+    for j in 1:n
+        @. ᶜρq_e -= max(0, Y.c.sgsʲs.:($$j).ρa) * max(0, Y.c.sgsʲs.:($$j).q_lcl)
+    end
+    L_v = TD.Parameters.LH_v0(thermo_params)
+    return @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT -
+            FT(c_b) * L_v * max(0, ᶜρq_e) / Y.c.ρ /
+            TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+            ᶜp,
+            ᶜq_tot_nonneg,
+            max(0, ᶜq_liq - FT(c_b) * max(0, ᶜρq_e) / Y.c.ρ),
+            ᶜq_ice,
+        ),
+    )
+end
+
+"""
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
 Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
@@ -302,6 +347,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
 
     for j in 1:n
         # Compute the entrainment velocity scale, non-velocity entrainment rate,
@@ -332,7 +378,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
                 ᶜq_liqʲs.:($$j),
                 ᶜq_iceʲs.:($$j),
             ),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
+            vertical_buoyancy_acceleration(ᶜρ_ref, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             FT(0),
             TD.relative_humidity(
                 thermo_params,
@@ -350,7 +396,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             turbconv_params,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
+            vertical_buoyancy_acceleration(ᶜρ_ref, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             FT(0),
             FT(0),
             p.atmos.edmfx_model.entr_model,
@@ -365,7 +411,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
 
-        @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+        @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - ᶜρ_ref) / ᶜρʲs.:($$j)
     end
 
     # Surface BC payload per updraft at level 1 (capped mass flux +

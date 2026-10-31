@@ -17,6 +17,15 @@ main
   evaluate `compute_∂T_∂θ!` at the environment state under `PrognosticEDMFX`,
   and evaluate non-equilibrium updraft cloud fraction (`_updraft_cloud_fraction`)
   against the updraft vapor subsaturation deficit.
+- ![][badge-✨feature/enhancement] Add subsaturated-environment upper-tail
+  truncation (`env_equilibrium_condensate`, `_materialize_env_tail_partition!`,
+  `sgs_env_updraft_tail_truncation_coeff`), moist-static-energy tail entrainment
+  (`tail_entrainment_increments`, `edmf_tail_entr_weight`), clear-environment
+  updraft buoyancy reference density (`ᶜupdraft_reference_density`,
+  `edmf_buoyancy_clear_env_weight`), and convective environment autoconversion
+  velocity (`env_detrained_condensate_fraction`,
+  `sgs_env_autoconversion_updraft_velocity_weight`,
+  `sgs_env_autoconversion_detrained_velocity`).
 
 0.42.17
 -------

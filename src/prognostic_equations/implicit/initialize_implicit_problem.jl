@@ -60,10 +60,11 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     if n_picard > 0
         ᶠsnapshot = p.precomputed.ᶠsgsʲs_picard_snapshot
         ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
+        ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
         for j in 1:n
             @. ᶠsnapshot.:($$j) = Y.f.sgsʲs.:($$j)
             @. ᶜsnapshot.:($$j) = Y.c.sgsʲs.:($$j)
-            @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+            @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - ᶜρ_ref) / ᶜρʲs.:($$j)
         end
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
@@ -83,8 +84,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             # Faces: always, so u₃_old = stage u₃. Centers: only between
             # rounds — the last round leaves the Picard-converged draft
             # scalars as a warm start for the Newton solve.
+            ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
             for j in 1:n
-                @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+                @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - ᶜρ_ref) / ᶜρʲs.:($$j)
                 @. Y.f.sgsʲs.:($$j) = ᶠsnapshot.:($$j)
                 round == n_picard || @. Y.c.sgsʲs.:($$j) = ᶜsnapshot.:($$j)
             end
@@ -717,6 +719,10 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
     advection_factor_first =
         Fields.field_values(Fields.level(ᶜadvection_factor, 1))
 
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    use_tail_entr =
+        (w_tail > zero(FT)) && hasproperty(p.precomputed, :ᶜT′T′)
+
     for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
@@ -724,13 +730,15 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
         # Cell 1: no flow through the surface, whatever the covariant `u₃`
         # there; with α[1] = 0 the sweep's `init` value drops out.
         @. advection_factor_first = FT(0)
-        @. ᶜentr_tot =
+        ᶜentrʲ = @. lazy(
             compute_entrainment(
                 p.precomputed.ᶜentr_vel_scaleʲs.:($$j),
                 p.precomputed.ᶜentr_nonvel_rateʲs.:($$j),
                 p.precomputed.ᶜarea_bounding_entr_detrʲs.:($$j),
                 ᶜinterp(ᶠw),
-            ) + p.precomputed.ᶜturb_entrʲs.:($$j)
+            ),
+        )
+        @. ᶜentr_tot = ᶜentrʲ + p.precomputed.ᶜturb_entrʲs.:($$j)
         @. ᶜdenominator = 1 / dtγ + ᶜadvection_factor + ᶜentr_tot
 
         ρʲ_int_val =
@@ -750,6 +758,57 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
                 χ_name === @name(mse) ? ᶜspecific_env_mse(Y, p) :
                 ᶜspecific_env_value(χ_name, Y, p)
             @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
+            if use_tail_entr &&
+               (χ_name === @name(mse) || χ_name === @name(q_tot))
+                thermo_params = CAP.thermodynamics_params(p.params)
+                (;
+                    ᶜT⁰,
+                    ᶜq_tot_nonneg⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
+                    ᶜT′T′,
+                    ᶜq′q′,
+                    ᶜcorr_Tq,
+                ) = p.precomputed
+                ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
+                ᶜρaʲ = sgsʲ.ρa
+                dt = p.dt
+                if χ_name === @name(mse)
+                    @. ᶜnumerator +=
+                        ᶜentrʲ * tail_entrainment_Δmse(
+                            thermo_params,
+                            w_tail,
+                            ᶜT⁰,
+                            ᶜq_tot_nonneg⁰,
+                            ᶜq_liq⁰,
+                            ᶜq_ice⁰,
+                            ᶜT′T′,
+                            ᶜq′q′,
+                            ᶜcorr_Tq,
+                            ᶜρa⁰,
+                            ᶜρaʲ,
+                            ᶜentrʲ,
+                            dt,
+                        )
+                else
+                    @. ᶜnumerator +=
+                        ᶜentrʲ * tail_entrainment_Δq_tot(
+                            thermo_params,
+                            w_tail,
+                            ᶜT⁰,
+                            ᶜq_tot_nonneg⁰,
+                            ᶜq_liq⁰,
+                            ᶜq_ice⁰,
+                            ᶜT′T′,
+                            ᶜq′q′,
+                            ᶜcorr_Tq,
+                            ᶜρa⁰,
+                            ᶜρaʲ,
+                            ᶜentrʲ,
+                            dt,
+                        )
+                end
+            end
             # Cell 1 of `mse` and `q_tot` relaxes toward the buoyant surface
             # value; the denominator includes `r_sfc` only while one of them
             # is swept.
