@@ -384,6 +384,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `0` keeps the truncated-Gaussian variance. Applies to all cloud types; the
     default `0.25` is set from overcast stratocumulus and is likely low for ice
     and convective clouds at coarse resolution [-].
+  - `cloud_inhomogeneity_eis_coeff`: Sensitivity coefficient `γ_EIS` [-] of the
+    liquid-cloud shortwave effective-thickness exponent
+    `β_l = clamp(1 − γ_EIS max(0, tanh((EIS − 3) / 4)), 0.15, 1)` to Estimated
+    Inversion Strength (`solve_fluxes!`); `0` (default) leaves `χ` unmodulated.
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -419,6 +423,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_env_subsat_rh_transition::FT
     sgs_env_subsat_gamma_crit::FT
     cloud_condensate_relative_variance_floor::FT
+    cloud_inhomogeneity_eis_coeff::FT
 end
 
 """
