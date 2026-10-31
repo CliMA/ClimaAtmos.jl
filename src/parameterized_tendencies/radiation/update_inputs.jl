@@ -336,15 +336,15 @@ and subject to change in the future.
 
 The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
 with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
-prescribed sea-salt, dust, and sulfate mass concentrations and the column liquid water
-path; the ice effective radius is a constant. Cloud condensate and cloud fraction come from
+prescribed sea-salt, dust, and sulfate mass concentrations and the in-cloud liquid specific
+humidity; the ice effective radius is a constant. Cloud condensate and cloud fraction come from
 the model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field` when
 `radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed fields are
 re-evaluated from their `TimeVaryingInput`s first, regardless of the branch below.
 
 Nothing is written when `radiation_mode.idealized_clouds` is true, since those cloud layers
 are prescribed once at solver construction. Uses `p.scratch.ᶜtemp_scalar`,
-`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `temp_field_level`.
+`ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3`.
 """
 function update_cloud_properties!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -427,27 +427,23 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
                 end
             end
         end
-        lwp_col = p.scratch.temp_field_level
-        ᶜliquid_water_mass_concentration =
-            @. lazy(cloud_liquid_water_content * u.c.ρ)
-        Operators.column_integral_definite!(
-            lwp_col,
-            ᶜliquid_water_mass_concentration,
+        q_l_in = @. lazy(
+            max(FT(0), cloud_liquid_water_content) /
+            max(eps(FT), cloud_fraction),
         )
 
         @. ᶜreliq = ifelse(
-            cloud_liquid_water_content > FT(0),
+            cloud_liquid_water_content > FT(0) && cloud_fraction > zero(FT),
             CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
                 cmc.liquid,
                 u.c.ρ,
-                max(FT(0), cloud_liquid_water_content) /
-                max(eps(FT), cloud_fraction),
+                q_l_in,
                 ml_N_cloud_liquid_droplets(
                     (cmc,),
                     dust_aero_conc,
                     seasalt_aero_conc,
                     SO4_aero_conc,
-                    lwp_col,
+                    q_l_in,
                 ),
                 FT(0),
                 FT(0),
@@ -501,17 +497,22 @@ end
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 
 Return the cloud droplet number concentration diagnosed from the aerosol loading and the
-cloud liquid water [1/m³].
+in-cloud liquid specific humidity [1/m³].
 
-The data-driven closure is log-linear about a reference state,
+The closure uses a bounded log-saturation law about a reference state,
 
 ```math
-N = N₀ \\left[1 + Σ_i α_i \\, \\log(c_i / c_{0,i}) + α_{q_l} \\log(q_l / q_{0,l})\\right],
+s = Σ_i α_i \\, \\log(\\max(c_i, c_{\\min,i}) / c_{0,i}) + α_{q_l} \\log(\\max(q_l, q_{\\min}) / q_{0,l}),
 ```
 
-summed over dust, sea salt, and ammonium sulfate. Each argument is floored at `eps` before
-the logarithm, and the calibration coefficients `α` and reference values `c₀`, `q₀` come
-from `cmc.aml`.
+```math
+N = N₀ \\exp\\left(Δ_{\\max} \\tanh(s / Δ_{\\max})\\right),
+```
+
+summed over dust, sea salt, and ammonium sulfate, with ``Δ_{\\max} = \\ln(3)`` bounding
+the concentration in ``[N₀ / 3, 3 N₀]``. Each argument is floored at ``10^{-3}`` of its
+reference value before the logarithm, and the calibration coefficients `α` and reference
+values `c₀`, `q₀` come from `cmc.aml`.
 
 # Arguments
 
@@ -519,28 +520,24 @@ from `cmc.aml`.
     `cmc.aml` and the reference concentration `cmc.N_cloud_liquid_droplets` [1/m³].
   - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass concentrations
     [kg/kg].
-  - `q_liq`: Cloud liquid water content, compared against the reference `q₀_liq`.
-
-!!! note
-
-    `q₀_liq` is calibrated as a specific humidity [kg/kg], but `update_cloud_properties!`
-    passes the column-integrated liquid water path [kg/m²] for `q_liq`.
+  - `q_liq`: In-cloud liquid water specific humidity [kg/kg], compared against `q₀_liq`.
 """
 function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
-    # We can also add w, T, RH, w' ...
-    # Also consider lookind only at around cloud base height
     (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
     (; c₀_dust, c₀_seasalt, c₀_SO4, q₀_liq) = cmc.aml
     N₀ = cmc.N_cloud_liquid_droplets
 
     FT = eltype(N₀)
-    return N₀ * (
-        FT(1) +
-        α_dust * (log(max(c_dust, eps(FT))) - log(c₀_dust)) +
-        α_seasalt * (log(max(c_seasalt, eps(FT))) - log(c₀_seasalt)) +
-        α_SO4 * (log(max(c_SO4, eps(FT))) - log(c₀_SO4)) +
-        α_q_liq * (log(max(q_liq, eps(FT))) - log(q₀_liq))
-    )
+    c_min_scale = FT(1e-3)
+    s =
+        α_dust * (log(max(c_dust, c_min_scale * c₀_dust)) - log(c₀_dust)) +
+        α_seasalt *
+        (log(max(c_seasalt, c_min_scale * c₀_seasalt)) - log(c₀_seasalt)) +
+        α_SO4 * (log(max(c_SO4, c_min_scale * c₀_SO4)) - log(c₀_SO4)) +
+        α_q_liq * (log(max(q_liq, c_min_scale * q₀_liq)) - log(q₀_liq))
+
+    Δ_max = FT(1.0986122886681098)
+    return N₀ * exp(Δ_max * tanh(s / Δ_max))
 end
 
 """

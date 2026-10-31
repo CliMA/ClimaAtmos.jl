@@ -141,6 +141,7 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
                 },
             },
         )
+        fill!(parent(prescribed_aerosols_field), zero(eltype(Y.c.ρ)))
         prescribed_aerosol_timevaryinginputs =
             (; zip(prescribed_aerosol_names_as_symbols, timevaryinginputs)...)
         aerosol_cache =

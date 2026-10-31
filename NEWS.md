@@ -26,6 +26,11 @@ main
   velocity (`env_detrained_condensate_fraction`,
   `sgs_env_autoconversion_updraft_velocity_weight`,
   `sgs_env_autoconversion_detrained_velocity`).
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Pass in-cloud liquid specific
+  humidity `q_liq / cf` [kg/kg] instead of column-integrated liquid water path
+  [kg/m²] to `ml_N_cloud_liquid_droplets` in `update_cloud_properties!`, bound
+  droplet number concentration smoothly in `[N₀ / 3, 3 N₀]`, and zero-initialize
+  `prescribed_aerosols_field` at cache construction.
 
 0.42.17
 -------

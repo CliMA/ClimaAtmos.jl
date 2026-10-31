@@ -272,19 +272,11 @@ include ``\chi``.
 
 **Effective radii.** The liquid effective radius follows the ``1/3``-power law
 of [LiuHallett1997](@cite), evaluated with a droplet number concentration
-diagnosed from the aerosol loading. That closure, `ml_N_cloud_liquid_droplets`,
-is log-linear in the dust, sea-salt, and ammonium-sulfate concentrations and in
-the liquid water. The ice effective radius is a constant from the microphysics
+diagnosed from the aerosol loading and in-cloud liquid specific humidity
+(`ml_N_cloud_liquid_droplets`), using a bounded log-saturation law in the dust,
+sea-salt, and ammonium-sulfate mass concentrations and in-cloud liquid specific
+humidity. The ice effective radius is a constant from the microphysics
 parameters.
-
-!!! warning "Known inconsistency"
-
-    `ml_N_cloud_liquid_droplets` was calibrated with a specific humidity [kg
-    kg⁻¹] as its liquid-water argument, but `update_cloud_properties!` passes
-    the column-integrated liquid water path [kg m⁻²]. The reference value it is
-    compared against is the specific-humidity one, so the liquid-water term of
-    the closure is evaluated far from where it was fitted. This is recorded in
-    the docstring and tracked as a code-side task.
 
 **Where the clouds come from.** Three sources, selected independently of the
 mode:
