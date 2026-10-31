@@ -1,4 +1,4 @@
-449
+450
 
 # **README**
 #
@@ -32,14 +32,22 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+450
+- `implicit_microphysics: true` (default) now additionally routes 1M
+  `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT
+  call driven by `microphysics_1m_implicit_params`, applied as
+  `ᶜmp_tendency_implicit` with a `−dtγ / τ_cond` and `−dtγ / τ_subl`
+  Jacobian on the `q_lcl` / `q_icl` diagonals. The
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is removed.
+
 449
 - Release v0.42.17: SurfaceFluxes v1.5.1 -> v1.6.0, ClimaCore v1.0.4 -> v1.0.6.
 
 448
 - 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
   via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
-  routes it through an SGS-integrated implicit source with a
-  `−dtγ / (τ_cond · Γₗ)` Jacobian diagonal.
+  routes it through an SGS-integrated implicit source with a `−dtγ / τ_cond`
+  Jacobian diagonal.
 
 447
 - Snow falls at the Chen et al. (2022) speed by default;

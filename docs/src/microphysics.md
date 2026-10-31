@@ -107,50 +107,55 @@ CloudMicrophysics.jl, in which sink terms are locally linearized and folded
 into the time integration scheme; see the [CloudMicrophysics.jl bulk-tendency
 documentation](https://clima.github.io/CloudMicrophysics.jl/dev/BulkTendencies/).
 
-### Implicit cloud-liquid condensation
+### Implicit cloud condensation / sublimation
 
-The default 1-moment path routes cloud-liquid condensation and evaporation
-through CloudMicrophysics' `BulkMicrophysicsTendencies`, which averages
-`conv_q_vap_to_q_lcl` jointly with the other vapor-exchange processes
-(ice deposition / sublimation, rain evaporation, snow sublimation) and
-limits the total latent heating per step.
+The 1-moment path can either run cloud-liquid condensation / evaporation
+(`conv_q_vap_to_q_lcl`) and cloud-ice deposition / sublimation
+(`conv_q_vap_to_q_icl`) jointly inside CM's `BulkMicrophysicsTendencies`,
+or isolate them in a second CM BMT call so the implicit stage can treat
+them separately. The toggle is the single config key
+`implicit_microphysics`.
 
-Setting `cloud_liquid_formation: "ImplicitCloudLiquidFormation"` moves
-condensation out of CM's joint solve into a separate implicit source
-(`_add_implicit_lcl_condensation_grid_mean!`,
-`_add_implicit_lcl_condensation_prognostic_edmfx!`) that Newton solves
-against through a dedicated Jacobian block
-(`update_lcl_condensation_jacobian!`, diagonal ``-\Delta t_{\gamma} / \tau_{cond}``).
-CM's bulk tendency then runs with `cloud_liquid_formation = nothing`
-(see `_split_cloud_liquid_formation`) and produces no condensation
-contribution — the two paths are mutually exclusive by construction.
+With `implicit_microphysics: true` (the default), `create_parameters.jl`
+moves the user's `cloud_liquid_formation` and `cloud_ice_formation`
+options from `microphysics_1m_params` (bulk) to
+`microphysics_1m_implicit_params` (implicit); the implicit set keeps
+every other process `nothing`. `set_microphysics_tendency_cache!` then
+calls `microphysics_tendencies_1m` twice — once with each parameter set —
+and stores the results in `ᶜmp_tendency` and `ᶜmp_tendency_implicit`
+(and the EDMFX siblings). The tendency function and the EDMFX Picard
+predictor read both caches; the Newton solve attaches a
+`-\Delta t_{\gamma} / \tau_{cond}` diagonal on `(ρq_lcl, ρq_lcl)` and
+`(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)`, and a
+`-\Delta t_{\gamma} / \tau_{subl}` diagonal on the matching `q_icl`
+blocks (`update_implicit_microphysics_jacobian!`).
 
-Consequences:
+With `implicit_microphysics: false`, CM's bulk tendency carries both
+formation options and `ᶜmp_tendency_implicit` is zero.
 
-  - **Joint vapor-exchange solve.** Cloud-liquid condensation is no longer
-    co-integrated with ice deposition, rain evaporation, and snow
-    sublimation. The remaining processes still solve jointly in CM; only
-    liquid comes out.
+Consequences of enabling the implicit path:
+
+  - **Joint vapor-exchange solve.** Cloud-liquid condensation and
+    cloud-ice deposition / sublimation are no longer co-integrated with
+    rain evaporation and snow sublimation. The remaining processes still
+    solve jointly in CM BMT; only `q_lcl` and `q_icl` come out.
   - **Heating-rate limiter.** CM's limiter on the latent heating per step,
-    derived from the joint solve, no longer bounds the condensation
-    contribution. The implicit source is bounded instead by the stage-
-    averaged factor ``\tau_{cond} \cdot (1 - \exp(-\Delta t_{\gamma} / \tau_{cond}))``
-    applied to CM's instantaneous rate (used in the EDMFX Picard predictor);
-    evaporation is additionally bounded through CM's `-min(-sat_excess, Γ · q_{lcl})`
-    branch.
-  - **Thermodynamic trajectory.** Both paths relax ``(q_v - q_{sat})``
-    with the same ``\tau_{cond}``, but along slightly different trajectories.
+    derived from the joint solve, no longer bounds the cond / subl
+    contribution.
+  - **Thermodynamic trajectory.** Both paths relax ``(q_v - q_{sat,x})``
+    with the same ``\tau_x``, but along slightly different trajectories.
     CM's bulk tendency assumes enthalpy conservation at fixed pressure
-    (the ``\Gamma_{cp} = 1 + L_v/c_p \cdot \partial q_{sat}/\partial T``
-    factor in its rate). The implicit path's Newton diagonal
-    ``-\Delta t_{\gamma} / \tau_{cond}`` is exact for the updraft (``T`` diagnosed
-    from `mse` at fixed ``p`` — matches CM's assumption, with
+    (the ``\Gamma_{cp} = 1 + L/c_p \cdot \partial q_{sat}/\partial T``
+    factor in its rate). The implicit path's Newton diagonals
+    ``-\Delta t_{\gamma} / \tau_x`` are exact for the updraft (``T``
+    diagnosed from `mse` at fixed ``p`` — matches CM's assumption, with
     ``\Gamma_{cp}`` cancelling the T-feedback) and an approximation
-    (``O(\Gamma_{e,v} / \Gamma_{cp}) \approx 1.1`` – ``1.3`` at warm temperatures)
-    for the grid mean / environment (``T`` diagnosed from ``\rho e_{tot}``
-    at fixed ``\rho``).
+    (``O(\Gamma_{e,v} / \Gamma_{cp}) \approx 1.1`` – ``1.3`` at warm
+    temperatures) for the grid mean / environment (``T`` diagnosed from
+    ``\rho e_{tot}`` at fixed ``\rho``).
 
-This split is temporary scaffolding; the longer-term plan is a
+This split keeps CM BMT authoritative for processes that remain explicit while
+giving `q_lcl` / `q_icl` a Newton-stable update; the longer-term plan is a
 fully-coupled implicit microphysics solver.
 
 ### Enforcing physical constraints

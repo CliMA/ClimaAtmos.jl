@@ -361,12 +361,21 @@ function precomputed_quantities(Y, atmos)
         # iterate, so autodiff needs Dual-typed copies of them.
         precipitation_quantities = (; ᶜmp_tendency = similar(Y.c, MP0_NT))
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        # `ᶜmp_tendency_implicit` carries the SGS-integrated condensation /
+        # sublimation tendencies from CM BMT with
+        # `microphysics_1m_implicit_params`; refreshed per Newton iterate by
+        # `update_implicit_microphysics_cache!`, zeroed here so it stays
+        # zero when `implicit_microphysics: false` (the function is not
+        # called in that mode).
+        ᶜmp_tendency_implicit = similar(Y.c, MP1_NT)
+        fill!(parent(ᶜmp_tendency_implicit), zero(FT))
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
             ᶜwᵢ = similar(Y.c, FT),
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
             ᶜmp_tendency = similar(Y.c, MP1_NT),
+            ᶜmp_tendency_implicit,
         )
     elseif atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
@@ -409,17 +418,26 @@ function precomputed_quantities(Y, atmos)
             )
         end
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        # Implicit siblings are zeroed so they stay zero in
+        # `implicit_microphysics: false` runs; the implicit cache update
+        # (and the Picard-round refresh) overwrites them otherwise.
+        ᶜmp_tendency_implicitʲs = similar(Y.c, NTuple{n, MP1_NT})
+        fill!(parent(ᶜmp_tendency_implicitʲs), zero(FT))
         precipitation_sgs_quantities = (;
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            ᶜmp_tendency_implicitʲs,
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
         )
         if atmos.turbconv_model isa PrognosticEDMFX
+            ᶜmp_tendency_implicit⁰ = similar(Y.c, MP1_NT)
+            fill!(parent(ᶜmp_tendency_implicit⁰), zero(FT))
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
                 ᶜmp_tendency⁰ = similar(Y.c, MP1_NT),
+                ᶜmp_tendency_implicit⁰,
             )
         end
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M
@@ -866,13 +884,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Do nothing for other turbconv models for now
     end
 
-    # When microphysics is implicit, refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt and the
-    # surface precipitation fluxes so that they reflect the current Y.
-    # The surface flux fields have Dual-typed copies in
-    # implicit_precomputed_quantities, so AD can write into them safely.
-    if p.atmos.microphysics_tendency_timestepping == Implicit()
-        update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
-    end
+    # Microphysics is always treated implicitly: refresh ᶜρ_dq_tot_dt /
+    # ᶜρ_de_tot_dt (0M), the surface precipitation fluxes, and (for 1M with
+    # `implicit_microphysics: true`) the `ᶜmp_tendency_implicit*` cache so
+    # all three track the Newton iterate. The surface flux fields have
+    # Dual-typed copies in `implicit_precomputed_quantities`, so AD can write
+    # into them safely.
+    update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
 
     # With implicit vertical diffusion, the vertical Smagorinsky-Lilly tendency
     # is part of `implicit_tendency!`, so its eddy viscosity has to follow the

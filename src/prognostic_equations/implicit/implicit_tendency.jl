@@ -15,10 +15,12 @@ This is the stiff part of the IMEX splitting, containing the terms that are
 fast relative to the timestep: vertical advection and the vertical momentum
 equation (`implicit_vertical_advection_tendency!`), EDMFX subdomain vertical
 advection, entrainment/detrainment, mass flux, boundary conditions, pressure
-work, and the cached updraft `u₃`/`ρa` stage tendencies. Vertical diffusion is
-included only when `p.atmos.diff_mode == Implicit()`, and microphysics sources
-(plus surface precipitation deposition) only when
-`p.atmos.microphysics_tendency_timestepping == Implicit()`. All non-EDMFX
+work, and the cached updraft `u₃`/`ρa` stage tendencies. Microphysics sources
+and surface precipitation deposition are always applied here; the
+`implicit_microphysics` config only decides whether 1M cond/subl flow through
+`ᶜmp_tendency_implicit` (refreshed per Newton iterate with a `−dtγ/τ`
+Jacobian) or stay in the frozen bulk `ᶜmp_tendency`. Vertical diffusion is
+included only when `p.atmos.diff_mode == Implicit()`. All non-EDMFX
 configurations dispatch the SGS tendencies to no-ops.
 
 The linearization of this tendency is the Jacobian ``∂Yₜ/∂Y`` computed by the
@@ -38,26 +40,26 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    if p.atmos.microphysics_tendency_timestepping == Implicit()
-        microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-        # Surface water/energy deposition from precipitation (implicit path).
-        # The explicit counterpart is called from remaining_tendency!.
-        surface_precipitation_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.surface.temperature,
-            p.atmos.microphysics_model,
-        )
-    end
+    # Microphysics tendencies are always applied here. `implicit_microphysics`
+    # only decides whether cond/subl flows through `ᶜmp_tendency_implicit`
+    # (refreshed per Newton iter via `update_implicit_microphysics_cache!`
+    # with a `-dtγ/τ` Jacobian) or stays in the frozen bulk `ᶜmp_tendency`.
+    microphysics_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.microphysics_model,
+        p.atmos.turbconv_model,
+    )
+    surface_precipitation_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.surface.temperature,
+        p.atmos.microphysics_model,
+    )
 
     edmfx_sgs_vertical_advection_tendency!(
         Yₜ,

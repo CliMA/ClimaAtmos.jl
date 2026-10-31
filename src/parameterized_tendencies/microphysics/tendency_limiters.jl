@@ -190,6 +190,11 @@ Dispatches on `timestepping`:
   - `Implicit`: no-op, since the Jacobian provides the stability.
   - `nothing`: no-op.
 
+With `microphysics_tendency_timestepping` currently hard-wired to `Implicit()`
+when microphysics is active (callers pass `p.atmos.microphysics_tendency_timestepping`),
+the `Explicit` branch is only reachable if that wiring is relaxed for a future
+2M-specific setting; it is kept as the reference formulation for that case.
+
 Mutates `ᶜmp_tendency`; the return value is unused.
 """
 @inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing

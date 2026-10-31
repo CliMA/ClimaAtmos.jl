@@ -90,8 +90,6 @@ Accumulates contributions from:
     `p.atmos.diff_mode == Explicit()` (implicit diffusion is applied in
     `implicit_tendency!`).
   - Surface fluxes, radiation, EDMFX TKE, and chemistry.
-  - Microphysics (condensation, precipitation) and surface precipitation, only when
-    `p.atmos.microphysics_tendency_timestepping == Explicit()`.
   - Non-orographic and orographic gravity-wave drag.
   - Surface temperature evolution, pressure work, Smagorinsky-Lilly, AMD LES, and
     constant horizontal diffusion.
@@ -99,9 +97,8 @@ Accumulates contributions from:
     `zero_velocity_tendency!` for advection tests (which must remain last so no
     later call reintroduces velocity tendencies).
 
-The order of calls matters: microphysics must precede `surface_temp_tendency!`
-(which reads the precipitation cache), and all `ρa` tendencies must precede
-`pressure_work_tendency!`. Called from `remaining_tendency!`. Returns `nothing`.
+Microphysics and surface precipitation are applied in `implicit_tendency!`,
+not here. Called from `remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
@@ -200,17 +197,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # Chemistry tendencies
     chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
 
-    # Unified microphysics tendencies (cloud condensation + precipitation)
-    if p.atmos.microphysics_tendency_timestepping == Explicit()
-        microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
+    # Unified microphysics tendencies: always applied in the implicit stage
+    # (`implicit_tendency!`). `implicit_microphysics` only controls whether
+    # cond/subl flows through the implicit cache with a Jacobian or stays in
+    # the frozen bulk tendency; both paths run in the implicit stage.
 
     non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
@@ -228,16 +218,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface.temperature)
-    if p.atmos.microphysics_tendency_timestepping == Explicit()
-        surface_precipitation_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.surface.temperature,
-            p.atmos.microphysics_model,
-        )
-    end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

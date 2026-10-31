@@ -22,22 +22,36 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 # source terms inside the broadcast.
 # ---------------------------------------------------------------------------
 """
-    _mp1m_source_term(::Val{F}, mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _mp1m_source_term(::Val{F}, mp_bulk, mp_imp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
-Evaluate the 1-moment verbose tendencies and return the single source term named `F`.
+Evaluate the 1-moment verbose tendencies on both the bulk and implicit 1M
+parameter sets and return the sum of the source term `F` from each.
 
-Selecting the field by a `Val` type parameter keeps the choice at compile time, so that
-the other seventeen source terms are dead-code eliminated inside the broadcast and the
-diagnostic evaluates to a plain `Field{FT}` with no intermediate allocation.
+The bulk and implicit sets are process-disjoint by construction
+(`_split_formation`):
+
+  - `implicit_microphysics: true` → bulk carries every process except
+    `cloud_liquid_formation` and `cloud_ice_formation`; implicit carries only
+    those two.
+  - `implicit_microphysics: false` → bulk carries every process (including the
+    two formations); implicit carries no active process, so its contribution
+    for every source term is zero.
+
+Either way the sum equals the single-set evaluation that `microphysics_tendency!`
+applies to the state, with no double counting.
 """
 @inline function _mp1m_source_term(
-    ::Val{F}, mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
+    ::Val{F}, mp_bulk, mp_imp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
 ) where {F}
-    src = BMT.bulk_microphysics_tendencies(
+    src_bulk = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
-        mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
+        mp_bulk, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
     )
-    return getfield(src, F)
+    src_imp = BMT.bulk_microphysics_tendencies(
+        BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
+        mp_imp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
+    )
+    return getfield(src_bulk, F) + getfield(src_imp, F)
 end
 
 # ---------------------------------------------------------------------------
@@ -89,7 +103,8 @@ The four-argument form is the diagnostic entry point: it dispatches on
 prognostic densities.
 """
 function compute_mp1m_source(state, cache, ::Val{F}) where {F}
-    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρ = state.c.ρ
     ᶜT = cache.precomputed.ᶜT
@@ -101,7 +116,8 @@ function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     ᶜq_sno = @. lazy(specific(state.c.ρq_sno, ᶜρ))
     return @. lazy(
         _mp1m_source_term(
-            $Val(F), cmp, thp, ᶜρ, ᶜT, ᶜw, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            $Val(F), cmp, cmp_i, thp,
+            ᶜρ, ᶜT, ᶜw, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
         ),
     )
 end
@@ -129,7 +145,8 @@ The four-argument form dispatches jointly on `cache.atmos.microphysics_model` an
 humidities, so the tendencies are in-draft rather than area-weighted.
 """
 function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
-    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρʲ = cache.precomputed.ᶜρʲs.:1
     ᶜTʲ = cache.precomputed.ᶜTʲs.:1
@@ -141,7 +158,7 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     ᶜq_snoʲ = (state.c.sgsʲs.:1).q_sno
     return @. lazy(
         _mp1m_source_term(
-            $Val(F), cmp, thp,
+            $Val(F), cmp, cmp_i, thp,
             ᶜρʲ, ᶜTʲ, ᶜwʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
         ),
     )
@@ -176,7 +193,8 @@ temperature and the grid-mean pressure; the condensate and precipitation mixing 
 come from `ᶜspecific_env_value`.
 """
 function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
-    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     ᶜρ⁰ = @. lazy(
@@ -189,7 +207,7 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     return @. lazy(
         _mp1m_source_term(
-            $Val(F), cmp, thp,
+            $Val(F), cmp, cmp_i, thp,
             ᶜρ⁰, ᶜT⁰, ᶜw⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
         ),
     )

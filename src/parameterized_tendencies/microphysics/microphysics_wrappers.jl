@@ -261,7 +261,10 @@ the nodes.
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
 """
-struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+struct Microphysics1MEvaluator{
+    Mode <: BMT.TendencyMode, S, MP, TPS, FT, Args <: Tuple,
+}
+    mode::Mode         # BMT.LinearizedAverage() or BMT.Instantaneous()
     scheme::S
     mp::MP
     tps::TPS
@@ -285,7 +288,8 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # Precipitation-fraction placement
     β_precip::FT
     shaft_frac::FT
-    # Numerical parameters
+    # Numerical parameters (used by `BMT.LinearizedAverage()`; ignored for
+    # `BMT.Instantaneous()`)
     dt::FT
     nsubs::Int
     args::Args
@@ -294,19 +298,28 @@ end
 # Without `λ_eq`: the grid-mean equilibrium multiplier `max(0, μ_S − q_rai − q_sno)`,
 # as in `microphysics_tendencies_1m`.
 @inline Microphysics1MEvaluator(
-    scheme, mp, tps, ρ, w,
+    mode, scheme, mp, tps, ρ, w,
     q_rai, q_sno, λ,
     ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α,
     β_precip, shaft_frac,
     dt, nsubs, args,
 ) = Microphysics1MEvaluator(
-    scheme, mp, tps, ρ, w,
+    mode, scheme, mp, tps, ρ, w,
     q_rai, q_sno, λ,
     ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, max(zero(ρ), mu_S - (q_rai + q_sno)), mu_S, α,
     β_precip, shaft_frac,
     dt, nsubs, args,
+)
+
+# Backward-compat constructor: assume `BMT.LinearizedAverage()` when no mode
+# is given. Keeps the pre-mode call sites (e.g. unit tests) working.
+@inline Microphysics1MEvaluator(
+    scheme::BMT.MicrophysicsScheme, mp, tps, ρ, w,
+    args_rest...,
+) = Microphysics1MEvaluator(
+    BMT.LinearizedAverage(), scheme, mp, tps, ρ, w, args_rest...,
 )
 
 """
@@ -466,14 +479,30 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
             (eval.q_rai, eval.q_sno, q_tot_eff)
         end
 
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+    return _call_bmt_1m(
+        eval.mode, eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
         eval.ρ, T_hat, eval.w,
         q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
-        eval.dt, eval.nsubs, eval.args...,
+        eval.dt, eval.nsubs, eval.args,
     )
 end
+
+# Dispatch helper: `LinearizedAverage` takes `dt`, `nsubs`, and `args`;
+# `Instantaneous` ignores them.
+@inline _call_bmt_1m(
+    mode::BMT.LinearizedAverage, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, args,
+) = BMT.bulk_microphysics_tendencies(
+    mode, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, args...,
+)
+@inline _call_bmt_1m(
+    mode::BMT.Instantaneous, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, _dt, _nsubs, _args,
+) = BMT.bulk_microphysics_tendencies(
+    mode, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno,
+)
 
 """
     microphysics_tendencies_1m(
@@ -551,13 +580,13 @@ positive when a source of the corresponding tracer.
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
+    mode = BMT.LinearizedAverage(),
 )
-    local_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp), ρ, T, w,
-        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+    return _call_bmt_1m(
+        mode, BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp),
+        ρ, T, w,
+        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, (),
     )
-    return local_tendency
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
@@ -575,11 +604,13 @@ end
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq),
     precip_frac_floor = zero(ρ),
     λ_eq = max(zero(ρ), mu_S - (max(zero(ρ), q_rai) + max(zero(ρ), q_sno))),
+    mode = BMT.LinearizedAverage(),
     args...,
 )
     FT = typeof(ρ)
     not_quadrature(sgs_quad) && return microphysics_tendencies_1m(
         ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
+        mode,
     )
     # Shaft threshold on the centred excess: the moistest `a_p` of the PDF. The
     # shaft is never taken narrower than `precip_frac_floor` of the cell
@@ -588,7 +619,7 @@ end
     σ_S = FT(sigma_S)
     S_star = sgs_precip_shaft_threshold(a_p, σ_S)
     return _sum_1m_over_sgs(
-        scheme, sgs_quad, cmp, thp, ρ, T, w,
+        mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
         max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         max(zero(ρ), q_rai), max(zero(ρ), q_sno),
         T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(ξ_liq), FT(ξ_ice), dt, nsubs, λ,
@@ -609,8 +640,8 @@ rounding; computes the shaft fraction (`1` when `β_precip = 0`) and the
 `TemperatureSpread` with `β_T`-regressed temperature spread at fixed `S′`;
 calls `make_evaluator(s·λ_lagrange, s·α_safe, shaft_frac)` to build the
 caller's evaluator with the scaled parameters, and returns the sum via
-`sum_over_conditional_nodes`. Shared by `_sum_1m_over_sgs` (explicit bulk
-tendency) and `_sum_cond_over_sgs` (implicit condensation).
+`sum_over_conditional_nodes`. Used by `_sum_1m_over_sgs` (the CM BMT bulk
+tendency SGS integration).
 """
 @inline function _sum_over_conditional_sgs(
     make_evaluator,
@@ -650,7 +681,7 @@ tendency) and `_sum_cond_over_sgs` (implicit condensation).
 end
 
 """
-    _sum_1m_over_sgs(scheme, sgs_quad, cmp, thp, ρ, T, w,
+    _sum_1m_over_sgs(mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
                      q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
                      λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
                      β_precip, σ_S, S_star, λ_eq, args)
@@ -659,17 +690,19 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF using
 `_sum_over_conditional_sgs`. The rule integrates the piecewise-linear
 condensates exactly; the node weight of the shaft
 (`conditional_rule_shaft_fraction`) conserves the cell-mean precipitation
-exactly for any `a_p` (bounded below by `precip_frac_floor`).
+exactly for any `a_p` (bounded below by `precip_frac_floor`). `mode` picks
+the BMT variant at each node (`LinearizedAverage` for the explicit
+substep-averaged tendency, `Instantaneous` for the implicit path).
 """
 @inline function _sum_1m_over_sgs(
-    scheme, sgs_quad, cmp, thp, ρ, T, w,
+    mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
     β_precip, σ_S, S_star, λ_eq, args,
 )
     return _sum_over_conditional_sgs(
         (λ_scaled, α_scaled, shaft_frac) -> Microphysics1MEvaluator(
-            scheme, cmp, thp, ρ, w,
+            mode, scheme, cmp, thp, ρ, w,
             q_rai, q_sno, λ,
             ξ_liq, ξ_ice, q_lcl, q_icl,
             λ_scaled, λ_eq, mu_S, α_scaled,
@@ -742,13 +775,14 @@ form, so the two are identical.
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     sgs_moments, α, dt, nsubs, λ, mu_S, precip_frac,
     opts::SGSMicrophysicsOptions,
+    mode = BMT.LinearizedAverage(),
 )
     return microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
         sgs_moments.λ_lagrange, α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
         opts.precip_incloud_fraction, precip_frac, sgs_moments.sigma_S,
-        opts.precip_frac_floor, sgs_moments.λ_eq,
+        opts.precip_frac_floor, sgs_moments.λ_eq, mode,
     )
 end
 

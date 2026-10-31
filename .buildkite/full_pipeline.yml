@@ -16,7 +16,6 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
-  NUMERICS_SENS_CONFIG_PATH: "config/numerics_sensitivity_configs"
 
 # NOTE: this pipeline is uploaded by .buildkite/decide_pipeline.sh, which only
 # runs on non-`main` builds.
@@ -488,121 +487,6 @@ steps:
         artifact_paths: "larcform1_1M_prognostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
-
-  - group: "Numerics sensitivity (RICO)"
-    steps:
-      - label: ":genie: RICO sens 1: dt=10s, picard=2, cache=stage, exp, N=1"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_1
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_1.yml
-          --job_id prognostic_edmfx_rico_sens_1
-        artifact_paths: "prognostic_edmfx_rico_sens_1/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: RICO sens 2: dt=120s, picard=0, cache=step, exp, N=1"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_2
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_2.yml
-          --job_id prognostic_edmfx_rico_sens_2
-        artifact_paths: "prognostic_edmfx_rico_sens_2/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: RICO sens 3: dt=120s, picard=2, cache=step, exp, N=1"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_3
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_3.yml
-          --job_id prognostic_edmfx_rico_sens_3
-        artifact_paths: "prognostic_edmfx_rico_sens_3/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: RICO sens 4: dt=120s, picard=2, cache=stage, exp, N=1"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_4
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_4.yml
-          --job_id prognostic_edmfx_rico_sens_4
-        artifact_paths: "prognostic_edmfx_rico_sens_4/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: RICO sens 5: dt=120s, picard=2, cache=stage, imp, N=1"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_5
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_5.yml
-          --job_id prognostic_edmfx_rico_sens_5
-        artifact_paths: "prognostic_edmfx_rico_sens_5/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: RICO sens 6: dt=120s, picard=2, cache=stage, imp, N=3"
-        retry: *retry_policy
-        key: prognostic_edmfx_rico_sens_6
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_base.yml
-          --config_file $NUMERICS_SENS_CONFIG_PATH/prognostic_edmfx_rico_sens_6.yml
-          --job_id prognostic_edmfx_rico_sens_6
-        artifact_paths: "prognostic_edmfx_rico_sens_6/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":chart_with_upwards_trend: RICO numerics sensitivity overlay"
-        retry: *retry_policy
-        depends_on:
-          - step: prognostic_edmfx_rico_sens_1
-            allow_failure: true
-          - step: prognostic_edmfx_rico_sens_2
-            allow_failure: true
-          - step: prognostic_edmfx_rico_sens_3
-            allow_failure: true
-          - step: prognostic_edmfx_rico_sens_4
-            allow_failure: true
-          - step: prognostic_edmfx_rico_sens_5
-            allow_failure: true
-          - step: prognostic_edmfx_rico_sens_6
-            allow_failure: true
-        command: |
-          for JOB in \
-            prognostic_edmfx_rico_sens_1 \
-            prognostic_edmfx_rico_sens_2 \
-            prognostic_edmfx_rico_sens_3 \
-            prognostic_edmfx_rico_sens_4 \
-            prognostic_edmfx_rico_sens_5 \
-            prognostic_edmfx_rico_sens_6; do
-            mkdir -p $$JOB/output_active/nc_files
-            tar xf $$JOB/output_active/nc_files.tar -C $$JOB/output_active/nc_files 2>/dev/null || true
-          done
-          julia --color=yes --project=.buildkite \
-            post_processing/rico_numerics_sensitivity.jl \
-            --sim_root . \
-            --output rico_numerics_sensitivity.pdf
-        artifact_paths: "rico_numerics_sensitivity.pdf"
-        agents:
-          slurm_mem: 8GB
-        soft_fail: true
 
   - group: "Analytic Tests"
     steps:
