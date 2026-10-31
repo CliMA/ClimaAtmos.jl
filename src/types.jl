@@ -101,9 +101,10 @@ and one built from an unmodified configuration file agree (see
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
-    `cloud_liquid_formation` may be `nothing`, `CMP.CloudLiquidFormation()`
-    (explicit via CM's bulk tendency), or `ImplicitCloudLiquidFormation()`
-    (implicit via `_add_implicit_lcl_condensation_*`).
+    `cloud_liquid_formation` and `cloud_ice_formation` are routed to either
+    `microphysics_1m_params` (bulk CM BMT) or `microphysics_1m_implicit_params`
+    (SGS-integrated implicit source) by `create_parameters.jl`, driven by the
+    `implicit_microphysics` config toggle.
 
 # Examples
 
@@ -129,12 +130,10 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         process_options...,
     )
         # Override CM's `ConstantTimescale` ice formation default to match
-        # `default_config.yml`. `cloud_liquid_formation` keeps CM's default
-        # (`CloudLiquidFormation()`, explicit via CM's bulk tendency); passing
-        # `ImplicitCloudLiquidFormation()` here routes it through the implicit
-        # source. `create_parameters.jl` translates the choice into the
-        # matching `cloud_liquid_formation` on `microphysics_1m_params` (bulk)
-        # and `microphysics_1m_implicit_params` (implicit).
+        # `default_config.yml`. `create_parameters.jl` splits
+        # `cloud_liquid_formation` and `cloud_ice_formation` between
+        # `microphysics_1m_params` (bulk) and `microphysics_1m_implicit_params`
+        # (implicit) based on `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
@@ -142,27 +141,6 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
-
-"""
-    ImplicitCloudLiquidFormation()
-
-Marker that selects the implicit cloud-liquid condensation / evaporation path
-(`_add_implicit_lcl_condensation_*`) for 1M microphysics. Stored in
-`NonEquilibriumMicrophysics1M.processes.cloud_liquid_formation` as a sibling
-of CM's `CMP.CloudLiquidFormation`, which selects the explicit bulk-averaged
-path. `create_parameters.jl` translates the choice into the matching
-`cloud_liquid_formation` on `microphysics_1m_params` (bulk) and
-`microphysics_1m_implicit_params` (implicit); `_split_cloud_liquid_formation`
-guarantees the two are mutually exclusive, so CM's `BulkMicrophysicsTendencies`
-does not also average condensation.
-
-Picking this path moves condensation out of CM's joint vapor-exchange solve
-and heating-rate limiter — see the "Implicit cloud-liquid condensation" section
-in `docs/src/microphysics.md` for the thermodynamic consequences and the
-Jacobian / predictor formulas Newton uses to recover the implicit answer.
-Temporary scaffolding toward a fully-coupled implicit microphysics solver.
-"""
-struct ImplicitCloudLiquidFormation end
 
 """
     NonEquilibriumMicrophysics2M
@@ -1790,8 +1768,9 @@ end
 Whether a process is integrated explicitly or implicitly.
 
 Subtypes: `Explicit` and `Implicit`. Used for the `diff_mode` numerics option
-(config key `implicit_diffusion`) and for
-`microphysics_tendency_timestepping` (config key `implicit_microphysics`).
+(config key `implicit_diffusion`) and for `microphysics_tendency_timestepping`
+(hard-coded to `Implicit()` when microphysics is active; `implicit_microphysics`
+instead controls whether 1M cond/subl flow through the implicit cache).
 """
 abstract type AbstractTimesteppingMode end
 
@@ -2220,8 +2199,9 @@ Group of moisture, cloud, and microphysics choices inside an
 
   - `microphysics_model`: An `AbstractMicrophysicsModel`; `DryModel()` by default.
   - `cloud_model`: An `AbstractCloudModel`; `QuadratureCloud()` by default.
-  - `microphysics_tendency_timestepping`: `Explicit()`, `Implicit()`, or
-    `nothing` when there is no microphysics.
+  - `microphysics_tendency_timestepping`: always `Implicit()` when microphysics
+    is active, `nothing` otherwise. Retained as a field so the 2M tendency
+    limiter (`apply_2m_tendency_limits!`) can still dispatch on it.
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.

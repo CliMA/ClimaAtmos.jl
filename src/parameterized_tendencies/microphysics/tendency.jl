@@ -157,12 +157,11 @@ grid-mean tracers, and each updraft's prognostic `q_lclʲ`, `q_iclʲ`, `q_raiʲ`
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::NonEquilibriumMicrophysics1M, _,
 )
-    (; ᶜmp_tendency) = p.precomputed
-    @. Yₜ.c.ρq_lcl += Y.c.ρ * ᶜmp_tendency.dq_lcl_dt
-    @. Yₜ.c.ρq_icl += Y.c.ρ * ᶜmp_tendency.dq_icl_dt
+    (; ᶜmp_tendency, ᶜmp_tendency_implicit) = p.precomputed
+    @. Yₜ.c.ρq_lcl += Y.c.ρ * (ᶜmp_tendency.dq_lcl_dt + ᶜmp_tendency_implicit.dq_lcl_dt)
+    @. Yₜ.c.ρq_icl += Y.c.ρ * (ᶜmp_tendency.dq_icl_dt + ᶜmp_tendency_implicit.dq_icl_dt)
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
     @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜmp_tendency.dq_sno_dt
-    _add_implicit_lcl_condensation_grid_mean!(Yₜ, Y, p)
     return nothing
 end
 
@@ -174,7 +173,10 @@ function microphysics_tendency!(
     ::NonEquilibriumMicrophysics1M,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+    (;
+        ᶜmp_tendencyʲs, ᶜmp_tendency⁰,
+        ᶜmp_tendency_implicitʲs, ᶜmp_tendency_implicit⁰,
+    ) = p.precomputed
     draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
     DataLayouts.foreach_column(
@@ -182,27 +184,38 @@ function microphysics_tendency!(
         Y.c,
         ᶜmp_tendency⁰,
         ᶜmp_tendencyʲs,
-    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
+        ᶜmp_tendency_implicit⁰,
+        ᶜmp_tendency_implicitʲs,
+    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs,
+    ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         sgs_args = (ᶜρa⁰, ᶜmp_tendency⁰, Yc.sgsʲs, ᶜmp_tendencyʲs)
+        sgs_args_imp =
+            (ᶜρa⁰, ᶜmp_tendency_implicit⁰, Yc.sgsʲs, ᶜmp_tendency_implicitʲs)
+        # Bulk CM BMT accumulation (all 1M species).
         @. Yₜc.ρq_lcl = add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args..., @name(dq_lcl_dt))
         @. Yₜc.ρq_icl = add_sgs_tendencies(Yₜc.ρq_icl, sgs_args..., @name(dq_icl_dt))
         @. Yₜc.ρq_rai = add_sgs_tendencies(Yₜc.ρq_rai, sgs_args..., @name(dq_rai_dt))
         @. Yₜc.ρq_sno = add_sgs_tendencies(Yₜc.ρq_sno, sgs_args..., @name(dq_sno_dt))
+        # Implicit cond/subl accumulation (only q_lcl, q_icl).
+        @. Yₜc.ρq_lcl =
+            add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args_imp..., @name(dq_lcl_dt))
+        @. Yₜc.ρq_icl =
+            add_sgs_tendencies(Yₜc.ρq_icl, sgs_args_imp..., @name(dq_icl_dt))
 
         unrolled_foreach(draft_indices) do j
             @inline
             ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
+            ᶜmp_impʲ = ᶜmp_tendency_implicitʲs.:($j)
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
-            @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt
-            @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt
+            @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt + ᶜmp_impʲ.dq_lcl_dt
+            @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt + ᶜmp_impʲ.dq_icl_dt
             @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
             @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt
             return nothing
         end
         return nothing
     end
-    _add_implicit_lcl_condensation_prognostic_edmfx!(Yₜ, Y, p, turbconv_model)
     return nothing
 end
 

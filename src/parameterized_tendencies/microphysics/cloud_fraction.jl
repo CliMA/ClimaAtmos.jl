@@ -641,7 +641,7 @@ function set_covariance_cache!(
         p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
         CAP.sgs_cloud_species_constant_timescales(p.params) <= 0
     τ_mp_params =
-        uses_1m_times ? CAP.cloud_liquid_formation_1m_params(p.params) :
+        uses_1m_times ? CAP.cloud_formation_1m_params(p.params) :
         ConstantMicrophysicsTimescales(
             FT(CAP.condensation_evaporation_timescale(p.params)),
             FT(CAP.sublimation_deposition_timescale(p.params)),
@@ -1079,10 +1079,9 @@ Base.broadcastable(τ::ConstantMicrophysicsTimescales) = tuple(τ)
 """
     sgs_microphysics_relaxation_time(τ_params, thp, T, ρ, q_cloud, q_lcl, q_icl)
 
-The phase-blended relaxation time `sgs_microphysics_timescale` of the Damköhler
 factor of `sgs_variance_fidelity`, at a point.
 
-With `τ_params` the `CAP.cloud_liquid_formation_1m_params` of the 1M scheme,
+With `τ_params` the `CAP.cloud_formation_1m_params` of the 1M scheme,
 the liquid and ice times are those of its condensation–evaporation and
 deposition–sublimation processes at the state `(T, ρ, q_cloud, q_lcl, q_icl)`
 (`cloud_species_relaxation_time`, with `q_cloud = q_tot − q_rai − q_sno` the
@@ -1864,6 +1863,59 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             thermo_params, σ_abs,
         )
         return nothing
+    end
+    return nothing
+end
+
+"""
+    set_sgs_moments!(Y, p)
+
+Refresh `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` from the current state
+`Y` without touching `ᶜcloud_fraction` or `ᶜprecip_frac`. Used by
+`set_implicit_precomputed_quantities!` on each Newton iterate (`λ_lagrange`
+follows `q_lcl + q_icl`, which Newton moves): the implicit 1M BMT reads
+`ᶜsgs_moments` directly, while `ᶜcloud_fraction` is not a BMT input and
+`ᶜprecip_frac` only enters the BMT when `sgs_precip_incloud_fraction > 0`
+(off by default). `set_precomputed_quantities!` does not call this helper
+because `set_covariance_cache_and_cloud_fraction!` in its explicit half
+already left `ᶜsgs_moments` current. No-op when `ᶜsgs_moments` is not
+allocated (dry / 0M).
+"""
+NVTX.@annotate function set_sgs_moments!(Y, p)
+    hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
+
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    microphysics_model = p.atmos.microphysics_model
+
+    ᶜρ_env, ᶜT_mean, ᶜq_mean =
+        _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜq_lcl, ᶜq_icl =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_precip =
+        _get_precip_mean(Y, p, turbconv_model, microphysics_model)
+    sgs_quad = p.atmos.sgs_quadrature
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
+
+    FT = eltype(p.params)
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+    c = equilibrium_condensate_truncation(p)
+
+    if p.atmos.sgs_variance_curvature
+        ᶜdisp_S = p.precomputed.ᶜdisp_S
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
+        )
+    else
+        lin₀ = zero(FT)
+        curv₀ = zero(FT)
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
+        )
     end
     return nothing
 end
