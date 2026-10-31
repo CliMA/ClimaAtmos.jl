@@ -3,6 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
+  the implicit path with cloud-liquid condensation / evaporation. A single
+  `implicit_microphysics` toggle controls both: when `true` (default), the
+  user's `cloud_liquid_formation` and `cloud_ice_formation` are moved from
+  `microphysics_1m_params` (bulk CM BMT) to `microphysics_1m_implicit_params`,
+  and a second CM BMT call with that implicit set fills a new
+  `ᶜmp_tendency_implicit` cache. The implicit stage applies this cache
+  tendency, with CM's state-dependent `τ_vap_to_q_lcl` / `τ_vap_to_q_icl`
+  driving the Jacobian diagonals (so the ice diagonal tracks the configured
+  ice-formation variant rather than the constant
+  `sublimation_deposition_timescale` parameter). The Picard predictor reads
+  the same cache, so the manual `τ·(1 − exp(−dtγ/τ))·S` damping is gone.
+  The `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is
+  removed; `implicit_microphysics: false` reverts to the previous behavior
+  (bulk CM BMT covers condensation).
 
 0.42.17
 -------

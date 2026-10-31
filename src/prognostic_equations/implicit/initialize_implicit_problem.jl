@@ -446,8 +446,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         p.atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
     implicit_0m_mp =
-        p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
-        p.atmos.microphysics_tendency_timestepping == Implicit()
+        p.atmos.microphysics_model isa EquilibriumMicrophysics0M
 
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
@@ -643,49 +642,34 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
         Y, p, microphysics_model, turbconv_model, dtγ,
     )
 
-    # Implicit condensation source: evaluated at the transport state (before the
-    # explicit sources below change it). Stage-averaged along the adiabat as
-    # Δq_lcl = τ·S·(1−exp(−dtγ/τ)) — what CM's bulk averaging would produce if
-    # condensation were the only process in the window. Reduces to dtγ·S for
-    # dtγ ≪ τ, saturates at (q_v − q_sat)/Γ_cp for dtγ ≫ τ.
-    if microphysics_model isa NonEquilibriumMicrophysics1M
-        mp = CAP.microphysics_1m_implicit_params(p.params)
-        if !isnothing(mp.processes.cloud_liquid_formation)
-            thp = CAP.thermodynamics_params(p.params)
-            τ_cond = CAP.condensation_evaporation_timescale(p.params)
-            for j in 1:n_mass_flux_subdomains(turbconv_model)
-                sgsʲ = Y.c.sgsʲs.:($j)
-                MatrixFields.has_field(sgsʲ, @name(q_lcl)) || continue
-                ᶜTʲ = p.precomputed.ᶜTʲs.:($j)
-                ᶜρʲ = p.precomputed.ᶜρʲs.:($j)
-                ᶜq_tot_nonnegʲ = p.precomputed.ᶜq_tot_nonnegʲs.:($j)
-                @. sgsʲ.q_lcl +=
-                    τ_cond * (1 - exp(-dtγ / τ_cond)) *
-                    _cm_condensation_rate(
-                        mp, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                    )
-            end
-        end
-    end
-
-    # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs`; a pair
-    # with either name missing is skipped.
+    # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs` /
+    # `ᶜmp_tendency_implicitʲs`; a pair with either name missing is skipped.
+    # Reading the implicit tendency from CM BMT (substep-averaged) directly
+    # subsumes the earlier manual τ·(1 − exp(−dtγ/τ))·S damping.
     condensate_sources = (
         (@name(q_lcl), @name(dq_lcl_dt)),
         (@name(q_icl), @name(dq_icl_dt)),
         (@name(q_rai), @name(dq_rai_dt)),
         (@name(q_sno), @name(dq_sno_dt)),
     )
+    has_implicit_mp =
+        microphysics_model isa NonEquilibriumMicrophysics1M
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
         ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
+        ᶜmp_tendency_implicitʲ =
+            has_implicit_mp ?
+            p.precomputed.ᶜmp_tendency_implicitʲs.:($j) : nothing
         MatrixFields.unrolled_foreach(condensate_sources) do (χ_name, S_name)
             MatrixFields.has_field(sgsʲ, χ_name) &&
             MatrixFields.has_field(ᶜmp_tendencyʲ, S_name) || return
             χ = MatrixFields.get_field(sgsʲ, χ_name)
             S = MatrixFields.get_field(ᶜmp_tendencyʲ, S_name)
             @. χ += dtγ * S
+            if has_implicit_mp
+                S_i = MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name)
+                @. χ += dtγ * S_i
+            end
         end
     end
 

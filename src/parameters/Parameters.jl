@@ -578,12 +578,14 @@ accessors generated at the bottom of this module, e.g.
     activation, and the aerosol-ML coefficients.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
-  - `microphysics_1m_params`: 1-moment parameters with
-    `cloud_liquid_formation = nothing` (bulk tendency never averages
-    condensation), or `nothing`.
-  - `microphysics_1m_implicit_params`: 1-moment parameters with the user's
-    `cloud_liquid_formation`, consumed by the implicit condensation source,
-    or `nothing`.
+  - `microphysics_1m_params`: Full 1-moment process set used by CM BMT bulk;
+    `cloud_liquid_formation` and `cloud_ice_formation` are nulled when
+    `implicit_microphysics: true`. `nothing` outside 1M configurations.
+  - `microphysics_1m_implicit_params`: 1-moment parameters with only
+    `cloud_liquid_formation` and `cloud_ice_formation` enabled (everything
+    else `nothing`), consumed by a second CM BMT call to isolate the
+    implicit condensation / sublimation tendency. `nothing` outside 1M
+    configurations.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
     or `nothing`.
   - `microphysics_2mp3_params`: `CloudMicrophysics` 2-moment plus P3-ice
@@ -820,9 +822,10 @@ end
 
 Return whichever of the two 1M parameter sets carries CM's
 `CloudLiquidFormation`, so consumers that need the condensation timescale
-(regardless of which path integrates it) can dispatch uniformly through
-CM's `τ_vap_to_q_lcl`. Falls back to `microphysics_1m_params` when neither
-is active (both carry `nothing` and the CM dispatch returns `Inf`).
+(regardless of which stage integrates it) can dispatch uniformly through
+CM's `τ_vap_to_q_lcl`. Prefers `microphysics_1m_implicit_params` when it
+carries the formation (i.e. `implicit_microphysics: true`), otherwise falls
+back to `microphysics_1m_params`.
 """
 function cloud_liquid_formation_1m_params(ps::ACAP)
     imp = microphysics_1m_implicit_params(ps)

@@ -1853,6 +1853,56 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
 end
 
 """
+    set_sgs_moments!(Y, p)
+
+Refresh `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` from the current state
+`Y` without touching `ᶜcloud_fraction` or `ᶜprecip_frac`. Used by
+`update_implicit_microphysics_cache!` on each Newton iterate: the implicit
+1M BMT reads `ᶜsgs_moments` directly, while `ᶜcloud_fraction` is not a BMT
+input and `ᶜprecip_frac` only enters the BMT when
+`sgs_precip_incloud_fraction > 0` (off by default). No-op when
+`ᶜsgs_moments` is not allocated (dry / 0M).
+"""
+NVTX.@annotate function set_sgs_moments!(Y, p)
+    hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
+
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    microphysics_model = p.atmos.microphysics_model
+
+    ᶜρ_env, ᶜT_mean, ᶜq_mean =
+        _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜq_lcl, ᶜq_icl =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_precip =
+        _get_precip_mean(Y, p, turbconv_model, microphysics_model)
+    sgs_quad = p.atmos.sgs_quadrature
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
+
+    FT = eltype(p.params)
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+    c = equilibrium_condensate_truncation(p)
+
+    if p.atmos.sgs_variance_curvature
+        ᶜdisp_S = p.precomputed.ᶜdisp_S
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
+        )
+    else
+        lin₀ = zero(FT)
+        curv₀ = zero(FT)
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
+        )
+    end
+    return nothing
+end
+
+"""
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
         ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,

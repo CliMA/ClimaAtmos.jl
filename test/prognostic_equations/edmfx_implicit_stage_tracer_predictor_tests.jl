@@ -2,13 +2,15 @@
 Checks `solve_sgs_updraft_tracers_implicit_stage_analytic!`, the semi-implicit
 upwind predictor for the updraft scalars in the EDMFX implicit stage, against
 the recurrence its docstring states: upwind advection with the round's `u₃`,
-entrainment toward the environment value, the 1M microphysics source evaluated
-at the transported state, and the cell-1 surface relaxation of `mse` and
-`q_tot`. A nonzero covariant `u₃` at the surface face, as over
-sloped terrain, leaves cell 1 unadvected. Two limits follow: fast entrainment
-pulls every scalar to the environment value, and with advection and
-entrainment off only cell 1 of `mse` and `q_tot` moves, to the surface-relaxed
-value, while each condensate moves by `dtγ` times its source.
+entrainment toward the environment value, the explicit and implicit 1M
+microphysics sources evaluated at the transported state (from
+`ᶜmp_tendencyʲs` and `ᶜmp_tendency_implicitʲs`), and the cell-1 surface
+relaxation of `mse` and `q_tot`. A nonzero covariant `u₃` at the surface face,
+as over sloped terrain, leaves cell 1 unadvected. Two limits follow: fast
+entrainment pulls every scalar to the environment value, and with advection
+and entrainment off only cell 1 of `mse` and `q_tot` moves, to the
+surface-relaxed value, while each condensate moves by `dtγ` times the sum of
+its explicit and implicit cached sources.
 =#
 using Test
 import ClimaComms
@@ -38,11 +40,9 @@ column(f) = vec(Array(parent(f)))
             "implicit_diffusion" => true,
             "prognostic_tke" => true,
             "microphysics_model" => "1M",
-            # Route condensation through the implicit source so the predictor
-            # actually exercises `_cm_condensation_rate` (otherwise the implicit
-            # path dispatches on `nothing` and the predictor is a no-op for
-            # condensation).
-            "cloud_liquid_formation" => "ImplicitCloudLiquidFormation",
+            # `implicit_microphysics: true` routes cond/subl into
+            # `ᶜmp_tendency_implicitʲs` so the predictor sweep adds its
+            # cached contribution on top of `ᶜmp_tendencyʲs`.
             "implicit_microphysics" => true,
             "z_max" => 3000.0,
             "z_elem" => 30,
@@ -164,32 +164,17 @@ column(f) = vec(Array(parent(f)))
         S[χ_name] = zeros(FT, nz)
     end
     ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:(1)
+    ᶜmp_tendency_implicitʲ = p.precomputed.ᶜmp_tendency_implicitʲs.:(1)
     S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
 
-    # Implicit condensation runs between the transport sweep and the explicit
-    # `ᶜmp_tendencyʲ` sources, with the stage-averaged factor
-    # `τ·(1 − exp(−dtγ/τ))` on CM's instantaneous rate. The rate is evaluated
-    # at the transport-state condensates with thermo at the transported draft
-    # state. Both `ᶜTʲ` and `ᶜρʲ` are refreshed inside the solve just before
-    # the condensation block, so reading `p.precomputed.ᶜTʲs` after the solve
-    # returns gives the transport-state values.
+    # `implicit_microphysics: true` moves `cloud_liquid_formation` and
+    # `cloud_ice_formation` to `microphysics_1m_implicit_params`, so the
+    # second CM BMT call `update_updraft_microphysics_tendency_cache!`
+    # issues inside the predictor fills `ᶜmp_tendency_implicitʲs` with the
+    # SGS-integrated cond/subl rates at the transported state.
     mp_imp = CAP.microphysics_1m_implicit_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
-    τ_cond = CAP.condensation_evaporation_timescale(p.params)
-    cm_cond_predictor_active =
-        !isnothing(mp_imp.processes.cloud_liquid_formation)
-    @test cm_cond_predictor_active  # config should enable the implicit path
-    τ_factor = τ_cond * (one(FT) - exp(-dtγ / τ_cond))
-    function s_cond_predictor(q_lcl, q_icl, q_rai, q_sno)
-        cm_cond_predictor_active || return zeros(FT, nz)
-        ρʲ_col = column(p.precomputed.ᶜρʲs.:(1))
-        Tʲ_col = column(p.precomputed.ᶜTʲs.:(1))
-        q_tot_nonnegʲ_col = column(p.precomputed.ᶜq_tot_nonnegʲs.:(1))
-        return CA._cm_condensation_rate.(
-            Ref(mp_imp), Ref(thp), ρʲ_col, Tʲ_col, q_tot_nonnegʲ_col,
-            q_lcl, q_icl, q_rai, q_sno,
-        )
-    end
+    @test !isnothing(mp_imp.processes.cloud_liquid_formation)
+    @test !isnothing(mp_imp.processes.cloud_ice_formation)
 
     # Transport-only result of the recurrence, swept bottom to top.
     function predicted_transport(χ_name; α = α, ε = ε, r_sfc = r_sfc)
@@ -206,42 +191,41 @@ column(f) = vec(Array(parent(f)))
         return χ_new
     end
 
-    # Full prediction: transport + `dtγ · S` (used for `mse`, `q_tot`, and
-    # the non-liquid condensates). `q_lcl` goes through its own path below
-    # that interleaves the implicit condensation.
-    predicted(χ_name) = predicted_transport(χ_name) .+ dtγ .* S[χ_name]
+    # Full prediction: transport + `dtγ · (S_bulk + S_impl)`. `S_impl` is
+    # cond/subl from `ᶜmp_tendency_implicitʲs`, nonzero only for `q_lcl`
+    # and `q_icl` under `implicit_microphysics: true`.
+    S_impl = Dict{Any, Vector{FT}}(
+        @name(mse) => zeros(FT, nz),
+        @name(q_tot) => zeros(FT, nz),
+        @name(q_lcl) => zeros(FT, nz),
+        @name(q_icl) => zeros(FT, nz),
+        @name(q_rai) => zeros(FT, nz),
+        @name(q_sno) => zeros(FT, nz),
+    )
+    predicted(χ_name) =
+        predicted_transport(χ_name) .+ dtγ .* (S[χ_name] .+ S_impl[χ_name])
 
     @testset "matches the documented recurrence" begin
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        # The condensate source the sweep evaluates at the transported state
-        # stays cached.
+        # The explicit and implicit sources the sweep evaluates at the
+        # transported state stay cached.
         for (χ_name, S_name) in sgs_tracers
             isnothing(S_name) && continue
             S[χ_name] = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+            if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
+                S_impl[χ_name] = column(
+                    MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                )
+            end
         end
         @test any(!=(0), S[@name(q_lcl)])
         @test S[@name(q_lcl)] != S_cached
-        # Transport-only state (what the implicit condensation sees).
-        q_lcl_transport = predicted_transport(@name(q_lcl))
-        q_icl_transport = predicted_transport(@name(q_icl))
-        q_rai_transport = predicted_transport(@name(q_rai))
-        q_sno_transport = predicted_transport(@name(q_sno))
-        cond_amount =
-            τ_factor .* s_cond_predictor(
-                q_lcl_transport, q_icl_transport, q_rai_transport,
-                q_sno_transport,
-            )
-        @test any(!=(0), cond_amount)
+        # The implicit split places cond/subl in `ᶜmp_tendency_implicitʲs`,
+        # not in the bulk cache.
+        @test any(!=(0), S_impl[@name(q_lcl)])
         for (χ_name, _) in sgs_tracers
-            # q_lcl: transport + implicit cond + explicit source.
-            # others: transport + explicit source (or just transport for
-            # mse/q_tot via `predicted`).
-            expected =
-                χ_name === @name(q_lcl) ?
-                q_lcl_transport .+ cond_amount .+ dtγ .* S[@name(q_lcl)] :
-                predicted(χ_name)
-            @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈ expected rtol =
-                1e-12
+            @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈
+                  predicted(χ_name) rtol = 1e-12
         end
         # Draft area and velocity are untouched.
         @test parent(sgsʲ.ρa) == parent(Y_init.c.sgsʲs.:(1).ρa)
@@ -255,24 +239,19 @@ column(f) = vec(Array(parent(f)))
         # of ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
         @. p.precomputed.ᶜturb_entrʲs.:(1) = FT(1e3)
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        # In the fast-entrainment limit the transport recurrence is `≈ χ⁰(q_X)`,
-        # which is the state the implicit condensation sees. The explicit
-        # sources then stack on top for the condensates.
-        cond_amount =
-            τ_factor .* s_cond_predictor(
-                χ⁰[@name(q_lcl)], χ⁰[@name(q_icl)],
-                χ⁰[@name(q_rai)], χ⁰[@name(q_sno)],
-            )
         for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
-            # Strip the explicit source off the condensates; strip the
-            # implicit condensation off q_lcl too. What remains is the
-            # transport result, which the fast-ε limit pulls to χ⁰.
+            # Strip explicit and implicit cached sources off the condensates;
+            # what remains is the transport result, which the fast-ε limit
+            # pulls to χ⁰.
             if !isnothing(S_name)
                 S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
-                χ_new = χ_new - dtγ * S_used
-                if χ_name === @name(q_lcl)
-                    χ_new = χ_new - cond_amount
+                χ_new = χ_new .- dtγ .* S_used
+                if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
+                    S_used_impl = column(
+                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                    )
+                    χ_new = χ_new .- dtγ .* S_used_impl
                 end
             end
             # Cell 1 of `mse` and `q_tot` also feels the surface relaxation.
@@ -293,13 +272,6 @@ column(f) = vec(Array(parent(f)))
             parent(ᶜrate) .= 0
         end
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        # Without transport the implicit condensation sees χ_old for every
-        # condensate, so the stage-averaged bump uses χ_old.
-        cond_amount =
-            τ_factor .* s_cond_predictor(
-                χ_old[@name(q_lcl)], χ_old[@name(q_icl)],
-                χ_old[@name(q_rai)], χ_old[@name(q_sno)],
-            )
         for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
             if sfc_forced(χ_name)
@@ -310,40 +282,91 @@ column(f) = vec(Array(parent(f)))
                 @test χ_new[2:end] ≈ χ_old[χ_name][2:end] rtol = 1e-14
             else
                 S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
-                expected = χ_old[χ_name] + dtγ * S_used
-                if χ_name === @name(q_lcl)
-                    expected = expected .+ cond_amount
+                expected = χ_old[χ_name] .+ dtγ .* S_used
+                if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
+                    S_used_impl = column(
+                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                    )
+                    expected = expected .+ dtγ .* S_used_impl
                 end
                 @test χ_new ≈ expected rtol = 1e-12
             end
         end
     end
 
-    @testset "Jacobian diagonal is −dtγ/τ_cond" begin
-        # Build the full implicit-stage Jacobian matrix via the real cache
-        # builder, zero the two condensation-affected blocks, run only the
-        # condensation update, and verify the diagonals carry exactly
-        # `−dtγ/τ_cond`. The sum-over-entries trick (dims=4 is the row-entry
-        # dim of a MatrixRow Field) works for both `DiagonalMatrixRow` (1
-        # entry) and `TridiagonalMatrixRow` (3 entries, off-diagonals left
-        # at zero by this update).
+    @testset "Jacobian diagonals use CM state-dependent τ for q_lcl / q_icl" begin
+        # Build the full implicit-stage Jacobian via the real cache builder,
+        # zero the four cond/subl-affected blocks, run just the implicit
+        # microphysics update, and verify each diagonal entry matches the
+        # state-dependent `-dtγ / τ_vap_to_q_lcl` / `-dtγ / τ_vap_to_q_icl`
+        # evaluated at the matching (grid-mean or updraft) state.
+        import CloudMicrophysics.MicrophysicsNonEq as CMNe
         alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
         cache = CA.jacobian_cache(alg, Y, p.atmos)
         matrix = cache.matrix.matrix
-        blocks = [matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]]
+        # Grid-mean block + one entry per updraft; second element is the
+        # updraft index (0 = grid-mean).
+        liq_blocks = Any[(matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)], 0)]
+        ice_blocks = Any[(matrix[@name(c.ρq_icl), @name(c.ρq_icl)], 0)]
         for j in 1:CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
-            χ_state_name = @name(c.sgsʲs.:($j).q_lcl)
-            MatrixFields.has_field(Y, χ_state_name) || continue
-            push!(blocks, matrix[χ_state_name, χ_state_name])
+            χ_liq = @name(c.sgsʲs.:($j).q_lcl)
+            χ_ice = @name(c.sgsʲs.:($j).q_icl)
+            MatrixFields.has_field(Y, χ_liq) || continue
+            push!(liq_blocks, (matrix[χ_liq, χ_liq], j))
+            push!(ice_blocks, (matrix[χ_ice, χ_ice], j))
         end
-        for block in blocks
+        for (block, _) in vcat(liq_blocks, ice_blocks)
             parent(block) .= 0
         end
-        CA.update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
-        expected_entry = -dtγ / τ_cond
-        for block in blocks
-            diag_per_level = vec(sum(parent(block); dims = 4))
-            @test all(≈(expected_entry), diag_per_level)
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+
+        thp = CAP.thermodynamics_params(p.params)
+        mp_i = CAP.microphysics_1m_implicit_params(p.params)
+        function state_cols(j)
+            if j == 0
+                return (
+                    column(Y.c.ρ), column(p.precomputed.ᶜT),
+                    column(p.precomputed.ᶜq_tot_nonneg),
+                    column(Y.c.ρq_lcl) ./ column(Y.c.ρ),
+                    column(Y.c.ρq_icl) ./ column(Y.c.ρ),
+                    column(Y.c.ρq_rai) ./ column(Y.c.ρ),
+                    column(Y.c.ρq_sno) ./ column(Y.c.ρ),
+                )
+            else
+                sgs = Y.c.sgsʲs.:($j)
+                return (
+                    column(p.precomputed.ᶜρʲs.:($j)),
+                    column(p.precomputed.ᶜTʲs.:($j)),
+                    column(p.precomputed.ᶜq_tot_nonnegʲs.:($j)),
+                    column(sgs.q_lcl), column(sgs.q_icl),
+                    column(sgs.q_rai), column(sgs.q_sno),
+                )
+            end
+        end
+        _micro(q_tot, q_lcl, q_icl, q_rai, q_sno) =
+            (; q_tot, q_lcl = max(0, q_lcl), q_icl = max(0, q_icl),
+                q_rai = max(0, q_rai), q_sno = max(0, q_sno))
+        for (block, j) in liq_blocks
+            ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno = state_cols(j)
+            expected = [
+                -dtγ / CMNe.τ_vap_to_q_lcl(
+                    mp_i.processes.cloud_liquid_formation, mp_i, thp,
+                    _micro(q_tot[i], q_lcl[i], q_icl[i], q_rai[i], q_sno[i]),
+                    (; ρ = ρ[i], T = T[i]),
+                ) for i in 1:length(T)
+            ]
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+        for (block, j) in ice_blocks
+            ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno = state_cols(j)
+            expected = [
+                -dtγ / CMNe.τ_vap_to_q_icl(
+                    mp_i.processes.cloud_ice_formation, mp_i, thp,
+                    _micro(q_tot[i], q_lcl[i], q_icl[i], q_rai[i], q_sno[i]),
+                    (; ρ = ρ[i], T = T[i]),
+                ) for i in 1:length(T)
+            ]
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
         end
     end
 end

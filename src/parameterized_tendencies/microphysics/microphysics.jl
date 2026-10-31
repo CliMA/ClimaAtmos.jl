@@ -26,7 +26,6 @@ include("conditional_nodes.jl")
 
 # Microphysics processes
 include("microphysics_wrappers.jl")
-include("implicit_condensation.jl")
 include("tendency.jl")
 include("moisture_fixers.jl")
 

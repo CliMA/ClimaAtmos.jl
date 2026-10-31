@@ -93,8 +93,8 @@ update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
 update_cache_every:
-  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step` (default), `stage`]"
-  value: "step"
+  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
+  value: "stage"
 update_constrain_state_every:
   help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
   value: "step"
@@ -262,7 +262,7 @@ cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
   value: "arch_2layers_8nodes.jld2"
 implicit_microphysics:
-  help: "Whether to treat microphysics tendencies implicitly [`true` (default), `false`]"
+  help: "Controls how 1M cloud condensation and sublimation are coupled to the implicit solve. When `true`, both processes are refreshed each Newton iterate and contribute `-dtγ/τ` diagonals to the Jacobian; when `false`, they are part of the stage-fixed CM BMT bulk tendency with no Jacobian contribution. All 1M microphysics tendencies are applied in the implicit stage either way. [`true` (default), `false`]"
   value: true
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
@@ -298,10 +298,10 @@ snow_terminal_velocity:
   help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
   value: "Chen2022"
 cloud_liquid_formation:
-  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation through CM's bulk-averaged tendency (explicit); `ImplicitCloudLiquidFormation` routes it through the SGS-integrated implicit source `_add_implicit_lcl_condensation_*` with a `-dtγ/(τ_cond·Γₗ)` Jacobian; `~` disables it. [`CloudLiquidFormation` (default), `ImplicitCloudLiquidFormation`, `~`]"
+  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation; `~` disables it. The `implicit_microphysics` toggle routes the process between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`CloudLiquidFormation` (default), `~`]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `TemperatureDependentIceNumber`, `ConstantTimescale`, `TemperatureDependent`, ~]"
+  help: "Cloud ice formation option for 1M microphysics. The `implicit_microphysics` toggle routes the chosen variant between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`TemperatureDependentIceNumber` (default), `PrescribedIceNumber`, `ConstantTimescale`, `TemperatureDependent`, `~`]"
   value: "TemperatureDependentIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"

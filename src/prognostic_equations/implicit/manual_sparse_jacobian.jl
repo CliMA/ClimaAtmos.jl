@@ -3,6 +3,7 @@ import LinearAlgebra: I, Adjoint
 using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
 import UnrolledUtilities: unrolled_any, unrolled_filter, unrolled_map, unrolled_reduce
+import CloudMicrophysics.MicrophysicsNonEq as CMNe
 
 """
     DerivativeFlag
@@ -1746,43 +1747,130 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
-    update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
 
-Add `−dtγ / τ_cond` to the `(ρq_lcl, ρq_lcl)` and each
-`(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)` diagonal, approximating
-`∂S_cond/∂q_lcl` with CM's latent-heat feedback factored out. This value
-is exact for the `q_lcl`-limited evaporation sub-branch (where
-`S = −q_lcl/τ`), exact for the updraft when `T` is diagnosed from `mse`
-at fixed `p` (so `Γ_cp` in the rate exactly cancels the T-feedback
-`dT/dq_lcl = L_v/c_p`), and an `O(Γ_e_v / Γ_cp)` approximation
-(≈ 1 within ~20%) for the grid-mean / env condensation / vapor-limited
-evaporation sub-branches at fixed `ρe_tot`. No `ρe_tot` cross-term
-under 1M.
+Add `−dtγ / τ` to the `(ρq_lcl, ρq_lcl)` and `(ρq_icl, ρq_icl)` diagonals
+(and the matching `sgsʲs.:(j).q_lcl` / `q_icl` diagonals) when the
+corresponding implicit 1M condensation / sublimation source is active.
+`τ` is CM's `τ_vap_to_q_lcl` / `τ_vap_to_q_icl` evaluated at the current
+state, so the diagonal follows the configured ice-formation variant
+(`TemperatureDependentIceNumber`, `PrescribedIceNumber`, etc.) rather than
+the constant `sublimation_deposition_timescale` parameter.
+
+The term approximates `∂S/∂q` with CM's latent-heat feedback factored out:
+exact for the `q`-limited evaporation / sublimation sub-branch
+(`S = −q/τ`), exact for the updraft when `T` is diagnosed from `mse` at
+fixed `p` (so `Γ_cp` cancels `dT/dq = L/c_p`), and an `O(Γ_e_v / Γ_cp)`
+approximation for the grid-mean branches at fixed `ρe_tot`. No `ρe_tot`
+cross-term under 1M.
 """
-function update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
-    p.atmos.microphysics_tendency_timestepping isa Implicit || return nothing
     microphysics_model = p.atmos.microphysics_model
     microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
-    # No implicit source → no Jacobian contribution.
-    isnothing(
-        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
-    ) && return nothing
-    τ_cond = CAP.condensation_evaporation_timescale(p.params)
-    diagonal_entry = -dtγ / τ_cond
+    mp_i = CAP.microphysics_1m_implicit_params(p.params)
+    procs = mp_i.processes
+    has_cond = !isnothing(procs.cloud_liquid_formation)
+    has_subl = !isnothing(procs.cloud_ice_formation)
+    (has_cond || has_subl) || return nothing
+    thp = CAP.thermodynamics_params(p.params)
 
-    ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
-    @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(diagonal_entry)
+    # Grid-mean state inputs.
+    (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
+    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+    if has_cond
+        ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
+        @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(
+            -dtγ / _implicit_mp_τ_lcl(
+                mp_i, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ),
+        )
+    end
+    if has_subl
+        ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
+        @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(
+            -dtγ / _implicit_mp_τ_icl(
+                mp_i, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+                ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ),
+        )
+    end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
+        (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs) = p.precomputed
         for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-            χ_state_name = @name(c.sgsʲs.:($j).q_lcl)
-            MatrixFields.has_field(Y, χ_state_name) || continue
-            ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ = matrix[χ_state_name, χ_state_name]
-            @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(diagonal_entry)
+            sgsʲ = Y.c.sgsʲs.:($j)
+            ᶜTʲ = ᶜTʲs.:($j)
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+            if has_cond
+                χ = @name(c.sgsʲs.:($j).q_lcl)
+                MatrixFields.has_field(Y, χ) || continue
+                ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ = matrix[χ, χ]
+                @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(
+                    -dtγ / _implicit_mp_τ_lcl(
+                        mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
+                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
+                    ),
+                )
+            end
+            if has_subl
+                χ = @name(c.sgsʲs.:($j).q_icl)
+                MatrixFields.has_field(Y, χ) || continue
+                ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ = matrix[χ, χ]
+                @. ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ += DiagonalMatrixRow(
+                    -dtγ / _implicit_mp_τ_icl(
+                        mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
+                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
+                    ),
+                )
+            end
         end
     end
     return nothing
+end
+
+"""
+    _implicit_mp_τ_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _implicit_mp_τ_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+
+Pack the microphysics / thermodynamic state into CM's `(micro, thermo)`
+tuples and dispatch to the state-dependent relaxation timescale
+`τ_vap_to_q_lcl` / `τ_vap_to_q_icl` on `mp.processes.cloud_liquid_formation` /
+`mp.processes.cloud_ice_formation`. Returns `Inf` when the process is off.
+"""
+@inline function _implicit_mp_τ_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    FT = typeof(ρ)
+    micro = (;
+        q_tot,
+        q_lcl = max(zero(FT), q_lcl),
+        q_icl = max(zero(FT), q_icl),
+        q_rai = max(zero(FT), q_rai),
+        q_sno = max(zero(FT), q_sno),
+    )
+    thermo = (; ρ, T)
+    return CMNe.τ_vap_to_q_lcl(
+        mp.processes.cloud_liquid_formation, mp, thp, micro, thermo,
+    )
+end
+@inline function _implicit_mp_τ_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    FT = typeof(ρ)
+    micro = (;
+        q_tot,
+        q_lcl = max(zero(FT), q_lcl),
+        q_icl = max(zero(FT), q_icl),
+        q_rai = max(zero(FT), q_rai),
+        q_sno = max(zero(FT), q_sno),
+    )
+    thermo = (; ρ, T)
+    return CMNe.τ_vap_to_q_icl(
+        mp.processes.cloud_ice_formation, mp, thp, micro, thermo,
+    )
 end
 
 """
@@ -2034,7 +2122,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-    update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
