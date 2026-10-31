@@ -1067,3 +1067,139 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
     q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end
+
+"""
+    es_liq_tetens(T)
+
+Return the saturation vapor pressure over liquid water [Pa] at temperature `T` [K]
+from the Tetens formula.
+"""
+@inline function es_liq_tetens(T)
+    FT = typeof(T)
+    return FT(611.2) * exp(FT(17.67) * (T - FT(273.15)) / (T - FT(29.65)))
+end
+
+"""
+    gamma_moist_wb06(T, p)
+
+Return the moist adiabatic lapse rate [K/m] at temperature `T` [K] and pressure
+`p` [Pa], following Wood and Bretherton (2006).
+"""
+@inline function gamma_moist_wb06(T, p)
+    FT = typeof(T)
+    R_D = FT(287.058)
+    CP_D = FT(1004.0)
+    R_V = FT(461.5)
+    LH_V0 = FT(2.501e6)
+    EPS_DV = R_D / R_V
+    GRAV = FT(9.80665)
+
+    es = es_liq_tetens(T)
+    qs = EPS_DV * es / max(p - (one(FT) - EPS_DV) * es, one(FT))
+    num = one(FT) + (LH_V0 * qs) / (R_D * T)
+    den = one(FT) + (LH_V0^2 * qs) / (CP_D * R_V * T^2)
+    return (GRAV / CP_D) * (one(FT) - num / den)
+end
+
+"""
+    compute_wb06_eis_from_bot_700(
+        p_bot, T_bot, rh_bot, z_bot, T_700, z_700, p_700 = 0.70 * p_bot,
+    )
+
+Return Estimated Inversion Strength [K] following Wood and Bretherton (2006)
+from lowest-layer (`p_bot`, `T_bot`, `rh_bot`, `z_bot`) and 700 hPa-equivalent
+(`T_700`, `z_700`, `p_700`) thermodynamic states.
+"""
+@inline function compute_wb06_eis_from_bot_700(
+    p_bot::FT,
+    T_bot::FT,
+    rh_bot::FT,
+    z_bot::FT,
+    T_700::FT,
+    z_700::FT,
+    p_700::FT = FT(0.70) * p_bot,
+) where {FT}
+    R_D = FT(287.058)
+    CP_D = FT(1004.0)
+    R_V = FT(461.5)
+    LH_V0 = FT(2.501e6)
+    kappa = R_D / CP_D
+
+    theta_bot = T_bot * (FT(100000) / p_bot)^kappa
+    theta_700 = T_700 * (FT(100000) / p_700)^kappa
+    lts = theta_700 - theta_bot
+
+    gm = gamma_moist_wb06(FT(0.5) * (T_bot + T_700), FT(0.85) * p_bot)
+    Td_dep =
+        T_bot *
+        (one(FT) - one(FT) / (one(FT) - (R_V * T_bot / LH_V0) * log(rh_bot)))
+    z_lcl = max(zero(FT), FT(125) * Td_dep)
+    dz_cloud = max(zero(FT), (z_700 - z_bot) - z_lcl)
+    return lts - gm * dz_cloud
+end
+
+@inline function _eis_column_reduce_step(state, (p, T, rh, z))
+    FT = typeof(p)
+    p_prev, T_prev, z_prev, p_bot, T_bot, rh_bot, z_bot, T_700, z_700, found =
+        state
+    if p_prev == zero(FT)
+        rh_clamped = clamp(rh, FT(0.05), one(FT))
+        return (p, T, z, p, T, rh_clamped, z, T, z, false)
+    else
+        p_700 = FT(0.70) * p_bot
+        if !found && p_prev >= p_700 >= p
+            w =
+                (log(p_prev) - log(p_700)) /
+                max(log(p_prev) - log(p), FT(1e-8))
+            w = clamp(w, zero(FT), one(FT))
+            T_700 = (one(FT) - w) * T_prev + w * T
+            z_700 = (one(FT) - w) * z_prev + w * z
+            found = true
+        elseif !found
+            T_700 = T
+            z_700 = z
+        end
+        return (p, T, z, p_bot, T_bot, rh_bot, z_bot, T_700, z_700, found)
+    end
+end
+
+@inline _eis_column_reduce_transform(state) = compute_wb06_eis_from_bot_700(
+    state[4],
+    state[5],
+    state[6],
+    state[7],
+    state[8],
+    state[9],
+)
+
+"""
+    compute_column_eis_field!(eis_lvl, ᶜp, ᶜT, ᶜrh, ᶜz)
+
+Evaluate Wood and Bretherton (2006) Estimated Inversion Strength [K] from 3D
+pressure `ᶜp`, temperature `ᶜT`, relative humidity `ᶜrh`, and altitude `ᶜz` via
+`Operators.column_reduce!`, writing into the 2D level field `eis_lvl`.
+"""
+function compute_column_eis_field!(eis_lvl, ᶜp, ᶜT, ᶜrh, ᶜz)
+    FT = Spaces.undertype(axes(ᶜp))
+    init_state = (
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        zero(FT),
+        false,
+    )
+    input = @. lazy(tuple(ᶜp, ᶜT, ᶜrh, ᶜz))
+    Operators.column_reduce!(
+        _eis_column_reduce_step,
+        eis_lvl,
+        input;
+        init = init_state,
+        transform = _eis_column_reduce_transform,
+    )
+    return eis_lvl
+end

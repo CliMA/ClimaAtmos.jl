@@ -31,6 +31,10 @@ main
   [kg/m²] to `ml_N_cloud_liquid_droplets` in `update_cloud_properties!`, bound
   droplet number concentration smoothly in `[N₀ / 3, 3 N₀]`, and zero-initialize
   `prescribed_aerosols_field` at cache construction.
+- ![][badge-✨feature/enhancement] Modulate the liquid-cloud shortwave subgrid
+  effective-thickness exponent by Wood and Bretherton (2006) Estimated Inversion
+  Strength (`cloud_inhomogeneity_eis_coeff`, `compute_column_eis_field!`) in
+  `solve_fluxes!`.
 
 0.42.17
 -------

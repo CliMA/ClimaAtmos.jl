@@ -9,6 +9,7 @@ import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
 import ..NonEquilibriumMicrophysics1M
+import ..compute_column_eis_field!
 
 """
     update_atmospheric_state!(integrator)
@@ -577,8 +578,39 @@ function solve_fluxes!((; u, p, t)::I) where {I}
             RRTMGP.cloud_ice_water_path(rrtmgp_solver),
             axes(u.c),
         )
-        @. ᶜlwp *= ᶜχ
-        @. ᶜiwp *= ᶜχ
+        gamma_eis_inhom = FT(CAP.cloud_inhomogeneity_eis_coeff(p.params))
+        if p.atmos.radiation_mode.idealized_clouds ||
+           gamma_eis_inhom == zero(FT)
+            @. ᶜlwp *= ᶜχ
+            @. ᶜiwp *= ᶜχ
+        else
+            # High-EIS marine stratocumulus decks exhibit smaller horizontal
+            # optical-depth heterogeneity (`β_l < 1`, keeping `χ^β_l` closer to 1)
+            # than low-EIS cumulus and convective regimes (`β_l > 1`).
+            ᶜrh = Fields.array2field(
+                RRTMGP.layer_relative_humidity(rrtmgp_solver),
+                axes(u.c),
+            )
+            ᶜz = Fields.coordinate_field(u.c).z
+            eis_lvl = p.scratch.temp_field_level_2
+            compute_column_eis_field!(
+                eis_lvl,
+                p.precomputed.ᶜp,
+                p.precomputed.ᶜT,
+                ᶜrh,
+                ᶜz,
+            )
+            ᶜeis = p.scratch.ᶜtemp_scalar_4
+            @. ᶜeis = eis_lvl
+            beta_eff_l = @. lazy(
+                max(
+                    FT(0.2),
+                    one(FT) - gamma_eis_inhom * tanh((ᶜeis - FT(3)) / FT(4)),
+                ),
+            )
+            @. ᶜlwp *= ᶜχ^beta_eff_l
+            @. ᶜiwp *= ᶜχ
+        end
         RRTMGP.update_sw_fluxes!(rrtmgp_solver)
         RRTMGP.update_net_fluxes!(rrtmgp_solver)
     else

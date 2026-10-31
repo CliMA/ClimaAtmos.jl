@@ -719,6 +719,9 @@ function SGSQuadratureParameters(
         # the liquid water path of overcast marine stratocumulus. Applied to all
         # cloud types; ice and convective clouds are likely more inhomogeneous.
         cloud_condensate_relative_variance_floor = FT(0.25),
+        # Estimated Inversion Strength sensitivity of liquid-cloud shortwave
+        # subgrid inhomogeneity (`solve_fluxes!`): off (`0`) by default.
+        cloud_inhomogeneity_eis_coeff = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
