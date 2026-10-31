@@ -645,15 +645,12 @@ function SGSQuadratureParameters(
     # TODO: promote each default to ClimaParams (and the name_map above) once
     # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Cloud-fraction floor release (see `_compute_cloud_fraction`):
-        # residual = 1 keeps the relative floor fully active everywhere (no
-        # release, D ≡ 1). margin = abs_margin = sharpness = 1 are the release
-        # shape used when residual < 1: a one-width saturation margin guarded
-        # by an absolute margin of one floor width.
-        cloud_fraction_floor_release_margin = FT(1),
-        cloud_fraction_floor_release_abs_margin = FT(1),
-        cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(1),
+        # Positive: the Damköhler factor of the variance fidelity and the
+        # cloud-species flux blend use the constant
+        # `condensation_evaporation_timescale` and
+        # `sublimation_deposition_timescale` in place of the per-cell 1M
+        # relaxation times (`cloud_species_relaxation_time`).
+        sgs_cloud_species_constant_timescales = FT(0),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`materialized_displacement_length!`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],

@@ -327,17 +327,16 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
   - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
+    `ε_rel` in the subsaturation-deficit floor of the cloud-fraction closure [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
     saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `sgs_cloud_species_constant_timescales`: Positive selects the constant
+    `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
+    for the Damköhler factor of the variance fidelity
+    (`set_sgs_microphysics_timescale!`) and for the cloud-species flux blend
+    (`add_cloud_species_diffusionᵥ!`), in place of the per-cell 1M relaxation
+    times (`cloud_species_relaxation_time`); `0` (default) uses the per-cell
+    times [-].
   - `cloud_condensate_relative_variance_floor`: Relative variance of an
     unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
     truncated-Gaussian in-cloud distribution in the radiative
@@ -371,10 +370,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_fidelity_equilibrium_weight::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
-    cloud_fraction_floor_release_margin::FT
-    cloud_fraction_floor_release_abs_margin::FT
-    cloud_fraction_floor_release_sharpness::FT
-    cloud_fraction_floor_residual::FT
+    sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
 end
 

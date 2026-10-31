@@ -84,26 +84,21 @@ end
 
 # --- Function barrier helpers ---
 
-_test_floor_params(::Type{FT}) where {FT} = (;
+_test_floor_params(::Type{FT}) where {FT} = CA.CloudFractionFloorParams(;
     ε_rel = FT(0.02),
     σ_abs = FT(1e-7),
-    margin = FT(1),
-    abs_margin = FT(1),
-    sharpness = FT(1),
-    residual = FT(0),
 )
 
 function _allocs_cloud_fraction_simple()
     FT = Float64
     floor = _test_floor_params(FT)
     CA._compute_cloud_fraction(
-        FT(1e-3), FT(-1e-4), FT(3.16e-4), FT(5e-5), FT(1), floor,
+        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), floor,
     )
     return @allocated CA._compute_cloud_fraction(
-        FT(1e-3),
+        FT(5e-5),
         FT(-1e-4),
         FT(3.16e-4),
-        FT(5e-5),
         FT(1),
         floor,
     )

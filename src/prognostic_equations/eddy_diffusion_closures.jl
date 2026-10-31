@@ -1294,20 +1294,34 @@ function add_cloud_species_diffusionᵥ!(
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜρ_air =
         @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
+    # The relaxation time of the species: that of the 1M process at the cell
+    # state, or, with `sgs_cloud_species_constant_timescales`, the constant
+    # parameter of the phase.
+    τ_const =
+        phase isa TD.Liquid ?
+        CAP.condensation_evaporation_timescale(p.params) :
+        CAP.sublimation_deposition_timescale(p.params)
+    ᶜτ_μ = if CAP.sgs_cloud_species_constant_timescales(p.params) > 0
+        τ_const
+    else
+        @. lazy(
+            cloud_species_relaxation_time(
+                cmp,
+                thermo_params,
+                ᶜT,
+                ᶜρ_air,
+                ᶜq_tot,
+                ᶜq_liq,
+                ᶜq_ice,
+                phase,
+            ),
+        )
+    end
     @. ᶜλ = cloud_species_flux_blend(
         ᶜl_mix,
         specific(Y.c.ρtke, Y.c.ρ),
         c_d,
-        cloud_species_relaxation_time(
-            cmp,
-            thermo_params,
-            ᶜT,
-            ᶜρ_air,
-            ᶜq_tot,
-            ᶜq_liq,
-            ᶜq_ice,
-            phase,
-        ),
+        ᶜτ_μ,
     )
     ᶜsensitivities = @. lazy(
         equilibrium_condensate_sensitivities(

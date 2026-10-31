@@ -9,6 +9,14 @@ main
   `default_config.yml`), falling back to `HyperbolicTangentStretching(dz_bottom)`
   on coarse test grids outside the two-scale regime. Added 79-level common
   configurations `numerics_sphere_he24ze79.yml` and `numerics_column_ze79.yml`.
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Formulate the
+  non-equilibrium SGS cloud-fraction floor (`_sgs_augmented_sigma`,
+  `_compute_cloud_fraction`) with the subsaturation deficit `max(0, −μ_S)` so it
+  vanishes `C¹`-smoothly in saturated cloud decks, partition non-equilibrium
+  condensate excess `max(0, q_c − q_c_eq)` against `√(σ_aug² + δ_sub²)`,
+  evaluate `compute_∂T_∂θ!` at the environment state under `PrognosticEDMFX`,
+  and evaluate non-equilibrium updraft cloud fraction (`_updraft_cloud_fraction`)
+  against the updraft vapor subsaturation deficit.
 
 0.42.17
 -------
