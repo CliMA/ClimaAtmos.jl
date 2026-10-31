@@ -19,6 +19,34 @@ import ClimaCore as CC
         linearorder = vec(collect(CC.Meshes.elements(mesh)))
         @test linearorder != sfc_elemorder
 
+        # Full atmospheric vertical grid uses BoundaryLayerHyperbolicTangentStretching
+        if isdefined(CC.Meshes, :BoundaryLayerHyperbolicTangentStretching)
+            atmos_grid = CA.SphereGrid(
+                Float64;
+                h_elem = 3,
+                z_elem = 63,
+                z_max = 60000.0,
+                dz_bottom = 30.0,
+            )
+            z_stretch_rule = atmos_grid.vertical_grid.topology.mesh.stretch
+            @test z_stretch_rule isa
+                  CC.Meshes.BoundaryLayerHyperbolicTangentStretching{Float64}
+            @test z_stretch_rule.dz_surface == 30.0
+            @test z_stretch_rule.dz_top == 3000.0
+            @test z_stretch_rule.z_pbl == 2200.0
+
+            atmos_grid_z79 = CA.SphereGrid(
+                Float64;
+                h_elem = 3,
+                z_elem = 79,
+                z_max = 60000.0,
+                dz_bottom = 28.0,
+            )
+            z_stretch_z79 = atmos_grid_z79.vertical_grid.topology.mesh.stretch
+            @test z_stretch_z79 isa
+                  CC.Meshes.BoundaryLayerHyperbolicTangentStretching{Float64}
+            @test z_stretch_z79.dz_surface == 28.0
+        end
     end
 
     @testset "BoxGrid" begin

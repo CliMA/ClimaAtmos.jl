@@ -22,6 +22,8 @@ Create an ExtrudedCubedSphereGrid with topography support.
   - `z_max = 30000.0`: the domain maximum along the z-direction
   - `z_stretch = true`: whether to use vertical stretching
   - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `dz_top = 3000.0`: top layer thickness for two-scale stretching
+  - `z_pbl = 2200.0`: boundary-layer scale height for two-scale stretching
   - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
   - `radius = 6.371229e6`: the radius of the cubed sphere
   - `h_elem = 6`: the number of horizontal elements per side of every panel (6
@@ -46,6 +48,8 @@ function SphereGrid(
     z_max = 30000.0,
     z_stretch = true,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     radius = 6.371229e6,
     h_elem = 6,
     nh_poly = 3,
@@ -55,8 +59,20 @@ function SphereGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
+    z_mesh = CommonGrids.DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch = get_stretching(
+            FT,
+            z_stretch,
+            dz_bottom,
+            dz_top,
+            z_pbl;
+            z_max,
+            z_elem,
+        ),
     ),
 ) where {FT}
     n_quad_points = nh_poly + 1
@@ -105,6 +121,8 @@ Create a ColumnGrid.
   - `z_max = 30000.0`: the domain maximum along the z-direction
   - `z_stretch = true`: whether to use vertical stretching
   - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `dz_top = 3000.0`: top layer thickness for two-scale stretching
+  - `z_pbl = 2200.0`: boundary-layer scale height for two-scale stretching
   - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
 """
 function ColumnGrid(
@@ -114,8 +132,22 @@ function ColumnGrid(
     z_max = 30000.0,
     z_stretch = true,
     dz_bottom = 500.0,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
+    z_mesh = CommonGrids.DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch = get_stretching(
+            FT,
+            z_stretch,
+            dz_bottom,
+            dz_top,
+            z_pbl;
+            z_max,
+            z_elem,
+        ),
     ),
 ) where {FT}
     grid = CommonGrids.ColumnGrid(
@@ -150,6 +182,8 @@ Create a Box3DGrid with topography support.
     1D within each horizontal element is then `n_quad_points = nh_poly + 1`
   - `z_stretch = true`: whether to use vertical stretching
   - `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
+  - `dz_top = 3000.0`: top layer thickness for two-scale vertical stretching
+  - `z_pbl = 2200.0`: boundary-layer scale height for two-scale stretching
   - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
   - `bubble = false`: enables the "bubble correction" for more accurate element
     areas when computing the spectral element space.
@@ -174,6 +208,8 @@ function BoxGrid(
     nh_poly = 3,
     z_stretch = true,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     bubble = false,
     periodic_x = true,
     periodic_y = true,
@@ -181,8 +217,20 @@ function BoxGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
+    z_mesh = CommonGrids.DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch = get_stretching(
+            FT,
+            z_stretch,
+            dz_bottom,
+            dz_top,
+            z_pbl;
+            z_max,
+            z_elem,
+        ),
     ),
 ) where {FT}
     n_quad_points = nh_poly + 1
@@ -225,6 +273,8 @@ Create a SliceXZGrid with topography support.
     1D within each horizontal element is then `n_quad_points = nh_poly + 1`
   - `z_stretch = true`: whether to use vertical stretching
   - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `dz_top = 3000.0`: top layer thickness for two-scale stretching
+  - `z_pbl = 2200.0`: boundary-layer scale height for two-scale stretching
   - `periodic_x = true`: use periodic domain along x-direction
   - `topography = NoTopography()`: topography type
   - `topography_damping_factor = 5.0`: factor by which smallest resolved
@@ -243,13 +293,27 @@ function PlaneGrid(
     nh_poly = 3,
     z_stretch = true,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     periodic_x = true,
     topography::AbstractTopography = NoTopography(),
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
+    z_mesh = CommonGrids.DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch = get_stretching(
+            FT,
+            z_stretch,
+            dz_bottom,
+            dz_top,
+            z_pbl;
+            z_max,
+            z_elem,
+        ),
     ),
 ) where {FT}
     n_quad_points = nh_poly + 1
@@ -353,8 +417,56 @@ function hypsography_function_from_topography(
     end
 end
 
-get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
-    z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+function _use_boundary_layer_stretching(dz_bottom, dz_top, z_pbl, z_max, z_elem)
+    isdefined(Meshes, :BoundaryLayerHyperbolicTangentStretching) || return false
+    (isnothing(dz_top) || isnothing(z_pbl)) && return false
+    if isnothing(z_max) || isnothing(z_elem)
+        return zero(dz_bottom) < dz_bottom < dz_top && z_pbl > zero(z_pbl)
+    end
+    H = Float64(z_max)
+    N = Float64(z_elem)
+    dz_b = Float64(dz_bottom)
+    dz_t = Float64(dz_top)
+    zp = Float64(z_pbl)
+    (z_elem ≥ 2 && 0 < dz_b < H / N < dz_t < H && zp > 0) || return false
+    η_b = dz_b / H
+    η_t = dz_t / H
+    τ_max = sqrt((η_t - η_b) / ((1 - η_b) * η_t))
+    δ_max = η_b * (1 - η_t) / ((1 - η_b) * η_t)
+    γ_min = 1e-6
+    γ_max = log1p(τ_max) - log(δ_max) / 2
+    th_pbl = tanh(H / zp)
+    n_bg_of_gamma(γ) = γ / atanh(η_t * tanh(γ))
+    function find_gamma(γ)
+        n_bg = n_bg_of_gamma(γ)
+        k_bg =
+            n_bg * (log1p(η_b * expm1(2 * γ) / 2) - log1p(η_b * expm1(-2 * γ) / 2)) /
+            (2 * γ)
+        return k_bg + (N - n_bg) * (tanh(dz_b / zp) / th_pbl) - 1
+    end
+    γ_low = Meshes._golden_section_argmin(find_gamma, γ_min, γ_max)
+    return find_gamma(γ_low) ≤ 0 ≤ find_gamma(γ_max)
+end
+
+function get_stretching(
+    ::Type{FT},
+    z_stretch,
+    dz_bottom,
+    dz_top = 3000.0,
+    z_pbl = 2200.0;
+    z_max = nothing,
+    z_elem = nothing,
+) where {FT}
+    z_stretch || return Meshes.Uniform()
+    if _use_boundary_layer_stretching(dz_bottom, dz_top, z_pbl, z_max, z_elem)
+        return Meshes.BoundaryLayerHyperbolicTangentStretching{FT}(
+            dz_bottom,
+            dz_top,
+            z_pbl,
+        )
+    end
+    return Meshes.HyperbolicTangentStretching{FT}(dz_bottom)
+end
 
 """
     get_spaces(grid)

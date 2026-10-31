@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Default vertical stretching uses two-scale
+  `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching(dz_bottom, dz_top, z_pbl)`
+  with `dz_top = 3000.0 m` and `z_pbl = 2200.0 m` (`dz_top` and `z_pbl` keys in
+  `default_config.yml`), falling back to `HyperbolicTangentStretching(dz_bottom)`
+  on coarse test grids outside the two-scale regime. Added 79-level common
+  configurations `numerics_sphere_he24ze79.yml` and `numerics_column_ze79.yml`.
 
 0.42.17
 -------
