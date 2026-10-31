@@ -96,7 +96,13 @@ E_{\mathrm{turb}}^j = \varepsilon_{t} \exp(-c_t a^j) ,
 
 is added to the dynamical rate in the scalar tendencies
 (`turbulent_entrainment`; ``(\varepsilon_t, c_t)`` are the two entries of
-`turb_entr_param_vec`).
+`turb_entr_param_vec`). When `edmf_tail_entr_weight` (``w_{\mathrm{tail}}``) is
+positive, dynamical entrainment draws moist static energy and total water from
+the environment's moist upper tail (`tail_entrainment_increments`), and when
+`edmf_shallow_support_height_scale` (``H_{\mathrm{sup}}``) is positive, both
+`edmf_tail_entr_weight` and the clear-environment buoyancy reference weight
+`edmf_buoyancy_clear_env_weight` decay above the surface as
+``\exp(-((z - z_s) / H_{\mathrm{sup}})^2)`` (`shallow_support_weight`).
 
 Detrainment (`edmfx_detr_model: "Generalized"`,
 [`BuoyancyVelocityDetrainment`](@ref ClimaAtmos.BuoyancyVelocityDetrainment))

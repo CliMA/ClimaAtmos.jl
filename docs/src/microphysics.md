@@ -74,7 +74,12 @@ total water, density or total energy.
 
 All microphysics tracers sediment with a bulk (group) sedimentation velocity.
 The sedimentation velocity can be parameterized via CloudMicrophysics.jl or
-specified as a fixed value for each tracer.
+specified as a fixed value for each tracer. When `sgs_precip_incloud_fraction`
+is positive in the 1-moment scheme, rain and snow sedimentation velocities are
+mass-flux-weighted across the subgrid precipitation shaft of area
+`max(a_p, sgs_precip_fraction_floor)` and its complement
+(`shaft_weighted_terminal_velocity`), matching the two-zone partition used by
+subgrid collision and evaporation tendencies.
 
 Sedimentation is treated implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation

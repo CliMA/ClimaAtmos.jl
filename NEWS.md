@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Mass-flux-weight 1M rain and snow terminal
+  velocities across the subgrid precipitation shaft
+  (`shaft_weighted_terminal_velocity`) when `sgs_precip_incloud_fraction > 0`,
+  and add Gaussian height tapering (`shallow_support_weight`,
+  `edmf_shallow_support_height_scale`) to `edmf_tail_entr_weight` and
+  `edmf_buoyancy_clear_env_weight`.
 - ![][badge-✨feature/enhancement] Add subsaturated-environment upper-tail
   truncation (`env_equilibrium_condensate`, `_materialize_env_tail_partition!`,
   `sgs_variance_fidelity`, `sgs_env_updraft_tail_truncation_coeff`),

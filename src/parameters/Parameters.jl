@@ -364,6 +364,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     environment's cloud liquid evaporated adiabatically in the density to which
     updraft buoyancy is referenced (`ᶜupdraft_reference_density`); `0` (default)
     references the grid-mean density [-].
+  - `edmf_shallow_support_height_scale`: Height scale `H_sup` [m] above the
+    surface over which `edmf_tail_entr_weight` and
+    `edmf_buoyancy_clear_env_weight` decay via `exp(−((z − z_sfc) / H_sup)²)`;
+    `0` (default) applies both weights uniformly at all heights [m].
   - `sgs_env_updraft_tail_truncation_coeff`: Multiplier `c_tail ≥ 0` on the
     updraft area fraction `a_up` that sets the upper-tail probability
     `q_tail = 0.49 tanh(w_cu c_tail max(a_up, 0) / 0.49)` truncated from the
@@ -419,6 +423,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_env_autoconversion_updraft_velocity_weight::FT
     sgs_env_autoconversion_detrained_velocity::FT
     edmf_buoyancy_clear_env_weight::FT
+    edmf_shallow_support_height_scale::FT
     sgs_env_updraft_tail_truncation_coeff::FT
     sgs_env_subsat_rh_transition::FT
     sgs_env_subsat_gamma_crit::FT

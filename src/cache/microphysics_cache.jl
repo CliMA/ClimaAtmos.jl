@@ -95,6 +95,106 @@ function fill_column_max!(ᶜw_max, ᶜw)
 end
 
 """
+    shaft_weighted_terminal_velocity(
+        terminal_velocity_fn, χ_name, ρ, q, β_p, a_p, a_floor,
+    )
+
+Mass-flux-weighted terminal velocity [m/s] of a 1-moment precipitation species
+over the two-zone subgrid shaft partition of `sgs_placement_factor`.
+
+When a fraction `β_p ∈ (0, 1]` of the subdomain-mean mixing ratio `q` falls in
+the precipitation shaft of area `a_s = clamp(max(a_p, a_floor), ε, 1)`
+(`φ_in = (1 - β_p) + β_p / a_s`) and the remainder `(1 - β_p) q` occupies
+`1 - a_s`, the subdomain sedimentation flux equals `ρ q w_eff` with
+
+    w_eff = a_s φ_in w_term(ρ, φ_in q₊) + (1 - a_s) (1 - β_p) w_term(ρ, (1 - β_p) q₊).
+
+Reduces to `w_term(ρ, q₊)` when `β_p = 0`, `a_s = 1`, or `w_term` is
+state-independent.
+"""
+@inline function shaft_weighted_terminal_velocity(
+    terminal_velocity_fn::F,
+    χ_name,
+    ρ,
+    q,
+    β_p,
+    a_p,
+    a_floor,
+) where {F}
+    q_pos = max(zero(q), q)
+    β_p > zero(β_p) || return terminal_velocity_fn(χ_name, ρ, q_pos)
+    one_a = one(a_floor)
+    a_s = clamp(max(a_p, a_floor), eps(typeof(a_floor)), one_a)
+    φ_out = one(β_p) - β_p
+    φ_in = φ_out + β_p / a_s
+    w_in = terminal_velocity_fn(χ_name, ρ, φ_in * q_pos)
+    w_out = terminal_velocity_fn(χ_name, ρ, φ_out * q_pos)
+    return a_s * φ_in * w_in + (one_a - a_s) * φ_out * w_out
+end
+
+@inline _1m_terminal_velocity(
+    microphysics_model,
+    vel_mode,
+    χ_name,
+    params,
+    ρ,
+    q,
+) = terminal_velocity(
+    microphysics_model,
+    vel_mode,
+    χ_name,
+    params,
+    CAP.microphysics_cloud_params(params),
+    CAP.microphysics_1m_params(params),
+    ρ,
+    q,
+)
+
+@inline function shaft_weighted_terminal_velocity(
+    microphysics_model,
+    vel_mode,
+    χ_name,
+    params,
+    ρ,
+    q,
+    β_p,
+    a_p,
+    a_floor,
+)
+    q_pos = max(zero(q), q)
+    β_p > zero(β_p) ||
+        return _1m_terminal_velocity(
+            microphysics_model,
+            vel_mode,
+            χ_name,
+            params,
+            ρ,
+            q_pos,
+        )
+    one_a = one(a_floor)
+    a_s = clamp(max(a_p, a_floor), eps(typeof(a_floor)), one_a)
+    φ_out = one(β_p) - β_p
+    φ_in = φ_out + β_p / a_s
+    w_in = _1m_terminal_velocity(
+        microphysics_model,
+        vel_mode,
+        χ_name,
+        params,
+        ρ,
+        φ_in * q_pos,
+    )
+    w_out = _1m_terminal_velocity(
+        microphysics_model,
+        vel_mode,
+        χ_name,
+        params,
+        ρ,
+        φ_out * q_pos,
+    )
+    return a_s * φ_in * w_in + (one_a - a_s) * φ_out * w_out
+end
+
+"""
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Update the grid-mean precipitation terminal velocities and cloud sedimentation
@@ -130,24 +230,18 @@ function set_precipitation_velocities!(
     (; ᶜΦ) = p.core
     atmos = p.atmos
     params = p.params
-    cmc = CAP.microphysics_cloud_params(params)
-    cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
 
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
     @. ᶜρwₕhₜ = 0
 
-    terminal_velocity_function(name, ρ, q) = terminal_velocity(
-        microphysics_model,
-        velocity_mode(atmos, name),
-        name,
-        params,
-        cmc,
-        cmp,
-        ρ,
-        q,
-    )
+    FT = eltype(params)
+    β_p = FT(CAP.sgs_precip_incloud_fraction(params))
+    a_floor = FT(CAP.sgs_precip_fraction_floor(params))
+    use_shaft_vel =
+        (β_p > zero(FT)) &&
+        MatrixFields.has_field(p.precomputed, @name(ᶜprecip_frac))
 
     microphysics_tracers = (
         (@name(q_lcl), @name(ᶜwₗ)),
@@ -159,10 +253,33 @@ function set_precipitation_velocities!(
         MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)) || return
 
         e_int_func = internal_energy_func(χ_name)
+        vel_mode = velocity_mode(atmos, χ_name)
 
         ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-        @. ᶜw = terminal_velocity_function(χ_name, Y.c.ρ, max(zero(Y.c.ρ), ᶜρχ / Y.c.ρ))
+        if use_shaft_vel && (χ_name === @name(q_rai) || χ_name === @name(q_sno))
+            ᶜprecip_frac = p.precomputed.ᶜprecip_frac
+            @. ᶜw = shaft_weighted_terminal_velocity(
+                microphysics_model,
+                vel_mode,
+                χ_name,
+                params,
+                Y.c.ρ,
+                ᶜρχ / Y.c.ρ,
+                β_p,
+                ᶜprecip_frac,
+                a_floor,
+            )
+        else
+            @. ᶜw = _1m_terminal_velocity(
+                microphysics_model,
+                vel_mode,
+                χ_name,
+                params,
+                Y.c.ρ,
+                max(zero(Y.c.ρ), ᶜρχ / Y.c.ρ),
+            )
+        end
 
         # The energy flux carries the same clamped mass as the sedimentation
         # flux in `implicit_vertical_advection_tendency!`, so a negative cell
@@ -193,21 +310,17 @@ function set_precipitation_velocities!(
     water = p.atmos.water
     params = p.params
 
-    cmc = CAP.microphysics_cloud_params(params)
-    cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
     draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
-    terminal_velocity_function(name, ρ, q) = terminal_velocity(
-        microphysics_model,
-        velocity_mode(water, name),
-        name,
-        params,
-        cmc,
-        cmp,
-        ρ,
-        q,
-    )
+    FT = eltype(params)
+    β_p = FT(CAP.sgs_precip_incloud_fraction(params))
+    a_floor = FT(CAP.sgs_precip_fraction_floor(params))
+    use_shaft_vel =
+        (β_p > zero(FT)) &&
+        MatrixFields.has_field(p.precomputed, @name(ᶜprecip_frac))
+    ᶜprecip_frac_or_dummy =
+        use_shaft_vel ? p.precomputed.ᶜprecip_frac : Y.c.ρ
 
     # Fuse the column loop across all 4 species and the final WVec outputs so
     # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
@@ -222,9 +335,11 @@ function set_precipitation_velocities!(
     )
     DataLayouts.foreach_column(
         ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
-        Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
+        Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+        ᶜu⁰, ᶜprecip_frac_or_dummy,
     ) do ᶜw_pairs, ᶜwₕhₜ,
-    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰
+    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ᶜu⁰, ᶜprecip_frac
         ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
@@ -241,6 +356,7 @@ function set_precipitation_velocities!(
         ) do ((χ_name, ρχ_name), (ᶜw, ᶜwʲs))
             @inline
             e_int_func = internal_energy_func(χ_name)
+            vel_mode = velocity_mode(water, χ_name)
             ᶜρχ_gs = MatrixFields.get_field(Yc, ρχ_name)
             ᶜχ⁰ = @. specific_env_value(
                 χ_name, ᶜρχ_gs, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
@@ -248,9 +364,31 @@ function set_precipitation_velocities!(
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
-            @. ᶜw =
-                ᶜρa⁰χ⁰ *
-                terminal_velocity_function(χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
+            if use_shaft_vel &&
+               (χ_name === @name(q_rai) || χ_name === @name(q_sno))
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ * shaft_weighted_terminal_velocity(
+                        microphysics_model,
+                        vel_mode,
+                        χ_name,
+                        params,
+                        ᶜρ⁰,
+                        ᶜχ⁰,
+                        β_p,
+                        ᶜprecip_frac,
+                        a_floor,
+                    )
+            else
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ * _1m_terminal_velocity(
+                        microphysics_model,
+                        vel_mode,
+                        χ_name,
+                        params,
+                        ᶜρ⁰,
+                        max(zero(Yc.ρ), ᶜχ⁰),
+                    )
+            end
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
             unrolled_foreach(draft_indices) do j
@@ -264,7 +402,14 @@ function set_precipitation_velocities!(
 
                 ᶜρaʲχʲ = @. max(zero(Yc.ρ), ᶜsgsʲ.ρa) * max(zero(Yc.ρ), ᶜχʲ)
                 @. ᶜρχ += ᶜρaʲχʲ
-                @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲ, max(zero(Yc.ρ), ᶜχʲ))
+                @. ᶜwʲ = _1m_terminal_velocity(
+                    microphysics_model,
+                    vel_mode,
+                    χ_name,
+                    params,
+                    ᶜρʲ,
+                    max(zero(Yc.ρ), ᶜχʲ),
+                )
                 @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
                 @. ᶜimplied_env_mass_flux -= ᶜρaʲχʲ * ᶜwʲ
                 @. ᶜρwₕhₜ +=
@@ -275,7 +420,7 @@ function set_precipitation_velocities!(
 
             @. ᶜw = gs_terminal_velocity(
                 microphysics_model,
-                velocity_mode(water, χ_name),
+                vel_mode,
                 χ_name,
                 params,
                 ᶜw,
@@ -295,6 +440,7 @@ function set_precipitation_velocities!(
 
         @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Yc.ρ
         return nothing
+    end
     end
     return nothing
 end

@@ -248,3 +248,36 @@ end
         @test CA.ClimaAtmosParameters(config) isa CAP.ClimaAtmosParameters
     end
 end
+
+@testset "Subgrid precipitation shaft velocity and shallow-support weight" begin
+    for FT in (Float32, Float64)
+        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        @test CAP.edmf_shallow_support_height_scale(sq) == zero(FT)
+
+        # Datum-shift invariance and asymptotic limits of `shallow_support_weight`.
+        @test CA.shallow_support_weight(FT(0.5), FT(4000), FT(500), zero(FT)) ==
+              FT(0.5)
+        @test CA.shallow_support_weight(FT(0.5), FT(500), FT(500), FT(2000)) ==
+              FT(0.5)
+        w_sea = CA.shallow_support_weight(FT(0.5), FT(1500), zero(FT), FT(2000))
+        w_mtn = CA.shallow_support_weight(FT(0.5), FT(3500), FT(2000), FT(2000))
+        @test w_sea ≈ w_mtn atol = eps(FT)
+        @test zero(FT) < w_sea < FT(0.5)
+
+        # Subgrid shaft terminal velocity limits and superlinear enhancement.
+        const_tv(_, ρ, q) = FT(5)
+        power_tv(_, ρ, q) = FT(20) * q^FT(0.25)
+        @test CA.shaft_weighted_terminal_velocity(
+            const_tv, :q_rai, FT(1), FT(1e-4), FT(0.75), FT(0.2), FT(0.1),
+        ) ≈ FT(5)
+        @test CA.shaft_weighted_terminal_velocity(
+            power_tv, :q_rai, FT(1), FT(1e-4), zero(FT), FT(0.2), FT(0.1),
+        ) == power_tv(:q_rai, FT(1), FT(1e-4))
+        @test CA.shaft_weighted_terminal_velocity(
+            power_tv, :q_rai, FT(1), FT(1e-4), FT(0.75), one(FT), FT(0.1),
+        ) ≈ power_tv(:q_rai, FT(1), FT(1e-4))
+        @test CA.shaft_weighted_terminal_velocity(
+            power_tv, :q_rai, FT(1), FT(1e-4), FT(0.75), FT(0.2), FT(0.1),
+        ) > power_tv(:q_rai, FT(1), FT(1e-4))
+    end
+end
