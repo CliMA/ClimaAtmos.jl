@@ -223,7 +223,9 @@ function set_precipitation_velocities!(
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
-            @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
+            @. ᶜw =
+                ᶜρa⁰χ⁰ *
+                terminal_velocity_function(χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
             unrolled_foreach(draft_indices) do j
@@ -239,9 +241,9 @@ function set_precipitation_velocities!(
                 @. ᶜρχ += ᶜρaʲχʲ
                 @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲ, max(zero(Yc.ρ), ᶜχʲ))
                 @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
-                @. ᶜimplied_env_mass_flux -= ᶜsgsʲ.ρa * ᶜχʲ * ᶜwʲ
+                @. ᶜimplied_env_mass_flux -= ᶜρaʲχʲ * ᶜwʲ
                 @. ᶜρwₕhₜ +=
-                    ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ *
+                    ᶜρaʲχʲ * ᶜwʲ *
                     (e_int_func(thp, ᶜTʲ) + ᶜΦ + $(Kin(ᶜwʲ, ᶜuʲ)))
                 return nothing
             end
@@ -254,7 +256,10 @@ function set_precipitation_velocities!(
                 ᶜw,
                 ᶜρχ,
             )
-            @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
+            @. ᶜimplied_env_mass_flux = max(
+                zero(Yc.ρ),
+                ᶜimplied_env_mass_flux + max(zero(Yc.ρ), ᶜρχ_gs) * ᶜw,
+            )
             @. ᶜρwₕhₜ +=
                 ᶜimplied_env_mass_flux *
                 (e_int_func(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜw, ᶜuvw⁰)))

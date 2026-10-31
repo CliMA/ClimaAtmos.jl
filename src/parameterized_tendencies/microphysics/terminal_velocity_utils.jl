@@ -48,8 +48,9 @@ struct Blk1MTerminalVelocity <: AbstractTerminalVelocityMode end
 Mass-weighted terminal velocity from the Chen et al. (2022) fall-speed relations of
 CloudMicrophysics, diagnosed from the local density and specific humidity: the
 small-ice relation for cloud ice, the rain relation for rain, and the large-ice
-relation for snow (integrated over the 1-moment snow size distribution). The snow
-particle fall speed depends on the snow apparent density (ClimaParams
+relation for snow (integrated over the 1-moment snow size distribution), with smooth
+asymptotic hydrodynamic breakup caps of `10 m/s` for rain and `3 m/s` for snow. The
+snow particle fall speed depends on the snow apparent density (ClimaParams
 `snow_apparent_density`).
 """
 struct Chen2022TerminalVelocity <: AbstractTerminalVelocityMode end
@@ -119,7 +120,12 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q)
+) = CMNe.terminal_velocity(
+    cmc.liquid,
+    cmc.stokes,
+    max(ρ, eps(typeof(ρ))),
+    q,
+)
 
 # Ice, 1M
 terminal_velocity(
@@ -139,7 +145,12 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
+) = CMNe.terminal_velocity(
+    cmc.ice,
+    cmc.Ch2022.small_ice,
+    max(ρ, eps(typeof(ρ))),
+    q,
+)
 
 # Rain, 1M
 terminal_velocity(
@@ -165,9 +176,14 @@ terminal_velocity(
 ) where {FT} = CM1.terminal_velocity(
     cmp.precip.rain,
     cmp.terminal_velocity.rain,
-    ρ,
+    max(ρ, eps(typeof(ρ))),
     max(q, FT(1e-8)),
 )
+
+# Hydrodynamic drop and aggregate breakup bounds mass-weighted terminal fall
+# speeds of 1-moment exponential size distributions at low upper-air density
+# or concentrated convective-shaft mixing ratios (Gunn & Kinzer 1949).
+@inline _bounded_fall_speed(w, w_max) = w / hypot(one(w), w / w_max)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -178,8 +194,15 @@ terminal_velocity(
     cmp,
     ρ,
     q::FT,
-) where {FT} =
-    CM1.terminal_velocity(cmp.precip.rain, cmc.Ch2022.rain, ρ, max(q, FT(1e-8)))
+) where {FT} = _bounded_fall_speed(
+    CM1.terminal_velocity(
+        cmp.precip.rain,
+        cmc.Ch2022.rain,
+        max(ρ, eps(typeof(ρ))),
+        max(q, FT(1e-8)),
+    ),
+    FT(10),
+)
 
 # Snow, 1M
 terminal_velocity(
@@ -199,7 +222,12 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q)
+) = CM1.terminal_velocity(
+    cmp.precip.snow,
+    cmp.terminal_velocity.snow,
+    max(ρ, eps(typeof(ρ))),
+    q,
+)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -209,8 +237,16 @@ terminal_velocity(
     cmc,
     cmp,
     ρ,
-    q,
-) = CM1.terminal_velocity(cmp.precip.snow, cmc.Ch2022.large_ice, ρ, q)
+    q::FT,
+) where {FT} = _bounded_fall_speed(
+    CM1.terminal_velocity(
+        cmp.precip.snow,
+        cmc.Ch2022.large_ice,
+        max(ρ, eps(typeof(ρ))),
+        max(q, zero(FT)),
+    ),
+    FT(3),
+)
 
 """
     gs_terminal_velocity(

@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Bound 1M `Chen2022` terminal fall
+  speeds smoothly at hydrodynamic breakup limits (`10 m/s` for rain, `3 m/s` for
+  snow) and enforce non-negative subdomain sedimentation fluxes in
+  `set_precipitation_velocities!` and `vertical_advection_of_water_tendency!` so
+  `ᶠtop_bias` stays upwind under `PrognosticEDMFX`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Pass in-cloud liquid specific
   humidity `q_liq / cf` [kg/kg] instead of column-integrated liquid water path
   [kg/m²] to `ml_N_cloud_liquid_droplets` in `update_cloud_properties!`, bound

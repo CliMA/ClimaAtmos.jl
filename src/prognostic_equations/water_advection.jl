@@ -107,6 +107,9 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+        FT = eltype(params)
+        ε_ρ = eps(FT)
+        zero_FT = zero(FT)
 
         # TODO the following code works for only one updraft
         sgs_microphysics_tracers = unrolled_filter(
@@ -136,11 +139,15 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
         ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
         ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
-            ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+            ᶜρ⁰ = @. max(
+                ε_ρ,
+                TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+            )
             ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
-            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            ᶜρaʲ_pos = @. max(zero_FT, ᶜρaʲ)
+            ᶜaʲ_pos = @. max(zero_FT, draft_area(ᶜρaʲ, ᶜρʲ))
             # The velocities are converted once for every species.
             ᶜuvw = @. Geometry.UVWVector(ᶜu)
             ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
@@ -150,6 +157,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ) do (q_name, (ᶜwʲ, ᶜw))
                 @inline
                 ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
+                ᶜqʲ_pos = @. max(zero_FT, ᶜqʲ)
                 ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
                 e_int_func = internal_energy_func(get_ρχ_name(q_name))
                 # Grid-mean specific energy carried by the sedimentation flux
@@ -159,7 +167,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
                 ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(ᶠ∂ξ³∂x³ * (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ))),
+                    CT3(
+                        ᶠ∂ξ³∂x³ *
+                        (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ_pos * ᶜqʲ_pos * ᶜΔeʲ)),
+                    ),
                 )
                 # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
                 # environment sedimentation velocity is not stored separately
@@ -167,8 +178,13 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
                 # TODO: Update for when updraft area fraction is not necessarily
                 # small
+                # A nonnegative floor keeps ᶠtop_bias upwind when
+                # ᶜρq * ᶜw < ρaʲ * ᶜqʲ * ᶜwʲ.
                 ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
-                ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
+                ᶜwaq⁰ = @. max(
+                    zero_FT,
+                    (max(zero_FT, ᶜρq) * ᶜw - ᶜρaʲ_pos * ᶜqʲ_pos * ᶜwʲ) / ᶜρ⁰,
+                )
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
                     CT3(ᶠ∂ξ³∂x³ * (ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰))),
                 )

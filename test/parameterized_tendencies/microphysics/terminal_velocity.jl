@@ -99,11 +99,14 @@ import ClimaCore.MatrixFields: @name
                         FT(q),
                     )
                     @test w(chen, @name(q_rai), ρ, q) ==
-                          CM1.terminal_velocity(
-                        cmp.precip.rain,
-                        cmc.Ch2022.rain,
-                        FT(ρ),
-                        FT(q),
+                          CA._bounded_fall_speed(
+                        CM1.terminal_velocity(
+                            cmp.precip.rain,
+                            cmc.Ch2022.rain,
+                            FT(ρ),
+                            FT(q),
+                        ),
+                        FT(10),
                     )
                     @test w(blk, @name(q_sno), ρ, q) == CM1.terminal_velocity(
                         cmp.precip.snow,
@@ -111,13 +114,20 @@ import ClimaCore.MatrixFields: @name
                         FT(ρ),
                         FT(q),
                     )
-                    @test w(chen, @name(q_sno), ρ, q) == CM1.terminal_velocity(
-                        cmp.precip.snow,
-                        cmc.Ch2022.large_ice,
-                        FT(ρ),
-                        FT(q),
+                    @test w(chen, @name(q_sno), ρ, q) ==
+                          CA._bounded_fall_speed(
+                        CM1.terminal_velocity(
+                            cmp.precip.snow,
+                            cmc.Ch2022.large_ice,
+                            FT(ρ),
+                            FT(q),
+                        ),
+                        FT(3),
                     )
                 end
+                @test zero(FT) < w(chen, @name(q_rai), 0.1, 0.05) < FT(10)
+                @test zero(FT) < w(chen, @name(q_sno), 0.1, 0.05) < FT(3)
+                @test w(chen, @name(q_sno), 1.0, -1e-5) == zero(FT)
             end
         end
     end
