@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Default `cloud_liquid_formation` to
+  `ImplicitCloudLiquidFormation`, `update_cache_every` to `stage`, and
+  `rain_terminal_velocity` to `Chen2022` in `default_config.yml`,
+  `NonEquilibriumMicrophysics1M()`, and `AtmosWater()`, set
+  `condensation_evaporation_timescale = 10` and recalibrated 1M EDMFX parameters
+  for implicit condensation and `Chen2022` rain and snow sedimentation in
+  `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`,
+  and set `z_elem = 79, dz_bottom = 28.0` in `amip_target.yml` (with
+  `dt = "120secs"`) and `longrun_aquaplanet_allsky_progedmf_1M.yml`.
 - ![][badge-✨feature/enhancement] Modulate the liquid-cloud shortwave subgrid
   effective-thickness exponent in high-EIS boundary-layer regimes by Wood and
   Bretherton (2006) Estimated Inversion Strength (`cloud_inhomogeneity_eis_coeff`,

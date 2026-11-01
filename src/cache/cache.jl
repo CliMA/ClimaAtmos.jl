@@ -178,7 +178,7 @@ function build_cache(
     start_date,
     steady_state_velocity;
     ode_algo = nothing,
-    update_cache_every = "step",
+    update_cache_every = "stage",
 )
     FT = eltype(params)
     dt = FT(dt)

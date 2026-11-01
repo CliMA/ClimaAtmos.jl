@@ -177,15 +177,241 @@ the evaluator.
     # Shaft threshold on the centred excess: the moistest `a_p` of the PDF,
     # with `a_p` bounded below by `precip_frac_floor`.
     a_p = max(FT(precip_frac), FT(precip_frac_floor))
-    S_star = sgs_precip_shaft_threshold(a_p, FT(σ_S))
+    σ_S_ft = FT(σ_S)
+    S_star = sgs_precip_shaft_threshold(a_p, σ_S_ft)
+    β_p = FT(β_precip)
+    λ_eq_ft = FT(λ_eq)
+    mu_S_ft = FT(mu_S)
+    λ_ft = FT(λ)
+    ξ_liq_ft = FT(ξ_liq)
+    ξ_ice_ft = FT(ξ_ice)
     return _sum_over_conditional_sgs(
         (λ_scaled, α_scaled, shaft_frac) -> LiquidCondensationEvaluator(
-            mp, thp, ρ, λ_scaled, λ_eq, mu_S, α_scaled,
-            λ, ξ_liq, ξ_ice, q_lcl_nn, q_icl_nn, q_rai_nn, q_sno_nn,
-            FT(β_precip), shaft_frac,
+            mp, thp, ρ, λ_scaled, λ_eq_ft, mu_S_ft, α_scaled,
+            λ_ft, ξ_liq_ft, ξ_ice_ft, q_lcl_nn, q_icl_nn, q_rai_nn, q_sno_nn,
+            β_p, shaft_frac,
         ),
-        thp, ρ, T, mu_S, σ_S, λ_lagrange, λ_eq, α, q_lcl_nn + q_icl_nn,
-        T′T′, q′q′, corr_Tq, FT(β_precip), S_star, sgs_quad,
+        thp, ρ, T, mu_S_ft, σ_S_ft, FT(λ_lagrange), λ_eq_ft, FT(α),
+        q_lcl_nn + q_icl_nn, T′T′, q′q′, corr_Tq, β_p, S_star, sgs_quad,
+    )
+end
+
+"""
+    _sum_cond_over_sgs(
+        mp, thp, sgs_quad, ρ, T, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, sgs_moments, α, precip_frac,
+        opts::SGSMicrophysicsOptions,
+    )
+
+Packed form of `_sum_cond_over_sgs`: computes `λ` and `mu_S` from the mean
+state and forwards `sgs_moments` and `opts` to the positional form so the
+tendency broadcast stays within Julia's specialized `Broadcast._getindex`
+argument limit.
+"""
+@inline function _sum_cond_over_sgs(
+    mp,
+    thp,
+    sgs_quad,
+    ρ,
+    T,
+    q_tot_nonneg,
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+    T′T′,
+    q′q′,
+    corr_Tq,
+    sgs_moments,
+    α,
+    precip_frac,
+    opts::SGSMicrophysicsOptions,
+)
+    FT = typeof(ρ)
+    λ = TD.liquid_fraction(thp, T, max(q_lcl, zero(FT)), max(q_icl, zero(FT)))
+    # `mu_S = q_tot − q_sat(T, ρ)` centres the SGS `S′` perturbation.
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ)
+    return _sum_cond_over_sgs(
+        mp,
+        thp,
+        ρ,
+        T,
+        q_lcl,
+        q_icl,
+        q_rai,
+        q_sno,
+        T′T′,
+        q′q′,
+        corr_Tq,
+        sgs_moments.λ_lagrange,
+        sgs_moments.λ_eq,
+        mu_S,
+        sgs_moments.sigma_S,
+        α,
+        λ,
+        opts.ξ_liq,
+        opts.ξ_ice,
+        opts.precip_incloud_fraction,
+        precip_frac,
+        opts.precip_frac_floor,
+        sgs_quad,
+    )
+end
+
+@inline function _grid_mean_sgs_cond_tendency(
+    mp,
+    thp,
+    sgs_quad,
+    opts::SGSMicrophysicsOptions,
+    ρ,
+    T,
+    q_tot_nonneg,
+    ρq_lcl,
+    ρq_icl,
+    ρq_rai,
+    ρq_sno,
+    T′T′,
+    q′q′,
+    corr_Tq,
+    sgs_moments,
+    α,
+    precip_frac,
+)
+    return ρ * _sum_cond_over_sgs(
+        mp,
+        thp,
+        sgs_quad,
+        ρ,
+        T,
+        q_tot_nonneg,
+        specific(ρq_lcl, ρ),
+        specific(ρq_icl, ρ),
+        specific(ρq_rai, ρ),
+        specific(ρq_sno, ρ),
+        T′T′,
+        q′q′,
+        corr_Tq,
+        sgs_moments,
+        α,
+        precip_frac,
+        opts,
+    )
+end
+
+@inline function _env_tracers_for_cond(
+    ρ,
+    ρa_env,
+    sgsʲs,
+    ρq_lcl,
+    ρq_icl,
+    ρq_rai,
+    ρq_sno,
+    turbconv_model,
+)
+    q_lcl⁰ = specific(
+        env_value(ρq_lcl, sgsʲ -> sgsʲ.ρa * sgsʲ.q_lcl, sgsʲs),
+        ρa_env,
+        ρq_lcl,
+        ρ,
+        turbconv_model,
+    )
+    q_icl⁰ = specific(
+        env_value(ρq_icl, sgsʲ -> sgsʲ.ρa * sgsʲ.q_icl, sgsʲs),
+        ρa_env,
+        ρq_icl,
+        ρ,
+        turbconv_model,
+    )
+    q_rai⁰ = specific(
+        env_value(ρq_rai, sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, sgsʲs),
+        ρa_env,
+        ρq_rai,
+        ρ,
+        turbconv_model,
+    )
+    q_sno⁰ = specific(
+        env_value(ρq_sno, sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, sgsʲs),
+        ρa_env,
+        ρq_sno,
+        ρ,
+        turbconv_model,
+    )
+    return (q_lcl⁰, q_icl⁰, q_rai⁰, q_sno⁰)
+end
+
+@inline function _env_point_cond_tendency(
+    mp,
+    thp,
+    turbconv_model,
+    ρ,
+    sgsʲs,
+    p_air,
+    T⁰,
+    q_tot_nonneg⁰,
+    q_liq⁰,
+    q_ice⁰,
+    ρq_lcl,
+    ρq_icl,
+    ρq_rai,
+    ρq_sno,
+)
+    ρa_env = ρa⁰(ρ, sgsʲs, turbconv_model)
+    ρ⁰ = TD.air_density(thp, T⁰, p_air, q_tot_nonneg⁰, q_liq⁰, q_ice⁰)
+    q_lcl⁰, q_icl⁰, q_rai⁰, q_sno⁰ = _env_tracers_for_cond(
+        ρ, ρa_env, sgsʲs, ρq_lcl, ρq_icl, ρq_rai, ρq_sno, turbconv_model,
+    )
+    return ρa_env * _cm_condensation_rate(
+        mp, thp, ρ⁰, T⁰, q_tot_nonneg⁰, q_lcl⁰, q_icl⁰, q_rai⁰, q_sno⁰,
+    )
+end
+
+@inline function _env_sgs_cond_tendency(
+    mp,
+    thp,
+    sgs_quad,
+    turbconv_model,
+    opts::SGSMicrophysicsOptions,
+    ρ,
+    sgsʲs,
+    p_air,
+    T⁰,
+    q_tot_nonneg⁰,
+    q_liq⁰,
+    q_ice⁰,
+    ρq_lcl,
+    ρq_icl,
+    ρq_rai,
+    ρq_sno,
+    T′T′,
+    q′q′,
+    corr_Tq,
+    sgs_moments,
+    α,
+    precip_frac,
+)
+    ρa_env = ρa⁰(ρ, sgsʲs, turbconv_model)
+    ρ⁰ = TD.air_density(thp, T⁰, p_air, q_tot_nonneg⁰, q_liq⁰, q_ice⁰)
+    q_lcl⁰, q_icl⁰, q_rai⁰, q_sno⁰ = _env_tracers_for_cond(
+        ρ, ρa_env, sgsʲs, ρq_lcl, ρq_icl, ρq_rai, ρq_sno, turbconv_model,
+    )
+    return ρa_env * _sum_cond_over_sgs(
+        mp,
+        thp,
+        sgs_quad,
+        ρ⁰,
+        T⁰,
+        q_tot_nonneg⁰,
+        q_lcl⁰,
+        q_icl⁰,
+        q_rai⁰,
+        q_sno⁰,
+        T′T′,
+        q′q′,
+        corr_Tq,
+        sgs_moments,
+        α,
+        precip_frac,
+        opts,
     )
 end
 
@@ -216,13 +442,12 @@ function _add_implicit_lcl_condensation_grid_mean!(
     thp = CAP.thermodynamics_params(p.params)
     mp = CAP.microphysics_1m_implicit_params(p.params)
     sgs_quad = p.atmos.sgs_quadrature
-    FT = eltype(Y.c.ρ)
-    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
     if not_quadrature(sgs_quad)
         (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
+        ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+        ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
         @. Yₜ.c.ρq_lcl +=
             Y.c.ρ * _cm_condensation_rate(
                 mp, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
@@ -234,26 +459,11 @@ function _add_implicit_lcl_condensation_grid_mean!(
             ᶜprecip_frac,
         ) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        ᶜλ = @. lazy(
-            TD.liquid_fraction(
-                thp,
-                ᶜT,
-                max(ᶜq_lcl, zero(FT)),
-                max(ᶜq_icl, zero(FT)),
-            ),
+        @. Yₜ.c.ρq_lcl += _grid_mean_sgs_cond_tendency(
+            mp, thp, sgs_quad, opts, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
+            Y.c.ρq_lcl, Y.c.ρq_icl, Y.c.ρq_rai, Y.c.ρq_sno,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, ᶜprecip_frac,
         )
-        # `mu_S = q_tot − q_sat(T, ρ)` centres the SGS `S′` perturbation.
-        ᶜmu_S = @. lazy(ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ))
-        @. Yₜ.c.ρq_lcl +=
-            Y.c.ρ * _sum_cond_over_sgs(
-                mp, thp, Y.c.ρ, ᶜT,
-                ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
-                ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.λ_eq, ᶜmu_S,
-                ᶜsgs_moments.sigma_S, ᶜα, ᶜλ, opts.ξ_liq, opts.ξ_ice,
-                opts.precip_incloud_fraction, ᶜprecip_frac,
-                opts.precip_frac_floor, sgs_quad,
-            )
     end
     return nothing
 end
@@ -305,46 +515,24 @@ function _add_implicit_lcl_condensation_prognostic_edmfx!(
     thp = CAP.thermodynamics_params(p.params)
     mp = CAP.microphysics_1m_implicit_params(p.params)
     sgs_quad = p.atmos.sgs_quadrature
-    FT = eltype(Y.c.ρ)
 
     # Env contribution to grid-mean `ρq_lcl`.
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
-    )
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     if not_quadrature(sgs_quad)
-        @. Yₜ.c.ρq_lcl +=
-            ᶜρa⁰ * _cm_condensation_rate(
-                mp, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-                ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            )
+        @. Yₜ.c.ρq_lcl += _env_point_cond_tendency(
+            mp, thp, turbconv_model, Y.c.ρ, Y.c.sgsʲs,
+            ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            Y.c.ρq_lcl, Y.c.ρq_icl, Y.c.ρq_rai, Y.c.ρq_sno,
+        )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
             p.precomputed
         opts = sgs_microphysics_options(p.params)
-        ᶜλ⁰ = @. lazy(
-            TD.liquid_fraction(
-                thp,
-                ᶜT⁰,
-                max(ᶜq_lcl⁰, zero(FT)),
-                max(ᶜq_icl⁰, zero(FT)),
-            ),
+        @. Yₜ.c.ρq_lcl += _env_sgs_cond_tendency(
+            mp, thp, sgs_quad, turbconv_model, opts, Y.c.ρ, Y.c.sgsʲs,
+            ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            Y.c.ρq_lcl, Y.c.ρq_icl, Y.c.ρq_rai, Y.c.ρq_sno,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, ᶜprecip_frac,
         )
-        ᶜmu_S⁰ = @. lazy(ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰))
-        @. Yₜ.c.ρq_lcl +=
-            ᶜρa⁰ * _sum_cond_over_sgs(
-                mp, thp, ᶜρ⁰, ᶜT⁰,
-                ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
-                ᶜsgs_moments.λ_lagrange, ᶜsgs_moments.λ_eq, ᶜmu_S⁰,
-                ᶜsgs_moments.sigma_S, ᶜα, ᶜλ⁰, opts.ξ_liq, opts.ξ_ice,
-                opts.precip_incloud_fraction, ᶜprecip_frac,
-                opts.precip_frac_floor, sgs_quad,
-            )
     end
 
     # Updrafts: single-point (no SGS distribution). Tracers are clipped inside
