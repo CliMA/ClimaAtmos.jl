@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] With
+  `ImplicitCloudLiquidFormation` and `PrognosticEDMFX`, set the grid-mean
+  `ρq_lcl` of the Newton initial guess so that the environment cloud liquid
+  keeps its stage-initial value (`warm_start_grid_mean_cloud_liquid!`), and
+  use the backward-Euler increment `dtγ / (1 + dtγ / τ)` for the draft
+  condensation in the implicit-stage predictor. The draft cloud liquid then
+  passes `enforce_edmf_updraft_constraints!` unclipped after one Newton
+  iteration, which strengthens cumulus and deep convection.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] ERA5 forcing files take the
   sign of the horizontal advective tendencies from the coordinate order of the
   raw input. Raw CDS ERA5 latitude descends, so the meridional advection of

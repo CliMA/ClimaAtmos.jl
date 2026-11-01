@@ -2064,15 +2064,24 @@ end
     update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
 
 Add `−dtγ / τ_cond` to the `(ρq_lcl, ρq_lcl)` and each
-`(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)` diagonal, approximating
-`∂S_cond/∂q_lcl` with CM's latent-heat feedback factored out. This value
-is exact for the `q_lcl`-limited evaporation sub-branch (where
-`S = −q_lcl/τ`), exact for the updraft when `T` is diagnosed from `mse`
-at fixed `p` (so `Γ_cp` in the rate exactly cancels the T-feedback
-`dT/dq_lcl = L_v/c_p`), and an `O(Γ_e_v / Γ_cp)` approximation
-(≈ 1 within ~20%) for the grid-mean / env condensation / vapor-limited
-evaporation sub-branches at fixed `ρe_tot`. No `ρe_tot` cross-term
-under 1M.
+`(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)` diagonal. CM's rate falls by
+`Δq_lcl / τ_cond` as `q_lcl` rises at fixed `q_tot`: through the vapor deficit
+and the latent-heat factor `Γ` on the condensation and vapor-limited
+evaporation branches, and directly on the `q_lcl`-limited evaporation branch.
+At `q_lcl = 0` in subsaturated air, it is the derivative for liquid that
+arrives by transport and evaporates. The value is exact for the draft, where
+`T` follows from `mse` at fixed `p`, and an `O(Γ_e_v / Γ_cp)` approximation
+(≈ 1 within ~20%) for the grid mean and environment at fixed `ρe_tot`. The
+rate has zero derivative where the homogeneous limiter suppresses
+condensation (supersaturated air below `T_hom`); the diagonal ignores this.
+
+With `PrognosticEDMFX`, the grid-mean source `ρa⁰ S⁰ + Σⱼ ρaʲ Sʲ`, with
+`q_lcl⁰ = (ρq_lcl − Σⱼ ρaʲ q_lclʲ) / ρa⁰`, has `∂/∂q_lclʲ = ρaʲ (k⁰ − kʲ)`
+for the rates `k = −∂S/∂q_lcl` of the environment and draft. Both are
+`1 / τ_cond`, so the `(ρq_lcl, q_lclʲ)` derivative vanishes and a residual
+of the draft source alone gives `Δρq_lcl = Σⱼ ρaʲ Δq_lclʲ`, which keeps
+`q_lcl⁰`. This holds at a guess whose `q_lcl⁰` is nonnegative
+(`warm_start_grid_mean_cloud_liquid!`). No `ρe_tot` cross-term under 1M.
 """
 function update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
     MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
