@@ -1,6 +1,6 @@
 # Software Design Patterns (SDPs)
 
-This file is an agent-facing checklist for writing robust, maintainable, and GPU-compatible Julia code.
+This file is an agent-facing checklist for writing correct, maintainable, and GPU-compatible Julia code.
 
 Unless explicitly instructed otherwise, treat all rules below as defaults.
 
@@ -73,11 +73,11 @@ end
 end
 ```
 
-Prefer explicit qualification (`Foo.baz()` at the call site) or follow whatever module-wiring convention the package already uses. The goal is to keep include/initialization order auditable and prevent accidental cycles between submodules.
+Prefer explicit qualification (`Foo.baz()` at the call site) or follow the package's existing module convention. This keeps include and initialization order auditable and prevents cycles between submodules.
 
 ## 3. Do not use `Symbol`s in broadcasted expressions
 
-Avoid symbol-based broadcast patterns. Use concrete, type-stable values/structures instead.
+Avoid symbol-based broadcast patterns. Use concrete, type-stable values or structs.
 
 ## 4. Do not use abstract types in struct fields
 
@@ -107,21 +107,14 @@ end
 
 ## 7. Define `isbits` structs when possible
 
-Anything passed into a GPU kernel must be `isbits` *after device adaptation*, not necessarily on the host. ClimaCore objects (e.g. `Field`, `Space`) are deliberately not `isbits` on the host and become `isbits` only after `Adapt.adapt(CUDA.KernelAdaptor(), x)` (i.e. `CUDA.cudaconvert(x)`).
+Anything passed into a GPU kernel must be `isbits` *after device adaptation*; ClimaCore objects such as `Field` and `Space` become `isbits` only after `CUDA.cudaconvert`. See [gpu_performance.md §8](../performance/gpu_performance.md) for the contract and for what to fix when the check fails.
 
-For a new struct that does not wrap device-resident arrays, the host-side check suffices:
-
-```julia
-isbits(A(...))
-```
-
-For a struct that *does* wrap a `Field`, `CuArray`, or similar, the meaningful check is the post-adapt one (see [gpu_performance.md §8](../performance/gpu_performance.md)):
+For a struct that does not wrap device-resident arrays, the host-side check suffices; for one that wraps a `Field`, `CuArray`, or similar, use the post-adapt check and define `Adapt.adapt_structure` so the adapted object is `isbits`:
 
 ```julia
-isbits(CUDA.cudaconvert(A(...)))
+isbits(A(...))                      # no device-resident arrays
+isbits(CUDA.cudaconvert(A(...)))    # wraps a Field / CuArray
 ```
-
-In the wrapping case, also define `Adapt.adapt_structure` so the post-adapt object actually becomes `isbits`.
 
 ## 8. Prefer immutable structs
 
@@ -134,11 +127,11 @@ For fixed-size data, use stack-friendly/static representations.
 ## 10. Reduce allocations
 
 - Avoid explicit allocators like `collect` and `reshape` in performance-sensitive paths.
-- Prefer allocation-light transforms (for example, `map`) instead of manual accumulate patterns that create temporary arrays.
+- Prefer `map` over a `Tuple` or `SVector` (SDP 23) to accumulation patterns that create temporary arrays.
 
 ## 11. Do not use `@assert` within kernels
 
-Use `error("static message")` instead. Do not capture runtime variables in the error string within a kernel: string interpolation allocates and, on GPU, typically fails to compile because the device runtime lacks the full `print_to_string` machinery.
+Use `error("static message")` instead. Do not capture runtime variables in the error string within a kernel: string interpolation allocates and, on GPU, fails to compile because the device runtime lacks the `print_to_string` machinery.
 
 Bad:
 
@@ -158,11 +151,11 @@ Follow project conventions that avoid `@views`.
 
 ## 13. Do not use `Dict` in kernels
 
-`Dict` is not allowed in CPU/GPU kernels. Replace with custom structs or `NamedTuple`s.
+Replace `Dict` in CPU/GPU kernels with custom structs or `NamedTuple`s.
 
 ## 14. Duck-type physics functions; avoid explicit `where {FT}` on non-constructors
 
-This rule is strongest for model-side, tendency, and AD-traversed code: prefer `function f(x, y)` over `function f(x::FT, y::FT) where {FT}`. The `where {FT}` form binds every annotated argument to the *same* concrete element type, which rejects mixed-AD calls (e.g. `f(Dual(1.0), 2.0)`) and rejects `ClimaCore.Field`s whose `eltype`s differ from each other or from a `Float`. Duck typing lets each argument carry its own type and lets AD flow through naturally.
+This rule is strongest for model-side, tendency, and AD-traversed code: prefer `function f(x, y)` over `function f(x::FT, y::FT) where {FT}`. The `where {FT}` form binds every annotated argument to the *same* type, so it rejects mixed-AD calls (e.g. `f(Dual(1.0), 2.0)`) and `ClimaCore.Field`s whose `eltype`s differ. See [ad_compatibility.md](../performance/ad_compatibility.md) for the rationale and the AD-side examples.
 
 Exceptions:
 
@@ -212,7 +205,7 @@ end
 
 ## 16. Use `zero(x)` / `one(x)` over `FT(0)` / `FT(1)` for accumulators
 
-Type-agnostic idioms propagate numeric type (including Dual numbers) without an explicit conversion. Use `FT(constant)` only for named constants that must be a specific type.
+Type-agnostic idioms propagate the numeric type, including Dual numbers. Use `FT(constant)` only for named constants that must be a specific type.
 
 Bad:
 
@@ -230,11 +223,11 @@ acc = zero(x)
 
 A data-dependent `if/else` in a GPU kernel causes warp divergence; `ifelse(cond, a, b)` computes branchlessly. Both arguments are always evaluated, so guard mathematically invalid operations (`log`, `sqrt`, division) *before* the `ifelse`, not inside a `begin...end` block inside it.
 
-For the full explanation (SIMT semantics, why `ifelse` does not skip work, and the worked `log(x)` example), see [GPU Performance Guide §1](../performance/gpu_performance.md). For the broader branch-avoidance discipline (including evaluating both arms of a physical case split and combining pointwise conditions with `&`/`|` rather than `&&`/`||`), see the [Branchless Code Guide](../performance/branchless_code.md). For choosing the right floor in the pre-guard, see [Numerical Robustness §1–2](../performance/numerical_robustness.md).
+For the SIMT semantics, why `ifelse` does not skip work, and the worked `log(x)` example, see [GPU Performance Guide §1](../performance/gpu_performance.md). For the broader branch-avoidance discipline (evaluating both arms of a physical case split, combining pointwise conditions with `&`/`|` rather than `&&`/`||`), see the [Branchless Code Guide](../performance/branchless_code.md). For choosing the floor in the pre-guard, see [Numerical Robustness §1–2](../performance/numerical_robustness.md).
 
 ## 18. Prefer functors over closures in broadcast or high-loop contexts
 
-Closures that capture multiple local variables produce heap allocations and may fail to compile on GPU (`InvalidIRError: unsupported dynamic function invocation`). Encapsulate context in a concrete callable struct (functor) instead.
+Closures that capture multiple local variables produce heap allocations and may fail to compile on GPU (`InvalidIRError: unsupported dynamic function invocation`). Encapsulate context in a concrete callable struct (functor).
 
 Bad:
 
@@ -259,13 +252,13 @@ Validation: `@allocated integrate(PhysicsEval(params, state), data)` should be 0
 
 ## 19. Prefer fixed iteration counts in iterative solvers inside GPU kernels
 
-Convergence-based loops (`while err > tol`, or `for ...; converged && break; end`) cause thread divergence when different threads converge at different rates: the warp runs until the slowest point finishes, and the early-exit `break` is itself a data-dependent branch. Where the physics allows it, prefer a fixed number of iterations so all threads in a warp follow the same execution path.
+Convergence-based loops (`while err > tol`, or `for ...; converged && break; end`) cause thread divergence when different threads converge at different rates: the warp runs until the slowest point finishes, and the early-exit `break` is itself a data-dependent branch. Where the physics allows it, use a fixed number of iterations.
 
-Fix the count by *physical adequacy* (e.g. temperature to ~0.1 K, not to `eps(FT)`), and determine it with an offline test that sweeps the full range of conditions a climate run can produce. The canonical example is `Thermodynamics.saturation_adjustment` (a fixed `maxiter = 2` Newton solve, no convergence flag). For the methodology, the offline-test checklist, and the worked example, see the [Branchless Code Guide §4–5](../performance/branchless_code.md).
+Choose the count by physical adequacy (e.g. temperature to ~0.1 K, not to `eps(FT)`) and validate it with an offline sweep of the conditions a climate run can produce; `Thermodynamics.saturation_adjustment` (a fixed `maxiter = 2` safeguarded Newton solve with no stopping test) is the canonical example. For the methodology, the offline-test checklist, and the worked example, see the [Branchless Code Guide §4–5](../performance/branchless_code.md).
 
 ## 20. Extract parameters and non-field scalars before `@.` blocks
 
-Capturing complex parameter structs or thermodynamic parameter containers directly inside a `@.` broadcast expression forces the broadcast engine to determine their broadcast shape at runtime. Extracting them to named local variables before the broadcast (a) makes the broadcast shape unambiguous to the compiler, (b) prevents potential shape-mismatch errors in ClimaCore's field-space broadcast engine, and (c) keeps the broadcast expression readable.
+Capturing a parameter struct or thermodynamic parameter container directly inside a `@.` broadcast expression forces the broadcast engine to determine its broadcast shape at runtime, and capturing the full `p.params` container can push a large struct into GPU kernel parameter memory and exceed hardware limits. Extracting the sub-struct to a named local variable before the broadcast makes the broadcast shape unambiguous to the compiler, prevents shape-mismatch errors in ClimaCore's field-space broadcast engine, keeps the kernel argument small, and keeps the broadcast expression readable.
 
 Bad:
 
@@ -280,7 +273,7 @@ thp = p.params.thermodynamics_params
 @. result = my_physics(thp, Y.c.T, Y.c.ρ)
 ```
 
-Note: `Ref()` is not the standard broadcast-escape pattern in this codebase. Its current use is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction.
+`Ref()` is not the broadcast-escape pattern in CliMA code; it appears only as a mutable scalar box in callbacks and other non-broadcast contexts. Extract parameters as above.
 
 ## 21. No keyword arguments inside GPU kernels
 
@@ -310,7 +303,7 @@ Prefer `@safetestset` over `@testset` + nested `include` so variables and import
 
 ## 23. Do not use list comprehensions
 
-Avoid list comprehensions like `[getproperty(dist, p) for p in params]` in hot paths or GPU code, as they explicitly allocate `Array`s on the heap.
+Avoid list comprehensions like `[getproperty(dist, p) for p in params]` in hot paths or GPU code: they allocate an `Array` on the heap.
 
 Use `map` over a `Tuple` or `SVector`, which returns a `Tuple` or `SVector` respectively without heap allocation. The rule is about the *input type*: `map` over a `Vector` / `Array` still allocates a new `Array`.
 
@@ -327,9 +320,9 @@ x = map(f, SVector(a, b, c))
 
 ## 24. Limit use of @generated functions
 
-Generated functions are versatile and helpful for debugging, but they have significantly higher compilation latencies than non-generated functions.
+Generated functions have much higher compilation latency than ordinary functions.
 
-To minimize compilation time, only use generated functions when absolutely necessary. This includes the following situations:
+To limit compilation time, use generated functions only when necessary, which includes the following situations:
 
 - Guaranteeing inlining or unrolling of code, to avoid compilation errors when the compiler fails to perform these optimizations.
 - Dynamically constructing a `String` inside a GPU kernel, which requires runtime allocations.
