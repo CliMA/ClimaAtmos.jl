@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Lower `zd_rayleigh` and `zd_viscous` to `30000.0` m
+  in `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
+  to damp upper-stratospheric topographic mountain waves on the 79-level grid.
 - ![][badge-🔥behavioralΔ] Default `cloud_liquid_formation` to
   `ImplicitCloudLiquidFormation`, `update_cache_every` to `stage`, and
   `rain_terminal_velocity` to `Chen2022` in `default_config.yml`,
