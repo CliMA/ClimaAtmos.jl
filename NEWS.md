@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add subsaturated-environment upper-tail
+  truncation (`env_equilibrium_condensate`, `_materialize_env_tail_partition!`,
+  `sgs_variance_fidelity`, `sgs_env_updraft_tail_truncation_coeff`),
+  moist-static-energy tail entrainment (`tail_entrainment_increments`,
+  `edmf_tail_entr_weight`), clear-environment updraft buoyancy reference density
+  (`ᶜupdraft_reference_density`, `edmf_buoyancy_clear_env_weight`), and
+  convective environment autoconversion velocity
+  (`env_detrained_condensate_fraction`,
+  `sgs_env_autoconversion_updraft_velocity_weight`,
+  `sgs_env_autoconversion_detrained_velocity`).
 - ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
   from `1` to `2` and the default `update_constrain_state_every` from `step`
   to `stage` in `config/default_configs/default_config.yml`, and the matching
