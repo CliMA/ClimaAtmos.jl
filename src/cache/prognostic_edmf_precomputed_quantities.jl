@@ -374,6 +374,51 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
 end
 
 """
+    ᶜupdraft_reference_density(Y, p)
+
+Lazy center field of the density to which updraft buoyancy is referenced.
+
+With `edmf_buoyancy_clear_env_weight = 0` (default) this is the grid-mean
+density `Y.c.ρ`. With weight `c_b ∈ (0, 1]`, a fraction `c_b` of the
+environment's cloud liquid is evaporated adiabatically before the density is
+evaluated: `T → T − c_b (L_v / c_pm) q_e`, `q_liq → q_liq − c_b q_e`, with
+`q_e = (ρq_lcl − Σⱼ ρaʲ q_lclʲ) / ρ ≥ 0` the environment cloud liquid per unit
+grid-mean mass and `q_tot` unchanged. In a cumulus regime the environment's
+subgrid condensation at cloud base warms the mean against which the updraft is
+compared; referencing buoyancy to the environment with that condensate
+evaporated preserves the updraft buoyancy relative to clear air. Ice is left in
+place; with `0M` or `2M` microphysics the weight is ignored.
+"""
+function ᶜupdraft_reference_density(Y, p)
+    (; microphysics_model, turbconv_model) = p.atmos
+    c_b = CAP.edmf_buoyancy_clear_env_weight(p.params)
+    (c_b > 0 && microphysics_model isa NonEquilibriumMicrophysics1M) ||
+        return Y.c.ρ
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜρq_e = p.scratch.ᶜtemp_scalar_9
+    @. ᶜρq_e = Y.c.ρq_lcl
+    for j in 1:n
+        @. ᶜρq_e -= max(0, Y.c.sgsʲs.:($$j).ρa) * max(0, Y.c.sgsʲs.:($$j).q_lcl)
+    end
+    L_v = TD.Parameters.LH_v0(thermo_params)
+    return @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT -
+            FT(c_b) * L_v * max(0, ᶜρq_e) / Y.c.ρ /
+            TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+            ᶜp,
+            ᶜq_tot_nonneg,
+            max(0, ᶜq_liq - FT(c_b) * max(0, ᶜρq_e) / Y.c.ρ),
+            ᶜq_ice,
+        ),
+    )
+end
+
+"""
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
 Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
@@ -439,6 +484,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
 
     entr_model = p.atmos.edmfx_model.entr_model
     zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
@@ -453,14 +499,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j), ᶜstrain_rate_norm,
             Y.c, Y.c.sgsʲs.:($j), ᶜz, z_sfc, ᶜp, ᶜρʲs.:($j), ᶜuʲs.:($j), ᶠu³, ᶜlg,
             ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
-            ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
+            ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref,
         ) do ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ,
         ᶜarea_bounding_entr_detrʲ, ᶜρ_diffʲ, ᶜstrain_rate_norm,
         Yc, ᶜsgsʲ, ᶜz, z_sfc, ᶜp, ᶜρʲ, ᶜuʲ, ᶠu³, ᶜlg, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
-        ᶜq_iceʲ, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
+        ᶜq_iceʲ, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref
             ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
-            ᶜbuoyʲ = @. vertical_buoyancy_acceleration(Yc.ρ, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
+            ᶜbuoyʲ = @. vertical_buoyancy_acceleration(ᶜρ_ref, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
             @. ᶜentr_vel_scaleʲ = entrainment_velocity_scale(
                 thermo_params,
                 turbconv_params,
@@ -505,7 +551,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 
-            @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
+            @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ_ref) / ᶜρʲ
 
             if j == 1
                 set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)

@@ -689,11 +689,14 @@ condensate detrained from updrafts into subsaturated air, is normalized by
 subsaturation deficit ``\delta_{\mathrm{sub}} = \max(0, -\mu_S)`` of the
 cloud-available water (`_compute_cloud_fraction`), because filling the clear
 fraction at mean deficit ``\delta_{\mathrm{sub}}`` takes condensate of that
-order. Subsaturated air with detrained or residual condensate therefore stays
-patchy, and quiescent saturated decks become overcast. Microphysical rates are
-evaluated at each node and aggregated linearly, which preserves total water
-and total energy at the subdomain level because the bulk rates preserve them
-pointwise.
+order. Under `PrognosticEDMFX`, the upper tail of the subsaturated
+environment's saturation-excess distribution occupied by mass-flux updrafts can
+also be truncated at quantile ``c_{\mathrm{hi}} \le c``
+(`env_equilibrium_condensate`). Subsaturated air with detrained or residual
+condensate therefore stays patchy, and quiescent saturated decks become
+overcast. Microphysical rates are evaluated at each node and aggregated
+linearly, which preserves total water and total energy at the subdomain level
+because the bulk rates preserve them pointwise.
 
 The one-moment microphysics nodes are placed from the conditional moments of
 the Gaussian. Every quantity the one-moment evaluator reads at a node is a
