@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] ERA5 forcing files take the
+  sign of the horizontal advective tendencies from the coordinate order of the
+  raw input. Raw CDS ERA5 latitude descends, so the meridional advection of
+  temperature and humidity in previously generated `ReanalysisTimeVarying` and
+  `ReanalysisMonthlyAveragedDiurnal` forcing files had the wrong sign; regenerate
+  them.
 
 0.42.17
 -------
