@@ -1,8 +1,0 @@
-dt: 120secs
-surface_setup: DefaultMoninObukhov
-rad: allskywithclear
-edmfx_sgs_diffusive_flux: true
-turbconv: edonly_edmfx
-microphysics_model: "0M"
-t_end: 3hours
-dt_save_state_to_disk: 600secs
