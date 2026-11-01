@@ -10,6 +10,7 @@ import Logging
     # These match the values from https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
     config = CA.AtmosConfig(
         Dict(
+            "z_stretch" => false,
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.1857,
             "hyperdiffusion_prandtl_number" => 0.2,
@@ -35,6 +36,7 @@ import Logging
     # Test that CAM_SE throws an error when user tries to set different coefficients
     config_wrong = CA.AtmosConfig(
         Dict(
+            "z_stretch" => false,
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.18571, # deliberately wrong value
             "hyperdiffusion_prandtl_number" => 0.2,
@@ -59,7 +61,11 @@ end
 
 @testset "Setup components applied to the model via get_atmos" begin
     config = CA.AtmosConfig(
-        Dict("config" => "column", "initial_condition" => "Bomex"),
+        Dict(
+            "config" => "column",
+            "z_stretch" => false,
+            "initial_condition" => "Bomex",
+        ),
         job_id = "test_setup_components_bomex",
     )
     params = CA.ClimaAtmosParameters(config)

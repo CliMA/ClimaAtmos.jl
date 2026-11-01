@@ -1,5 +1,6 @@
 z_max: 60000.0
 z_elem: 63
+z_stretch: true # numerics_sphere_he6ze10.yml, paired with it in CI, sets false
 dz_bottom: 30.0
 dt_save_state_to_disk: "5days"
 initial_condition: "IsothermalProfile"

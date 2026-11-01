@@ -8,6 +8,7 @@ include("../test_helpers.jl")
 function create_physical_constraints_config(job_id = "physical_constraints_test")
     config_dict = Dict(
         "config" => "column",
+        "z_stretch" => false,
         "initial_condition" => "DecayingProfile",
         "turbconv" => "prognostic_edmfx",
         "edmfx_filter" => true,
@@ -213,6 +214,7 @@ end
         # calling enforce_physical_constraints! does not modify Y.
         config_dict = Dict(
             "config" => "column",
+            "z_stretch" => false,
             "initial_condition" => "DecayingProfile",
             "microphysics_model" => "0M",
             "output_default_diagnostics" => false,

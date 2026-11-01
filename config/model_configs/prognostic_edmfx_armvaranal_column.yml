@@ -25,6 +25,7 @@ z_max: 15e3 # ARM VARANAL data extends to ~16 km (100 hPa).
 z_elem: 45
 z_stretch: true
 dz_bottom: 30
+dz_top: 1000 # 15 km domain; the 3000 m default puts 3 km layers aloft
 perturb_initstate: false
 dt: "120secs"
 dt_rad: "120mins"

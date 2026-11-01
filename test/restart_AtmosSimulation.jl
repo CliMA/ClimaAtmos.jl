@@ -88,9 +88,8 @@ function amip_target(context, output_dir)
     h_elem = 4
     z_elem = 15
     z_max = 60000.0
-    dz_bottom = 30.0
 
-    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
+    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, context)
 
     model = CA.AtmosModel(
         grid;
