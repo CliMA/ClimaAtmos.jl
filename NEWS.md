@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Lower `zd_rayleigh` and `zd_viscous` to `30000.0` m
+  in `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
+  to damp upper-stratospheric topographic mountain waves on the 79-level grid.
 - ![][badge-🔥behavioralΔ] Default `update_cache_every` to `stage` in
   `build_cache`, matching `default_config.yml`, set
   `condensation_evaporation_timescale = 10` and recalibrated 1M EDMFX parameters

@@ -304,8 +304,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     is the excess reconstruction; `1` treats the species uniform at every node [-].
   - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
     that is confined to the precipitation shaft of the SGS PDF
-    (`sgs_precip_shaft_threshold`) instead of being
-    spread over all nodes, in `[0, 1]`; default `1`; `0` is the uniform placement [-].
+    (`sgs_precip_shaft_threshold`, `sgs_placement_factor`), in `[0, 1]`; sets
+    both the in-shaft concentration that scales cloud–precipitation accretion
+    and the `1 − β_p` share exposed to clear-node evaporation; default `1`; `0`
+    is the uniform placement [-].
   - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
     maximum-random overlap recursion that diagnoses the precipitation fraction
     `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`

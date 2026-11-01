@@ -350,8 +350,11 @@ the rest stays uniform,
 
     φ = (1 − β) + β · flag / shaft_frac,
 
-so that the node mean of `φ` is 1 and the cell mean is conserved. `β = 0`
-returns exactly 1; `shaft_frac = 0` falls back to uniform.
+so that the node mean of `φ` is 1 and the cell mean is conserved. Where cloud
+fraction does not exceed `shaft_frac`, every cloudy node has `flag = 1`, so `φ`
+scales cloud–precipitation accretion (`∝ φ^{7/8}` for rain) inside the shaft
+while `1 − β` scales evaporation and sublimation on clear nodes. `β = 0`
+returns 1; `shaft_frac = 0` falls back to uniform.
 """
 @inline function sgs_placement_factor(β, flag, shaft_frac)
     FT = typeof(β)
