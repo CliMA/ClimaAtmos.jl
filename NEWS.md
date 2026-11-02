@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
+  (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
+  albedos `α_s` in `RegressionFunctionAlbedo`, as `α_s + (1 - α_s) R_sub`.
 - ![][badge-🔥behavioralΔ] The 1M rain and snow are placed on the precipitation
   shaft of the SGS distribution by default (`sgs_precip_incloud_fraction = 1`,
   `sgs_precip_fraction_floor = 0.1`; previously `0`, uniform, and `0.5`). Spread

@@ -639,6 +639,8 @@ accessors generated at the bottom of this module, e.g.
   - `idealized_ocean_albedo`: Ocean surface albedo for idealized simulations [-].
   - `water_refractive_index`: Refractive index of water relative to air, for the
     broadband ocean-albedo model [-].
+  - `ocean_subsurface_reflectance`: Subsurface volume reflectance of the ocean,
+    added to the broadband ocean-albedo model [-].
   - `constant_horizontal_diffusion_D`: Constant horizontal diffusivity [m²/s].
   - `T_min_sgs`: Lower temperature bound of the SGS quadrature [K].
   - `q_max_sgs`: Upper specific-humidity bound of the SGS quadrature [kg/kg].
@@ -723,6 +725,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
+    ocean_subsurface_reflectance::FT
     # Constant horizontal diffusion
     constant_horizontal_diffusion_D::FT
     # SGS quadrature bounds
