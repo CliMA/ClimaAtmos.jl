@@ -164,19 +164,30 @@ diagnosed environment specific humidities; with an equilibrium scheme,
 and `ᶜq_ice⁰`.
 """
 function ᶜenv_diffusing_water(Y, p)
-    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-        ᶜq_tot_eff⁰ = @. lazy(ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰)
-        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-        return (ᶜq_tot_eff⁰, ᶜq_lcl⁰, ᶜq_icl⁰)
-    else
-        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        return (ᶜspecific_env_value(@name(q_tot), Y, p), ᶜq_liq⁰, ᶜq_ice⁰)
-    end
+    (; turbconv_model, microphysics_model) = p.atmos
+    (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    nonequil_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
+    return env_diffusing_water(
+        Y.c, ᶜρa⁰, ᶜq_liq⁰, ᶜq_ice⁰, turbconv_model, nonequil_val,
+    )
 end
+
+# `ᶜenv_diffusing_water` of the grid-mean state `ᶜY`, a whole field or one
+# column of a fused loop, with the environment mass `ᶜρa⁰` and the cached
+# diagnostic `ᶜq_liq⁰` and `ᶜq_ice⁰`.
+@inline function env_diffusing_water(ᶜY, ᶜρa⁰, _, _, turbconv_model, ::Val{true})
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), ᶜY, ᶜρa⁰, turbconv_model)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), ᶜY, ᶜρa⁰, turbconv_model)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), ᶜY, ᶜρa⁰, turbconv_model)
+    return (
+        (@. lazy(ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰)),
+        ᶜspecific_env_value(@name(q_lcl), ᶜY, ᶜρa⁰, turbconv_model),
+        ᶜspecific_env_value(@name(q_icl), ᶜY, ᶜρa⁰, turbconv_model),
+    )
+end
+@inline env_diffusing_water(ᶜY, ᶜρa⁰, ᶜq_liq⁰, ᶜq_ice⁰, turbconv_model, ::Val{false}) =
+    (ᶜspecific_env_value(@name(q_tot), ᶜY, ᶜρa⁰, turbconv_model), ᶜq_liq⁰, ᶜq_ice⁰)
 
 """
     ᶜupdraft_diffusing_water(Y, p, ::Val{j})
@@ -216,28 +227,33 @@ non-diffusing precipitation replaced by that of dry air,
 written into `ᶜmse_eff` with non-equilibrium microphysics. With an equilibrium
 scheme, return `Y.c.sgsʲs.:(j).mse` itself.
 """
-function ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j}) where {j}
-    ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-        thermo_params = CAP.thermodynamics_params(p.params)
-        ᶜTʲ = p.precomputed.ᶜTʲs.:($j)
-        ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
-        ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
-        @. ᶜmse_eff =
-            ᶜmseʲ -
+ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j}) where {j} =
+    updraft_diffusing_mse!(
+        ᶜmse_eff,
+        Y.c.sgsʲs.:($j),
+        p.precomputed.ᶜTʲs.:($j),
+        CAP.thermodynamics_params(p.params),
+        Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics),
+    )
+
+# `ᶜupdraft_diffusing_mse!` of the updraft state `ᶜsgsʲ` at the temperature
+# `ᶜTʲ`, a whole field or one column of a fused loop (see `materialize_into!`).
+@inline updraft_diffusing_mse!(_, ᶜsgsʲ, _, _, ::Val{false}) = ᶜsgsʲ.mse
+@inline updraft_diffusing_mse!(ᶜmse_eff, ᶜsgsʲ, ᶜTʲ, thermo_params, ::Val{true}) =
+    materialize_into!(
+        ᶜmse_eff,
+        (@. lazy(
+            ᶜsgsʲ.mse -
             (
                 TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
                 TD.enthalpy_dry(thermo_params, ᶜTʲ)
-            ) * ᶜq_raiʲ -
+            ) * ᶜsgsʲ.q_rai -
             (
                 TD.enthalpy_ice(thermo_params, ᶜTʲ) -
                 TD.enthalpy_dry(thermo_params, ᶜTʲ)
-            ) * ᶜq_snoʲ
-        return ᶜmse_eff
-    else
-        return ᶜmseʲ
-    end
-end
+            ) * ᶜsgsʲ.q_sno,
+        )),
+    )
 
 """
     edmfx_diffused_scalars(Y)
@@ -351,190 +367,24 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    ϵ_FT = eps(FT)
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
-    apply_sgs_updraft =
-        turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.vertical_diffusion
-    updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
-    moist = !(p.atmos.microphysics_model isa DryModel)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux
 
-        (; ᶠK_h, ᶠK_u, ᶜl_mix) = p.precomputed
-        ᶜρ = Y.c.ρ
-        ᶠρK_h = p.scratch.ᶠtemp_scalar_3
-        @. ᶠρK_h = ᶠinterp(ᶜρ) * ᶠK_h
-
+        (; ᶠK_h, ᶠK_u) = p.precomputed
         if turbconv_model isa PrognosticEDMFX
-            (; ᶜT⁰, ᶜTʲs) = p.precomputed
-            ᶜρa⁰ = @. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv_model))
-            ᶠw⁰ = p.scratch.ᶠtemp_scalar
-            @. ᶠw⁰ = ᶠinterp(ᶜρa⁰) * ᶠK_h
-            ᶠwʲ = p.scratch.ᶠtemp_scalar_2
-            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜscratch = p.scratch.ᶜtemp_scalar_3
-            ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
-
-            # Environment: sensible heat, water enthalpy, and total water down
-            # their environmental gradients. The blend flag and its face
-            # fluxes are bound once here so that the closure over the
-            # environment scalars captures them unboxed; the scratch fields
-            # exist only with the 1M scheme.
-            ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
-            blend = blended_cloud_species_flux(Y, p)
-            ᶠF_qt⁰ = blend ? p.scratch.ᶠtemp_C3 : nothing
-            ᶠF_sl⁰ = blend ? p.scratch.ᶠtemp_C3_2 : nothing
-            add_sensible_heat_diffusionᵥ!(
-                Yₜ.c.ρe_tot,
-                ᶠw⁰,
-                ᶜT⁰,
-                ᶜq_water⁰,
+            edmfx_scalar_diffusion!(
+                Yₜ,
+                Y,
                 p,
-                ᶜscratch,
+                p.atmos.edmfx_model.vertical_diffusion,
+                CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params),
             )
-            if moist
-                add_water_enthalpy_diffusionᵥ!(
-                    Yₜ.c.ρe_tot,
-                    ᶠw⁰,
-                    ᶜT⁰,
-                    ᶜq_water⁰,
-                    p,
-                    ᶜscratch;
-                    ᶜq_scratch,
-                )
-                ᶜq_tot⁰ = maybe_materialize!(ᶜq_scratch, ᶜq_water⁰[1])
-                @. ᶜρχₜ_diffusion = -(ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))))
-                @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
-                @. Yₜ.c.ρ += ᶜρχₜ_diffusion
-                # Face fluxes of environment total water and liquid–ice static
-                # energy for the blended cloud-species flux
-                if blend
-                    @. ᶠF_qt⁰ = -(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))
-                    ᶠliquid_ice_static_energy_flux!(
-                        ᶠF_sl⁰,
-                        ᶠw⁰,
-                        ᶜT⁰,
-                        ᶜq_water⁰,
-                        p,
-                        ᶜscratch,
-                        ᶜq_scratch,
-                    )
-                end
-            end
-
-            # Environment: the other scalars down their environmental
-            # gradients, or their grid-mean gradients if the updrafts do not
-            # carry them; cloud liquid and ice take the blended flux of
-            # add_cloud_species_diffusionᵥ!, whose scratch fields exist only
-            # with the 1M scheme
-            ᶜblend_scratch =
-                blend ?
-                (
-                    p.scratch.ᶜtemp_scalar_8,
-                    p.scratch.ᶜtemp_scalar_9,
-                    p.scratch.ᶜtemp_scalar_10,
-                ) : nothing
-            MatrixFields.unrolled_foreach(
-                edmfx_diffused_scalars(Y),
-            ) do (χ_name, ρχ_name)
-                ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-                phase = cloud_species_phase(χ_name)
-                if blend && !isnothing(phase)
-                    ᶜχ⁰ = maybe_materialize!(
-                        ᶜq_scratch,
-                        ᶜspecific_env_value(χ_name, Y, p),
-                    )
-                    add_cloud_species_diffusionᵥ!(
-                        ᶜρχₜ,
-                        Y,
-                        p,
-                        ᶠw⁰,
-                        ᶠF_qt⁰,
-                        ᶠF_sl⁰,
-                        ᶜT⁰,
-                        ᶜq_water⁰,
-                        p.precomputed.ᶜsgs_moments,
-                        ᶜχ⁰,
-                        phase,
-                        ᶜblend_scratch,
-                    )
-                elseif MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name)
-                    ᶜχ⁰ = maybe_materialize!(
-                        ᶜq_scratch,
-                        ᶜspecific_env_value(χ_name, Y, p),
-                    )
-                    @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))
-                else
-                    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-                    @. ᶜρχₜ -=
-                        ᶜdiffdivᵥ(-(ᶠρK_h * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
-                end
-            end
-
-            # Updrafts: each scalar down its own gradient, with the extensive
-            # flux divergence added to the grid mean
-            if apply_sgs_updraft
-                for j in 1:n
-                    ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-                    ᶠupdraft_diffusion_weight!(
-                        ᶠwʲ,
-                        ᶜρaʲ,
-                        ᶠK_h,
-                        updraft_kh_factor,
-                    )
-                    ᶜinv_ρaʲ = @. lazy(1 / max(ᶜρaʲ, ϵ_FT))
-                    ᶜTʲ = ᶜTʲs.:($j)
-                    ᶜq_waterʲ =
-                        moist ? ᶜupdraft_diffusing_water(Y, p, Val(j)) : nothing
-                    add_sensible_heat_diffusionᵥ!(
-                        Yₜ.c.ρe_tot,
-                        ᶠwʲ,
-                        ᶜTʲ,
-                        ᶜq_waterʲ,
-                        p,
-                        ᶜscratch,
-                    )
-                    ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
-                    @. Yₜ.c.sgsʲs.:($$j).mse -=
-                        ᶜinv_ρaʲ * ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜmse_effʲ)))
-
-                    if moist
-                        add_water_enthalpy_diffusionᵥ!(
-                            Yₜ.c.ρe_tot,
-                            ᶠwʲ,
-                            ᶜTʲ,
-                            ᶜq_waterʲ,
-                            p,
-                            ᶜscratch;
-                            ᶜq_scratch,
-                        )
-                        ᶜq_totʲ = maybe_materialize!(ᶜq_scratch, ᶜq_waterʲ[1])
-                        @. ᶜρχₜ_diffusion =
-                            -(ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜq_totʲ))))
-                        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
-                        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
-                        @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
-                    end
-
-                    MatrixFields.unrolled_foreach(
-                        edmfx_diffused_scalars(Y),
-                    ) do (χ_name, ρχ_name)
-                        MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name) ||
-                            return
-                        ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                        ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-                        @. ᶜρχₜ_diffusion = -(ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜχʲ))))
-                        @. ᶜρχₜ += ᶜρχₜ_diffusion
-                        @. ᶜχʲₜ += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
-                    end
-                end
-            end
         else
+            ᶠρK_h = p.scratch.ᶠtemp_scalar_3
+            @. ᶠρK_h = ᶠinterp(Y.c.ρ) * ᶠK_h
             add_scalar_diffusionᵥ!(
                 Yₜ,
                 Y,
@@ -545,34 +395,208 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
         end
 
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠK_u
-
-        if use_prognostic_tke(turbconv_model)
-            (; ρtke_flux) = p.precomputed
-            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-            ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(ρtke_flux),
-            )
-            @. Yₜ.c.ρtke -=
-                ᶜdivᵥ_ρtke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke))) + ifelse(
-                    ᶜtke >= FT(0),
-                    tke_dissipation(
-                        turbconv_params,
-                        Y.c.ρtke,
-                        ᶜtke,
-                        ᶜl_mix,
-                    ),
-                    Y.c.ρtke / dt,
+        # TKE and momentum, in one fused column loop whose face weight `ρ K_u`
+        # is a register temporary
+        zero_FT = zero(FT)
+        tke_fields =
+            use_prognostic_tke(turbconv_model) ?
+            (p.precomputed.ᶜl_mix, p.precomputed.ρtke_flux) : ()
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶠK_u, ᶜu, tke_fields,
+        ) do Yₜc, Yc, ᶠK_u, ᶜu, tke_fields
+            ᶠρaK_u = @. ᶠinterp(Yc.ρ) * ᶠK_u
+            if !isempty(tke_fields)
+                (ᶜl_mix, ρtke_flux) = tke_fields
+                ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+                ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
+                    top = Operators.SetValue(C3(zero_FT)),
+                    bottom = Operators.SetValue(ρtke_flux),
                 )
+                @. Yₜc.ρtke -=
+                    ᶜdivᵥ_ρtke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke))) + ifelse(
+                        ᶜtke >= zero_FT,
+                        tke_dissipation(turbconv_params, Yc.ρtke, ᶜtke, ᶜl_mix),
+                        Yc.ρtke / dt,
+                    )
+            end
+            ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+            @. Yₜc.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Yc.ρ)
+            return nothing
         end
-
-        # Momentum diffusion
-        ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-        @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
 
+    return nothing
+end
+
+"""
+    edmfx_scalar_diffusion!(Yₜ, Y, p, apply_sgs_updraft, f_j)
+
+Add the vertical diffusive fluxes of `PrognosticEDMFX` for energy, total water,
+and the `edmfx_diffused_scalars` to `Yₜ`: the environment fluxes, then those of
+each updraft when `apply_sgs_updraft` (see `edmfx_sgs_diffusive_flux_tendency!`,
+with the updraft weight factor `f_j`). Every subdomain shares one fused column
+loop, whose face weights, diffusing water, moist static energy, and blended
+cloud-species fluxes are register temporaries rather than scratch fields. Each
+tendency is updated in the same order as in separate broadcasts, so the result
+does not depend on the fusion.
+"""
+function edmfx_scalar_diffusion!(Yₜ, Y, p, apply_sgs_updraft, f_j)
+    (; turbconv_model, microphysics_model) = p.atmos
+    ϵ_FT = eps(Spaces.undertype(axes(Y.c)))
+    moist = Val(!(microphysics_model isa DryModel))
+    nonequil_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶠK_h, ᶜT⁰, ᶜTʲs, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    # The blended cloud-species flux needs the closures of the 1M scheme.
+    blend = Val(blended_cloud_species_flux(Y, p))
+    blend_fields =
+        blend isa Val{true} ?
+        (p.precomputed.ᶜl_mix, p.precomputed.ᶜp, p.precomputed.ᶜsgs_moments) : ()
+    blend_params = blend isa Val{true} ? cloud_species_blend_params(p) : nothing
+    χ_pairs = edmfx_diffused_scalars(Y)
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶠK_h, p.core.ᶜΦ, ᶜT⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜq_liqʲs,
+        ᶜq_iceʲs, blend_fields,
+    ) do Yₜc, Yc, ᶠK_h, ᶜΦ, ᶜT⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜq_liqʲs, ᶜq_iceʲs,
+    blend_fields
+        # Environment: each scalar down its environmental gradient, or its
+        # grid-mean gradient if the updrafts do not carry it
+        # The temperatures and diffusing water of every subdomain are register
+        # temporaries of one type, so the environment and the updrafts share
+        # the inferred methods of their fluxes.
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        ᶠw⁰ = @. ᶠinterp(ᶜρa⁰) * ᶠK_h
+        ᶜT⁰ = as_register(ᶜT⁰)
+        ᶜq_water⁰ =
+            moist isa Val{true} ?
+            unrolled_map(
+                as_register,
+                env_diffusing_water(
+                    Yc, ᶜρa⁰, ᶜq_liq⁰, ᶜq_ice⁰, turbconv_model, nonequil_val,
+                ),
+            ) : nothing
+        add_sensible_heat_diffusionᵥ!(
+            Yₜc.ρe_tot, ᶠw⁰, ᶜT⁰, ᶜq_water⁰, thermo_params, ᶜΦ,
+        )
+        moist isa Val{true} && add_water_diffusionᵥ!(
+            Yₜc, nothing, ᶠw⁰, ᶜT⁰, ᶜq_water⁰, thermo_params, ᶜΦ,
+        )
+        # Face fluxes of total water and liquid–ice static energy for the
+        # blended cloud-species flux
+        ᶜq_tot⁰ = isnothing(ᶜq_water⁰) ? nothing : ᶜq_water⁰[1]
+        (ᶠF_qt⁰, ᶠF_sl⁰) =
+            blend isa Val{true} ?
+            (
+                (@. -(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))),
+                ᶠliquid_ice_static_energy_flux!(
+                    nothing, ᶠw⁰, ᶜT⁰, ᶜq_water⁰, thermo_params, ᶜΦ,
+                ),
+            ) : (nothing, nothing)
+        MatrixFields.unrolled_foreach(χ_pairs) do (χ_name, ρχ_name)
+            @inline
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            phase = cloud_species_phase(χ_name)
+            blended = blend isa Val{true} && !isnothing(phase)
+            if blended || MatrixFields.has_field(Yc.sgsʲs.:(1), χ_name)
+                # The blend implies the 1M scheme, whose environment cloud
+                # liquid and ice are the last two diffusing water values.
+                ᶜχ⁰ =
+                    blended ? ᶜq_water⁰[phase isa TD.Liquid ? 2 : 3] :
+                    Base.materialize(
+                        ᶜspecific_env_value(χ_name, Yc, ᶜρa⁰, turbconv_model),
+                    )
+                if blended
+                    (ᶜl_mix, ᶜp, ᶜsgs_moments) = blend_fields
+                    add_cloud_species_diffusionᵥ!(
+                        ᶜρχₜ, ᶠw⁰, ᶠF_qt⁰, ᶠF_sl⁰, ᶜT⁰, ᶜq_water⁰, ᶜsgs_moments,
+                        ᶜχ⁰, phase, nothing, blend_params, ᶜl_mix, ᶜp,
+                        (@. lazy(specific(Yc.ρtke, Yc.ρ))),
+                    )
+                else
+                    @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))
+                end
+            else
+                ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+                @. ᶜρχₜ -= ᶜdiffdivᵥ(
+                    -(ᶠinterp(Yc.ρ) * ᶠK_h * ᶠgradᵥ(specific(ᶜρχ, Yc.ρ))),
+                )
+            end
+        end
+
+        # Updrafts: each scalar down its own gradient, with the extensive flux
+        # divergence added to the grid mean
+        apply_sgs_updraft || return nothing
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            ᶜsgsʲ = Yc.sgsʲs.:($j)
+            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+            ᶜTʲ = as_register(ᶜTʲs.:($j))
+            ᶠwʲ = ᶠupdraft_diffusion_weight!(nothing, ᶜsgsʲ.ρa, ᶠK_h, f_j)
+            ᶜinv_ρaʲ = @. 1 / max(ᶜsgsʲ.ρa, ϵ_FT)
+            ᶜq_waterʲ =
+                moist isa Val{true} ?
+                unrolled_map(
+                    as_register,
+                    updraft_diffusing_water(
+                        ᶜsgsʲ, ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), nonequil_val,
+                    ),
+                ) : nothing
+            add_sensible_heat_diffusionᵥ!(
+                Yₜc.ρe_tot, ᶠwʲ, ᶜTʲ, ᶜq_waterʲ, thermo_params, ᶜΦ,
+            )
+            ᶜmse_effʲ = updraft_diffusing_mse!(
+                nothing, ᶜsgsʲ, ᶜTʲ, thermo_params, nonequil_val,
+            )
+            @. ᶜsgsʲₜ.mse -= ᶜinv_ρaʲ * ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜmse_effʲ)))
+            moist isa Val{true} && add_water_diffusionᵥ!(
+                Yₜc, (ᶜsgsʲₜ.q_tot, ᶜinv_ρaʲ), ᶠwʲ, ᶜTʲ, ᶜq_waterʲ,
+                thermo_params, ᶜΦ,
+            )
+            MatrixFields.unrolled_foreach(χ_pairs) do (χ_name, ρχ_name)
+                @inline
+                MatrixFields.has_field(ᶜsgsʲ, χ_name) || return
+                ᶜχʲ = as_register(MatrixFields.get_field(ᶜsgsʲ, χ_name))
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+                ᶜρχₜ_diffusion = @. -(ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜχʲ))))
+                @. ᶜρχₜ += ᶜρχₜ_diffusion
+                @. ᶜχʲₜ += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
+            end
+        end
+        return nothing
+    end
+    return nothing
+end
+
+"""
+    add_water_diffusionᵥ!(Yₜc, sgs_q_totₜ, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+
+Add the water part of the vertical diffusive enthalpy flux of a subdomain
+(`add_water_enthalpy_diffusionᵥ!`) to `Yₜc.ρe_tot`, and the divergence of its
+diffusive flux of total water `-ᶠw ∇q_tot` to `Yₜc.ρq_tot` and `Yₜc.ρ`, in one
+column of a fused loop. For an updraft, `sgs_q_totₜ` is the pair of its total
+water tendency and inverse mass `1 / ρaʲ`, which receives the intensive
+tendency; for the environment, it is `nothing`.
+"""
+@inline function add_water_diffusionᵥ!(
+    Yₜc,
+    sgs_q_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params,
+    ᶜΦ,
+)
+    add_water_enthalpy_diffusionᵥ!(
+        Yₜc.ρe_tot, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ,
+    )
+    ᶜq_tot = ᶜq_water[1]
+    ᶜρq_totₜ = @. -(ᶜdiffdivᵥ(-(ᶠw * ᶠgradᵥ(ᶜq_tot))))
+    @. Yₜc.ρq_tot += ᶜρq_totₜ
+    @. Yₜc.ρ += ᶜρq_totₜ
+    if !isnothing(sgs_q_totₜ)
+        (ᶜq_totʲₜ, ᶜinv_ρaʲ) = sgs_q_totₜ
+        @. ᶜq_totʲₜ += ᶜinv_ρaʲ * ᶜρq_totₜ
+    end
     return nothing
 end
 

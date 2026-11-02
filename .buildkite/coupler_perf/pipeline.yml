@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "97e24f95a29bcdcb1d08e7e31feef0b9a1e1e631"
+  COUPLER_COMMIT: "39743a7b576f833ea238aa9de76b512a60a95b3d"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
   # Packages whose [compat] bounds are dropped from the coupler projects at
@@ -49,6 +49,8 @@ steps:
       # Instantiate and dev install ClimaCore
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
+      # The ClimaCore branch of CliMA/ClimaCore.jl#2717, which this branch is tested with
+      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCore.jl.git", rev="dy/read_only_geometry")'''
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"

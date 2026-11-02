@@ -926,6 +926,27 @@ callers pass a scratch field.
 @inline maybe_materialize!(ᶜscratch, ᶜχ) = @. ᶜscratch = ᶜχ
 
 """
+    materialize_into!(ᶜout, ᶜχ)
+
+Copy the lazy `ᶜχ` into the field `ᶜout` and return it, or, when `ᶜout` is
+`nothing`, return `ᶜχ` materialized as a register temporary of a fused loop.
+"""
+@inline materialize_into!(::Nothing, ᶜχ) = Base.materialize(ᶜχ)
+@inline materialize_into!(ᶜout, ᶜχ) = @. ᶜout = ᶜχ
+
+"""
+    as_register(ᶜχ)
+
+Return the values of a slice or lazy expression `ᶜχ` of a fused loop as a register
+temporary (`Base.materialize` returns a slice unchanged, and `copy` allocates a new
+array). Statements whose arguments are register temporaries of the same type
+share their inferred methods, which shortens the compilation of loop bodies that
+apply one expression to different inputs (e.g., to the environment and to every
+updraft).
+"""
+@inline as_register(ᶜχ) = identity.(ᶜχ)
+
+"""
     ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
 
 Write the isobaric specific heat capacity of the diffusing mixture,
@@ -1277,20 +1298,34 @@ into `ᶠF_sl`, with the same terms and face interpolation as
 `add_water_enthalpy_diffusionᵥ!`, so that the diffusive energy flux is
 `F_sl + (h_v + Φ) F_qt` to rounding.
 """
-function ᶠliquid_ice_static_energy_flux!(
+ᶠliquid_ice_static_energy_flux!(ᶠF_sl, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch, ᶜq_scratch) =
+    ᶠliquid_ice_static_energy_flux!(
+        ᶠF_sl,
+        ᶠw,
+        ᶜT,
+        ᶜq_water,
+        CAP.thermodynamics_params(p.params),
+        p.core.ᶜΦ,
+        ᶜscratch,
+        ᶜq_scratch,
+    )
+# With `ᶠF_sl === nothing`, the flux is a register temporary of a fused loop.
+@inline function ᶠliquid_ice_static_energy_flux!(
     ᶠF_sl,
     ᶠw,
     ᶜT,
     ᶜq_water,
-    p,
-    ᶜscratch,
-    ᶜq_scratch,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing,
+    ᶜq_scratch = nothing,
 )
-    (; ᶜΦ) = p.core
-    thermo_params = CAP.thermodynamics_params(p.params)
     _, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
-    @. ᶠF_sl = -(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ)))
+    ᶠF_sl = materialize_into!(
+        ᶠF_sl,
+        (@. lazy(-(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ))))),
+    )
     ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
     @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
@@ -1338,7 +1373,7 @@ rest in the cell, which the microphysics already relaxes toward equilibrium at
 the rate `1/τ_μ`; a blended value of `q_μ` itself would apply that relaxation
 twice.
 """
-function add_cloud_species_diffusionᵥ!(
+add_cloud_species_diffusionᵥ!(
     ᶜρχₜ,
     Y,
     p,
@@ -1351,33 +1386,79 @@ function add_cloud_species_diffusionᵥ!(
     ᶜq_μ,
     phase::TD.Phase,
     ᶜscratch,
+) = add_cloud_species_diffusionᵥ!(
+    ᶜρχₜ,
+    ᶠw,
+    ᶠF_qt,
+    ᶠF_sl,
+    ᶜT,
+    ᶜq_water,
+    ᶜsgs_moments,
+    ᶜq_μ,
+    phase,
+    ᶜscratch,
+    cloud_species_blend_params(p),
+    p.precomputed.ᶜl_mix,
+    p.precomputed.ᶜp,
+    (@. lazy(specific(Y.c.ρtke, Y.c.ρ))),
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    # The Damköhler blend needs the condensation timescale regardless of
-    # which path integrates condensation; pick whichever 1M mp carries it.
-    cmp = CAP.cloud_liquid_formation_1m_params(p.params)
-    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
-    (; ᶜl_mix, ᶜp) = p.precomputed
-    ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch
+
+# The parameters of `add_cloud_species_diffusionᵥ!`. The Damköhler blend needs
+# the condensation timescale regardless of which path integrates condensation;
+# pick whichever 1M mp carries it.
+cloud_species_blend_params(p) = (;
+    thermo_params = CAP.thermodynamics_params(p.params),
+    cmp = CAP.cloud_liquid_formation_1m_params(p.params),
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params)),
+)
+
+# With `ᶜscratch === nothing`, the blend weight and the sensitivities are
+# register temporaries of a fused loop.
+@inline function add_cloud_species_diffusionᵥ!(
+    ᶜρχₜ,
+    ᶠw,
+    ᶠF_qt,
+    ᶠF_sl,
+    ᶜT,
+    ᶜq_water,
+    ᶜsgs_moments,
+    ᶜq_μ,
+    phase::TD.Phase,
+    ᶜscratch,
+    blend_params,
+    ᶜl_mix,
+    ᶜp,
+    ᶜtke,
+)
+    (; thermo_params, cmp, c_d) = blend_params
+    (ᶜλ_out, ᶜc_qt_out, ᶜc_sl_out) = something(ᶜscratch, (nothing, nothing, nothing))
+    # In a fused loop, values that several expressions read are evaluated once.
+    fused = isnothing(ᶜscratch)
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
-    ᶜρ_air =
+    ᶜρ_air_lazy =
         @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
-    @. ᶜλ = cloud_species_flux_blend(
-        ᶜl_mix,
-        specific(Y.c.ρtke, Y.c.ρ),
-        c_d,
-        cloud_species_relaxation_time(
-            cmp,
-            thermo_params,
-            ᶜT,
-            ᶜρ_air,
-            ᶜq_tot,
-            ᶜq_liq,
-            ᶜq_ice,
-            phase,
-        ),
+    ᶜρ_air = fused ? Base.materialize(ᶜρ_air_lazy) : ᶜρ_air_lazy
+    ᶜλ = materialize_into!(
+        ᶜλ_out,
+        (@. lazy(
+            cloud_species_flux_blend(
+                ᶜl_mix,
+                ᶜtke,
+                c_d,
+                cloud_species_relaxation_time(
+                    cmp,
+                    thermo_params,
+                    ᶜT,
+                    ᶜρ_air,
+                    ᶜq_tot,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                    phase,
+                ),
+            ),
+        )),
     )
-    ᶜsensitivities = @. lazy(
+    ᶜsensitivities_lazy = @. lazy(
         equilibrium_condensate_sensitivities(
             thermo_params,
             ᶜT,
@@ -1390,8 +1471,10 @@ function add_cloud_species_diffusionᵥ!(
             phase,
         ),
     )
-    @. ᶜc_qt = first(ᶜsensitivities)
-    @. ᶜc_sl = last(ᶜsensitivities)
+    ᶜsensitivities =
+        fused ? Base.materialize(ᶜsensitivities_lazy) : ᶜsensitivities_lazy
+    ᶜc_qt = materialize_into!(ᶜc_qt_out, (@. lazy(first(ᶜsensitivities))))
+    ᶜc_sl = materialize_into!(ᶜc_sl_out, (@. lazy(last(ᶜsensitivities))))
     @. ᶜρχₜ -= ᶜdiffdivᵥ(
         -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
         ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),

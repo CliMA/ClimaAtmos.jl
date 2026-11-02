@@ -141,14 +141,20 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     isnothing(hyperdiff) && return nothing
 
-    n = n_mass_flux_subdomains(turbconv_model)
-    diffuse_tke = use_prognostic_tke(turbconv_model)
     (; ᶜu, ᶜT, ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        (; ᶜuʲs, ᶜTʲs) = p.precomputed
-    end
+    has_q_tot = Val(MatrixFields.has_field(Y, @name(c.ρq_tot)))
+    nonequil = Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics)
+    ᶜ∇²tke = use_prognostic_tke(turbconv_model) ? p.hyperdiff.ᶜ∇²tke : ()
+    sgs_fields =
+        turbconv_model isa PrognosticEDMFX ?
+        (
+            p.hyperdiff.ᶜ∇²uʲs,
+            p.hyperdiff.ᶜ∇²Tʲs,
+            p.hyperdiff.ᶜ∇²q_tot_effʲs,
+            p.precomputed.ᶜuʲs,
+            p.precomputed.ᶜTʲs,
+        ) : ()
 
     # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
     # from a smooth hydrostatic reference profile: on tilted terrain-following
@@ -158,76 +164,86 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # `T_r(p)`, `Φ_r(p)`, and `q_tot_r(p)` cancel this leading-order geometric
     # term, matching the split-form pressure-gradient treatment in
     # `advection.jl`. `Φ - Φ_r(p)` is recomputed every step because `Φ_r`
-    # follows the evolving pressure.
-    @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
-    @. ᶜ∇²T = wdivₕ(gradₕ(ᶜT - air_temperature_reference(thermo_params, ᶜp)))
-    @. ᶜ∇²Φ = wdivₕ(gradₕ(ᶜΦ - phi_r(thermo_params, ᶜp)))
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-            @. ᶜ∇²q_tot_eff = wdivₕ(
-                gradₕ(
-                    specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
-                ),
-            )
-        else
-            @. ᶜ∇²q_tot_eff = wdivₕ(
-                gradₕ(
-                    specific(Y.c.ρq_tot, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
-                ),
-            )
+    # follows the evolving pressure. The vector Laplacians of the grid mean and
+    # the updrafts are computed in one fused slab loop, and the scalar
+    # Laplacians in another, where the reference profiles are register
+    # temporaries shared by the grid mean and the updrafts. (A single loop needs
+    # too many registers to keep its blocks resident.)
+    ᶜu_sgs = turbconv_model isa PrognosticEDMFX ? (sgs_fields[1], sgs_fields[4]) : ()
+    DataLayouts.foreach_slab(ᶜ∇²u, ᶜu, ᶜu_sgs) do ᶜ∇²u, ᶜu, ᶜu_sgs
+        # Full vector Laplacian identity. Under non-orthogonal metrics
+        # (topography), the C12 components of the updraft Laplacians matter
+        # because they couple into the C3 of the outer
+        # `wcurlₕ(C123(curlₕ(⋅)))` via g_{13}, g_{23}.
+        vector_laplacian!(ᶜ∇²u, ᶜu)
+        turbconv_model isa PrognosticEDMFX || return nothing
+        (ᶜ∇²uʲs, ᶜuʲs) = ᶜu_sgs
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            vector_laplacian!(ᶜ∇²uʲs.:($j), ᶜuʲs.:($j))
         end
+        return nothing
     end
-
-    if diffuse_tke
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        (; ᶜ∇²tke) = p.hyperdiff
-        @. ᶜ∇²tke = wdivₕ(gradₕ(ᶜtke))
-    end
-
-    # Sub-grid scale hyperdiffusion. SGS mseⱼ uses the same
-    # temperature + geopotential + q_tot_eff split as the grid mean (assembled
-    # with subdomain thermodynamics in `apply_hyperdiffusion_tendency!`); the
-    # geopotential Laplacian `ᶜ∇²Φ` is shared.
-    if turbconv_model isa PrognosticEDMFX
-        # Config-level (not per-j) check: all subdomains carry the same
-        # prognostic fields, so hoist the has_field lookup.
-        for j in 1:n
-            # Full vector Laplacian identity, matching the grid-mean pattern
-            # for `ᶜ∇²u`. Under non-orthogonal metrics (topography), the C12
-            # components matter because they couple into the C3 of the outer
-            # `wcurlₕ(C123(curlₕ(⋅)))` via g_{13}, g_{23}.
-            @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(ᶜuʲs.:($$j)))))
-            # Same reference-state subtraction as grid mean. Updrafts share
-            # the grid-mean pressure, so `T_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the
-            # same profiles.
-            @. ᶜ∇²Tʲs.:($$j) = wdivₕ(
-                gradₕ(
-                    ᶜTʲs.:($$j) - air_temperature_reference(thermo_params, ᶜp),
-                ),
-            )
-            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-                @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
-                    gradₕ(
-                        Y.c.sgsʲs.:($$j).q_tot -
-                        Y.c.sgsʲs.:($$j).q_rai -
-                        Y.c.sgsʲs.:($$j).q_sno -
-                        q_tot_r(thermo_params, ᶜp),
-                    ),
-                )
-            else
-                @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
-                    gradₕ(
-                        Y.c.sgsʲs.:($$j).q_tot - q_tot_r(thermo_params, ᶜp),
-                    ),
-                )
-            end
+    DataLayouts.foreach_slab(
+        (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Y.c, ᶜT, ᶜp, ᶜΦ, sgs_fields,
+    ) do (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Yc, ᶜT, ᶜp, ᶜΦ, sgs_fields
+        ᶜT_r = @. air_temperature_reference(thermo_params, ᶜp)
+        scalar_laplacian!(ᶜ∇²T, (@. ᶜT - ᶜT_r))
+        scalar_laplacian!(ᶜ∇²Φ, (@. ᶜΦ - phi_r(thermo_params, ᶜp)))
+        ᶜq_tot_r =
+            has_q_tot isa Val{true} || turbconv_model isa PrognosticEDMFX ?
+            (@. q_tot_r(thermo_params, ᶜp)) : nothing
+        if has_q_tot isa Val{true}
+            ᶜq_tot_eff = gs_diffusing_q_tot(Yc, nonequil)
+            scalar_laplacian!(ᶜ∇²q_tot_eff, (@. ᶜq_tot_eff - ᶜq_tot_r))
         end
+        if ᶜ∇²tke isa Fields.Field
+            scalar_laplacian!(ᶜ∇²tke, (@. specific(Yc.ρtke, Yc.ρ)))
+        end
+
+        # Sub-grid scale hyperdiffusion. SGS mseⱼ uses the same temperature +
+        # geopotential + q_tot_eff split as the grid mean (assembled with
+        # subdomain thermodynamics in `apply_hyperdiffusion_tendency!`); the
+        # geopotential Laplacian `ᶜ∇²Φ` is shared. Updrafts share the grid-mean
+        # pressure, so `T_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the same profiles.
+        turbconv_model isa PrognosticEDMFX || return nothing
+        (_, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs, _, ᶜTʲs) = sgs_fields
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            scalar_laplacian!(ᶜ∇²Tʲs.:($j), (@. ᶜTʲs.:($$j) - ᶜT_r))
+            ᶜq_tot_effʲ = sgs_diffusing_q_tot(Yc.sgsʲs.:($j), nonequil)
+            scalar_laplacian!(ᶜ∇²q_tot_effʲs.:($j), (@. ᶜq_tot_effʲ - ᶜq_tot_r))
+        end
+        return nothing
     end
+    return nothing
 end
+
+# The Laplacians of a fused slab loop. Every operator statement reads and writes
+# register temporaries of one type (the scalar argument, and the two terms of
+# the vector Laplacian), so that the Laplacians of a loop share their inferred
+# methods, whatever their inputs and destinations. A vector argument stays a
+# slice of its Field: a vector register temporary read by spectral operators is
+# heap-allocated on CPUs.
+@inline function scalar_laplacian!(ᶜ∇²χ, ᶜχ)
+    ᶜ∇²χ_register = @. wdivₕ(gradₕ(ᶜχ))
+    @. ᶜ∇²χ = ᶜ∇²χ_register
+    return nothing
+end
+@inline function vector_laplacian!(ᶜ∇²u, ᶜu)
+    ᶜgrad_div = @. C123(wgradₕ(divₕ(ᶜu)))
+    ᶜcurl_curl = @. C123(wcurlₕ(C123(curlₕ(ᶜu))))
+    @. ᶜ∇²u = ᶜgrad_div - ᶜcurl_curl
+    return nothing
+end
+
+# The specific total water that diffuses in the grid mean `ᶜY` or an updraft
+# `ᶜsgsʲ` (whole fields or slices of a fused loop): with non-equilibrium
+# microphysics, precipitation does not diffuse.
+@inline gs_diffusing_q_tot(ᶜY, ::Val{true}) =
+    @. lazy(specific(ᶜY.ρq_tot - ᶜY.ρq_rai - ᶜY.ρq_sno, ᶜY.ρ))
+@inline gs_diffusing_q_tot(ᶜY, ::Val{false}) = @. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))
+@inline sgs_diffusing_q_tot(ᶜsgsʲ, ::Val{true}) =
+    @. lazy(ᶜsgsʲ.q_tot - ᶜsgsʲ.q_rai - ᶜsgsʲ.q_sno)
+@inline sgs_diffusing_q_tot(ᶜsgsʲ, ::Val{false}) = ᶜsgsʲ.q_tot
 
 """
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)

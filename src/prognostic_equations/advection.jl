@@ -27,66 +27,15 @@ Increments (all with a minus sign, i.e., flux divergences and gradients are sink
     `p.atmos.turbconv_model isa PrognosticEDMFX` (advective form for `mse`).
 
 Reads `Y.c` and, from the cache `p`, the precomputed fields `ᶜu`, `ᶜK`, `ᶜp`, `ᶜT`,
-`ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, `ᶜh_tot` (and `ᶜuʲs` for `PrognosticEDMFX`), the
-geopotential `ᶜΦ` from `p.core`, and scratch space. Called from
-`remaining_tendency!`, i.e., placed in the explicit part of the IMEX splitting.
-Returns `nothing`. The continuous-form equations are documented on the "Equations"
-page of the docs (`docs/src/equations.md`).
+`ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, `ᶜh_tot` (and `ᶜuʲs` for `PrognosticEDMFX`) and
+the geopotential `ᶜΦ` from `p.core`, in the slab loop of
+`horizontal_advection_tendency!`. Called from `remaining_tendency!` (through
+`horizontal_advection_tendency!`), i.e., placed in the explicit part of the IMEX
+splitting. Returns `nothing`. The continuous-form equations are documented on the
+"Equations" page of the docs (`docs/src/equations.md`).
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    cp_d = thermo_params.cp_d
-
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p.precomputed
-    end
-
-    @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= split_divₕ(
-                Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j),
-                1,
-            )
-        end
-    end
-
-    (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
-
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).mse) -
-                Y.c.sgsʲs.:($$j).mse * split_divₕ(ᶜuʲs.:($$j), 1)
-        end
-    end
-
-    if use_prognostic_tke(p.atmos.turbconv_model)
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
-    end
-
-    (; ᶜq_tot_nonneg) = p.precomputed
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
-    ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
-    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
-    # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]
-    @. Yₜ.c.uₕ -= C12(
-        gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
-        cp_d *
-        (
-            ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) - ᶜΠ * gradₕ(ᶜθ_v_diff)
-        ) / 2,
-    )
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    horizontal_advection_tendency!(Yₜ, nothing, Y, p, t)
     return nothing
 end
 
@@ -99,45 +48,124 @@ EDMFX-subdomain tracers.
 Increments (with a minus sign on each flux divergence):
 
   - Every grid-mean tracer `Yₜ.c.ρχ`: flux-form advection `∇ₕ⋅(ρu χ)` for all
-    prognostic tracer variables in `Y.c` (identified by `is_tracer_var`).
+    prognostic tracer variables in `Y.c` (identified by `gs_tracer_names`).
   - `Yₜ.c.sgsʲs.:(j).q_tot`, when `p.atmos.turbconv_model isa PrognosticEDMFX`:
     advective-form advection with the updraft velocity `ᶜuʲs`.
   - Every auto-discovered SGS tracer in `Yₜ.c.sgsʲs.:(j)` (microphysics species and
     user-defined passive tracers, from `sgs_tracer_names`), also in advective form.
 
 Reads `Y.c`, the precomputed velocities `ᶜu` (and `ᶜuʲs` for `PrognosticEDMFX`) from
-`p`. `t` is unused. Called from `remaining_tendency!` with the limited tendency
-vector `Yₜ_lim`, so these tendencies pass through the tracer limiters. Returns
-`nothing`.
+`p`, in the slab loop of `horizontal_advection_tendency!`. `t` is unused. Called
+from `remaining_tendency!` (through `horizontal_advection_tendency!`) with the
+limited tendency vector `Yₜ_lim`, so these tendencies pass through the tracer
+limiters. Returns `nothing`.
 """
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    horizontal_advection_tendency!(nothing, Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Add the tendencies of `horizontal_dynamics_tendency!` to `Yₜ` and those of
+`horizontal_tracer_advection_tendency!` to `Yₜ_lim` in one fused slab loop, which
+reads `Y.c` and the precomputed fields once. Either tendency vector can be
+`nothing`, which skips its tendencies. `t` is unused. Returns `nothing`.
+"""
+NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    (; turbconv_model) = p.atmos
     (; ᶜu) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    cp_d = thermo_params.cp_d
+    ᶜuʲs = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜuʲs : ()
+    # An absent tendency vector, and the inputs that only its tendencies read,
+    # are empty tuples.
+    Yₜc = isnothing(Yₜ) ? () : Yₜ.c
+    Yₜ_limc = isnothing(Yₜ_lim) ? () : Yₜ_lim.c
+    ᶜdynamics_inputs =
+        isnothing(Yₜ) ? () :
+        (
+            p.precomputed.ᶜK, p.precomputed.ᶜp, p.precomputed.ᶜT,
+            p.precomputed.ᶜq_tot_nonneg, p.precomputed.ᶜq_liq,
+            p.precomputed.ᶜq_ice, p.precomputed.ᶜh_tot, p.core.ᶜΦ,
+        )
+    ρχ_names = isnothing(Yₜ_lim) ? () : gs_tracer_names(Y)
+    χ_names =
+        isnothing(Yₜ_lim) || !(turbconv_model isa PrognosticEDMFX) ? () :
+        (@name(q_tot), sgs_tracer_names(Y)...)
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p.precomputed
-    end
-
-    for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
-        @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
-    end
-
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
-                Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
-            # Auto-discovered SGS tracers (microphysics species and any
-            # user-defined passive tracers)
-            for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                @. ᶜχʲₜ -=
-                    split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
-                    ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
+    # The mass flux `ρu` is a register temporary shared by the density, energy,
+    # TKE, and every grid-mean tracer, and the divergence of each updraft
+    # velocity by the energy and every tracer of the updraft. Each advected
+    # quantity and its flux divergence are register temporaries of one type, so
+    # that every quantity shares the inferred methods of the divergence (see
+    # `as_register`).
+    DataLayouts.foreach_slab(
+        Yₜc, Yₜ_limc, Y.c, ᶜu, ᶜuʲs, ᶜdynamics_inputs,
+    ) do Yₜc, Yₜ_limc, Yc, ᶜu, ᶜuʲs, ᶜdynamics_inputs
+        ᶜρu = @. Yc.ρ * ᶜu
+        MatrixFields.unrolled_foreach(ρχ_names) do ρχ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ_limc, ρχ_name)
+            ᶜχ = @. specific(ᶜρχ, Yc.ρ)
+            ᶜdivₕρuχ = @. split_divₕ(ᶜρu, ᶜχ)
+            @. ᶜρχₜ -= ᶜdivₕρuχ
+        end
+        if ᶜdynamics_inputs !== ()
+            (ᶜK, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜΦ) =
+                ᶜdynamics_inputs
+            @. Yₜc.ρ -= split_divₕ(ᶜρu, 1)
+            ᶜh = as_register(ᶜh_tot)
+            ᶜdivₕρuh = @. split_divₕ(ᶜρu, ᶜh)
+            @. Yₜc.ρe_tot -= ᶜdivₕρuh
+            if use_prognostic_tke(turbconv_model)
+                ᶜtke = @. specific(Yc.ρtke, Yc.ρ)
+                ᶜdivₕρutke = @. split_divₕ(ᶜρu, ᶜtke)
+                @. Yₜc.ρtke -= ᶜdivₕρutke
+            end
+            # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv],
+            # with the Exner function and the virtual potential temperature
+            # difference evaluated once as register temporaries
+            ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+            ᶜθ_v = @. theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+            ᶜθ_v_diff = @. ᶜθ_v - theta_vr(thermo_params, ᶜp)
+            ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
+            @. Yₜc.uₕ -= C12(
+                gradₕ(ᶜK + ᶜΦ - ᶜΦ_r) +
+                cp_d *
+                (
+                    ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) -
+                    ᶜΠ * gradₕ(ᶜθ_v_diff)
+                ) / 2,
+            )
+            # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+        end
+        turbconv_model isa PrognosticEDMFX || return nothing
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            ᶜsgsʲ = Yc.sgsʲs.:($j)
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶜdivₕuʲ = @. split_divₕ(ᶜuʲ, 1)
+            if ᶜdynamics_inputs !== ()
+                ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+                @. ᶜsgsʲₜ.ρa -= split_divₕ(ᶜsgsʲ.ρa * ᶜuʲ, 1)
+                # Advective form, sharing the divergence of the updraft velocity
+                ᶜmseʲ = as_register(ᶜsgsʲ.mse)
+                ᶜmse_advʲ = @. split_divₕ(ᶜuʲ, ᶜmseʲ) - ᶜmseʲ * ᶜdivₕuʲ
+                @. ᶜsgsʲₜ.mse -= ᶜmse_advʲ
+            end
+            # Total water, then the auto-discovered SGS tracers (microphysics
+            # species and any user-defined passive tracers)
+            MatrixFields.unrolled_foreach(χ_names) do χ_name
+                @inline
+                ᶜχʲ = as_register(MatrixFields.get_field(ᶜsgsʲ, χ_name))
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ_limc.sgsʲs.:($j), χ_name)
+                ᶜadvʲ = @. split_divₕ(ᶜuʲ, ᶜχʲ) - ᶜχʲ * ᶜdivₕuʲ
+                @. ᶜχʲₜ -= ᶜadvʲ
             end
         end
+        return nothing
     end
     return nothing
 end

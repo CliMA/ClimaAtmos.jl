@@ -50,9 +50,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
         ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
         ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+        hgrad_invariants!(ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq_tot_nonneg, ᶜθ_li, p)
     end
 
     if p.atmos.numerics.reproducible_restart
@@ -418,6 +416,34 @@ function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
     @. ᶜinv = lumpedₕ(dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2)))
     buf = p.scratch.ᶜscalar_dss_buffer
     buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
+    return nothing
+end
+
+"""
+    hgrad_invariants!(ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ, p)
+
+Write the invariants of `hgrad_invariant!` for `ᶜq` and `ᶜθ` into `ᶜinv_q` and
+`ᶜinv_θ`, and the cross invariant of `hgrad_cross_invariant!` for `(ᶜθ, ᶜq)` into
+`ᶜinv_θq`, in one fused slab loop in which both gradients are register
+temporaries, then DSS each of them.
+"""
+function hgrad_invariants!(ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ, p)
+    DataLayouts.foreach_slab(
+        ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ,
+    ) do ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ
+        ᶜ∇q = @. gradₕ(ᶜq)
+        ᶜ∇θ = @. gradₕ(ᶜθ)
+        @. ᶜinv_q = lumpedₕ(norm_sqr(ᶜ∇q))
+        @. ᶜinv_θ = lumpedₕ(norm_sqr(ᶜ∇θ))
+        @. ᶜinv_θq = lumpedₕ(dot(Geometry.Contravariant12Vector(ᶜ∇θ), ᶜ∇q))
+        return nothing
+    end
+    buf = p.scratch.ᶜscalar_dss_buffer
+    if buf !== nothing
+        Spaces.weighted_dss!(ᶜinv_q, buf)
+        Spaces.weighted_dss!(ᶜinv_θ, buf)
+        Spaces.weighted_dss!(ᶜinv_θq, buf)
+    end
     return nothing
 end
 

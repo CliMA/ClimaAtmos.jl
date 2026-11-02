@@ -30,11 +30,11 @@ Compute the explicit ("remaining") tendencies of the IMEX splitting.
 
 Zeroes `Yₜ` and `Yₜ_lim`, then accumulates, in order:
 
- 1. `horizontal_tracer_advection_tendency!` (into `Yₜ_lim`).
- 2. `horizontal_dynamics_tendency!`.
- 3. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
- 4. `explicit_vertical_advection_tendency!`.
- 5. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
+ 1. `horizontal_advection_tendency!`: `horizontal_tracer_advection_tendency!` (into
+    `Yₜ_lim`) and `horizontal_dynamics_tendency!` in one slab loop.
+ 2. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
+ 3. `explicit_vertical_advection_tendency!`.
+ 4. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
 
 `Yₜ_lim` collects the tracer tendencies that are subject to the horizontal
 limiters (see `limiters_func!`); everything else accumulates into `Yₜ`. The
@@ -48,9 +48,8 @@ implicitly treated counterparts (vertical acoustic/advective terms, diffusion wh
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
-    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
-    horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+    horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
