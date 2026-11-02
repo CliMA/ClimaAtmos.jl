@@ -166,34 +166,53 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     return nothing
 end
 
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilibriumMicrophysics1M, turbconv_model::PrognosticEDMFX,
+function microphysics_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilibriumMicrophysics1M,
+    turbconv_model::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+    draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
-    # Contribution to grid mean tendency from environment
-    # ᶜmp_tendency⁰ is computed from environmental microphysics variables
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    @. Yₜ.c.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
-    @. Yₜ.c.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_icl_dt
-    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
-    @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜmp_tendency⁰.dq_sno_dt
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        Y.c,
+        ᶜmp_tendency⁰,
+        ᶜmp_tendencyʲs,
+    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        sgs_args = (ᶜρa⁰, ᶜmp_tendency⁰, Yc.sgsʲs, ᶜmp_tendencyʲs)
+        @. Yₜc.ρq_lcl = add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args..., @name(dq_lcl_dt))
+        @. Yₜc.ρq_icl = add_sgs_tendencies(Yₜc.ρq_icl, sgs_args..., @name(dq_icl_dt))
+        @. Yₜc.ρq_rai = add_sgs_tendencies(Yₜc.ρq_rai, sgs_args..., @name(dq_rai_dt))
+        @. Yₜc.ρq_sno = add_sgs_tendencies(Yₜc.ρq_sno, sgs_args..., @name(dq_sno_dt))
 
-    # Contribution from updraft microphysics to grid mean and updraft tendency
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.c.ρq_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.ρq_icl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_icl_dt
-        @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_sno_dt
-
-        @. Yₜ.c.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_icl_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜmp_tendencyʲs.:($$j).dq_sno_dt
+        unrolled_foreach(draft_indices) do j
+            @inline
+            ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
+            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+            @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt
+            @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt
+            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
+            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt
+            return nothing
+        end
+        return nothing
     end
     _add_implicit_lcl_condensation_prognostic_edmfx!(Yₜ, Y, p, turbconv_model)
     return nothing
+end
+
+# `ρχₜ + ρa⁰ dχ⁰ + Σⱼ ρaʲ dχʲ`, added in this order, where `dχ` is the tendency
+# `name` of the environment (`mp⁰`) or of a draft (`mpʲs`).
+@inline add_sgs_tendencies(ρχₜ, ρa⁰, mp⁰, sgsʲs, mpʲs, name) = unrolled_reduce(
+    StaticOneTo(length(sgsʲs)),
+    ρχₜ + ρa⁰ * MatrixFields.get_field(mp⁰, name),
+) do total, j
+    total + sgsʲs[j].ρa * MatrixFields.get_field(mpʲs[j], name)
 end
 
 #####

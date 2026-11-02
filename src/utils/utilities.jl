@@ -232,7 +232,7 @@ vertical gradients only.
 A lazy center `Field` with the symmetric `UVW × UVW` strain-rate tensor
 `(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
-function compute_strain_rate_center_vertical(ᶠu)
+@inline function compute_strain_rate_center_vertical(ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))))
 end
@@ -546,6 +546,24 @@ to physical units.
 """
 projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
     V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
+
+"""
+    projected_c3_data(vector, local_geometry)
+
+`projected_vector_data(C3, vector, local_geometry)`, for broadcasts in column loop
+bodies: a broadcast wraps a type argument in a `Ref`, which is allocated once per column
+on CPUs when the broadcast is passed to a function that is not inlined.
+"""
+projected_c3_data(vector, local_geometry) =
+    projected_vector_data(C3, vector, local_geometry)
+
+"""
+    unit_c3_data(local_geometry)
+
+`unit_basis_vector_data(C3, local_geometry)`, for broadcasts in column loop bodies (see
+`projected_c3_data`).
+"""
+unit_c3_data(local_geometry) = unit_basis_vector_data(C3, local_geometry)
 
 """
     get_physical_w(u, local_geometry)

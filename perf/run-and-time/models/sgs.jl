@@ -5,8 +5,11 @@ import Random
 Random.seed!(1234)
 
 # ---------------------------------------------------------------------------
-# Minimal setup to call `set_sgs_moments_and_cloud_fraction!`, exposed as the
-# `case_setup`/`case_run` functions expected by the timing harness.
+# Minimal setup to time the final 1M/2M step of
+# `set_covariance_cache_and_cloud_fraction!` — the cloud env state
+# (`cloud_env_state`), `set_sgs_moments_and_cloud_fraction!`, and
+# `set_precip_fraction!` — exposed as the `case_setup`/`case_run` functions
+# expected by the timing harness.
 #
 # It only needs `Y` (state) and `p` (cache), so we skip `CA.get_simulation`
 # (integrator, Jacobian, callbacks, diagnostics, output writers) entirely and
@@ -15,11 +18,10 @@ Random.seed!(1234)
 # handling is skipped (this config starts from an initial condition, not a
 # restart file).
 #
-# `set_sgs_moments_and_cloud_fraction!` is one of the steps
-# `set_precomputed_quantities!` (invoked by `build_cache`) already runs, so
-# building the cache in `case_setup` exercises it once. It reads only the
-# thermodynamic / SGS-covariance parts of `p.precomputed`, and never reads
-# the radiation, aerosol, trace-gas, gravity-wave, tracer, or
+# These are steps `set_precomputed_quantities!` (invoked by `build_cache`)
+# already runs, so building the cache in `case_setup` exercises them once. They
+# read only the thermodynamic / SGS-covariance parts of `p.precomputed`, and
+# never read the radiation, aerosol, trace-gas, gravity-wave, tracer, or
 # external-forcing parts of `p`. Those are also the *expensive* part of model
 # setup (RRTMGP compilation + lookup tables, ETOPO topography load + spectral
 # smoothing, aerosol/trace-gas data ingestion, Beres gravity-wave tables), so
@@ -39,7 +41,7 @@ include("atmos_config.jl")
 """
     case_setup()
 
-Build the minimal `Y`/`p`/`t` needed to call `set_sgs_moments_and_cloud_fraction!`
+Build the minimal `Y`/`p`/`t` needed to run `case_run`
 and return them as a `NamedTuple` with fields `Y`, `p`, `t`. Mirrors the
 `Y`/`p`/`t`-producing subset of `AtmosSimulation{FT}(...)`; skips the
 integrator, Jacobian, callbacks, diagnostics, and output writers.
@@ -47,10 +49,10 @@ integrator, Jacobian, callbacks, diagnostics, and output writers.
 function case_setup()
     config = get_base_atmos_config()
 
-    # Stub out the components `set_sgs_moments_and_cloud_fraction!` does not read.
+    # Stub out the components the timed routines do not read.
     # Mutating `parsed_args` here (before params/model/grid are built) means the
     # un-needed parameter sets, data files, and caches are never constructed in
-    # the first place. None of these knobs affect which branch the routine takes.
+    # the first place. None of these knobs affect which branch the routines take.
     pa = config.parsed_args
     pa["rad"] = nothing                        # no RRTMGP model / lookup tables
     pa["aerosol_radiation"] = false
@@ -103,10 +105,17 @@ end
 """
     case_run(state)
 
-Run `set_sgs_moments_and_cloud_fraction!` under measurement. May be called
-multiple times on the same state.
+Run the final 1M/2M step of `set_covariance_cache_and_cloud_fraction!` under
+measurement: build the cloud env state (materialized under `PrognosticEDMFX`),
+then call `set_sgs_moments_and_cloud_fraction!` and `set_precip_fraction!`. May
+be called multiple times on the same state.
 """
 function case_run(state)
-    CA.set_sgs_moments_and_cloud_fraction!(state.Y, state.p)
+    (; Y, p) = state
+    thermo_params = CA.CAP.thermodynamics_params(p.params)
+    materialize = p.atmos.turbconv_model isa CA.PrognosticEDMFX
+    env_state = CA.cloud_env_state(Y, p, thermo_params; materialize)
+    CA.set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
+    CA.set_precip_fraction!(Y, p, env_state.ᶜq_precip)
     return nothing
 end
