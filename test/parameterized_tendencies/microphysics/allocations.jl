@@ -186,6 +186,44 @@ function _allocs_limit_sink()
     return @allocated limit_sink(FT(-0.01), FT(0.01), FT(60.0), 1)
 end
 
+function _allocs_entr_vel_scale(thp, tc)
+    FT = eltype(tc.max_area)
+    CA.entrainment_velocity_scale(
+        thp,
+        tc,
+        FT(3500),
+        zero(FT),
+        FT(70000),
+        FT(0.9),
+        FT(0.02),
+        FT(2),
+        one(FT),
+        FT(0.01),
+        zero(FT),
+        FT(0.35),
+        zero(FT),
+        FT(0.5),
+        CA.InvZEntrainment(),
+    )
+    return @allocated CA.entrainment_velocity_scale(
+        thp,
+        tc,
+        FT(3500),
+        zero(FT),
+        FT(70000),
+        FT(0.9),
+        FT(0.02),
+        FT(2),
+        one(FT),
+        FT(0.01),
+        zero(FT),
+        FT(0.35),
+        zero(FT),
+        FT(0.5),
+        CA.InvZEntrainment(),
+    )
+end
+
 function _allocs_sgs_sat_adj(thp, quad)
     FT = Float64
     ρ = FT(1.0)
@@ -324,6 +362,18 @@ function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
                 [edmf_shallow_support_height_scale]
                 value = 2200.0
                 type = "float"
+                [entr_subsat_coeff]
+                value = 5.0
+                type = "float"
+                [entr_subsat_power]
+                value = 2.0
+                type = "float"
+                [entr_subsat_height_min]
+                value = 0.2
+                type = "float"
+                [entr_subsat_height_width]
+                value = 0.1
+                type = "float"
                 """,
             )
         else
@@ -341,6 +391,18 @@ function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
                 type = "float"
                 [edmf_shallow_support_height_scale]
                 value = 0.0
+                type = "float"
+                [entr_subsat_coeff]
+                value = 0.0
+                type = "float"
+                [entr_subsat_power]
+                value = 2.0
+                type = "float"
+                [entr_subsat_height_min]
+                value = 0.2
+                type = "float"
+                [entr_subsat_height_width]
+                value = 0.1
                 type = "float"
                 """,
             )
@@ -463,6 +525,24 @@ end
                     qi = ClimaAtmos.SGSQuadrature(FTi; quadrature_order = 3)
                     _allocs_integrate_sgs_functor(qi, FTi)
                     @test _allocs_integrate_sgs_functor(qi, FTi) == 0
+                end
+            end
+        end
+        @testset "InvZEntrainment subsaturation velocity scale" begin
+            for FTi in (Float32, Float64)
+                @testset "FT = $FTi" begin
+                    thpi = CAP.thermodynamics_params(CA.ClimaAtmosParameters(FTi))
+                    tc_active = CA.TurbulenceConvectionParameters(
+                        FTi,
+                        (;
+                            entr_subsat_coeff = FTi(5),
+                            entr_subsat_power = FTi(2),
+                            entr_subsat_height_min = FTi(0.2),
+                            entr_subsat_height_width = FTi(0.1),
+                        ),
+                    )
+                    _allocs_entr_vel_scale(thpi, tc_active)
+                    @test _allocs_entr_vel_scale(thpi, tc_active) == 0
                 end
             end
         end

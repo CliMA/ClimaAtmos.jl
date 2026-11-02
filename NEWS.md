@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add free-tropospheric environmental-subsaturation
+  dynamical entrainment `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p` to
+  `entrainment_velocity_scale` (`InvZEntrainment`, `entr_subsat_coeff`,
+  `entr_subsat_power`, `entr_subsat_height_min`, `entr_subsat_height_width`).
 - ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
   (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
   albedos in `RegressionFunctionAlbedo`.

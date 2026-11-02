@@ -217,7 +217,9 @@ third from `area_bounding_entr_detr` (its positive branch).
   - `PiGroupsEntrainment`: `Π`-group closure
     (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
     `entr_param_vec`.
-  - `InvZEntrainment`: `entr_vel_scale = limiter · (entr_inv_length + entr_coeff / (ᶜz - z_sfc))`.
+  - `InvZEntrainment`: `entr_vel_scale = limiter · (entr_inv_length + entr_coeff / (ᶜz - z_sfc) + (c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p)`,
+    with `G_z(Π₅) = max(0, Π₅ - Π₅_min)² / (max(0, Π₅ - Π₅_min)² + ΔΠ₅²)` and
+    `Π₅ = (ᶜz - z_sfc) / ref_H`.
 
 Both non-trivial models multiply by `upper_area_limiter_factor` and
 return zero at or below the surface, where `1/(ᶜz - z_sfc)` is singular.
@@ -322,6 +324,7 @@ function entrainment_velocity_scale(
     FT = eltype(thermo_params)
     entr_inv_length = CAP.entr_inv_length(turbconv_params)
     entr_coeff = CAP.entr_coeff(turbconv_params)
+    c_subsat = CAP.entr_subsat_coeff(turbconv_params)
 
     elev_above_sfc = ᶜz - z_sfc
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
@@ -331,8 +334,23 @@ function entrainment_velocity_scale(
     end
 
     area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    base_inv_length = entr_inv_length + entr_coeff / elev_above_sfc
+    if c_subsat == zero(FT)
+        return max(0, area_limiter_factor * base_inv_length)
+    end
+
+    p_subsat = CAP.entr_subsat_power(turbconv_params)
+    Π₅_min = CAP.entr_subsat_height_min(turbconv_params)
+    ΔΠ₅ = CAP.entr_subsat_height_width(turbconv_params)
+    g = TDP.grav(thermo_params)
+    ref_H = max(ᶜp / (ᶜρ * g), eps(FT))
+    Π₅ = elev_above_sfc / ref_H
+    δΠ₅ = max(zero(FT), Π₅ - Π₅_min)
+    G_z = δΠ₅^2 / max(δΠ₅^2 + ΔΠ₅^2, eps(FT))
+    subsat_inv_length =
+        (c_subsat / ref_H) * G_z * max(zero(FT), one(FT) - ᶜRH⁰)^p_subsat
     entr_vel_scale =
-        area_limiter_factor * (entr_inv_length + entr_coeff / elev_above_sfc)
+        area_limiter_factor * (base_inv_length + subsat_inv_length)
     return max(0, entr_vel_scale)
 end
 

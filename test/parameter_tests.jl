@@ -310,3 +310,171 @@ end
               one(FT)
     end
 end
+
+@testset "Free-tropospheric subsaturation dynamical entrainment parameters and limits" begin
+    for FT in (Float32, Float64)
+        params_default = CA.ClimaAtmosParameters(FT)
+        thp = CAP.thermodynamics_params(params_default)
+        tc_default = params_default.turbconv_params
+        @test CAP.entr_subsat_coeff(tc_default) == zero(FT)
+        @test CAP.entr_subsat_power(tc_default) == FT(2)
+        @test CAP.entr_subsat_height_min(tc_default) == FT(0.2)
+        @test CAP.entr_subsat_height_width(tc_default) == FT(0.1)
+
+        tc_active = CA.TurbulenceConvectionParameters(
+            FT,
+            (;
+                entr_subsat_coeff = FT(5),
+                entr_subsat_power = FT(2),
+                entr_subsat_height_min = FT(0.2),
+                entr_subsat_height_width = FT(0.1),
+            ),
+        )
+        z_sfc = zero(FT)
+        p_c = FT(70000)
+        ρ_c = FT(0.9)
+        a_j = FT(0.02)
+        w_j = FT(2)
+        rh_j = one(FT)
+        b_j = FT(0.01)
+        w_0 = zero(FT)
+        b_0 = zero(FT)
+        tke = FT(0.5)
+
+        # Surface guard: z <= z_sfc returns 0
+        @test CA.entrainment_velocity_scale(
+            thp,
+            tc_active,
+            z_sfc,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(0.35),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        ) == zero(FT)
+
+        # MBL height (z = 1000 m, Π₅ < 0.2): identical to baseline for any RH⁰
+        z_mbl = FT(1000)
+        base_mbl = CA.entrainment_velocity_scale(
+            thp,
+            tc_default,
+            z_mbl,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(0.25),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        )
+        @test CA.entrainment_velocity_scale(
+            thp,
+            tc_active,
+            z_mbl,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(0.25),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        ) == base_mbl
+
+        # Free troposphere (z = 3500 m, Π₅ > 0.2): zero increment at RH⁰ >= 1, positive for RH⁰ < 1
+        z_ft = FT(3500)
+        base_ft = CA.entrainment_velocity_scale(
+            thp,
+            tc_default,
+            z_ft,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(0.35),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        )
+        @test CA.entrainment_velocity_scale(
+            thp,
+            tc_active,
+            z_ft,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            one(FT),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        ) == base_ft
+        @test CA.entrainment_velocity_scale(
+            thp,
+            tc_active,
+            z_ft,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(1.1),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        ) == base_ft
+
+        g = FT(CAP.grav(params_default))
+        ref_H = p_c / (ρ_c * g)
+        Π₅ = z_ft / ref_H
+        δΠ₅ = Π₅ - FT(0.2)
+        G_z = δΠ₅^2 / (δΠ₅^2 + FT(0.1)^2)
+        U_a = CA.upper_area_limiter_factor(a_j, tc_active)
+        expected_ft =
+            base_ft + U_a * (FT(5) / ref_H) * G_z * (one(FT) - FT(0.35))^2
+        @test CA.entrainment_velocity_scale(
+            thp,
+            tc_active,
+            z_ft,
+            z_sfc,
+            p_c,
+            ρ_c,
+            a_j,
+            w_j,
+            rh_j,
+            b_j,
+            w_0,
+            FT(0.35),
+            b_0,
+            tke,
+            CA.InvZEntrainment(),
+        ) ≈ expected_ft
+    end
+end
