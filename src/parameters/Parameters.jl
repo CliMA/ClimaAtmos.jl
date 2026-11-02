@@ -185,6 +185,17 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
+  - `entr_subsat_coeff`: Free-tropospheric environmental-subsaturation
+    coefficient `c_subsat ≥ 0` scaling `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p`
+    in `InvZEntrainment` (`0` by default) [-].
+  - `entr_subsat_power`: Exponent `p ≥ 1` on `max(0, 1 - RH⁰)` in
+    `InvZEntrainment` (`2` by default) [-].
+  - `entr_subsat_height_min`: Onset threshold `Π₅_min ≥ 0` of the dimensionless
+    height `Π₅ = (z - z_sfc) / ref_H` for the free-tropospheric subsaturation
+    gate `G_z(Π₅)` in `InvZEntrainment` (`0.2` by default) [-].
+  - `entr_subsat_height_width`: Transition half-width `ΔΠ₅ > 0` of the
+    dimensionless height gate `G_z(Π₅)` in `InvZEntrainment` (`0.1` by default)
+    [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -230,6 +241,10 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
     edmfx_updraft_kh_diffusion_factor::FT
+    entr_subsat_coeff::FT
+    entr_subsat_power::FT
+    entr_subsat_height_min::FT
+    entr_subsat_height_width::FT
 end
 
 """

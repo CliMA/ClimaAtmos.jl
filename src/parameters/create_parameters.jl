@@ -594,6 +594,10 @@ function TurbulenceConvectionParameters(
     FT = CP.float_type(toml_dict)
     provisional_defaults = (;
         edmfx_updraft_kh_diffusion_factor = FT(1),
+        entr_subsat_coeff = FT(0),
+        entr_subsat_power = FT(2),
+        entr_subsat_height_min = FT(0.2),
+        entr_subsat_height_width = FT(0.1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
