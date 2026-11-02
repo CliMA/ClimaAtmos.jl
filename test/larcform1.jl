@@ -4,7 +4,7 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
 import ClimaAtmos.Setups as Setups
-import AtmosphericProfilesLibrary as APL
+import ClimaAtmos.AtmosphericProfilesLibrary as APL
 import Thermodynamics as TD
 
 @testset "Larcform1 setup" begin

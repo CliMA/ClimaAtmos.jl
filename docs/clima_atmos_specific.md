@@ -16,6 +16,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
       + `les_sgs_models/`: Smagorinsky–Lilly, anisotropic minimum dissipation, constant horizontal diffusion.
       + `sponge/`: Rayleigh and viscous sponge tendencies.
   - EDMF code lives in `src/cache/{prognostic,diagnostic}_edmf_precomputed_quantities.jl` and `src/prognostic_equations/edmfx_*.jl`, not under `parameterized_tendencies/`.
+  - `src/atmospheric_profiles_library/`: `AtmosphericProfilesLibrary` submodule (imported as `APL`) holding the published single-column case profiles (BOMEX, DYCOMS, Rico, TRMM-LBA, ...) that `src/setups/` builds on. It depends only on interpolation packages, not on the rest of ClimaAtmos. Tested in `test/atmospheric_profiles_library.jl`.
   - `src/callbacks/`, `src/diagnostics/`, `src/setups/`, `src/surface_conditions/`, `src/topography/`, `src/parameters/`, `src/utils/`: remaining domain subtrees. Search by physics/runtime concept first.
   - `config/`: YAML/TOML config library. `default_configs/default_config.yml` is the schema baseline; `common_configs/` holds reusable numerics; `model_configs/`, `gpu_configs/`, `mpi_configs/`, `perf_configs/`, and `longrun_configs/` are scenario overlays.
   - `.buildkite/ci_driver.jl`: canonical run entry for CI-style simulations. It parses config, builds the simulation, runs `solve_atmos!`, and performs validation/output checks.

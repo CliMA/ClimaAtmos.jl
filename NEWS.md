@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- AtmosphericProfilesLibrary.jl is now the `ClimaAtmos.AtmosphericProfilesLibrary`
+  submodule, copied from AtmosphericProfilesLibrary.jl v0.1.10, and ClimaAtmos no
+  longer depends on the standalone package. Replace
+  `import AtmosphericProfilesLibrary as APL` with
+  `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] With
   `ImplicitCloudLiquidFormation` and `PrognosticEDMFX`, set the grid-mean
   `ρq_lcl` of the Newton initial guess so that the environment cloud liquid

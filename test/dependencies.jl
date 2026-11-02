@@ -42,7 +42,6 @@ known_dependencies = Set([
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
     "Artifacts",
-    "AtmosphericProfilesLibrary",
     "ClimaComms",
     "ClimaCore",
     "ClimaDiagnostics",
