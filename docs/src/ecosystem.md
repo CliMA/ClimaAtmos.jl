@@ -164,9 +164,10 @@ selected by the `microphysics_model` configuration argument.
     aerosol climatologies, ERA5-derived forcing files) that simulations
     download on demand as Julia artifacts, so runs are reproducible down to
     the input data.
-  - The `ClimaAtmos.AtmosphericProfilesLibrary` submodule provides the
-    published reference profiles (BOMEX, DYCOMS, GABLS, …) from which the
-    [single-column setups](setups.md) build their initial conditions.
+  - The [`ClimaAtmos.AtmosphericProfilesLibrary`](atmospheric_profiles_library.md)
+    submodule provides the published reference profiles (BOMEX, DYCOMS, GABLS,
+    …) from which the [single-column setups](setups.md) build their initial
+    conditions.
 
 ## Calibration
 
