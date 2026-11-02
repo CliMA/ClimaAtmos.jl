@@ -728,7 +728,7 @@ function _set_covariance_cache_loop!(
         ᶜtke = has_tke ? (@. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
         sfc_tke =
             has_tke ?
-            (@. lazy(specific(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
+            (lazy.(specific.(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
             zero_FT
         if is_edmf
             @. ᶜbuoygrad = blended_N²(
