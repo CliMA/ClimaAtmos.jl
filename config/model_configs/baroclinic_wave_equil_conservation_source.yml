@@ -11,3 +11,4 @@ diagnostics:
   - short_name: [massa, energya, watera, energyo, watero]
     period: 1days
     writer: dict
+z_stretch: false

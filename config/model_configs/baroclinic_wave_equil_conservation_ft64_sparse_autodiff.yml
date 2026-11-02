@@ -12,3 +12,4 @@ diagnostics:
   - short_name: [massa, energya]
     period: 1days
     writer: dict
+z_stretch: false

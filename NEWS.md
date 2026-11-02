@@ -11,6 +11,23 @@ main
   condensation in the implicit-stage predictor. The draft cloud liquid then
   passes `enforce_edmf_updraft_constraints!` unclipped after one Newton
   iteration, which strengthens cumulus and deep convection.
+- ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
+  grids (`z_stretch: true`) use the two-scale
+  `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the
+  boundary layer with scale height `z_pbl` (new key, default 2200 m) while
+  matching the layer thickness `dz_bottom` at the surface and `dz_top` (new key,
+  default 3000 m) at the model top. The rule admits `z_elem` within a range set
+  by these thicknesses and `z_max`, and building the grid raises an error that
+  names the range otherwise. Configurations whose grids lie outside the range,
+  among them every run on the 10-level default grid and the 25-level
+  performance benchmarks, set `z_stretch: false` and run with uniform layers;
+  `numerics_sphere_he6ze31.yml`, the 200-level ERA5-driven column, and the
+  RCEMIP box CRM set a `dz_top` inside the range the rule admits for them, and
+  the shallow LARC, ARM, and Schar-mountain cases set a `dz_top` near the top
+  spacing they have under the single-scale rule. The grid constructors
+  `SphereGrid`, `ColumnGrid`, `BoxGrid`, and `PlaneGrid` default to
+  `z_stretch = false`. Requires ClimaCore 1.0.8. Added the 79-level
+  configurations `numerics_sphere_he24ze79.yml` and `numerics_column_ze79.yml`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] ERA5 forcing files take the
   sign of the horizontal advective tendencies from the coordinate order of the
   raw input. Raw CDS ERA5 latitude descends, so the meridional advection of
