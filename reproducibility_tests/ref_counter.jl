@@ -1,4 +1,4 @@
-450
+451
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+451
+- The fused covariance loop reads the surface TKE at the first level, and
+  `ᶜbuoygrad` is written for models without covariances.
+
 450
 - Fused column loops (`DataLayouts.foreach_column`) for the implicit and explicit
   tendencies, the precomputed quantities and caches (including the SGS covariance

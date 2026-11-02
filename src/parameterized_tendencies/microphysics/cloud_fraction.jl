@@ -94,6 +94,17 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     picard_step!(Val(false))
     picard_step!(Val(true))
 
+    # TODO: Under `AbstractEDMF`, write `ᶜbuoygrad` and `ᶜl_mix` in one column loop.
+    if !uses_covariances(p.atmos)
+        ᶜlg = Fields.local_geometry_field(Y.c)
+        @. ᶜbuoygrad = blended_N²(
+            ᶜbg_coeffs,
+            ᶜcloud_fraction,
+            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+        )
+    end
+
     # Final post-Aitken covariance, then, for the 1M and 2M schemes, the SGS
     # moments, the cloud fraction consistent with them, and the precipitation
     # fraction.
@@ -728,7 +739,7 @@ function _set_covariance_cache_loop!(
         ᶜtke = has_tke ? (@. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
         sfc_tke =
             has_tke ?
-            (@. lazy(specific(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
+            (lazy.(specific.(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
             zero_FT
         if is_edmf
             @. ᶜbuoygrad = blended_N²(
