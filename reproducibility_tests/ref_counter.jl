@@ -1,4 +1,4 @@
-462
+463
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+463
+- `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
+  results at the level of Float32 rounding.
+
 462
 - 1M rain and snow are placed on the precipitation shaft by default
   (`sgs_precip_incloud_fraction = 1`, `sgs_precip_fraction_floor = 0.1`).

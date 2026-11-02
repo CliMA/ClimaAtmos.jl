@@ -4,7 +4,7 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
 import ClimaAtmos.Setups as Setups
-import AtmosphericProfilesLibrary as APL
+import ClimaAtmos.AtmosphericProfilesLibrary as APL
 import Thermodynamics as TD
 
 @testset "Larcform1 setup" begin
@@ -21,7 +21,11 @@ import Thermodynamics as TD
     simulation = CA.get_simulation(config)
     thermo_params = CAP.thermodynamics_params(simulation.integrator.p.params)
     FT = eltype(thermo_params)
-    LC = APL.Larcform1_constants
+    LC = APL.Larcform1_constants(
+        FT,
+        TD.Parameters.R_d(thermo_params),
+        TD.Parameters.grav(thermo_params),
+    )
 
     setup = Setups.Larcform1(; thermo_params)
     profs = setup.profiles

@@ -1669,8 +1669,6 @@ by `rad: "ISDAC"`.
     κ::FT = 170  # m²/kg
 end
 
-import AtmosphericProfilesLibrary as APL
-
 """
     RadiationTRMM_LBA(::Type{FT})
 
