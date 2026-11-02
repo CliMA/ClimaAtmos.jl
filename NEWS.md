@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
+  (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
+  albedos in `RegressionFunctionAlbedo`.
 - ![][badge-🔥behavioralΔ] Lower `zd_rayleigh` and `zd_viscous` to `30000.0` m
   in `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
   to damp upper-stratospheric topographic mountain waves on the 79-level grid.

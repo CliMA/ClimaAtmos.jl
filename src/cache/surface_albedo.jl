@@ -1,4 +1,3 @@
-# we are ignoring the volume reflectance for now
 """
     SurfaceAlbedoModel
 
@@ -41,11 +40,11 @@ while the YAML configuration path constructs it from the ClimaParams parameter
 end
 
 """
-    RegressionFunctionAlbedo{FT}(; n, n0, p, q_clear, q_cloud, wave_slope)
+    RegressionFunctionAlbedo{FT}(; n, n0, p, q_clear, q_cloud, R_sub, wave_slope)
 
 Ocean surface albedo from the regression functions of [Jin2011](@cite) (J11),
-with direct and diffuse components computed separately. Volume reflectance
-(foam and subsurface scattering) is currently ignored.
+with direct and diffuse surface-reflection components augmented by subsurface
+volume reflectance `R_sub`. Whitecap foam reflectance is omitted.
 
 # Fields
 
@@ -54,13 +53,15 @@ with direct and diffuse components computed separately. Volume reflectance
   - `p`: Regression coefficients for the direct albedo (J11 eq. 4) [-].
   - `q_clear`: Regression coefficients for the clear-sky diffuse albedo (J11 eq. 5a) [-].
   - `q_cloud`: Regression coefficients for the cloudy-sky diffuse albedo (J11 eq. 5b) [-].
+  - `R_sub`: Subsurface volume reflectance from water molecules and hydrosols [-].
   - `wave_slope`: Function of wind speed returning the mean wave-slope distribution
     width of the Cox-Munk model (J11 eq. 2) [-].
 
 # Constructor
 
-The keyword constructor supplies the J11 regression coefficients as defaults, so
-`RegressionFunctionAlbedo{FT}()` is the standard usage.
+The keyword constructor supplies the J11 regression coefficients and
+`R_sub = 0` as defaults, so `RegressionFunctionAlbedo{FT}()` is the
+standard usage.
 """
 struct RegressionFunctionAlbedo{FT, F <: Function} <: SurfaceAlbedoModel
     n::FT                           # relative refractive index of water and air (n = n_w/n_a) TODO: f(wavelength) for a spectrally dependent scheme
@@ -68,6 +69,7 @@ struct RegressionFunctionAlbedo{FT, F <: Function} <: SurfaceAlbedoModel
     p::SA.SVector{11, FT}           # regression coefficients of J11 for eq. 4
     q_clear::SA.SVector{4, FT}      # regression coefficients of J11 for eq. 5a
     q_cloud::SA.SVector{3, FT}      # regression coefficients of J11 for eq. 5b
+    R_sub::FT                       # subsurface volume reflectance
     wave_slope::F                   # mean wave slope distribution width (Cox-Munk model, J11 Eq. 2)
 end
 function RegressionFunctionAlbedo{FT}(;
@@ -88,9 +90,18 @@ function RegressionFunctionAlbedo{FT}(;
     ),
     q_clear = SA.SVector{4, FT}(-0.1482, -0.012, 0.1608, -0.0244),
     q_cloud = SA.SVector{3, FT}(-0.1479, 0.1502, -0.016),
+    R_sub = FT(0),
     wave_slope = u -> sqrt(FT(0.003) + FT(0.00512) * u),
 ) where {FT <: AbstractFloat}
-    return RegressionFunctionAlbedo(n, n0, p, q_clear, q_cloud, wave_slope)
+    return RegressionFunctionAlbedo(
+        n,
+        n0,
+        p,
+        q_clear,
+        q_cloud,
+        R_sub,
+        wave_slope,
+    )
 end
 
 import RRTMGP
@@ -240,7 +251,8 @@ function surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT
                     one(FT),
                     max(
                         zero(FT),
-                        rf(n, cosθ) - rf(n, cosθ) / rf(n0, cosθ) * f(cosθ, σ),
+                        rf(n, cosθ) - rf(n, cosθ) / rf(n0, cosθ) * f(cosθ, σ) +
+                        α_model.R_sub,
                     ),
                 )
             end
@@ -293,7 +305,8 @@ function surface_albedo_diffuse(
                     max(
                         zero(FT),
                         cloud_fraction * α_cloud +
-                        (1 - cloud_fraction) * α_clear,
+                        (1 - cloud_fraction) * α_clear +
+                        α_model.R_sub,
                     ),
                 )
             end
