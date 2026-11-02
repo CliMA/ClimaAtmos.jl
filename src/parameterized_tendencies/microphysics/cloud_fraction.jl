@@ -1857,7 +1857,7 @@ end
 
 Refresh `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` from the current state
 `Y` without touching `ᶜcloud_fraction` or `ᶜprecip_frac`. Used by
-`update_implicit_microphysics_cache!` on each Newton iterate: the implicit
+`set_implicit_precomputed_quantities!` on each Newton iterate: the implicit
 1M BMT reads `ᶜsgs_moments` directly, while `ᶜcloud_fraction` is not a BMT
 input and `ᶜprecip_frac` only enters the BMT when
 `sgs_precip_incloud_fraction > 0` (off by default). No-op when

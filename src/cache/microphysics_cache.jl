@@ -677,12 +677,11 @@ Refresh the microphysics precomputed quantities that depend on the current Newto
 iterate `Y`. Called from `set_implicit_precomputed_quantities!` at every Newton
 iteration of the implicit solve. Returns `nothing`.
 
-For 0M, 2M, and 2M+P3 the bulk microphysics tendency is frozen after
-`set_microphysics_tendency_cache!`; only density-weighted source terms and
-surface fluxes are refreshed here. For 1M the implicit cache
-`ᶜmp_tendency_implicit*` is also refreshed (via `update_implicit_1m_tendency!`)
-so the condensation / sublimation tendency the implicit stage treats separately
-tracks the Newton iterate.
+The bulk microphysics tendency is frozen after
+`set_microphysics_tendency_cache!`; only density-weighted source terms,
+sedimentation velocities, and surface fluxes are refreshed here. The 1M
+implicit tendency `ᶜmp_tendency_implicit*` is refreshed separately by
+`set_implicit_precomputed_quantities!` (see `has_implicit_1m_microphysics`).
 
 Dispatch on `microphysics_model` and `turbconv_model`:
 
@@ -694,10 +693,9 @@ Dispatch on `microphysics_model` and `turbconv_model`:
     current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
   - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): refreshes the sedimentation
     velocities with `set_precipitation_velocities!` (for 1M, when any mode is
-    state-dependent) and calls `set_precipitation_surface_fluxes!`. For 1M, also
-    refreshes `ᶜsgs_moments` (via `set_sgs_moments!`) and the
-    implicit tendency cache. Density weighting of the specific tendencies is
-    applied at tendency-evaluation time in `tendency.jl`.
+    state-dependent) and calls `set_precipitation_surface_fluxes!`. Density
+    weighting of the specific tendencies is applied at tendency-evaluation time
+    in `tendency.jl`.
   - Default: no-op (microphysics not active).
 """
 update_implicit_microphysics_cache!(Y, p, _, _) = nothing
@@ -756,25 +754,23 @@ function update_implicit_microphysics_cache!(
     else
         set_precipitation_velocities!(Y, p, mm, tm)
     end
-    # Refresh `ᶜsgs_moments` from the current Newton iterate when the implicit
-    # 1M condensation / sublimation source is active: `λ_lagrange` follows
-    # `q_c = q_lcl + q_icl`, which Newton moves. `microphysics_1m_implicit_params`
-    # is nulled for 2M/2MP3, so guard the whole block on `1M`.
-    if mm isa NonEquilibriumMicrophysics1M
-        procs = CAP.microphysics_1m_implicit_params(p.params).processes
-        if !isnothing(procs.cloud_liquid_formation) ||
-           !isnothing(procs.cloud_ice_formation)
-            # Refresh only the SGS moments the implicit 1M BMT reads
-            # directly. `ᶜcloud_fraction` and `ᶜprecip_frac` are not BMT
-            # inputs (the latter only enters when
-            # `sgs_precip_incloud_fraction > 0`, off by default).
-            set_sgs_moments!(Y, p)
-            # Refresh the implicit 1M tendency cache at the Newton iterate.
-            update_implicit_1m_tendency!(Y, p, mm, tm)
-        end
-    end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
+end
+
+"""
+    has_implicit_1m_microphysics(p)
+
+Whether the implicit 1M condensation / sublimation tendency is active: 1M
+microphysics with `cloud_liquid_formation` or `cloud_ice_formation` assigned to
+`microphysics_1m_implicit_params` (`implicit_microphysics: true`). When it is
+not, `ᶜmp_tendency_implicit*` keep their zero initialization.
+"""
+function has_implicit_1m_microphysics(p)
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return false
+    procs = CAP.microphysics_1m_implicit_params(p.params).processes
+    return !isnothing(procs.cloud_liquid_formation) ||
+           !isnothing(procs.cloud_ice_formation)
 end
 
 """
@@ -911,8 +907,9 @@ schemes the density weighting is applied at tendency-evaluation time in
 For 1M, this is the **stage-initial** cache update (runs once per IMEX stage,
 before the Newton solve starts): it writes only the bulk CM BMT tendency
 (`microphysics_1m_params`). The implicit tendency (`ᶜmp_tendency_implicit*`,
-driven by `microphysics_1m_implicit_params`) is refreshed by
-`update_implicit_microphysics_cache!` at every Newton iterate and by
+driven by `microphysics_1m_implicit_params`) is refreshed after this call in
+`set_explicit_precomputed_quantities!`, by
+`set_implicit_precomputed_quantities!` at every Newton iterate, and by
 `update_updraft_microphysics_tendency_cache!` at every Picard round; it stays
 zero when `implicit_microphysics: false`.
 
@@ -971,7 +968,7 @@ non-equilibrium schemes, after its transport sweep, and from the Picard loop
 of `initialize_implicit_stage_problem!` for the 0-moment scheme. The bulk
 `ᶜmp_tendencyʲs` is frozen through the Newton solve, matching the Jacobian
 (no derivative of `ᶜmp_tendencyʲs`); `ᶜmp_tendency_implicitʲs` is overwritten
-on each Newton iterate by `update_implicit_microphysics_cache!`. A no-op for
+on each Newton iterate by `set_implicit_precomputed_quantities!`. A no-op for
 any combination not covered by a specialization.
 """
 update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
@@ -998,7 +995,8 @@ function update_updraft_microphysics_tendency_cache!(
 )
     # Refresh both bulk and implicit updraft tendencies at the Picard-
     # transported state. The Picard predictor applies the sum; Newton later
-    # overwrites the implicit entries via `update_implicit_microphysics_cache!`.
+    # overwrites the implicit entries via `set_implicit_precomputed_quantities!`.
+    # The implicit entries stay zero when the implicit split is off.
     (;
         ᶜmp_tendencyʲs,
         ᶜmp_tendency_implicitʲs,
@@ -1014,6 +1012,7 @@ function update_updraft_microphysics_tendency_cache!(
     vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     vcmp_i = _fold(dev, cmp_i)
     nsubs = mp1m.n_substeps
+    refresh_implicit = has_implicit_1m_microphysics(p)
     for j in 1:n_mass_flux_subdomains(tm)
         ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
@@ -1022,12 +1021,14 @@ function update_updraft_microphysics_tendency_cache!(
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
             ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
         )
-        @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
-        )
+        if refresh_implicit
+            @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+                Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
+            )
+        end
     end
     return nothing
 end
@@ -1139,7 +1140,7 @@ function set_microphysics_tendency_cache!(
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
     # Bulk CM BMT only; the implicit cache is refreshed per Newton iterate
-    # by `update_implicit_microphysics_cache!`.
+    # by `set_implicit_precomputed_quantities!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
@@ -1182,7 +1183,7 @@ function set_microphysics_tendency_cache!(
 )
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!`. Bulk CM BMT only; the implicit cache
-    # is refreshed per Newton iterate by `update_implicit_microphysics_cache!`
+    # is refreshed per Newton iterate by `set_implicit_precomputed_quantities!`
     # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed

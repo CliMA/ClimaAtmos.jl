@@ -42,7 +42,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     # Microphysics tendencies are always applied here. `implicit_microphysics`
     # only decides whether cond/subl flows through `ᶜmp_tendency_implicit`
-    # (refreshed per Newton iter via `update_implicit_microphysics_cache!`
+    # (refreshed per Newton iter via `set_implicit_precomputed_quantities!`
     # with a `-dtγ/τ` Jacobian) or stays in the frozen bulk `ᶜmp_tendency`.
     microphysics_tendency!(
         Yₜ,

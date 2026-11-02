@@ -652,8 +652,7 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
         (@name(q_rai), @name(dq_rai_dt)),
         (@name(q_sno), @name(dq_sno_dt)),
     )
-    has_implicit_mp =
-        microphysics_model isa NonEquilibriumMicrophysics1M
+    has_implicit_mp = has_implicit_1m_microphysics(p)
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
         ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)

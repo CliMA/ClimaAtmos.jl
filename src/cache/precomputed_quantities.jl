@@ -364,7 +364,7 @@ function precomputed_quantities(Y, atmos)
         # `ᶜmp_tendency_implicit` carries the SGS-integrated condensation /
         # sublimation tendencies from CM BMT with
         # `microphysics_1m_implicit_params`; refreshed per Newton iterate by
-        # `update_implicit_microphysics_cache!`, zeroed here so it stays
+        # `set_implicit_precomputed_quantities!`, zeroed here so it stays
         # zero when `implicit_microphysics: false` (the function is not
         # called in that mode).
         ᶜmp_tendency_implicit = similar(Y.c, MP1_NT)
@@ -727,7 +727,7 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
 end
 
 """
-    set_implicit_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t; refresh_implicit_1m = true)
 
 Update the precomputed quantities that are handled implicitly based on the
 current state `Y`. This is called before each evaluation of either
@@ -738,8 +738,13 @@ thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, `ᶜh_t
 `PrognosticEDMFX`. When microphysics is timestepped implicitly, it also
 refreshes the density-weighted microphysics sources and surface precipitation
 fluxes via `update_implicit_microphysics_cache!`. When
-`p.atmos.diff_mode == Implicit()`, it also refreshes the Smagorinsky-Lilly eddy
-viscosity and diffusivity, whose vertical tendency is then implicit.
+`refresh_implicit_1m` is `true` and `has_implicit_1m_microphysics(p)`, it also
+refreshes `ᶜsgs_moments` and the 1M implicit tendency `ᶜmp_tendency_implicit*`.
+`set_precomputed_quantities!` passes `refresh_implicit_1m = false` and does that
+refresh in `set_explicit_precomputed_quantities!` instead, after the SGS
+covariances it reads are updated. When `p.atmos.diff_mode == Implicit()`, it
+also refreshes the Smagorinsky-Lilly eddy viscosity and diffusivity, whose
+vertical tendency is then implicit.
 
 This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface and at the model top (i.e., to enforce the impenetrable boundary
@@ -748,7 +753,9 @@ same for each `ᶠu³ʲ`. In the future, we will probably want to move this
 filtering elsewhere, but doing it here ensures that it occurs whenever the
 precomputed quantities are updated.
 """
-NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_implicit_precomputed_quantities!(
+    Y, p, t; refresh_implicit_1m = true,
+)
     (; turbconv_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) =
@@ -885,12 +892,18 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     end
 
     # Microphysics is always treated implicitly: refresh ᶜρ_dq_tot_dt /
-    # ᶜρ_de_tot_dt (0M), the surface precipitation fluxes, and (for 1M with
-    # `implicit_microphysics: true`) the `ᶜmp_tendency_implicit*` cache so
-    # all three track the Newton iterate. The surface flux fields have
-    # Dual-typed copies in `implicit_precomputed_quantities`, so AD can write
-    # into them safely.
+    # ᶜρ_de_tot_dt (0M) and the surface precipitation fluxes so they track
+    # the Newton iterate. The surface flux fields have Dual-typed copies in
+    # `implicit_precomputed_quantities`, so AD can write into them safely.
     update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
+    # The implicit 1M condensation / sublimation tendency also tracks the
+    # Newton iterate, including `λ_lagrange` in `ᶜsgs_moments`, which follows
+    # `q_lcl + q_icl`. The SGS covariances it reads stay at their last
+    # explicit update.
+    if refresh_implicit_1m && has_implicit_1m_microphysics(p)
+        set_sgs_moments!(Y, p)
+        update_implicit_1m_tendency!(Y, p, microphysics_model, turbconv_model)
+    end
 
     # With implicit vertical diffusion, the vertical Smagorinsky-Lilly tendency
     # is part of `implicit_tendency!`, so its eddy viscosity has to follow the
@@ -979,6 +992,18 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
+    # The implicit 1M tendency reads `ᶜsgs_moments`, which
+    # `set_covariance_cache_and_cloud_fraction!` has just updated together with
+    # the SGS covariances, so it is refreshed here rather than in
+    # `set_implicit_precomputed_quantities!` (see `set_precomputed_quantities!`).
+    if has_implicit_1m_microphysics(p)
+        update_implicit_1m_tendency!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
@@ -1003,9 +1028,10 @@ end
 
 Update all precomputed quantities in `p.precomputed` based on the current
 state `Y`, by calling `set_implicit_precomputed_quantities!` and then
-`set_explicit_precomputed_quantities!`.
+`set_explicit_precomputed_quantities!`. The 1M implicit tendency is computed
+only in the explicit half, after the SGS covariances it reads are updated.
 """
 function set_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t; refresh_implicit_1m = false)
     set_explicit_precomputed_quantities!(Y, p, t)
 end
