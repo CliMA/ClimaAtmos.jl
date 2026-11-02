@@ -265,9 +265,32 @@ end
     compute_strain_rate_center_horizontal(ᶜu)
 
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+
+On DG spaces the gradient of each velocity component is the strong gradient
+completed by its central face lift (`Operators.central_gradient_lift`), the
+DG gradient that the SIPG horizontal diffusion is built on; the element-local
+strong gradient alone misses the velocity jumps at element faces.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
     axis_uvw = Geometry.UVWAxis()
+    if is_dg_horizontal(axes(ᶜu))
+        FT = Spaces.undertype(axes(ᶜu))
+        ᶜuvw = @. UVW(ᶜu)
+        lift(ᶜχ) = Operators.lifting_correction(
+            Operators.central_gradient_lift,
+            Geometry.UVVector{FT},
+            ᶜχ,
+        )
+        ᶜL₁ = lift(ᶜuvw.components.data.:1)
+        ᶜL₂ = lift(ᶜuvw.components.data.:2)
+        ᶜL₃ = lift(ᶜuvw.components.data.:3)
+        # rows: gradient direction, columns: velocity component
+        ᶜ∇u = @. Geometry.project((axis_uvw,), gradₕ(ᶜuvw)) +
+           Geometry.outer(UVW(ᶜL₁), UVW(FT(1), FT(0), FT(0))) +
+           Geometry.outer(UVW(ᶜL₂), UVW(FT(0), FT(1), FT(0))) +
+           Geometry.outer(UVW(ᶜL₃), UVW(FT(0), FT(0), FT(1)))
+        return @. lazy((ᶜ∇u + adjoint(ᶜ∇u)) / 2)
+    end
     return @. lazy(
         (
             Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))) +

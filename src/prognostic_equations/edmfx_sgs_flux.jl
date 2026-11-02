@@ -398,6 +398,14 @@ scale.
 With prognostic updrafts and `edmfx_model.horizontal_diffusion` enabled, the
 grid-mean specific tendencies are also applied to the subdomain scalars.
 
+The scalar fluxes `∇ₕ⋅(ρK ∇ₕχ)` use `Operators.scalar_laplacian!`: the weak
+divergence of the element-local gradient on CG spaces (made continuous by DSS),
+and on DG spaces the symmetric interior-penalty (SIPG) form, whose face flux
+`−{ρK ∇ₕχ}⋅n̂ + τ⟦χ⟧` couples neighbouring elements, so each diffused scalar is
+conserved and its jumps across element faces are damped
+([`edmfx_sgs_horizontal_scalar_diffusion!`](@ref)). The momentum stress
+([`edmfx_sgs_horizontal_momentum_diffusion!`](@ref)) has no DG form yet.
+
 Always explicit; applied in the explicit remainder, independently of `diff_mode`.
 """
 edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) =
@@ -409,6 +417,23 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
         return nothing
     iscolumn(axes(Y.c)) && return nothing
+    edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+    edmfx_sgs_horizontal_scalar_diffusion!(Yₜ, Y, p, turbconv_model)
+    return nothing
+end
+
+"""
+    edmfx_sgs_horizontal_scalar_diffusion!(Yₜ, Y, p, turbconv_model)
+
+Scalar part of [`edmfx_sgs_horizontal_diffusive_flux_tendency!`](@ref): the
+horizontal SGS diffusion of total energy, the diffusing water and the cloud
+species that share it, the passive tracers, and prognostic TKE (transport and
+the shear production of the horizontal strain rate). Every flux divergence is
+an `Operators.scalar_laplacian!`, so on DG spaces the elements are coupled by
+the SIPG face terms, and the strain rate uses the DG gradient
+([`compute_strain_rate_center_horizontal`](@ref)).
+"""
+function edmfx_sgs_horizontal_scalar_diffusion!(Yₜ, Y, p, turbconv_model)
     FT = Spaces.undertype(axes(Y.c))
     ϵ_FT = eps(FT)
     (; params) = p
@@ -432,9 +457,13 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜΦ) = p.core
     (; ᶜT) = p.precomputed
+    ᶜρK_h = @. lazy(ᶜρ * ᶜK_h_h)
     ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-    @. ᶜρe_totₜ_diffusion =
-        wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+    Operators.scalar_laplacian!(
+        ᶜρe_totₜ_diffusion,
+        (@. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)));
+        weight = ᶜρK_h,
+    )
 
     if !(p.atmos.microphysics_model isa DryModel)
         ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
@@ -448,14 +477,19 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
             ᶜq_icl,
         )
         ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        @. ᶜρe_totₜ_diffusion +=
-            wdivₕ(ᶜρ * ᶜK_h_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+        ᶜρe_totₜ_water = p.scratch.ᶜtemp_scalar_5
+        Operators.scalar_laplacian!(
+            ᶜρe_totₜ_water,
+            ᶜq_tot_eff;
+            weight = (@. lazy(ᶜρK_h * ᶜh_eff_plus_Φ)),
+        )
+        @. ᶜρe_totₜ_diffusion += ᶜρe_totₜ_water
 
         # Water diffusion on `q_tot_eff`, and its effect on the moist air mass.
         # Cloud species inherit their share below; rain and snow get no
         # horizontal transport.
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
-        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜq_tot_eff))
+        Operators.scalar_laplacian!(ᶜρχₜ_diffusion, ᶜq_tot_eff; weight = ᶜρK_h)
         @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
         @. Yₜ.c.ρ += ᶜρχₜ_diffusion
         if apply_sgs_updraft
@@ -519,7 +553,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         ρχ_name in microphysics_tracer_names(Y) && return
         ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
-        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜχ))
+        Operators.scalar_laplacian!(ᶜρχₜ_diffusion, ᶜχ; weight = ᶜρK_h)
         @. ᶜρχₜ += ᶜρχₜ_diffusion
         if apply_sgs_updraft
             χ_name = specific_tracer_name(ρχ_name)
@@ -532,8 +566,6 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         end
     end
 
-    (; ᶜu, ᶠu) = p.precomputed
-
     # Turbulent TKE transport, and shear production from horizontal gradients;
     # the production from vertical gradients is applied in the TKE tendency.
     # The strain-rate invariant of the nodal spectral-element gradient is too
@@ -542,10 +574,38 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     # within each element by its lumped GLL{2} restriction (`lumpedₕ`), which
     # conserves the element's integral of the invariant.
     if use_prognostic_tke(turbconv_model)
-        @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
+        (; ᶜu) = p.precomputed
+        ᶜρtkeₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        Operators.scalar_laplacian!(
+            ᶜρtkeₜ_diffusion,
+            ᶜtke;
+            weight = (@. lazy(ᶜρ * ᶜK_u_h)),
+        )
+        @. Yₜ.c.ρtke += ᶜρtkeₜ_diffusion
         ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
         @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * lumpedₕ(norm_sqr(ᶜS_h))
     end
+    return nothing
+end
+
+"""
+    edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+
+Momentum part of [`edmfx_sgs_horizontal_diffusive_flux_tendency!`](@ref): the
+horizontal weak divergence of the SGS stress `τ = -2 K_u S` with the full
+strain rate, for `uₕ` at centers and `u₃` at faces. Element-local, so it
+errors on DG spaces, which need the face terms of a tensor interior-penalty
+form.
+"""
+function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+    is_dg_horizontal(axes(Y.c)) && error(
+        "edmfx_sgs_horizontal_diffusive_flux has no DG form of the momentum \
+         stress yet; the scalar fluxes are coupled across elements by SIPG, \
+         but wdivₕ(ρτ) would act element by element",
+    )
+    (; ᶜK_u_h) = p.precomputed
+    (; ᶜu, ᶠu) = p.precomputed
+    ᶜρ = Y.c.ρ
 
     # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`
     # with the full strain rate. The vertical stress divergence is handled by

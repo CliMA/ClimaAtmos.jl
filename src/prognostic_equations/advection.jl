@@ -36,16 +36,15 @@ page of the docs (`docs/src/equations.md`).
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     if is_dg_horizontal(axes(Y.c)) &&
        p.atmos.numerics.dg_equation_form === Val(:fddg)
-        p.atmos.turbconv_model isa PrognosticEDMFX && error(
-            "dg_equation_form = fddg does not support PrognosticEDMFX \
-             (the sgsʲ horizontal terms have no flux-form counterpart yet)",
-        )
         dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         # ρtke is excluded from is_tracer_var and the split_divₕ term below is
         # skipped by this early return; it rides the density flux of the
         # dynamics like the grid-mean tracers (dg_fddg_tracer_transport!)
         use_prognostic_tke(p.atmos.turbconv_model) &&
             dg_fddg_tke_advection!(Yₜ, Y, p)
+        # the updraft ρaʲ and mseʲ ride the same density flux
+        p.atmos.turbconv_model isa PrognosticEDMFX &&
+            dg_fddg_sgs_dynamics!(Yₜ, Y, p)
         return nothing
     end
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -140,6 +139,8 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     if is_dg_horizontal(axes(Y.c)) &&
        p.atmos.numerics.dg_equation_form === Val(:fddg)
         dg_fddg_tracer_transport!(Yₜ, Y, p)
+        p.atmos.turbconv_model isa PrognosticEDMFX &&
+            dg_fddg_sgs_tracer_transport!(Yₜ, Y, p)
         return nothing
     end
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
@@ -271,12 +272,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
     if is_dg_horizontal(axes(Y.f))
-        dg_ω¹²_horizontal!(ᶠω¹², Y)
+        dg_ω¹²_horizontal!(ᶠω¹², Y.f.u₃)
+        for j in 1:n
+            dg_ω¹²_horizontal!(ᶠω¹²ʲs.:($j), Y.f.sgsʲs.:($j).u₃)
+        end
     else
         @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
-    end
-    for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) += CT12(wcurlₕ(Y.f.sgsʲs.:($$j).u₃))
+        for j in 1:n
+            @. ᶠω¹²ʲs.:($$j) += CT12(wcurlₕ(Y.f.sgsʲs.:($$j).u₃))
+        end
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 

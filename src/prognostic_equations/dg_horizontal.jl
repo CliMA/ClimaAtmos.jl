@@ -724,17 +724,17 @@ function dg_ω³!(ᶜω³, Y)
 end
 
 """
-    dg_ω¹²_horizontal!(ᶠω¹², Y)
+    dg_ω¹²_horizontal!(ᶠω¹², ᶠu₃)
 
-DG replacement for `ᶠω¹² += CT12(wcurlₕ(u₃))`: strong horizontal curl of the
-vertical velocity plus the central curl lifting. `project` (not `transform`):
-on warped grids the tangential correction has an O(slope) third contravariant
-component that belongs to the ω³ correction.
+DG replacement for `ᶠω¹² += CT12(wcurlₕ(ᶠu₃))`: strong horizontal curl of the
+vertical velocity `ᶠu₃` (grid-mean or updraft) plus the central curl lifting.
+`project` (not `transform`): on warped grids the tangential correction has an
+O(slope) third contravariant component that belongs to the ω³ correction.
 """
-function dg_ω¹²_horizontal!(ᶠω¹², Y)
-    FT = Spaces.undertype(axes(Y.f))
-    @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
-    ᶠw_sc = @. Geometry.WVector(Y.f.u₃).components.data.:1
+function dg_ω¹²_horizontal!(ᶠω¹², ᶠu₃)
+    FT = Spaces.undertype(axes(ᶠu₃))
+    @. ᶠω¹² += CT12(curlₕ(ᶠu₃))
+    ᶠw_sc = @. Geometry.WVector(ᶠu₃).components.data.:1
     ω¹²_lift = Operators.lifting_correction(
         central_curl12_lift,
         Geometry.UVVector{FT},
@@ -968,6 +968,99 @@ function dg_fddg_tracer_transport!(Yₜ_lim, Y, p)
             water_in_system ? ᶜλ_zero : ᶜλ_tracer,
         )
         @. ᶜρχₜ += r / ᶜWJ
+    end
+    return nothing
+end
+
+"""
+    dg_fddg_mass_carrier(Y, p)
+
+The carried-residual map `χ ↦ R(χ)` of [`dg_carried_tracer_residual`](@ref)
+with the volume and interface fluxes of [`dg_fddg_flux_setup`](@ref) and the
+tracer penalty rate, together with `R(1)`, the density residual of the
+dynamics. Shared by the PrognosticEDMFX updraft transport on the flux-form DG
+path.
+"""
+function dg_fddg_mass_carrier(Y, p)
+    (; y, volume_flux, interface, ᶜλ_tracer) = dg_fddg_flux_setup(Y, p)
+    carried(ᶜχ) =
+        dg_carried_tracer_residual(volume_flux, interface, y, ᶜχ, ᶜλ_tracer)
+    ᶜR₁ = carried(@. one(Y.c.ρ))
+    return carried, ᶜR₁
+end
+
+# Advective-form transport `-uₕ⋅∇ₕχ` of the updraft specific quantity `ᶜχ`
+# into `ᶜχₜ`: `(R(χ) − χ R(1)) / ρ` with the grid-mean mass flux of the
+# dynamics (the updrafts share the grid-mean horizontal velocity). It vanishes
+# for uniform `χ`, and its weight is the grid-mean ρ, not the updraft ρa,
+# which may be arbitrarily small.
+function add_dg_fddg_advective_tendency!(ᶜχₜ, ᶜχ, carried, ᶜR₁, Y)
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    ᶜR = carried(ᶜχ)
+    @. ᶜχₜ += (ᶜR - ᶜχ * ᶜR₁) / (Y.c.ρ * ᶜWJ)
+    return nothing
+end
+
+"""
+    dg_fddg_sgs_dynamics!(Yₜ, Y, p)
+
+Horizontal transport of the PrognosticEDMFX updraft mass and moist static
+energy on the flux-form DG path, the counterpart of the `sgsʲ` `split_divₕ`
+terms of `horizontal_dynamics_tendency!`. The updrafts move with the
+grid-mean horizontal velocity, so `ρaʲ` rides the density flux of the
+dynamics as the specific quantity `ρaʲ/ρ` ([`dg_carried_tracer_residual`](@ref)),
+with `F_{ρa} = F_ρ {ρa/ρ}` in the volume and `F*_ρ {ρa/ρ} − λ_χ {ρ} ⟦ρa/ρ⟧`
+at faces, and a uniform updraft mass fraction stays uniform across the
+density jumps of the dynamics. `mseʲ` is advected in advective form by the
+same mass flux.
+"""
+function dg_fddg_sgs_dynamics!(Yₜ, Y, p)
+    n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    carried, ᶜR₁ = dg_fddg_mass_carrier(Y, p)
+    for j in 1:n
+        ᶜR_ρa = carried(@. Y.c.sgsʲs.:($$j).ρa / Y.c.ρ)
+        @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜR_ρa / ᶜWJ
+        add_dg_fddg_advective_tendency!(
+            Yₜ.c.sgsʲs.:($j).mse,
+            Y.c.sgsʲs.:($j).mse,
+            carried,
+            ᶜR₁,
+            Y,
+        )
+    end
+    return nothing
+end
+
+"""
+    dg_fddg_sgs_tracer_transport!(Yₜ_lim, Y, p)
+
+Horizontal advection of the PrognosticEDMFX updraft total water and
+auto-discovered SGS tracers (into `Yₜ_lim`) on the flux-form DG path, the
+counterpart of the `sgsʲ` terms of `horizontal_tracer_advection_tendency!`:
+advective form by the density flux of the dynamics, as for `mseʲ` in
+[`dg_fddg_sgs_dynamics!`](@ref).
+"""
+function dg_fddg_sgs_tracer_transport!(Yₜ_lim, Y, p)
+    n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
+    carried, ᶜR₁ = dg_fddg_mass_carrier(Y, p)
+    for j in 1:n
+        add_dg_fddg_advective_tendency!(
+            Yₜ_lim.c.sgsʲs.:($j).q_tot,
+            Y.c.sgsʲs.:($j).q_tot,
+            carried,
+            ᶜR₁,
+            Y,
+        )
+        for χ_name in sgs_tracer_names(Y)
+            add_dg_fddg_advective_tendency!(
+                MatrixFields.get_field(Yₜ_lim.c.sgsʲs.:($j), χ_name),
+                MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name),
+                carried,
+                ᶜR₁,
+                Y,
+            )
+        end
     end
     return nothing
 end
