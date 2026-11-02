@@ -374,6 +374,9 @@ function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
                 [entr_subsat_height_width]
                 value = 0.1
                 type = "float"
+                [sgs_ice_sedimentation_cf_floor]
+                value = 0.02
+                type = "float"
                 """,
             )
         else
@@ -412,6 +415,7 @@ function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
             Dict(
                 "initial_condition" => "Bomex",
                 "microphysics_model" => "1M",
+                "cloud_ice_terminal_velocity" => "Chen2022",
                 "rain_terminal_velocity" => "Chen2022",
                 "snow_terminal_velocity" => "Chen2022",
                 "turbconv" => "prognostic_edmfx",

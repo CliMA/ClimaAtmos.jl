@@ -45,11 +45,14 @@ struct Blk1MTerminalVelocity <: AbstractTerminalVelocityMode end
 """
     Chen2022TerminalVelocity <: AbstractTerminalVelocityMode
 
-Mass-weighted terminal velocity from the Chen et al. (2022) fall-speed relations of
-CloudMicrophysics, diagnosed from the local density and specific humidity: the
-small-ice relation for cloud ice, the rain relation for rain, and the large-ice
-relation for snow (integrated over the 1-moment snow size distribution). The snow
-particle fall speed depends on the snow apparent density (ClimaParams
+Mass-weighted terminal velocity from the Chen et al. (2022) fall-speed relations
+of CloudMicrophysics, diagnosed from the local density and specific humidity:
+the small-ice relation for cloud ice, the rain relation for rain, and the
+large-ice relation for snow (integrated over the 1-moment snow size
+distribution). CloudMicrophysics caps the rain and snow fall speeds smoothly at
+their hydrodynamic breakup limits; cloud ice is capped smoothly at `1.5 m/s`
+(numerical guard on `q / CF` at small cloud-fraction floors). The snow particle
+fall speed depends on the snow apparent density (ClimaParams
 `snow_apparent_density`).
 """
 struct Chen2022TerminalVelocity <: AbstractTerminalVelocityMode end
@@ -121,6 +124,11 @@ terminal_velocity(
     q,
 ) = CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q)
 
+# Smooth asymptotic cap on the 1-moment cloud-ice mass-weighted terminal fall
+# speed: a numerical guard on in-cloud q / CF at small cloud-fraction floors and
+# low upper-air density.
+@inline _bounded_fall_speed(w, w_max) = w / hypot(one(w), w / w_max)
+
 # Ice, 1M
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -138,8 +146,11 @@ terminal_velocity(
     cmc,
     cmp,
     ρ,
-    q,
-) = CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
+    q::FT,
+) where {FT} = _bounded_fall_speed(
+    CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q),
+    FT(1.5),
+)
 
 # Rain, 1M
 terminal_velocity(

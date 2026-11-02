@@ -194,6 +194,28 @@ end
     return a_s * φ_in * w_in + (one_a - a_s) * φ_out * w_out
 end
 
+@inline function incloud_ice_terminal_velocity(
+    microphysics_model,
+    vel_mode,
+    χ_name,
+    params,
+    ρ,
+    q,
+    cf,
+    cf_floor,
+)
+    q_pos = max(zero(q), q)
+    cf_eff = clamp(cf, cf_floor, one(cf_floor))
+    return _1m_terminal_velocity(
+        microphysics_model,
+        vel_mode,
+        χ_name,
+        params,
+        ρ,
+        q_pos / cf_eff,
+    )
+end
+
 """
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
@@ -239,9 +261,13 @@ function set_precipitation_velocities!(
     FT = eltype(params)
     β_p = FT(CAP.sgs_precip_incloud_fraction(params))
     a_floor = FT(CAP.sgs_precip_fraction_floor(params))
+    cf_ice_floor = FT(CAP.sgs_ice_sedimentation_cf_floor(params))
     use_shaft_vel =
         (β_p > zero(FT)) &&
         MatrixFields.has_field(p.precomputed, @name(ᶜprecip_frac))
+    use_ice_incloud_vel =
+        (cf_ice_floor < one(FT)) &&
+        MatrixFields.has_field(p.precomputed, @name(ᶜcloud_fraction))
 
     microphysics_tracers = (
         (@name(q_lcl), @name(ᶜwₗ)),
@@ -269,6 +295,17 @@ function set_precipitation_velocities!(
                 β_p,
                 ᶜprecip_frac,
                 a_floor,
+            )
+        elseif use_ice_incloud_vel && (χ_name === @name(q_icl))
+            @. ᶜw = incloud_ice_terminal_velocity(
+                microphysics_model,
+                vel_mode,
+                χ_name,
+                params,
+                Y.c.ρ,
+                ᶜρχ / Y.c.ρ,
+                p.precomputed.ᶜcloud_fraction,
+                cf_ice_floor,
             )
         else
             @. ᶜw = _1m_terminal_velocity(
@@ -316,11 +353,17 @@ function set_precipitation_velocities!(
     FT = eltype(params)
     β_p = FT(CAP.sgs_precip_incloud_fraction(params))
     a_floor = FT(CAP.sgs_precip_fraction_floor(params))
+    cf_ice_floor = FT(CAP.sgs_ice_sedimentation_cf_floor(params))
     use_shaft_vel =
         (β_p > zero(FT)) &&
         MatrixFields.has_field(p.precomputed, @name(ᶜprecip_frac))
     ᶜprecip_frac_or_dummy =
         use_shaft_vel ? p.precomputed.ᶜprecip_frac : Y.c.ρ
+    use_ice_incloud_vel =
+        (cf_ice_floor < one(FT)) &&
+        MatrixFields.has_field(p.precomputed, @name(ᶜcloud_fraction))
+    ᶜcloud_fraction_or_dummy =
+        use_ice_incloud_vel ? p.precomputed.ᶜcloud_fraction : Y.c.ρ
 
     # Fuse the column loop across all 4 species and the final WVec outputs so
     # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
@@ -336,10 +379,10 @@ function set_precipitation_velocities!(
     DataLayouts.foreach_column(
         ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
         Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-        ᶜu⁰, ᶜprecip_frac_or_dummy,
+        ᶜu⁰, ᶜprecip_frac_or_dummy, ᶜcloud_fraction_or_dummy,
     ) do ᶜw_pairs, ᶜwₕhₜ,
     Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-    ᶜu⁰, ᶜprecip_frac
+    ᶜu⁰, ᶜprecip_frac, ᶜcloud_fraction
         ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
@@ -377,6 +420,18 @@ function set_precipitation_velocities!(
                         β_p,
                         ᶜprecip_frac,
                         a_floor,
+                    )
+            elseif use_ice_incloud_vel && (χ_name === @name(q_icl))
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ * incloud_ice_terminal_velocity(
+                        microphysics_model,
+                        vel_mode,
+                        χ_name,
+                        params,
+                        ᶜρ⁰,
+                        ᶜχ⁰,
+                        ᶜcloud_fraction,
+                        cf_ice_floor,
                     )
             else
                 @. ᶜw =
@@ -440,7 +495,6 @@ function set_precipitation_velocities!(
 
         @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Yc.ρ
         return nothing
-    end
     end
     return nothing
 end

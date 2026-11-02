@@ -751,6 +751,10 @@ function SGSQuadratureParameters(
         # Floor on the overlap precipitation fraction seen by the placement:
         # the shaft is never narrower than a tenth of the cell.
         sgs_precip_fraction_floor = FT(0.1),
+        # Cloud-fraction floor dividing cloud ice into its in-cloud mixing
+        # ratio for 1M ice terminal velocity (`set_precipitation_velocities!`):
+        # 1 = domain-mean mixing ratio.
+        sgs_ice_sedimentation_cf_floor = FT(1),
         # Unresolved in-cloud condensate inhomogeneity seen by radiation
         # (`cloud_condensate_relative_variance`): relative variance 0.25, a
         # relative standard deviation of 0.5, within the 0.4–0.8 observed for
@@ -817,6 +821,13 @@ function SGSQuadratureParameters(
         ArgumentError(
             "cloud_condensate_relative_variance_floor must be non-negative; " *
             "got $rv_floor",
+        ),
+    )
+    cf_ice_floor = parameters.sgs_ice_sedimentation_cf_floor
+    0 < cf_ice_floor <= 1 || throw(
+        ArgumentError(
+            "sgs_ice_sedimentation_cf_floor must lie in (0, 1]; " *
+            "got $cf_ice_floor",
         ),
     )
     CAP.SGSQuadratureParameters{FT}(; parameters...)
