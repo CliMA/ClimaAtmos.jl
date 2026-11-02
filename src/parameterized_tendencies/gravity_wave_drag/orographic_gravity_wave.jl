@@ -738,12 +738,15 @@ function calc_nonpropagating_forcing!(
         return ᶠp_ref
     end
 
-    # Include cells that overlap with [z_pbl, z_ref):
+    # Include cells that overlap with [z_pbl, z_ref), only when p_ref is valid:
     # - ᶜtop_bias checks upper face > z_pbl (cell extends above z_pbl)
     # - ᶜbottom_bias checks lower face < z_ref (cell starts below z_ref)
-    # This ensures at least one cell is included when z_ref > z_pbl
-    @. ᶜmask = isone(ᶜtop_bias.((ᶠz .> ᶠz_pbl))) .&& isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
-    @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
+    # This ensures cells are included when p_ref is valid.
+    @. ᶜmask =
+        (!isnan(ᶠp_ref)) .&&
+        isone(ᶜtop_bias.((ᶠz .> ᶠz_pbl))) .&&
+        isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
+    @. ᶜweights = ifelse(ᶜmask, ᶜinterp.(ᶠp .- ifelse(isnan(ᶠp_ref), FT(0), ᶠp_ref)), FT(0))
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
     # Exclude zero and NaN weights so `ᶜdiff / ᶜweights` stays finite, and zero
@@ -752,7 +755,7 @@ function calc_nonpropagating_forcing!(
 
     @. ᶜweights = ifelse(ᶜmask, ᶜweights, FT(0))
 
-    input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
+    input = @. lazy(ifelse(ᶜmask, ᶜdiff / ᶜweights, FT(0)))
 
     Operators.column_reduce!(ᶜwtsum, input; init = FT(0)) do acc, wtsum_field
         return acc + wtsum_field
@@ -764,15 +767,17 @@ function calc_nonpropagating_forcing!(
 
     # Zero the tendency in columns where the mask is empty (`wtsum == 0`) or
     # `wtsum` is `NaN`.
+    ᶜsafe_wtsum =
+        @. lazy(ifelse(iszero(ᶜwtsum) || isnan(ᶜwtsum), FT(1), ᶜwtsum))
     @. ᶜuforcing += ifelse(
         iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
-        grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
+        grav * τ_x * τ_np / τ_l / ᶜsafe_wtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
         iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
-        grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
+        grav * τ_y * τ_np / τ_l / ᶜsafe_wtsum * ᶜweights,
     )
 
 end
