@@ -299,17 +299,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
-    # With `dg_fddg_vertical = flux` or `full_flux` the vertical transport of
-    # uₕ is the staggered flux form in dg_fddg_vertical_flux!, so the ω¹² × u³
-    # term is dropped here. With `flux` the u₃ equation keeps its
-    # vector-invariant form; with `full_flux` its advection is the dual-grid
-    # flux form of dg_fddg_w_flux!, and only the Coriolis term stays here.
+    # With `dg_fddg_vertical = full_flux` the vertical transport of uₕ is the
+    # staggered flux form of dg_fddg_vertical_flux! and the advection of u₃ is
+    # the dual-grid flux form of dg_fddg_w_flux!, so the ω¹² terms are dropped
+    # here and only the Coriolis terms stay.
     fddg_vflux =
         is_dg_horizontal(axes(Y.c)) &&
         p.atmos.numerics.dg_equation_form === Val(:fddg) &&
-        p.atmos.numerics.dg_fddg_vertical !== Val(:vi)
-    fddg_wflux =
-        fddg_vflux && p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
+        p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
+    fddg_wflux = fddg_vflux
     if isnothing(ᶠf¹²)
         # shallow atmosphere
         if fddg_vflux

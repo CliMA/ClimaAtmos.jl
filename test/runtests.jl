@@ -67,6 +67,12 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
     @safetestset "DG velocity penalty" begin @time include("prognostic_equations/dg_velocity_penalty_tests.jl") end
     @safetestset "DG VI entropy-variable penalties" begin @time include("prognostic_equations/dg_vi_es_interface_tests.jl") end
+    @safetestset "DG equation-of-state Roe dissipation" begin @time include("prognostic_equations/dg_roe_eos_tests.jl") end
+    @safetestset "DG moist entropy-variable dissipation" begin @time include("prognostic_equations/dg_moist_es_tests.jl") end
+    @safetestset "DG flux-form KPEP" begin @time include("prognostic_equations/dg_kpep_tests.jl") end
+    @safetestset "DG full flux-form momentum KE" begin @time include("prognostic_equations/dg_full_flux_kep_tests.jl") end
+    @safetestset "DG flux-form tracer-mass consistency" begin @time include("prognostic_equations/dg_fddg_tracer_consistency_tests.jl") end
+    @safetestset "DG VI moisture-consistent penalties" begin @time include("prognostic_equations/dg_vi_moist_interface_tests.jl") end
     @safetestset "Zhang–Shu limiter" begin @time include("prognostic_equations/zhang_shu_limiter_tests.jl") end
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end

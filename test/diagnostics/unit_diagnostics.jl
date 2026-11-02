@@ -54,6 +54,7 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
 
   :dry            — DryModel + SlabOceanSST, column
   :sphere         — DryModel + SlabOceanSST, sphere (also used for rv, orog, energyo)
+  :sphere_dg      — DryModel + SlabOceanSST, DG sphere (rv without DSS)
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
   :m1             — NonEquilibriumMicrophysics1M, column
@@ -81,7 +82,7 @@ import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, Spaces
+import ClimaCore: Fields, Spaces, Grids
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -169,6 +170,13 @@ model_dry = (;
 
 ## Sphere with dry model
 (Y_sphere, p_sphere) = build_state_cache(FT, model_dry; grid = sphere);
+
+## DG sphere with dry model: DSS is a no-op, so diagnostics that assemble
+## weak-form operators with DSS need a DG-specific path. Hyperdiffusion is
+## DSS-based and warns on DG, so it is disabled.
+sphere_dg = CA.SphereGrid(FT; h_elem = 2, discretization = Grids.DG())
+(Y_sphere_dg, p_sphere_dg) =
+    build_state_cache(FT, (; model_dry..., hyperdiff = nothing); grid = sphere_dg);
 
 ## Model with steady-state velocity
 # Mirrors the plane_no_topography_float64_test.yml config:
@@ -352,6 +360,7 @@ model_dwh = (;
 states = Dict(
     :dry            => (Y_dry,            p_dry),
     :sphere         => (Y_sphere,         p_sphere),
+    :sphere_dg      => (Y_sphere_dg,      p_sphere_dg),
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
     :m1             => (Y_1m,             p_1m),
@@ -410,8 +419,9 @@ VALID_CASES = [
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
     ), :dry)...,
-    # sphere-only (DSS / hypsography)
-    cases(("rv", "orog"), :sphere)...,
+    # sphere-only (DSS / hypsography); rv has a DG path (strong curl + lifting)
+    case("rv",   (:sphere, :sphere_dg)),
+    case("orog", :sphere),
     # MoistMicrophysics, single path
     cases((
         "hus", "hur", "husv", "hussfc", "evspsbl", "hfls",

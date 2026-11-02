@@ -3,45 +3,70 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-✨feature/enhancement] Add the `dg_vi_interface_flux` config option
-  for the vector-invariant horizontal DG form (`dg_equation_form: vi`). The
-  default `rusanov` keeps the face penalties on the jumps of `ρe_tot` and the
-  velocity. `es` penalizes the jumps of the dry entropy variables instead
-  (`−ρ/p` for `ρe_tot`, `βu` with `β = ρ/p` for the velocity, with either
-  `dg_vi_velocity_penalty`), so every face penalty is a sink of the dry entropy
-  `−ρs/(γ−1)`; the mass flux stays central, and energy and momentum stay
-  conserved at each face node. The central part is not entropy-conservative,
-  so `es` does not give a discrete entropy inequality for the whole scheme.
-- ![][badge-🐛bugfix] On DG horizontal spaces with `dg_equation_form: vi`,
-  prognostic TKE (`ρtke`, e.g. with `edonly_edmfx`) now receives the DG
-  interface flux of its horizontal advection, the same mass-consistent flux as
-  the grid-mean tracers. It previously had only the element-local volume term,
-  so TKE was not transported between elements.
-- ![][badge-✨feature/enhancement] Add the `dg_vi_velocity_penalty` config option
-  for the vector-invariant horizontal DG form (`dg_equation_form: vi`). The
-  default `rusanov` keeps the uniform `|u| + c` penalty on the horizontal
-  velocity jump. `wave_selective` damps the normal velocity jump at the
-  acoustic speed `max(|u_n| + c)` and the tangential and vertical-velocity
-  jumps at the shear speed `max(|{u_n}|, ε max(c))`, with the floor ε set by
-  `dg_vi_shear_floor` (default `0.05`). Both are sign-definite kinetic-energy
-  sinks that conserve momentum at each face node; `wave_selective` also adds a
-  horizontal jump penalty on the vertical velocity, which `rusanov` does not
-  damp.
+- ![][badge-✨feature/enhancement] Add the `dg_equation_form` config option
+  for horizontal DG discretizations: `vi` (default, vector-invariant) or
+  `fddg` (flux-form Cartesian momentum). The `fddg` dynamics use
+  pressure-free two-point fluxes for `(ρ, ρe_tot, ρu⃗)` with the Exner-split
+  pressure force of the vector-invariant form, which over terrain needs no
+  discrete metric identity. Options:
+  - `dg_volume_flux`: `kg_kpep` (default; Kennedy-Gruber advection with the
+    Exner force in the `{ρ}`-weighted two-point form of Souza et al. (2023)),
+    `div_exner` (mass flux averaged from the nodal mass fluxes, with the
+    nodal Exner gradient), or `kg_exner` (Kennedy-Gruber advection with the
+    nodal Exner gradient). `kg_kpep` and `div_exner` exchange kinetic and
+    potential energy exactly (KPEP) with `dg_fddg_vertical: vi`.
+  - `dg_interface_flux`: `roe_eos` (default; Roe-type wave-selective
+    dissipation with the sound speed, contact-wave energy and water-species
+    waves from automatic differentiation of the Thermodynamics.jl pressure,
+    so it is consistent across humidity fronts), `moist_es` (Lax-Friedrichs
+    on `(ρ, ρu⃗, ρe_tot, ρq_tot)` at one rate, a sink of every convex entropy
+    of the moist system), or `rusanov`.
+  - `dg_fddg_vertical`: `vi` (default; vector-invariant vertical exchange
+    terms) or `full_flux` (staggered flux form for `uₕ` and for `w` on the
+    dual grid, conserving kinetic energy in three dimensions, with a
+    ρ-weighted face jump penalty on `w`).
+
+  Grid-mean tracers and prognostic TKE ride the family's own two-point and
+  interface mass fluxes, so a uniform specific humidity stays uniform across
+  density jumps.
+- ![][badge-✨feature/enhancement] Add config options for the vector-invariant
+  horizontal DG form (`dg_equation_form: vi`):
+  - `dg_vi_velocity_penalty`: `rusanov` (default; `|u| + c` on the
+    horizontal velocity jump) or `wave_selective` (`|u_n| + c` on the normal
+    jump and `max(|u_n|, ε c)` on the tangential and vertical-velocity
+    jumps, `ε = dg_vi_shear_floor`, default `0.05`). Both are kinetic-energy
+    sinks that conserve momentum.
+  - `dg_vi_interface_flux`: `rusanov` (default; penalties on the ρ-weighted
+    jumps `{ρ}⟦e_tot⟧`, `{ρ}⟦χ⟧`), `rusanov_moist` (energy penalty on
+    `{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`, which vanishes across a humidity front at uniform
+    temperature and velocity), or `es` (penalty on the jump of `1/T` with
+    `{β}/β`-weighted velocity penalties, a sink of `−ρs` at each face). With
+    `rusanov_moist` and `es` the total-water penalty moves the mass and the
+    phase energies of the water together.
+  - `dg_tracer_penalty`: `acoustic` (default; `|u| + c`) or `advective`
+    (`max(|u|, ε c)`) for the tracer and TKE jump penalties.
+
+  The Rusanov and wave-selective rates use the moist sound speed
+  `sqrt(γ_m p / ρ)`. Prognostic TKE gets the same mass-consistent interface
+  flux as the grid-mean tracers.
 - ![][badge-✨feature/enhancement] Add the Zhang–Shu (2010) positivity limiter
-  (ClimaCore's `Limiters.PositivityLimiter`), enabled by the opt-in
-  `apply_zhang_shu_limiter` config option (default `false`, mutually exclusive
-  with `apply_sem_quasimonotone_limiter`), with floors `zhang_shu_rho_min`
-  (default `1e-6`) and `zhang_shu_p_min` (default `1e-2`). Applied in
-  `constrain_state!` to every complete stage value, so it requires
-  `update_constrain_state_every: "stage"` (or `"dss"`). ρ and each grid-mean
-  tracer are scaled at every node toward their WJ-weighted element mean to meet
-  the density and nonnegativity floors, then each element's conserved vector
-  (ρ, ρe_tot, orthonormal ρuₕ, and the tracers) is scaled toward its mean by one
-  θ ∈ [0, 1] meeting the pressure floor (on a concave lower bound of the moist
-  pressure, via per-node bisection) — mean-preserving convex combinations, not
-  pointwise clamps.
-  Intended for DG horizontal discretizations, whose transport is not
-  sign-preserving at nodal values; enabled in `aquaplanet_topo_kgpert_DG.yml`.
+  (ClimaCore's `Limiters.PositivityLimiter`), enabled by
+  `apply_zhang_shu_limiter` (default `false`, mutually exclusive with
+  `apply_sem_quasimonotone_limiter`, requires
+  `update_constrain_state_every: "stage"` or `"dss"`), with floors
+  `zhang_shu_rho_min` (default `1e-6`) and `zhang_shu_p_min` (default
+  `1e-2`). In each element, ρ and the vapor `ρq_tot − Σ ρq_cond` are scaled
+  toward their WJ-weighted element means to meet the floors, moving the vapor
+  mass and energy consistently; negative condensates are raised to zero
+  pointwise; and a single θ on the conserved vector meets the pressure floor.
+  The grid-mean microphysics constraints are skipped while it is active.
+  Intended for DG horizontal discretizations; enabled in
+  `aquaplanet_topo_kgpert_DG.yml`.
+- ![][badge-🐛bugfix] The `rv` (relative vorticity) diagnostic on DG grids is
+  the model's `ω³` (strong horizontal curl plus the central interface lifting).
+  The weak-form curl relies on DSS, a no-op on DG spaces, and showed
+  element-aligned striping.
+
 
 0.42.13
 -------

@@ -586,18 +586,9 @@ NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
             p.atmos.numerics.dg_vi_interface_flux === Val(:es) ||
             p.atmos.numerics.dg_vi_interface_flux === Val(:rusanov_moist)
         )
-    # fddg moist_es: total water is dissipated with the (ρ, ρu, ρe, ρq_tot)
-    # entropy system in dg_fddg_horizontal_dynamics!; keep only the central
-    # flux here
-    moist_es =
-        p.atmos.numerics.dg_equation_form === Val(:fddg) &&
-        p.atmos.numerics.dg_interface_flux === Val(:moist_es)
-    ᶜλ_zero = @. zero(ᶜλ)
     foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if es && ρχ_name == @name(ρq_tot)
             add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, p, ᶜuv, ᶜλ)
-        elseif moist_es && ρχ_name == @name(ρq_tot)
-            add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ_zero)
         else
             add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
         end
@@ -755,14 +746,12 @@ end
 
 # ---------------------------------------------------------------------------
 # FDDG (flux-form) horizontal dynamics — `dg_equation_form = :fddg`:
-# Waruszewski entropy-conservative + well-balanced volume flux (gravity as
-# the ½ρ̂⟦φ⟧ fluctuation), Roe interface dissipation, perturbation pressure
-# pm = p − p_ref in the momentum slot. The Cartesian-component momentum
-# tendency is built in the tangential (E, N) frame and converted to the
-# velocity state: duₕ = (d(ρu) − uₕ dρ)/ρ. With `dg_volume_flux = kg_exner`
-# the two-point momentum flux is advective only and the pressure force is
-# the Exner-split gradient of the vector-invariant form (volume gradₕ terms
-# plus central liftings), added to uₕ directly.
+# pressure-free two-point advective fluxes for (ρ, ρe, ρu⃗) with momentum in
+# global Cartesian components, the Exner-split pressure force of the
+# vector-invariant form (as a nodal gradient, or in the two-point form of
+# `kg_kpep`), and an equation-of-state or Rusanov interface dissipation. The
+# Cartesian-component momentum tendency is built in the tangential (E, N)
+# frame and converted to the velocity state: duₕ = (d(ρu) − uₕ dρ)/ρ.
 # ---------------------------------------------------------------------------
 
 """
@@ -866,18 +855,10 @@ function dg_fddg_flux_setup(Y, p)
     )
     # volume flux family and interface dissipation
     (; dg_volume_flux, dg_interface_flux) = p.atmos.numerics
-    # the Exner-gradient families carry no pressure in the two-point flux
-    exner_pgf =
-        dg_volume_flux === Val(:kg_exner) ||
-        dg_volume_flux === Val(:div_exner) || kpep
-    kg_advective = dg_volume_flux === Val(:kg_exner) || kpep
     volume_flux =
         dg_volume_flux === Val(:div_exner) ? divergence_cartesian_flux :
         kpep ? KennedyGruberKPEPFlux(cp_d) :
-        dg_volume_flux === Val(:kg_exner) ?
-        kennedy_gruber_advective_cartesian_flux :
-        dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_cartesian_flux :
-        waruszewski_cartesian_flux
+        kennedy_gruber_advective_cartesian_flux
     # the gravity fluctuation of kg_kpep is not an antisymmetric face flux;
     # its face part is the lifting KPEPFaceLift below
     iface_central = kpep ? kennedy_gruber_advective_cartesian_flux : volume_flux
@@ -885,27 +866,13 @@ function dg_fddg_flux_setup(Y, p)
     # moist_es dissipates total water with the system (6 slots) unless dry
     Nslots = moist_es && !(microphysics_model isa DryModel) ? 6 : 5
     interface = if dg_interface_flux === Val(:rusanov)
-        # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
-        # control than roe's ~5% contact floor — needed when no hyperdiffusion
-        # is present, e.g. to keep EDMFX TKE production bounded over terrain).
         dg_volume_flux === Val(:div_exner) ?
         CentralMinusDissipation(iface_central, rusanov_dissipation_cartesian) :
-        kg_advective ?
-        kennedy_gruber_advective_rusanov_cartesian :
-        kennedy_gruber_rusanov_cartesian
-    elseif dg_interface_flux === Val(:roe_eos)
-        RoeEOSInterface(iface_central, thermo_params)
+        kennedy_gruber_advective_rusanov_cartesian
     elseif moist_es
         MoistESInterface{Nslots}(iface_central, thermo_params)
-    elseif dg_interface_flux === Val(:es)
-        waruszewski_es_cartesian
     else
-        dg_volume_flux === Val(:div_exner) ?
-        CentralMinusDissipation(iface_central, roe_dissipation_cartesian) :
-        kg_advective ?
-        kennedy_gruber_advective_roe_cartesian :
-        dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_roe_cartesian :
-        waruszewski_roe_cartesian
+        RoeEOSInterface(iface_central, thermo_params)
     end
     return (;
         eE1,
@@ -934,8 +901,6 @@ function dg_fddg_flux_setup(Y, p)
         ᶜΠ,
         vertical_vi,
         ᶜψ_kpep,
-        exner_pgf,
-        kg_advective,
         volume_flux,
         iface_central,
         moist_es,
@@ -1012,32 +977,25 @@ end
 
 Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
 ρe_tot) terms, the Exner-split PGF, and the ω³ horizontal momentum advection
-of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
-terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
-components. Coriolis, all vertical terms, and tracer advection are unchanged.
+of `horizontal_dynamics_tendency!` with two-point flux-differencing volume
+terms and interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
+components. Coriolis and the vertical terms are unchanged; the tracers ride
+the same density flux ([`dg_fddg_tracer_transport!`](@ref)).
 
-With `dg_fddg_vertical = flux` the vertical transport of the horizontal
-momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)): the face
-mass flux of the continuity equation times the interpolated Cartesian
-velocity, which is kinetic-energy preserving on the staggered grid for the
-same reason the horizontal two-point flux is, plus, for the flux-form
-pressure families, the vertical two-point pressure flux
-`∂_ξ3({p_m}{ê_c ⋅ Ja³})` through the horizontal part of `Ja³`. That term is
-the terrain tilt of the horizontal pressure force; the horizontal flux
-differencing alone carries only `Σ_{k=1,2} ∂_ξk(p_m Ja^k)`, which over sloped
-surfaces is the along-surface gradient and not the horizontal one.
+With `dg_fddg_vertical = full_flux` the vertical transport of the horizontal
+momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)), and so is
+the advection of the vertical velocity ([`dg_fddg_w_flux!`](@ref)).
 
 With `dg_volume_flux = div_exner` the two-point flux is the divergence form
 [`divergence_cartesian_flux`](@ref): the mass flux is the average of the
 nodal mass fluxes, as in the vector-invariant form, so the nodal gradients of
-`κ` and `Φ` exchange kinetic with potential energy exactly. With
-`dg_fddg_vertical = vi` this makes the scheme kinetic- and potential-energy
-preserving (KPEP); `flux` breaks the deep-atmosphere metric pair of the
-vertical exchange.
+`κ` and `Φ` exchange kinetic with potential energy exactly (KPEP). With
+`kg_kpep` the Kennedy--Gruber mass flux is kept and the Exner force is
+written in its two-point form ([`KennedyGruberKPEPFlux`](@ref)).
 
 With `dg_volume_flux = kg_exner` only the advection is in flux form
-([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
-interface dissipation); the horizontal pressure force is the Exner-split
+([`kennedy_gruber_advective_cartesian_flux`](@ref)); the horizontal pressure
+force is the Exner-split
 gradient of the vector-invariant form, `gradₕ(Φ − Φ_r) + cp_d [θ_v′ ∇Π]`
 with its central liftings ([`dg_exner_split_pgf_lift!`](@ref)). Gradients
 of scalars are pointwise exact on constants, so over terrain this form
@@ -1080,8 +1038,6 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         ᶜΠ,
         vertical_vi,
         ᶜψ_kpep,
-        exner_pgf,
-        kg_advective,
         volume_flux,
         iface_central,
         moist_es,
@@ -1120,7 +1076,7 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             Geometry.transform(Geometry.Covariant12Axis(), L_kpep / Y.c.ρ),
         )
     end
-    if exner_pgf && !kpep
+    if !kpep
         # Exner-split horizontal PGF of the vector-invariant form (as in
         # horizontal_dynamics_tendency!) without the ∇K part, which the
         # flux-form advection above carries. kg_kpep carries the whole Exner
@@ -1164,7 +1120,6 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             Yₜ,
             Y,
             p,
-            pm,
             (u1, u2, u3),
             (eE1, eE2, eE3),
             (eN1, eN2, eN3),
@@ -1412,27 +1367,17 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
 end
 
 """
-    dg_fddg_vertical_flux!(Yₜ, Y, p, pm, (u1, u2, u3), (eE1, eE2, eE3), (eN1, eN2, eN3))
+    dg_fddg_vertical_flux!(Yₜ, Y, p, (u1, u2, u3), (eE1, eE2, eE3), (eN1, eN2, eN3))
 
-Staggered flux-form vertical terms of the Cartesian horizontal momentum for
-`dg_fddg_vertical = flux` (replacing the `ω¹² × u³` term of
-`explicit_vertical_advection_tendency!`):
-
-  - advection by the face mass flux of the continuity equation,
-    `m = ᶠinterp(ρJ) u³` (zero through the surface and the top), in velocity
-    form `du_c = −(δ(m {u_c}) − u_c δ(m)) / (ρJ)`, with `{u_c} = ᶠinterp(u_c)`.
-    This is the two-point Kennedy-Gruber momentum flux `{ρ}{u_c}{u³}` on the
-    two-point vertical stencil, so the vertical advection produces no
-    spurious kinetic energy (the summand `½ u_k·u_{k+1} m_{k+½}` telescopes);
-  - for `dg_volume_flux = kg_pert`, the vertical two-point pressure flux
-    `du_c = −δ({J p_m ê_c³}) / (ρJ)` with `ê_c³ = ∇ξ³ ⋅ ê_c` the
-    contravariant vertical component of the Cartesian unit vector. On
-    unwarped grids `J ê_c³ ∝ r̂ ⋅ ê_c`, so the tangential projection of the
-    term vanishes pointwise; over terrain `∇ξ³` tilts and the term carries
-    the slope part of the horizontal pressure force. The horizontal two-point
-    flux keeps its `{p_m}{ê_c ⋅ Ja^k}` part; the two stencils satisfy the
-    metric identity only to truncation, so a terrain rest residual of that
-    order remains (the vector-invariant Exner gradient has none).
+Staggered flux-form vertical transport of the Cartesian horizontal momentum
+for `dg_fddg_vertical = full_flux` (replacing the `ω¹² × u³` term of
+`explicit_vertical_advection_tendency!`): advection by the face mass flux of
+the continuity equation,
+`m = ᶠinterp(ρJ) u³` (zero through the surface and the top), in velocity
+form `du_c = −(δ(m {u_c}) − u_c δ(m)) / (ρJ)`, with `{u_c} = ᶠinterp(u_c)`.
+This is the two-point Kennedy-Gruber momentum flux `{ρ}{u_c}{u³}` on the
+two-point vertical stencil, so the vertical advection produces no spurious
+kinetic energy (the summand `½ u_k·u_{k+1} m_{k+½}` telescopes).
 
 The Cartesian tendencies are projected onto the tangential (E, N) frame and
 converted to the covariant `uₕ` state like the horizontal flux-form terms.
@@ -1441,16 +1386,13 @@ function dg_fddg_vertical_flux!(
     Yₜ,
     Y,
     p,
-    pm,
     (u1, u2, u3),
     (eE1, eE2, eE3),
     (eN1, eN2, eN3),
 )
     (; ᶠu³) = p.precomputed
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜJ = ᶜlg.J
+    ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    coords = Fields.coordinate_field(axes(Y.c))
     # face mass flux of the continuity equation (J-weighted contravariant)
     ᶠm = @. ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³
     ᶜdivm = @. ᶜadvdivᵥ(ᶠm)
@@ -1460,34 +1402,6 @@ function dg_fddg_vertical_flux!(
     du1 = adv(u1)
     du2 = adv(u2)
     du3 = adv(u3)
-    if p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
-        # Perturbation-pressure family only: with p_m = p − p_ref(Φ) the
-        # tangential part of −∇p − ρ∇Φ is exactly −(∇p_m)_t, so the 3D
-        # divergence of p_m ê_c needs no gravity term. The Waruszewski flux
-        # carries full p with the ½ρ̂⟦φ⟧ gravity fluctuation in its horizontal
-        # momentum slot; its vertical counterpart (p* plus the own-side
-        # fluctuation, which cancels at hydrostatic rest) is not implemented,
-        # so that family gets the flux-form advection only.
-        # Boundary faces: the surface pressure force on the sloped ground is
-        # the first-order (linear) extrapolation of the flux, since the
-        # zero-order value misses the half-cell hydrostatic increment.
-        ᶠinterp_lin = Operators.InterpolateC2F(;
-            bottom = Operators.Extrapolate{1}(),
-            top = Operators.Extrapolate{1}(),
-        )
-        # radial components of the Cartesian unit vectors
-        eR1 = @. cosd(coords.lat) * cosd(coords.long)
-        eR2 = @. cosd(coords.lat) * sind(coords.long)
-        eR3 = @. sind(coords.lat)
-        tilt(eE, eN, eR) = begin
-            ê³ = @. Geometry.contravariant3(Geometry.UVWVector(eE, eN, eR), ᶜlg)
-            X = @. ᶜJ * pm * ê³
-            @. ᶜdivᵥ(CT3(ᶠinterp_lin(X) / ᶠJ)) / Y.c.ρ
-        end
-        du1 .+= tilt(eE1, eN1, eR1)
-        du2 .+= tilt(eE2, eN2, eR2)
-        du3 .+= tilt(eE3, eN3, eR3)
-    end
     duE = @. du1 * eE1 + du2 * eE2 + du3 * eE3
     duN = @. du1 * eN1 + du2 * eN2 + du3 * eN3
     @. Yₜ.c.uₕ -= C12(

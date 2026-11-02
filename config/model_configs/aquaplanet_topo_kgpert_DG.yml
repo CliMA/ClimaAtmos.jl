@@ -2,16 +2,12 @@ horizontal_discretization: "DG"
 
 # Horizontal DG formulation: keep exactly one block uncommented (with both
 # commented out, the defaults give vi with rusanov penalties).
-# --- FDDG: flux-form momentum, Kennedy-Gruber volume flux, Roe interface flux
+# --- FDDG: flux-form Cartesian momentum, KPEP Kennedy-Gruber two-point flux
+# with the Exner force in two-point form, equation-of-state Roe dissipation
 # dg_equation_form: "fddg"
-# dg_volume_flux: "kg_pert"
-# dg_interface_flux: "roe"
-#
-# --- FDDG with the vi pressure treatment: Kennedy-Gruber advection only,
-# Exner-split gradient PGF (no two-point pressure flux over terrain)
-# dg_equation_form: "fddg"
-# dg_volume_flux: "kg_exner"
-# dg_interface_flux: "roe"
+# dg_volume_flux: "kg_kpep"
+# dg_interface_flux: "roe_eos"
+# dg_fddg_vertical: "vi"
 #
 # --- ES-VI: vector-invariant form with entropy-variable interface penalties
 dg_equation_form: "vi"

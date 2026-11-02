@@ -145,20 +145,14 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_equation_form = Symbol(get(parsed_args, "dg_equation_form", "vi"))
     dg_equation_form in (:vi, :fddg) ||
         error("dg_equation_form must be vi or fddg, got $dg_equation_form")
-    dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "waruszewski"))
-    dg_volume_flux in (:waruszewski, :kg_pert, :kg_exner, :div_exner, :kg_kpep) || error(
-        "dg_volume_flux must be waruszewski, kg_pert, kg_exner, div_exner, or kg_kpep, got $dg_volume_flux",
+    dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "kg_kpep"))
+    dg_volume_flux in (:kg_exner, :div_exner, :kg_kpep) || error(
+        "dg_volume_flux must be kg_exner, div_exner, or kg_kpep, got $dg_volume_flux",
     )
-    dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe"))
-    dg_interface_flux in (:roe, :roe_eos, :es, :moist_es, :rusanov) || error(
-        "dg_interface_flux must be roe, roe_eos, es, moist_es, or rusanov, got $dg_interface_flux",
+    dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe_eos"))
+    dg_interface_flux in (:roe_eos, :moist_es, :rusanov) || error(
+        "dg_interface_flux must be roe_eos, moist_es, or rusanov, got $dg_interface_flux",
     )
-    (dg_interface_flux == :es && dg_volume_flux != :waruszewski) &&
-        error("dg_interface_flux = es requires dg_volume_flux = waruszewski")
-    (dg_interface_flux == :rusanov && dg_volume_flux == :waruszewski) &&
-        error(
-            "dg_interface_flux = rusanov requires dg_volume_flux = kg_pert, kg_exner, div_exner, or kg_kpep",
-        )
     dg_vi_velocity_penalty =
         Symbol(get(parsed_args, "dg_vi_velocity_penalty", "rusanov"))
     dg_vi_velocity_penalty in (:rusanov, :wave_selective) || error(
@@ -181,8 +175,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         "dg_tracer_penalty must be acoustic or advective, got $dg_tracer_penalty",
     )
     dg_fddg_vertical = Symbol(get(parsed_args, "dg_fddg_vertical", "vi"))
-    dg_fddg_vertical in (:vi, :flux, :full_flux) || error(
-        "dg_fddg_vertical must be vi, flux, or full_flux, got $dg_fddg_vertical",
+    dg_fddg_vertical in (:vi, :full_flux) || error(
+        "dg_fddg_vertical must be vi or full_flux, got $dg_fddg_vertical",
     )
 
     numerics = AtmosNumerics(;

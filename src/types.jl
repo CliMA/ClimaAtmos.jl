@@ -1890,10 +1890,9 @@ symbols or strings.
     water flux carrying its mass and energy; or the entropy variables).
   - `dg_tracer_penalty`: `Val(:acoustic)` or `Val(:advective)`, the rate of
     the DG tracer jump penalties, `|u| + c` or `max(|u|, ε c)`.
-  - `dg_fddg_vertical`: `Val(:vi)` or `Val(:flux)`, the vertical transport
-    of the horizontal momentum in the flux-form DG dynamics (vector-invariant
-    `ω¹² × u³`, or the staggered flux form with the two-point vertical
-    pressure flux).
+  - `dg_fddg_vertical`: `Val(:vi)` or `Val(:full_flux)`, the vertical
+    momentum transport in the flux-form DG dynamics (the vector-invariant
+    exchange terms, or the staggered flux form for `uₕ` and `w`).
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -1936,23 +1935,17 @@ struct AtmosNumerics{
     # Val(:fddg) (flux-form Cartesian momentum). Val-typed (isbits) because
     # AtmosNumerics rides into GPU kernels via the AtmosModel.
     dg_equation_form::DGEF
-    # FDDG volume/interface flux family: Val(:waruszewski)
-    # (entropy-conservative; full-p momentum flux), Val(:kg_pert)
-    # (Kennedy-Gruber carrying pm = p − p_ref in the momentum flux), or
-    # Val(:kg_exner) (Kennedy-Gruber advection only; the pressure force is
-    # the Exner-split gradient of the vector-invariant form), or
-    # Val(:div_exner) (as kg_exner with the divergence-form mass flux
+    # FDDG volume flux family, all pressure-free in the two-point flux:
+    # Val(:kg_exner) (Kennedy-Gruber advection; the pressure force is the
+    # Exner-split gradient of the vector-invariant form), Val(:div_exner) (as kg_exner with the divergence-form mass flux
     # {ρu^ξ}, which makes the gravity and kinetic-energy gradients exchange
     # kinetic and potential energy exactly: KPEP with dg_fddg_vertical = vi),
     # or Val(:kg_kpep) (Kennedy-Gruber mass flux with the two-point gravity
     # of Souza et al. 2023: KPEP).
     dg_volume_flux::DGVF
-    # FDDG interface dissipation: Val(:roe) (dry-gas eigenstructure),
-    # Val(:roe_eos) (eigenstructure from the model's equation of state by
-    # autodiff of the Thermodynamics pressure), Val(:rusanov), Val(:es)
-    # (Lax-Friedrichs in dry entropy variables — with the Waruszewski volume
-    # flux this gives a discrete entropy inequality for dry air), or
-    # Val(:moist_es) (Lax-Friedrichs on the conserved vector with total
+    # FDDG interface dissipation: Val(:roe_eos) (Roe eigenstructure from the
+    # model's equation of state by autodiff of the Thermodynamics pressure),
+    # Val(:rusanov), or Val(:moist_es) (Lax-Friedrichs on the conserved vector with total
     # water: a sink of every convex entropy, the moist one included).
     dg_interface_flux::DGIF
     # VI-form DG velocity jump penalty: Val(:rusanov) (uniform |u| + c on the
@@ -1969,12 +1962,10 @@ struct AtmosNumerics{
     # Rate of the DG tracer jump penalties: Val(:acoustic) (|u| + c) or
     # Val(:advective) (max(|u|, ε c), ε = dg_vi_shear_floor).
     dg_tracer_penalty::DGTP
-    # FDDG vertical transport of the horizontal momentum: Val(:vi) (the
-    # ω¹² × u³ vector-invariant term), Val(:flux) (flux form on the
-    # staggered grid: the face mass flux times the interpolated Cartesian
-    # velocity, plus, for kg_pert, the vertical two-point pressure flux
-    # through the horizontal part of Ja³), or Val(:full_flux) (as :flux,
-    # with the vertical velocity in flux form on the dual grid as well).
+    # FDDG vertical momentum transport: Val(:vi) (the vector-invariant
+    # exchange terms) or Val(:full_flux) (staggered flux form: the face mass
+    # flux times the interpolated Cartesian velocity for uₕ, and the vertical
+    # velocity in flux form on the dual grid).
     dg_fddg_vertical::DGFV
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
@@ -2025,8 +2016,8 @@ types for compile-time dispatch.
     composition) or `:es` (entropy variables).
   - `dg_tracer_penalty = :acoustic`: Rate of the DG tracer jump penalties,
     `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
-  - `dg_fddg_vertical = :vi`: Vertical transport of the horizontal momentum
-    in the flux-form DG dynamics, `:vi`, `:flux`, or `:full_flux`.
+  - `dg_fddg_vertical = :vi`: Vertical momentum transport in the flux-form
+    DG dynamics, `:vi` or `:full_flux`.
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 
@@ -2052,8 +2043,8 @@ function AtmosNumerics(;
         prandtl_number = 1.0,
     ),
     dg_equation_form = :vi,
-    dg_volume_flux = :waruszewski,
-    dg_interface_flux = :roe,
+    dg_volume_flux = :kg_kpep,
+    dg_interface_flux = :roe_eos,
     dg_vi_velocity_penalty = :rusanov,
     dg_vi_shear_floor = 0.05,
     dg_vi_interface_flux = :rusanov,
