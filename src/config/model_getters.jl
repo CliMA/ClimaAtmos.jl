@@ -1448,7 +1448,10 @@ function AtmosSurface(
             isnothing(pa["rad"]) && error(
                 "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
             )
-            RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
+            RegressionFunctionAlbedo{FT}(;
+                n = params.water_refractive_index,
+                R_sub = params.ocean_subsurface_reflectance,
+            )
         elseif pa["albedo_model"] == "CouplerAlbedo"
             CouplerAlbedo()
         else
