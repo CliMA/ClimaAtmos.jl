@@ -143,7 +143,8 @@ function _sim_t_end(sim_dir)
         if isfile(p)
             try
                 ds = NCDataset(p)
-                t = ds["time"][end]
+                # `.var` reads seconds since the start date instead of decoded dates
+                t = ds["time"].var[end]
                 close(ds)
                 return Float64(t)
             catch
@@ -317,7 +318,7 @@ if !has_ref && has_sim
         if isfile(p)
             try
                 ds = NCDataset(p)
-                global ref_t_avg_end = Float64(ds["time"][end])
+                global ref_t_avg_end = Float64(ds["time"].var[end])
                 global ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
                 close(ds)
                 break
@@ -342,7 +343,7 @@ function load_and_avg(short_name; scale = 1.0)
     isfile(path) || return nothing, nothing, nothing
     try
         ds = NCDataset(path)
-        t_ax = ds["time"][:]
+        t_ax = ds["time"].var[:]
         z_ax = ds["z"][:]
         data = ds[short_name][:, :] .* scale
         close(ds)
@@ -371,7 +372,7 @@ function load_and_avg_sum(sn1, sn2; scale = 1.0)
     end
     try
         ds1 = NCDataset(p1)
-        t_ax = ds1["time"][:]
+        t_ax = ds1["time"].var[:]
         z_ax = ds1["z"][:]
         d1 = ds1[sn1][:, :] .* scale
         close(ds1)
@@ -397,7 +398,7 @@ function load_ts(short_name; scale = 1.0)
     isfile(path) || return nothing, nothing
     try
         ds = NCDataset(path)
-        t = ds["time"][:]
+        t = ds["time"].var[:]
         data = ds[short_name][:] .* scale
         close(ds)
         mask = t .<= ref_t_avg_end
@@ -585,7 +586,14 @@ if has_ref
 
     if combine_ice_snow
         if !isnothing(ref_q_tot_ice)
-            profile_band!(ax6, ref_q_tot_ice, ref_q_tot_ice_s, z_km, REF_COLOR; nsigma = ref_nsigma)
+            profile_band!(
+                ax6,
+                ref_q_tot_ice,
+                ref_q_tot_ice_s,
+                z_km,
+                REF_COLOR;
+                nsigma = ref_nsigma,
+            )
             ref_line!(ax6, ref_q_tot_ice, z_km)
         end
     else
@@ -614,7 +622,14 @@ if has_ref
     ref_t_h_plot = ref_t_h[ref_ts_mask]
     if !isnothing(ref_lwp)
         if !isnothing(ref_lwp_s)
-            ts_band!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask], ref_lwp_s[ref_ts_mask], REF_COLOR; nsigma = ref_nsigma)
+            ts_band!(
+                ax13,
+                ref_t_h_plot,
+                ref_lwp[ref_ts_mask],
+                ref_lwp_s[ref_ts_mask],
+                REF_COLOR;
+                nsigma = ref_nsigma,
+            )
         end
         ref_ts_line!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask])
     end
@@ -626,7 +641,14 @@ if has_ref
     if combine_ice_snow
         if !isnothing(ref_tot_iwp)
             if !isnothing(ref_tot_iwp_s)
-                ts_band!(ax16, ref_t_h_plot, ref_tot_iwp[ref_ts_mask], ref_tot_iwp_s[ref_ts_mask], REF_COLOR; nsigma = ref_nsigma)
+                ts_band!(
+                    ax16,
+                    ref_t_h_plot,
+                    ref_tot_iwp[ref_ts_mask],
+                    ref_tot_iwp_s[ref_ts_mask],
+                    REF_COLOR;
+                    nsigma = ref_nsigma,
+                )
             end
             ref_ts_line!(ax16, ref_t_h_plot, ref_tot_iwp[ref_ts_mask])
         end
@@ -662,12 +684,24 @@ if has_sim
         _z_qi, _mu_qi, _sig_qi = load_and_avg("cli"; scale = 1e3)
         if !isnothing(_z_qi)
             profile_band!(ax5, _mu_qi, _sig_qi, _z_qi ./ 1e3, SIM_COLOR)
-            sim_line!(ax5, _mu_qi, _z_qi ./ 1e3; label = "q_i  ClimaAtmos", color = SIM_COLOR)
+            sim_line!(
+                ax5,
+                _mu_qi,
+                _z_qi ./ 1e3;
+                label = "q_i  ClimaAtmos",
+                color = SIM_COLOR,
+            )
         end
         _z_qs, _mu_qs, _sig_qs = load_and_avg("hussn"; scale = 1e3)
         if !isnothing(_z_qs)
             profile_band!(ax5, _mu_qs, _sig_qs, _z_qs ./ 1e3, V_SIM_COLOR)
-            sim_line!(ax5, _mu_qs, _z_qs ./ 1e3; label = "q_s  ClimaAtmos", color = V_SIM_COLOR)
+            sim_line!(
+                ax5,
+                _mu_qs,
+                _z_qs ./ 1e3;
+                label = "q_s  ClimaAtmos",
+                color = V_SIM_COLOR,
+            )
         end
         # ax6: sum q_i + q_s from ClimaAtmos compared against paper reference
         _z_qis, _mu_qis, _sig_qis = load_and_avg_sum("cli", "hussn"; scale = 1e3)
@@ -720,9 +754,11 @@ if has_sim
 
     if combine_ice_snow
         t_i, y_i = load_ts("iwp"; scale = 1e3)
-        !isnothing(t_i) && sim_ts_line!(ax15, t_i, y_i; label = "IWP  ClimaAtmos", color = SIM_COLOR)
+        !isnothing(t_i) &&
+            sim_ts_line!(ax15, t_i, y_i; label = "IWP  ClimaAtmos", color = SIM_COLOR)
         t_sn, y_sn = load_ts("swp"; scale = 1e3)
-        !isnothing(t_sn) && sim_ts_line!(ax15, t_sn, y_sn; label = "SWP  ClimaAtmos", color = V_SIM_COLOR)
+        !isnothing(t_sn) &&
+            sim_ts_line!(ax15, t_sn, y_sn; label = "SWP  ClimaAtmos", color = V_SIM_COLOR)
         t_tot, y_tot = load_ts_sum("iwp", "swp"; scale = 1e3)
         !isnothing(t_tot) && sim_ts_line!(ax16, t_tot, y_tot)
     else
@@ -748,7 +784,10 @@ function set_xlims_from!(ax, mu, sig; nsigma = 2, margin_frac = 0.05)
 end
 
 function set_xlims_union!(ax, series_list; margin_frac = 0.05)
-    valid = [(mu, sig, nsig) for (mu, sig, nsig) in series_list if !isnothing(mu) && !isnothing(sig)]
+    valid = [
+        (mu, sig, nsig) for
+        (mu, sig, nsig) in series_list if !isnothing(mu) && !isnothing(sig)
+    ]
     isempty(valid) && return
     lo = minimum(minimum(mu .- nsig .* sig) for (mu, sig, nsig) in valid)
     hi = maximum(maximum(mu .+ nsig .* sig) for (mu, sig, nsig) in valid)
@@ -797,7 +836,10 @@ if combine_ice_snow
         _, mu_qs, sig_qs = load_and_avg("hussn"; scale = 1e3)
         set_xlims_union!(ax5, [(mu_qi, sig_qi, 2.0), (mu_qs, sig_qs, 2.0)])
         _, mu_qis, sig_qis = load_and_avg_sum("cli", "hussn"; scale = 1e3)
-        set_xlims_union!(ax6, [(ref_q_tot_ice, ref_q_tot_ice_s, ref_nsigma), (mu_qis, sig_qis, 2.0)])
+        set_xlims_union!(
+            ax6,
+            [(ref_q_tot_ice, ref_q_tot_ice_s, ref_nsigma), (mu_qis, sig_qis, 2.0)],
+        )
     elseif has_ref
         set_xlims_from!(ax6, ref_q_tot_ice, ref_q_tot_ice_s; nsigma = ref_nsigma)
     end
