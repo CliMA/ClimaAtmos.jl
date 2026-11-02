@@ -1228,7 +1228,6 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
           --job_id baroclinic_wave_sparse_autodiff
         artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
-        soft_fail: true
 
       # - label: "Prognostic EDMF GABLS in a column sparse autodiff"
       #   command: >

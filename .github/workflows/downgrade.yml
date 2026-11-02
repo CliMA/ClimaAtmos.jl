@@ -35,6 +35,8 @@ jobs:
         with:
           prefix: downgrade-julia${{ matrix.version }}-${{ runner.os }}
           hash: ${{ hashFiles('Project.toml') }}
+      # The cached depot's registry can predate the newest compat bounds of Project.toml.
+      - run: julia --color=yes -e 'using Pkg; Pkg.Registry.update()'
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica

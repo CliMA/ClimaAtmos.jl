@@ -72,7 +72,7 @@ function load_ts(root, job_id, short_name)
     isfile(path) || return (nothing, nothing)
     try
         ds = NCDataset(path)
-        t = ds["time"][:]
+        t = ds["time"].var[:]
         y = ds[short_name][:]
         close(ds)
         return t ./ 3600.0, y
@@ -90,7 +90,7 @@ function load_profile_at_z(root, job_id, short_name, z_target)
     isfile(path) || return (nothing, nothing)
     try
         ds = NCDataset(path)
-        t = ds["time"][:]
+        t = ds["time"].var[:]
         z = ds["z"][:]
         data = ds[short_name][:, :]
         close(ds)
