@@ -2,7 +2,7 @@
 # sphere spin-up rendered by the 9-panel plotter as a CI artifact.
 z_max: 30000.0
 z_elem: 10
-dz_bottom: 500.0
+z_stretch: false # z_elem lies outside the range the two-scale stretching admits
 rayleigh_sponge: false
 viscous_sponge: false
 dt: 20secs

@@ -315,10 +315,9 @@ end
     # tntha = -u * ∂T/∂x = -1.0 * 180 / (π R)
     expected_tntha = -1.0 * 180.0 / (π * external_tv_params.planet_radius)
 
-    # Grid spacing calculation in function:
-    # longitudinal_resolution = 1.0 (from 1 degree grid)
-    # dx = 2 * π * R * cos(lat) / 360 * 1.0
-    # computed_grad = (T_E - T_W) / (2 * dx) = 2.0 / (2 * dx) = 1.0 / dx = 180 / (π R)
+    # Grid spacing calculation in function, on the 1 degree grid at the equator:
+    # Δx = R * cos(lat) * deg2rad(lon[i+1] - lon[i-1]) = R * 2π/180
+    # computed_grad = (T_E - T_W) / Δx = 2.0 / (R * 2π/180) = 180 / (π R)
     # So it should match exactly (within FP precision)
 
     # Check that tendencies have correct shape
@@ -333,6 +332,65 @@ end
     @test maximum(abs.(tnhusha)) < 1e-6
 
     close(test_ds)
+end
+
+@testset "get_horizontal_tendencies coordinate order" begin
+    # The same physical state on grids with ascending and descending coordinates must
+    # give the same tendencies; protects against the problem that raw ERA5 latitude descends.
+    FT = Float64
+    temporary_dir = mktempdir()
+    R = 6.371e6
+    external_tv_params = (planet_radius = R,)
+    npres, ntime = 3, 2
+
+    # u = v = 1 m/s; T increases northward, q decreases eastward:
+    # T = 300 + lat, q = 0.01 - 0.001 * lon, so at the equator
+    # tntha = -v ∂T/∂y = -180 / (π R), tnhusha = -u ∂q/∂x = 0.001 * 180 / (π R)
+    expected_tntha = -180 / (π * R)
+    expected_tnhusha = 0.001 * 180 / (π * R)
+
+    for (lon_order, lat_order) in
+        Iterators.product((identity, reverse), (identity, reverse))
+        lons = lon_order(collect(-5.0:1.0:5.0))
+        lats = lat_order(collect(-5.0:1.0:5.0))
+        path = joinpath(temporary_dir, "test_order_$(lon_order)_$(lat_order).nc")
+        NCDataset(path, "c") do ds
+            defDim(ds, "longitude", length(lons))
+            defDim(ds, "latitude", length(lats))
+            defDim(ds, "pressure_level", npres)
+            defDim(ds, "valid_time", ntime)
+            defVar(ds, "longitude", lons, ("longitude",))
+            defVar(ds, "latitude", lats, ("latitude",))
+            dims = ("longitude", "latitude", "pressure_level", "valid_time")
+            shape = (length(lons), length(lats), npres, ntime)
+            defVar(ds, "u", ones(FT, shape), dims)
+            defVar(ds, "v", ones(FT, shape), dims)
+            defVar(
+                ds,
+                "t",
+                [300 + lat for _ in lons, lat in lats, _ in 1:npres, _ in 1:ntime],
+                dims,
+            )
+            defVar(
+                ds,
+                "q",
+                [0.01 - 0.001 * lon for lon in lons, _ in lats, _ in 1:npres, _ in 1:ntime],
+                dims,
+            )
+        end
+
+        NCDataset(path, "r") do test_ds
+            tntha, tnhusha = CA.get_horizontal_tendencies(
+                0.0,
+                findfirst(==(0.0), lons),
+                findfirst(==(0.0), lats),
+                test_ds,
+                external_tv_params,
+            )
+            @test all(isapprox.(tntha, expected_tntha, rtol = 1e-10))
+            @test all(isapprox.(tnhusha, expected_tnhusha, rtol = 1e-10))
+        end
+    end
 end
 
 @testset "smooth_4D_era5" begin

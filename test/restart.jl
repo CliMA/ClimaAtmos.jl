@@ -273,6 +273,9 @@ if MANYTESTS
                         "log_progress" => false,
                         "microphysics_model" => mp_model,
                         "config" => grid,
+                        # The default grid lies outside the range the
+                        # two-scale stretching admits.
+                        "z_stretch" => false,
                         "topography" => topography,
                         "turbconv" => turbconv_mode,
                         "dt" => "1secs",
@@ -322,6 +325,9 @@ else
         Dict(
             "h_elem" => 4,
             "z_elem" => 15,
+            # 15 levels up to 60 km lie outside the range the two-scale
+            # stretching admits.
+            "z_stretch" => false,
             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
             "reproducible_restart" => true,
             "check_nan_every" => 3,

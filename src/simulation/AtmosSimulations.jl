@@ -93,7 +93,6 @@ function setup_diagnostics_and_writers(
         z_sampling_method,
         horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
-        init_time = t_start,
         start_date,
     )
     writers = (CAD.DictWriter(), CAD.HDF5Writer(output_dir), netcdf_writer)
@@ -157,7 +156,6 @@ function setup_diagnostics_and_writers(
                     z_sampling_method = pressure_z_sampling,
                     horizontal_method,
                     sync_schedule = CAD.EveryStepSchedule(),
-                    init_time = t_start,
                     start_date,
                 )
                 writers = (writers..., pressure_netcdf_writer)
