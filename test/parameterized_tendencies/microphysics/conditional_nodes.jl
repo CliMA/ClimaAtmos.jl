@@ -105,6 +105,48 @@ const CA = ClimaAtmos
         end
     end
 
+    @testset "rule: nearly coincident cloud edges collapse" begin
+        for FT in (Float32, Float64)
+            toml_dict = CP.create_toml_dict(FT)
+            thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+            ρ = FT(1.1)
+            T = FT(285)
+            T′T′ = FT(0.25)
+            q′q′ = FT(2.5e-7)
+            corr = FT(0.5)
+            σ_S = CA._sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr)
+            β_T = CA.sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr)
+            mu_S = -σ_S / 2
+            t_a = -mu_S
+            t_p = CA.sgs_precip_shaft_threshold(FT(0.3), σ_S)
+            rule_ref = CA.conditional_rule(
+                thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a, t_p, FT(150), FT(0.05),
+            )
+            # an equilibrium edge within 10⁻³ σ_S of the actual edge gives the
+            # rule of coincident edges, so no node is built from the rounding
+            # noise of a sliver interval's moments
+            for δ in FT[1e-4, -1e-4, 1e-7]
+                rule = CA.conditional_rule(
+                    thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a + δ * σ_S, t_p,
+                    FT(150), FT(0.05),
+                )
+                @test all(
+                    n.S′ == m.S′ && n.w == m.w && n.T == m.T && n.q == m.q
+                    for (n, m) in zip(rule.nodes, rule_ref.nodes)
+                )
+            end
+            # an equilibrium edge well apart from the actual edge keeps its
+            # own interval
+            rule_apart = CA.conditional_rule(
+                thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a + σ_S / 2, t_p,
+                FT(150), FT(0.05),
+            )
+            @test any(
+                n.w != m.w for (n, m) in zip(rule_apart.nodes, rule_ref.nodes)
+            )
+        end
+    end
+
     @testset "_compute_sgs_moments: continuous multipliers" begin
         for FT in (Float32, Float64)
             toml_dict = CP.create_toml_dict(FT)

@@ -3,9 +3,10 @@ Wiring of the displacement length `l_d` of the SGS variance closure with prognos
 TKE: the buoyancy bound on `l_mix` and the Lagrangian time that limits the floor
 both use `κ_b = c_b tke / (2 c_σ)`. `l_d` is a temporary of the fused column loop of
 `set_covariance_cache!`, so it is checked through the moisture variance that loop
-sets, `q′q′ = min(ℓ_h² |∇ₕq|² + 2 c_σ l_d² (∂q/∂z)², (r_max q_tot)²)`. The pure
-helpers are tested in `cloud_fraction.jl`; this checks the arguments the model
-passes them.
+sets, `q′q′ = min(ℓ_h² |∇ₕq|² + 2 c_σ l_d² (∂q/∂z)², (r_max q_tot⁰)²)`, with
+`q_tot⁰` the environment total water under `PrognosticEDMFX`. The pure helpers
+are tested in `cloud_fraction.jl`; this checks the arguments the model passes
+them, and that the bound is taken against the environment mean.
 =#
 using Test
 import ClimaComms
@@ -16,25 +17,27 @@ import ClimaCore: Fields, Spaces
 
 include("../../test_helpers.jl")
 
+bomex_column_config(job_id, tomls) = CA.AtmosConfig(
+    Dict{String, Any}(
+        "initial_condition" => "Bomex",
+        "FLOAT_TYPE" => "Float64",
+        "config" => "column",
+        "turbconv" => "prognostic_edmfx",
+        "prognostic_tke" => true,
+        "microphysics_model" => "1M",
+        "z_max" => 3000.0,
+        "z_elem" => 30,
+        "z_stretch" => false,
+        "dt" => "1secs",
+        "t_end" => "10secs",
+        "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml"), tomls...],
+        "output_default_diagnostics" => false,
+    );
+    job_id,
+)
+
 @testset "Displacement length wiring through `set_covariance_cache!` (Bomex column)" begin
-    config = CA.AtmosConfig(
-        Dict{String, Any}(
-            "initial_condition" => "Bomex",
-            "FLOAT_TYPE" => "Float64",
-            "config" => "column",
-            "turbconv" => "prognostic_edmfx",
-            "prognostic_tke" => true,
-            "microphysics_model" => "1M",
-            "z_max" => 3000.0,
-            "z_elem" => 30,
-            "z_stretch" => false,
-            "dt" => "1secs",
-            "t_end" => "10secs",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
-            "output_default_diagnostics" => false,
-        );
-        job_id = "displacement_length_wiring_test",
-    )
+    config = bomex_column_config("displacement_length_wiring_test", ())
     (; Y, p, simulation) = generate_test_simulation(config)
     FT = eltype(Y)
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
@@ -42,6 +45,7 @@ include("../../test_helpers.jl")
 
     (; ᶜq′q′, ᶜl_mix, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_q_tot, ᶜq_tot_nonneg) =
         p.precomputed
+    (; ᶜq_tot_nonneg⁰) = p.precomputed
     q′q′ = copy(ᶜq′q′)
     l_mix = copy(ᶜl_mix)
     N² = similar(l_mix)
@@ -85,7 +89,7 @@ include("../../test_helpers.jl")
         )
         return @. min(
             CA.displacement_covariance(ℓ_h_q², 2 * c_σ * l_d^2, inv_q, ∂q∂z, ∂q∂z),
-            (r_max * ᶜq_tot_nonneg)^2,
+            (r_max * ᶜq_tot_nonneg⁰)^2,
         )
     end
     @test parent(q′q′) ≈ parent(expected_q′q′(c_b / (2 * c_σ)))
@@ -93,4 +97,36 @@ include("../../test_helpers.jl")
     # The test is not vacuous: the unnormalized `κ_b = c_b tke` gives a
     # different `q′q′` in this column.
     @test !(parent(q′q′) ≈ parent(expected_q′q′(c_b)))
+end
+
+@testset "Moisture-variance bound against the environment mean (Bomex column)" begin
+    # A small `sgs_variance_max_rel_std` makes the bound bind wherever the
+    # displacement variance is nonzero, so `q′q′` there equals
+    # `(r_max q_tot⁰)²` of the environment. Bomex starts without updraft area,
+    # so the updraft is given a tenth of the area and more total water than
+    # the grid mean, which puts the environment total water below it.
+    r_max = 1e-4
+    toml = joinpath(mktempdir(), "variance_bound.toml")
+    write(
+        toml,
+        "[sgs_variance_max_rel_std]\nvalue = $r_max\ntype = \"float\"\n",
+    )
+    config = bomex_column_config("environment_variance_bound_test", (toml,))
+    (; Y, p, simulation) = generate_test_simulation(config)
+    FT = eltype(Y)
+    @test FT(CAP.sgs_variance_max_rel_std(p.params)) == FT(r_max)
+    @. Y.c.ρtke = FT(0.5) * Y.c.ρ
+    @. Y.c.sgsʲs.:(1).ρa = FT(0.1) * Y.c.ρ
+    @. Y.c.sgsʲs.:(1).q_tot *= FT(1.2)
+    CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+
+    (; ᶜq′q′, ᶜq_tot_nonneg, ᶜq_tot_nonneg⁰) = p.precomputed
+    q′q′ = parent(ᶜq′q′)
+    bound⁰ = parent(@. (FT(r_max) * ᶜq_tot_nonneg⁰)^2)
+    bound_gm = parent(@. (FT(r_max) * ᶜq_tot_nonneg)^2)
+    @test all(q′q′ .<= bound⁰ .* (1 + 16 * eps(FT)))
+    @test all(parent(ᶜq_tot_nonneg⁰) .< parent(ᶜq_tot_nonneg))
+    binds = q′q′ .≈ bound⁰
+    @test count(binds) > 0
+    @test !any(q′q′[binds] .≈ bound_gm[binds])
 end

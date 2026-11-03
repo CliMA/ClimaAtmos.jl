@@ -217,13 +217,13 @@ effective-thickness approximation because ``\mathrm{E}[\ln \tau]`` and
 ``\mathrm{E}[\tau]`` are area-weighted sums over the components. The other is
 the Gamma factor of the mixture's own mean and variance. Each underestimates
 ``\chi`` where the other holds. The geometric mean collapses when an updraft
-that the binary cover counts as cloudy holds only trace condensate, although
-such an updraft is optically clear. The moment-matched Gamma puts a small,
-dense updraft core into a heavy tail near zero, whereas the geometric mean
-weighs the core by its area, so a dense core beside a thin environment cloud
-lowers ``\chi`` below the environment value. Where nearly all of the cover is
-trace-condensate updraft area, both estimates are small; those levels hold
-almost no water. The
+that the binary cover of 0-moment microphysics counts as cloudy holds only
+trace condensate, although such an updraft is optically clear. The
+moment-matched Gamma puts a small, dense updraft core into a heavy tail near
+zero, whereas the geometric mean weighs the core by its area, so a dense core
+beside a thin environment cloud lowers ``\chi`` below the environment value.
+Where nearly all of the cover is trace-condensate updraft area, both estimates
+are small; those levels hold almost no water. The
 radiation callback evaluates ``\chi`` (`set_sw_cloud_optical_depth_factor!`)
 before it passes the cloud properties to RRTMGP. Other cloud models
 (`GridScaleCloud`, `MLCloud`) have no in-cloud distribution, and prescribed

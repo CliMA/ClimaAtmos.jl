@@ -21,7 +21,11 @@ import ClimaParams
         bubble = true
         nh_poly = 3 # GLL{4} = nh_poly + 1
         # TODO: compile CUDA methods as well
-        context = ClimaComms.context(ClimaComms.CPUSingleThreaded())
+        # The singleton context is constructed directly: `ClimaComms.context`
+        # reads `CLIMACOMMS_CONTEXT`, which the MPI jobs set, and the
+        # precompile process does not load MPI.jl.
+        context =
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
         topography = CA.NoTopography()
         params = CA.ClimaAtmosParameters(FT)
         radius = CA.Parameters.planet_radius(params)

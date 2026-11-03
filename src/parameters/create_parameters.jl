@@ -595,15 +595,12 @@ end
 Build the SGS covariance, quadrature and cloud-fraction parameter set.
 
 Most values come from ClimaParams through an explicit name map. The
-provisional parameters (the cloud-fraction floor release shape, the
-displacement-closure scales and the precipitation placement) take the defaults
-set here and are read from `toml_dict` only when a run or calibration TOML
-defines them; the provisional default of `sgs_variance_horizontal_scale_factor`
-supersedes its ClimaParams value the same way. The default `residual = 1` keeps
-the relative floor fully active everywhere (no saturation-margin release);
-`margin = abs_margin = sharpness = 1` describe the release shape that a
-`residual < 1` would turn on (a one-width saturation margin guarded by an
-absolute margin of one floor width).
+provisional parameters (the cloud-species timescale switch, the
+displacement-closure scales, the precipitation placement and the radiative
+condensate inhomogeneity) take the defaults set here and are read from
+`toml_dict` only when a run or calibration TOML defines them; the provisional
+default of `sgs_variance_horizontal_scale_factor` supersedes its ClimaParams
+value the same way.
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -626,7 +623,6 @@ function SGSQuadratureParameters(
         :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
         :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
-        :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
         :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
         # Shared with CloudMicrophysics' 1M relaxation timescales.
         :condensation_evaporation_timescale =>
@@ -645,15 +641,12 @@ function SGSQuadratureParameters(
     # TODO: promote each default to ClimaParams (and the name_map above) once
     # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Cloud-fraction floor release (see `_compute_cloud_fraction`):
-        # residual = 1 keeps the relative floor fully active everywhere (no
-        # release, D ≡ 1). margin = abs_margin = sharpness = 1 are the release
-        # shape used when residual < 1: a one-width saturation margin guarded
-        # by an absolute margin of one floor width.
-        cloud_fraction_floor_release_margin = FT(1),
-        cloud_fraction_floor_release_abs_margin = FT(1),
-        cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(1),
+        # A positive value makes the Damköhler factor of the variance fidelity
+        # and the cloud-species flux blend use the constant
+        # `condensation_evaporation_timescale` and
+        # `sublimation_deposition_timescale`; zero uses the per-cell 1M
+        # relaxation times (`cloud_species_relaxation_time`).
+        sgs_cloud_species_constant_timescales = FT(0),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`floor_displacement_length`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],
