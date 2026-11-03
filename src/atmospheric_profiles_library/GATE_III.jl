@@ -125,14 +125,16 @@ end
 """
 function GATE_III_dqtdt(::Type{FT}) where {FT}
     z_in = GATE_III_z_in(FT)
-    # Advective qt forcing  for theta [g/kg/d] converted to [kg/kg/sec]
+    # Advective mixing ratio forcing [g/kg/d] converted to [kg/kg/sec]
     r_tend_in =
         FT[0.0, 1.2, 2.0, 2.3, 2.2, 2.1, 1.9, 1.7, 1.5, 1.35, 1.22, 1.08, 0.95,
             0.82, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.0025, 0.0012, 0.0006, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] ./ (24 * 3600) ./ 1000
-
-    Qtend_in = r_tend_in ./ (1 .+ r_tend_in) # convert mixing ratio to specific humidity
-    return ZProfile(linear_interp(z_in, Qtend_in))
+    # Specific humidity of the initial profile at the forcing heights
+    q_in = GATE_III_q_tot(FT).(z_in)
+    # dq/dt = (dr/dt) / (1 + r)² = (dr/dt) (1 - q)², from q = r / (1 + r)
+    q_tend_in = r_tend_in .* (1 .- q_in) .^ 2
+    return ZProfile(linear_interp(z_in, q_tend_in))
 end
 
 """
@@ -147,11 +149,6 @@ function GATE_III_dTdt(::Type{FT}) where {FT}
             -1.43, -1.36, -1.3, -1.25, -1.2, -1.15, -1.1, -1.05, -1.0, -0.95, -0.9, -0.85,
             -0.8,
             -0.75, -0.7, -0.6, -0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] ./ (24 * 3600)
-    # Advective qt forcing  for theta [g/kg/d] converted to [kg/kg/sec]
-    r_tend_in =
-        FT[0.0, 1.2, 2.0, 2.3, 2.2, 2.1, 1.9, 1.7, 1.5, 1.35, 1.22, 1.08, 0.95,
-            0.82, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.0025, 0.0012, 0.0006, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] ./ (24 * 3600) ./ 1000
     # Radiative T forcing [K/d] converted to [K/sec]
     Ttend_in =
         FT[0.0, -1.0, -2.2, -3.0, -3.5, -3.8, -4.0, -4.1, -4.2, -4.2, -4.1, -4.0, -3.85,

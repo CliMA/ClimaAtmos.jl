@@ -53,6 +53,13 @@ main
   longer depends on the standalone package. Replace
   `import AtmosphericProfilesLibrary as APL` with
   `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
+- ![][badge-🐛bugfix] `AtmosphericProfilesLibrary.GATE_III_dqtdt` converts the
+  GATE III mixing ratio forcing to a specific humidity tendency with
+  `dq/dt = (dr/dt) / (1 + r)²`, using the mixing ratio of the initial profile.
+  The tendency is up to 3.3% smaller. No ClimaAtmos setup uses this profile.
+- ![][badge-🐛bugfix] `AtmosphericProfilesLibrary.Bomex_dTdt` returns the float type
+  it is built with. Float32 BOMEX runs compute the large-scale cooling in Float32
+  instead of Float64, which changes their output at the rounding level.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
