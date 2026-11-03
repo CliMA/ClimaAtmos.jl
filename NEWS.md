@@ -8,6 +8,13 @@ main
   longer depends on the standalone package. Replace
   `import AtmosphericProfilesLibrary as APL` with
   `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
+- ![][badge-🐛bugfix] `AtmosphericProfilesLibrary.GATE_III_dqtdt` converts the
+  GATE III mixing ratio forcing to a specific humidity tendency with
+  `dq/dt = (dr/dt) / (1 + r)²`, using the mixing ratio of the initial profile.
+  The tendency is up to 3.3% smaller. No ClimaAtmos setup uses this profile.
+- ![][badge-🐛bugfix] `AtmosphericProfilesLibrary.Bomex_dTdt` returns the float type
+  it is built with. Float32 BOMEX runs compute the large-scale cooling in Float32
+  instead of Float64, which changes their output at the rounding level.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] With
   `ImplicitCloudLiquidFormation` and `PrognosticEDMFX`, set the grid-mean
   `ρq_lcl` of the Newton initial guess so that the environment cloud liquid
