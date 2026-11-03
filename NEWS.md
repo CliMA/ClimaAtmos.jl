@@ -54,6 +54,11 @@ main
   default `α = 0`, the droplet number and the radiative fluxes are unchanged.
   The liquid, ice, and snow effective radii, and the `reffclw` and `reffcli`
   diagnostics, are zero where the cloud fraction is zero.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity wave forcing is clamped
+  to ±3e-3 m/s² (with `NaN`/`Inf` set to zero) once per `dt_nogw` callback,
+  when it is computed, instead of in every tendency evaluation that applies it,
+  so the `utendnogw` and `vtendnogw` diagnostics report the clamped forcing.
+  The wind tendencies are unchanged.
 - ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
   grids (`z_stretch: true`) use the two-scale
   `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the

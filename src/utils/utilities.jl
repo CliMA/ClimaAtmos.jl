@@ -291,6 +291,8 @@ end
     compute_strain_rate_center_horizontal(ᶜu)
 
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+Since horizontal gradients act within each level, the same lazy expression of a face velocity is the
+horizontal strain rate at cell faces.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
     axis_uvw = (Geometry.UVWAxis(),)

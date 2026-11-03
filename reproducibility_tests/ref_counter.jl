@@ -1,4 +1,4 @@
-454
+455
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+455
+- Fused slab and column loops (advection, the turbulent and hyperdiffusive
+  fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the
+  gravity wave drag, AMD) change the order of floating-point operations, and
+  with it the last bits of the results.
+
 454
 - `implicit_microphysics: true` (default) now additionally routes 1M
   `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT
