@@ -186,8 +186,9 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
   - `entr_subsat_coeff`: Free-tropospheric environmental-subsaturation
-    coefficient `c_subsat ≥ 0` scaling `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p`
-    in `InvZEntrainment` (`0` by default) [-].
+    coefficient `c_subsat ≥ 0` scaling
+    `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p` in `InvZEntrainment` (`0` by
+    default) [-].
   - `entr_subsat_power`: Exponent `p ≥ 1` on `max(0, 1 - RH⁰)` in
     `InvZEntrainment` (`2` by default) [-].
   - `entr_subsat_height_min`: Onset threshold `Π₅_min ≥ 0` of the dimensionless
@@ -381,7 +382,8 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `sgs_env_autoconversion_detrained_velocity`: Weight `c_w` [-] of the
     mass-flux-weighted updraft velocity and reference velocity `w_d` [m/s] in
     the vertical velocity seen by the environment's 1-moment warm-rain
-    autoconversion for convective condensate (`set_microphysics_tendency_cache!`),
+    autoconversion for convective condensate
+    (`set_microphysics_tendency_cache!`),
     with `f_neq` the fraction of environment condensate in excess of equilibrium
     (`env_detrained_condensate_fraction`) and `w_cu` the subsaturated-cumulus
     switch (`_env_subsat_cu_switch`); `0` (default) uses the environment

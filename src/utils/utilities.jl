@@ -1101,8 +1101,8 @@ end
 """
     es_liq_tetens(T)
 
-Return the saturation vapor pressure over liquid water [Pa] at temperature `T` [K]
-from the Tetens formula.
+Return the saturation vapor pressure over liquid water [Pa] at temperature
+`T` [K] from the Tetens formula.
 """
 @inline function es_liq_tetens(T)
     FT = typeof(T)
