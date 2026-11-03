@@ -40,7 +40,9 @@ while the YAML configuration path constructs it from the ClimaParams parameter
 end
 
 """
-    RegressionFunctionAlbedo{FT}(; n, n0, p, q_clear, q_cloud, R_sub, wave_slope)
+    RegressionFunctionAlbedo{FT}(;
+        n, n0, p, q_clear, q_cloud, R_sub, wave_slope,
+    )
 
 Ocean surface albedo from the regression functions of [Jin2011](@cite) (J11),
 with direct and diffuse surface-reflection components augmented by subsurface
@@ -53,7 +55,8 @@ volume reflectance `R_sub`. Whitecap foam reflectance is omitted.
   - `p`: Regression coefficients for the direct albedo (J11 eq. 4) [-].
   - `q_clear`: Regression coefficients for the clear-sky diffuse albedo (J11 eq. 5a) [-].
   - `q_cloud`: Regression coefficients for the cloudy-sky diffuse albedo (J11 eq. 5b) [-].
-  - `R_sub`: Subsurface volume reflectance from water molecules and hydrosols [-].
+  - `R_sub`: Subsurface volume reflectance from water molecules and
+    hydrosols [-].
   - `wave_slope`: Function of wind speed returning the mean wave-slope distribution
     width of the Cox-Munk model (J11 eq. 2) [-].
 

@@ -88,7 +88,8 @@ the precipitation shaft of area `a_s = clamp(max(a_p, a_floor), ε, 1)`
 (`φ_in = (1 - β_p) + β_p / a_s`) and the remainder `(1 - β_p) q` occupies
 `1 - a_s`, the subdomain sedimentation flux equals `ρ q w_eff` with
 
-    w_eff = a_s φ_in w_term(ρ, φ_in q₊) + (1 - a_s) (1 - β_p) w_term(ρ, (1 - β_p) q₊).
+    w_eff = a_s φ_in w_term(ρ, φ_in q₊) +
+        (1 - a_s) (1 - β_p) w_term(ρ, (1 - β_p) q₊).
 
 Reduces to `w_term(ρ, q₊)` when `β_p = 0`, `a_s = 1`, or `w_term` is
 state-independent.

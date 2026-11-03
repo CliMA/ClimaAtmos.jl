@@ -13,10 +13,18 @@ value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
 
 ## 2) `RegressionFunctionAlbedo`
 
-This is an empirical parameterization of the direct and diffuse surface albedo of Jin et al. (2011) [Jin2011](@cite), augmented by subsurface volume reflectance $R_{\text{sub}}$ from water molecules and hydrosols (default $0$; whitecap foam reflectance is omitted). The direct reflection is calculated using the Fresnel reflection at the air-sea interface due to the difference in refractive index between air and water. The current implementation uses the broadband representation (the relative refractive index $n$ is independent of wavelength). Its formulation is:
+This is an empirical parameterization of the direct and diffuse surface albedo
+of Jin et al. (2011) [Jin2011](@cite), augmented by subsurface volume
+reflectance $R_{\text{sub}}$ from water molecules and hydrosols (default $0$;
+whitecap foam reflectance is omitted). The direct reflection is calculated
+using the Fresnel reflection at the air-sea interface due to the difference in
+refractive index between air and water. The current implementation uses the
+broadband representation (the relative refractive index $n$ is independent of
+wavelength). Its formulation is:
 
 ```math
-α_{dir}(λ, μ, u) = r_{f}(n, μ) - \frac{r_{f}(n, μ)}{r_{f}(n_{0}, μ)} f(μ, σ(u)) + R_{\text{sub}}
+α_{dir}(λ, μ, u) =
+r_{f}(n, μ) - \frac{r_{f}(n, μ)}{r_{f}(n_{0}, μ)} f(μ, σ(u)) + R_{\text{sub}}
 ```
 
 where:

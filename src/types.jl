@@ -110,10 +110,10 @@ Any process that is not passed keeps its default, so
 | `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`         |
 | `rain_snow_accretion`           | `RainSnowAccretion()`             |
 
-These match the defaults of the corresponding config keys, so a model built here
-and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_liquid_formation` and `cloud_ice_formation`
-override the `CMP.Microphysics1MOptions` defaults.
+These match the defaults of the corresponding config keys, so a model built
+here and one built from an unmodified configuration file agree (see
+`get_microphysics_1m_options`). `cloud_liquid_formation` and
+`cloud_ice_formation` override the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 

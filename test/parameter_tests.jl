@@ -397,7 +397,7 @@ end
             CA.InvZEntrainment(),
         ) == base_mbl
 
-        # Free troposphere (z = 3500 m, Π₅ > 0.2): zero increment at RH⁰ >= 1, positive for RH⁰ < 1
+        # Free troposphere (z = 3500 m, Π₅ > 0.2): zero at RH⁰ >= 1, > 0 for < 1
         z_ft = FT(3500)
         base_ft = CA.entrainment_velocity_scale(
             thp,

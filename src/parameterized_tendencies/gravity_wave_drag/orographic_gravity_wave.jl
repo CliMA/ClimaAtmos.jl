@@ -701,7 +701,7 @@ function calc_nonpropagating_forcing!(
     @. ᶜweights = ifelse(ᶜmask, ᶜinterp.(ᶠp .- ifelse(isnan(ᶠp_ref), FT(0), ᶠp_ref)), FT(0))
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
-    # Exclude cells with zero or NaN weights from the mask to avoid division by zero.
+    # Exclude cells with zero or NaN weights from the mask.
     @. ᶜmask = ᶜmask && (!iszero(ᶜweights)) && (!isnan(ᶜweights))
 
     @. ᶜweights = ifelse(ᶜmask, ᶜweights, FT(0))

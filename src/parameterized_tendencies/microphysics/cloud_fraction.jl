@@ -1941,7 +1941,8 @@ end
     _env_subsat_switch(thermo_params, T_mean, ρ_env, q_cloud, rh_trans)
 
 Fourth-order rational subsaturation switch `s_rh · w_warm ∈ [0, 1]`, with
-`s_rh = u² / (1 + u²)`, `u = (max(0, q_sat(T_mean, ρ_env) − q_cloud) / (ΔRH_trans q_sat))²`,
+`s_rh = u² / (1 + u²)`,
+`u = (max(0, q_sat(T_mean, ρ_env) − q_cloud) / (ΔRH_trans q_sat))²`,
 and warm-cloud ramp `w_warm = clamp((T_mean − 263.15 K) / 10 K, 0, 1)`.
 """
 @inline function _env_subsat_switch(
@@ -1991,7 +1992,8 @@ end
 
 """
     _materialize_subsat_cu_switch!(
-        ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
+        ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans,
+        gamma_crit,
     )
 
 Write the per-cell subsaturated-cumulus switch `_env_subsat_cu_switch` into

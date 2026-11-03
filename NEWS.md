@@ -3,13 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-✨feature/enhancement] Add free-tropospheric environmental-subsaturation
-  dynamical entrainment `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p` to
+- ![][badge-✨feature/enhancement] Add in-cloud `Chen2022` cloud-ice
+  sedimentation (`incloud_ice_terminal_velocity`) with cloud-fraction floor
+  `sgs_ice_sedimentation_cf_floor` and smooth `1.5 m/s` breakup cap
+  (`_bounded_fall_speed`).
+- ![][badge-✨feature/enhancement] Add free-tropospheric environmental
+  subsaturation dynamical entrainment
+  `(c_subsat / ref_H) G_z(Π₅) max(0, 1 - RH⁰)^p` to
   `entrainment_velocity_scale` (`InvZEntrainment`, `entr_subsat_coeff`,
   `entr_subsat_power`, `entr_subsat_height_min`, `entr_subsat_height_width`).
+  With `entr_subsat_coeff = 2.5`, cirrus fraction in the tropical tropopause
+  layer (100–125 hPa) rises to several times the CALIPSO value.
 - ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
   (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
   albedos in `RegressionFunctionAlbedo`.
+- ![][badge-🐛bugfix] Guard `calc_nonpropagating_forcing!` against `NaN`
+  reference pressures and zero or `NaN` interpolation weights in the
+  low-level wave-breaking mask.
 - ![][badge-🔥behavioralΔ] Lower `zd_rayleigh` and `zd_viscous` to `30000.0` m
   in `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
   to damp upper-stratospheric topographic mountain waves on the 79-level grid.
@@ -24,8 +34,9 @@ main
   `dt = "120secs"`) and `longrun_aquaplanet_allsky_progedmf_1M.yml`.
 - ![][badge-✨feature/enhancement] Modulate the liquid-cloud shortwave subgrid
   effective-thickness exponent in high-EIS boundary-layer regimes by Wood and
-  Bretherton (2006) Estimated Inversion Strength (`cloud_inhomogeneity_eis_coeff`,
-  `eis_inhomogeneity_exponent`, `compute_column_eis_field!`) in `solve_fluxes!`.
+  Bretherton (2006) Estimated Inversion Strength
+  (`cloud_inhomogeneity_eis_coeff`, `eis_inhomogeneity_exponent`,
+  `compute_column_eis_field!`) in `solve_fluxes!`.
 - ![][badge-✨feature/enhancement] Mass-flux-weight 1M rain and snow terminal
   velocities across the subgrid precipitation shaft
   (`shaft_weighted_terminal_velocity`) when `sgs_precip_incloud_fraction > 0`,

@@ -336,13 +336,15 @@ currently too small, and snow is not currently included in cloud_fraction calcul
 meaning that the way it is currently implemented in radiation is not physically correct
 and subject to change in the future.
 
-The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
-with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
-prescribed sea-salt, dust, and sulfate mass concentrations and the in-cloud liquid specific
-humidity; the ice effective radius is a constant. Cloud condensate and cloud fraction come from
-the model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field` when
-`radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed fields are
-re-evaluated from their `TimeVaryingInput`s first, regardless of the branch below.
+The liquid effective radius follows the Liu and Hallett (1997) parameterization,
+evaluated with a droplet number concentration diagnosed by
+`ml_N_cloud_liquid_droplets` from the prescribed sea-salt, dust, and sulfate
+mass concentrations and the in-cloud liquid specific humidity; the ice effective
+radius is a constant. Cloud condensate and cloud fraction come from the model
+state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field` when
+`radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed fields
+are re-evaluated from their `TimeVaryingInput`s first, regardless of the branch
+below.
 
 Nothing is written when `radiation_mode.idealized_clouds` is true, since those cloud layers
 are prescribed once at solver construction. Uses `p.scratch.ᶜtemp_scalar`,
@@ -498,31 +500,34 @@ end
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 
-Return the cloud droplet number concentration diagnosed from the aerosol loading and the
-in-cloud liquid specific humidity [1/m³].
+Return the cloud droplet number concentration diagnosed from the aerosol loading
+and the in-cloud liquid specific humidity [1/m³].
 
 The closure uses a bounded log-saturation law about a reference state,
 
 ```math
-s = Σ_i α_i \\, \\log(\\max(c_i, c_{\\min,i}) / c_{0,i}) + α_{q_l} \\log(\\max(q_l, q_{\\min}) / q_{0,l}),
+s = Σ_i α_i \\, \\log(\\max(c_i, c_{\\min,i}) / c_{0,i}) +
+    α_{q_l} \\log(\\max(q_l, q_{\\min}) / q_{0,l}),
 ```
 
 ```math
 N = N₀ \\exp\\left(Δ_{\\max} \\tanh(s / Δ_{\\max})\\right),
 ```
 
-summed over dust, sea salt, and ammonium sulfate, with ``Δ_{\\max} = \\ln(3)`` bounding
-the concentration in ``[N₀ / 3, 3 N₀]``. Each argument is floored at ``10^{-3}`` of its
-reference value before the logarithm, and the calibration coefficients `α` and reference
-values `c₀`, `q₀` come from `cmc.aml`.
+summed over dust, sea salt, and ammonium sulfate, with ``Δ_{\\max} = \\ln(3)``
+bounding the concentration in ``[N₀ / 3, 3 N₀]``. Each argument is floored at
+``10^{-3}`` of its reference value before the logarithm, and the calibration
+coefficients `α` and reference values `c₀`, `q₀` come from `cmc.aml`.
 
 # Arguments
 
-  - `cmc`: Cloud and aerosol parameter set (`CAP.microphysics_cloud_params`), providing
-    `cmc.aml` and the reference concentration `cmc.N_cloud_liquid_droplets` [1/m³].
-  - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass concentrations
-    [kg/kg].
-  - `q_liq`: In-cloud liquid water specific humidity [kg/kg], compared against `q₀_liq`.
+  - `cmc`: Cloud and aerosol parameter set (`CAP.microphysics_cloud_params`),
+    providing `cmc.aml` and the reference concentration
+    `cmc.N_cloud_liquid_droplets` [1/m³].
+  - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass
+    concentrations [kg/kg].
+  - `q_liq`: In-cloud liquid water specific humidity [kg/kg], compared against
+    `q₀_liq`.
 """
 function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
     (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
