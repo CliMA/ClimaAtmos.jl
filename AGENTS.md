@@ -33,6 +33,21 @@ Always read the ClimaAtmos-specific guide before working in this repository:
   then `Pkg.instantiate()` in the `docs` environment — before concluding that a
   build failure is real. A stale manifest shows up as an `UndefVarError` for a
   ClimaCore symbol during precompilation, not as a documentation error.
+- `@.` dots every call in its expression, including accessors such as
+  `Fields.level` and `MatrixFields.get_field`, and some of them return their
+  argument unchanged when applied to a number (`Fields.level(x, 1)` on a scalar
+  is `x`), so a broadcast over them silently reads the wrong values (see
+  #4952). Indexing is not dotted: `x[1]` inside `@.` indexes `x` itself, even
+  when `x` is a lazy broadcast. Bind accessed fields to variables before the
+  `@.`, and check fused or lazy rewrites against states that vary along every
+  dimension, since a vertically uniform initial state hides this error.
+- Do not end closures or `do` blocks with `return nothing` when their return
+  value is ignored (as in `foreach_column` loop bodies and `unrolled_foreach`):
+  the extra line affects neither latency nor runtime.
+- Performance work is measured against the AMIP target configuration
+  (`numerics_sphere_he16ze63.yml` + `amip_target.yml`), but it is not limited
+  to code that configuration runs: measure such code with the flags that
+  enable it (defaults are in `config/default_configs/default_config.yml`).
 - Optional but recommended: install the pre-commit hooks in [.pre-commit-config.yaml](.pre-commit-config.yaml) (`uv tool install prek && prek install`) to auto-format and trim trailing whitespace on commit. See [docs/src/contributor_guide.md](docs/src/contributor_guide.md) ("Pre-commit hooks").
 
 ## Self-correction

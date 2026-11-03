@@ -43,6 +43,11 @@ main
   (default `0`) is added: a positive value makes the 1M scheme use the constant
   `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
   in the variance-fidelity Damköhler factor and the cloud-species flux blend.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity wave forcing is clamped
+  to ±3e-3 m/s² (with `NaN`/`Inf` set to zero) once per `dt_nogw` callback,
+  when it is computed, instead of in every tendency evaluation that applies it,
+  so the `utendnogw` and `vtendnogw` diagnostics report the clamped forcing.
+  The wind tendencies are unchanged.
 - ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
   grids (`z_stretch: true`) use the two-scale
   `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the

@@ -399,7 +399,7 @@ Reads `ᶜp`, `ᶠu³`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, 
 `ᶜq_ice⁰`), the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`), and `ustar` from
 `p.precomputed.sfc_conditions`, so it must run after
 `set_prognostic_edmf_precomputed_quantities_draft!` and
-`..._environment!`. Uses `p.scratch.ᶠtemp_C123`.
+`..._environment!`.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,

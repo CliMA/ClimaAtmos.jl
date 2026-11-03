@@ -44,11 +44,9 @@ and an enthalpy-weighted effective total water, never on a lumped `h_tot`),
 `ᶜ∇²Φ`),
 `ᶜ∇²tke` when the turbulence-convection model carries prognostic TKE, and DSS
 ghost buffers when the space requires DSS. For `PrognosticEDMFX`, also allocates
-the per-updraft scratch fields `ᶜscratchʲs` and `ᶜscratch_2ʲs`, which are not
-DSSed. Both apply functions use `ᶜscratchʲs` (`apply_hyperdiffusion_tendency!`
-for `ᶜcpʲs`, `apply_tracer_hyperdiffusion_tendency!` for `ᶜq_tot_hyperdiffʲs`),
-each filling it before reading it, so its contents never carry from one apply
-function to the other, and the two must not be interleaved.
+the per-updraft scratch field `ᶜscratchʲs`, which is not DSSed and holds the
+updraft total-water tendencies `ᶜq_tot_hyperdiffʲs` of
+`apply_tracer_hyperdiffusion_tendency!` between its two loops.
 """
 function hyperdiffusion_cache(Y, atmos)
     (; hyperdiff, turbconv_model) = atmos
@@ -101,16 +99,12 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
             hyperdiffusion_ghost_buffer = map(Spaces.create_dss_buffer, quantities),
         )
     end
-    # Per-updraft scratch, not DSSed: the coefficients and tendencies that the
-    # fused column loops of the apply functions compute for every updraft at once.
-    # `ᶜscratchʲs` is shared by the two apply functions, so it holds valid values
-    # only within one of them.
+    # Per-updraft scratch, not DSSed. `ᶜscratchʲs` holds the total-water
+    # tendencies that the slab loop of `apply_tracer_hyperdiffusion_tendency!`
+    # computes for its column loop.
     sgs_scratch =
         turbconv_model isa PrognosticEDMFX ?
-        (;
-            ᶜscratchʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜscratch_2ʲs = similar(Y.c, NTuple{n, FT}),
-        ) : (;)
+        (; ᶜscratchʲs = similar(Y.c, NTuple{n, FT})) : (;)
     return (; quantities..., sgs_scratch...)
 end
 
@@ -141,14 +135,20 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     isnothing(hyperdiff) && return nothing
 
-    n = n_mass_flux_subdomains(turbconv_model)
-    diffuse_tke = use_prognostic_tke(turbconv_model)
     (; ᶜu, ᶜT, ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        (; ᶜuʲs, ᶜTʲs) = p.precomputed
-    end
+    has_q_tot = Val(MatrixFields.has_field(Y, @name(c.ρq_tot)))
+    nonequil = Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics)
+    ᶜ∇²tke = use_prognostic_tke(turbconv_model) ? p.hyperdiff.ᶜ∇²tke : ()
+    sgs_fields =
+        turbconv_model isa PrognosticEDMFX ?
+        (
+            p.hyperdiff.ᶜ∇²uʲs,
+            p.hyperdiff.ᶜ∇²Tʲs,
+            p.hyperdiff.ᶜ∇²q_tot_effʲs,
+            p.precomputed.ᶜuʲs,
+            p.precomputed.ᶜTʲs,
+        ) : ()
 
     # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
     # from a smooth hydrostatic reference profile: on tilted terrain-following
@@ -158,76 +158,84 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # `T_r(p)`, `Φ_r(p)`, and `q_tot_r(p)` cancel this leading-order geometric
     # term, matching the split-form pressure-gradient treatment in
     # `advection.jl`. `Φ - Φ_r(p)` is recomputed every step because `Φ_r`
-    # follows the evolving pressure.
-    @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
-    @. ᶜ∇²T = wdivₕ(gradₕ(ᶜT - air_temperature_reference(thermo_params, ᶜp)))
-    @. ᶜ∇²Φ = wdivₕ(gradₕ(ᶜΦ - phi_r(thermo_params, ᶜp)))
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-            @. ᶜ∇²q_tot_eff = wdivₕ(
-                gradₕ(
-                    specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
-                ),
-            )
-        else
-            @. ᶜ∇²q_tot_eff = wdivₕ(
-                gradₕ(
-                    specific(Y.c.ρq_tot, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
-                ),
-            )
+    # follows the evolving pressure. The vector Laplacians of the grid mean and
+    # the updrafts are computed in one fused slab loop, and the scalar
+    # Laplacians in another, where the reference profiles are register
+    # temporaries shared by the grid mean and the updrafts. (A single loop needs
+    # too many registers to keep its blocks resident.)
+    ᶜu_sgs = turbconv_model isa PrognosticEDMFX ? (sgs_fields[1], sgs_fields[4]) : ()
+    DataLayouts.foreach_slab(ᶜ∇²u, ᶜu, ᶜu_sgs) do ᶜ∇²u, ᶜu, ᶜu_sgs
+        # Full vector Laplacian identity. Under non-orthogonal metrics
+        # (topography), the C12 components of the updraft Laplacians matter
+        # because they couple into the C3 of the outer
+        # `wcurlₕ(C123(curlₕ(⋅)))` via g_{13}, g_{23}.
+        vector_laplacian!(ᶜ∇²u, ᶜu)
+        turbconv_model isa PrognosticEDMFX || return nothing
+        (ᶜ∇²uʲs, ᶜuʲs) = ᶜu_sgs
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            vector_laplacian!(ᶜ∇²uʲs.:($j), ᶜuʲs.:($j))
         end
     end
+    DataLayouts.foreach_slab(
+        (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Y.c, ᶜT, ᶜp, ᶜΦ, sgs_fields,
+    ) do (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Yc, ᶜT, ᶜp, ᶜΦ, sgs_fields
+        ᶜT_r = @. air_temperature_reference(thermo_params, ᶜp)
+        scalar_laplacian!(ᶜ∇²T, (@. ᶜT - ᶜT_r))
+        scalar_laplacian!(ᶜ∇²Φ, (@. ᶜΦ - phi_r(thermo_params, ᶜp)))
+        ᶜq_tot_r =
+            has_q_tot isa Val{true} || turbconv_model isa PrognosticEDMFX ?
+            (@. q_tot_r(thermo_params, ᶜp)) : nothing
+        if has_q_tot isa Val{true}
+            ᶜq_tot_eff = gs_diffusing_q_tot(Yc, nonequil)
+            scalar_laplacian!(ᶜ∇²q_tot_eff, (@. ᶜq_tot_eff - ᶜq_tot_r))
+        end
+        if ᶜ∇²tke isa Fields.Field
+            scalar_laplacian!(ᶜ∇²tke, (@. specific(Yc.ρtke, Yc.ρ)))
+        end
 
-    if diffuse_tke
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        (; ᶜ∇²tke) = p.hyperdiff
-        @. ᶜ∇²tke = wdivₕ(gradₕ(ᶜtke))
-    end
-
-    # Sub-grid scale hyperdiffusion. SGS mseⱼ uses the same
-    # temperature + geopotential + q_tot_eff split as the grid mean (assembled
-    # with subdomain thermodynamics in `apply_hyperdiffusion_tendency!`); the
-    # geopotential Laplacian `ᶜ∇²Φ` is shared.
-    if turbconv_model isa PrognosticEDMFX
-        # Config-level (not per-j) check: all subdomains carry the same
-        # prognostic fields, so hoist the has_field lookup.
-        for j in 1:n
-            # Full vector Laplacian identity, matching the grid-mean pattern
-            # for `ᶜ∇²u`. Under non-orthogonal metrics (topography), the C12
-            # components matter because they couple into the C3 of the outer
-            # `wcurlₕ(C123(curlₕ(⋅)))` via g_{13}, g_{23}.
-            @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(ᶜuʲs.:($$j)))))
-            # Same reference-state subtraction as grid mean. Updrafts share
-            # the grid-mean pressure, so `T_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the
-            # same profiles.
-            @. ᶜ∇²Tʲs.:($$j) = wdivₕ(
-                gradₕ(
-                    ᶜTʲs.:($$j) - air_temperature_reference(thermo_params, ᶜp),
-                ),
-            )
-            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-                @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
-                    gradₕ(
-                        Y.c.sgsʲs.:($$j).q_tot -
-                        Y.c.sgsʲs.:($$j).q_rai -
-                        Y.c.sgsʲs.:($$j).q_sno -
-                        q_tot_r(thermo_params, ᶜp),
-                    ),
-                )
-            else
-                @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
-                    gradₕ(
-                        Y.c.sgsʲs.:($$j).q_tot - q_tot_r(thermo_params, ᶜp),
-                    ),
-                )
-            end
+        # Sub-grid scale hyperdiffusion. SGS mseⱼ uses the same temperature +
+        # geopotential + q_tot_eff split as the grid mean (assembled with
+        # subdomain thermodynamics in `apply_hyperdiffusion_tendency!`); the
+        # geopotential Laplacian `ᶜ∇²Φ` is shared. Updrafts share the grid-mean
+        # pressure, so `T_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the same profiles.
+        turbconv_model isa PrognosticEDMFX || return nothing
+        (_, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs, _, ᶜTʲs) = sgs_fields
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            scalar_laplacian!(ᶜ∇²Tʲs.:($j), (@. ᶜTʲs.:($$j) - ᶜT_r))
+            ᶜq_tot_effʲ = sgs_diffusing_q_tot(Yc.sgsʲs.:($j), nonequil)
+            scalar_laplacian!(ᶜ∇²q_tot_effʲs.:($j), (@. ᶜq_tot_effʲ - ᶜq_tot_r))
         end
     end
+    return nothing
 end
+
+# The Laplacians of a fused slab loop. Every operator statement reads and writes
+# register temporaries of one type (the scalar argument, and the two terms of
+# the vector Laplacian), so that the Laplacians of a loop share their inferred
+# methods, whatever their inputs and destinations. A vector argument stays a
+# slice of its Field: a vector register temporary read by spectral operators is
+# heap-allocated on CPUs.
+@inline function scalar_laplacian!(ᶜ∇²χ, ᶜχ)
+    ᶜ∇²χ_register = @. wdivₕ(gradₕ(ᶜχ))
+    @. ᶜ∇²χ = ᶜ∇²χ_register
+    return nothing
+end
+@inline function vector_laplacian!(ᶜ∇²u, ᶜu)
+    ᶜgrad_div = @. C123(wgradₕ(divₕ(ᶜu)))
+    ᶜcurl_curl = @. C123(wcurlₕ(C123(curlₕ(ᶜu))))
+    @. ᶜ∇²u = ᶜgrad_div - ᶜcurl_curl
+    return nothing
+end
+
+# The specific total water that diffuses in the grid mean `ᶜY` or an updraft
+# `ᶜsgsʲ` (whole fields or slices of a fused loop): with non-equilibrium
+# microphysics, precipitation does not diffuse.
+@inline gs_diffusing_q_tot(ᶜY, ::Val{true}) =
+    @. lazy(specific(ᶜY.ρq_tot - ᶜY.ρq_rai - ᶜY.ρq_sno, ᶜY.ρ))
+@inline gs_diffusing_q_tot(ᶜY, ::Val{false}) = @. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))
+@inline sgs_diffusing_q_tot(ᶜsgsʲ, ::Val{true}) =
+    @. lazy(ᶜsgsʲ.q_tot - ᶜsgsʲ.q_rai - ᶜsgsʲ.q_sno)
+@inline sgs_diffusing_q_tot(ᶜsgsʲ, ::Val{false}) = ᶜsgsʲ.q_tot
 
 """
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -280,99 +288,124 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     draft_indices = StaticOneTo(n)
     is_edmf = turbconv_model isa PrognosticEDMFX
     nonequilibrium_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
-    diffuse_tke = use_prognostic_tke(turbconv_model)
-    ᶜρ = Y.c.ρ
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    point_type = eltype(Fields.coordinate_field(Y.c))
+    # Whether the updraft momentum `Yₜ.f.sgsʲs.:(j).u₃` is hyperdiffused (on 3D
+    # points only).
+    updraft_u₃ = Val(eltype(Fields.coordinate_field(Y.c)) <: Geometry.Abstract3DPoint)
     (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
-    if is_edmf
-        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        # Shares `ᶜscratchʲs` with `ᶜq_tot_hyperdiffʲs` in
-        # `apply_tracer_hyperdiffusion_tendency!`.
-        ᶜcpʲs = p.hyperdiff.ᶜscratchʲs
-        ᶜh_eff_minus_h_dʲs = p.hyperdiff.ᶜscratch_2ʲs
-    end
-    if diffuse_tke
-        (; ᶜ∇²tke) = p.hyperdiff
-    end
-
-    # re-use to store the curl-curl part
-    ᶜ∇⁴u = @. ᶜ∇²u =
-        divergence_damping_factor * C123(wgradₕ(divₕ(ᶜ∇²u))) -
-        C123(wcurlₕ(C123(curlₕ(ᶜ∇²u))))
-    @. Yₜ.f.u₃ -= ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴u))
-
-    # The horizontal momentum tendency and the heat-capacity and enthalpy
-    # coefficients of the energy fluxes (see the docstring) of the grid mean and of
-    # every updraft, in one column loop. The coefficients go to scratch fields,
-    # since they multiply DSSed Laplacian gradients in the horizontal divergences
-    # below.
-    ᶜcp = p.scratch.ᶜtemp_scalar
-    ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_2
-    ᶜq_water = ᶜdiffusing_water_phases(Y, p)
+    ᶜ∇²tke =
+        turbconv_model isa AbstractEDMF && use_prognostic_tke(turbconv_model) ?
+        p.hyperdiff.ᶜ∇²tke : ()
+    ᶜq_liq_ice =
+        microphysics_model isa DryModel ? () :
+        (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
     drafts =
         is_edmf ?
-        (;
-            ᶜcpʲs,
-            ᶜh_eff_minus_h_dʲs,
+        (
+            p.hyperdiff.ᶜ∇²uʲs,
+            p.hyperdiff.ᶜ∇²Tʲs,
+            p.hyperdiff.ᶜ∇²q_tot_effʲs,
             p.precomputed.ᶜTʲs,
             p.precomputed.ᶜq_liqʲs,
             p.precomputed.ᶜq_iceʲs,
-        ) : (;)
-    DataLayouts.foreach_column(
-        Yₜ.c.uₕ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Y.c, ᶜT, ᶜΦ, drafts,
-        something(ᶜq_water, ()),
-    ) do ᶜuₕₜ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Yc, ᶜT, ᶜΦ, drafts, ᶜq_water
-        @. ᶜuₕₜ -= ν₄_vorticity * C12(ᶜ∇⁴u)
-        ᶜcp_diffusing!(ᶜcp, thermo_params, isempty(ᶜq_water) ? nothing : ᶜq_water)
-        isempty(ᶜq_water) ||
-            ᶜh_eff_plus_Φ!(ᶜh_eff_plus_Φ, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+        ) : ()
+
+    # Every horizontal derivative of the grid mean and of the updrafts, in one slab
+    # loop. The density and `∇²Φ` are register temporaries shared by the
+    # divergences that read them, and the heat-capacity and enthalpy coefficients
+    # of the energy fluxes (see the docstring) are register temporaries computed
+    # from the state where the divergences read them.
+    DataLayouts.foreach_slab(
+        Yₜ.c, Y.c, ᶜ∇²u, (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), ᶜT, ᶜΦ,
+        ᶜq_liq_ice, drafts,
+    ) do Yₜc, Yc, ᶜ∇²u, (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), ᶜT, ᶜΦ,
+    ᶜq_liq_ice, drafts
+        # ∇⁴u overwrites ∇²u, for the column loop below.
+        @. ᶜ∇²u =
+            divergence_damping_factor * C123(wgradₕ(divₕ(ᶜ∇²u))) -
+            C123(wcurlₕ(C123(curlₕ(ᶜ∇²u))))
+        ᶜρ = as_register(Yc.ρ)
+        ᶜ∇²Φ_register = as_register(ᶜ∇²Φ)
+        ᶜρe_totₜ = Yₜc.ρe_tot
+        if isempty(ᶜq_liq_ice)
+            ᶜcp = ᶜcp_diffusing!(nothing, thermo_params, nothing)
+            @. ᶜρe_totₜ -=
+                ν₄_scalar * (
+                    wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) +
+                    wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ_register))
+                )
+        else
+            ᶜq_water = diffusing_water_phases(
+                Yc, ᶜq_liq_ice..., microphysics_model, Val(false),
+            )
+            (ᶜq_tot, ᶜq_liq, ᶜq_ice) = ᶜq_water
+            ᶜcp = ᶜcp_diffusing!(nothing, thermo_params, ᶜq_water)
+            # `ᶜh_eff_plus_Φ!` in registers
+            ᶜh_eff_plus_Φ =
+                @. h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) + ᶜΦ
+            @. ᶜρe_totₜ -=
+                ν₄_scalar * (
+                    wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) +
+                    wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ_register)) +
+                    wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
+                )
+        end
+        if ᶜ∇²tke isa Fields.Field
+            ᶜρtkeₜ = Yₜc.ρtke
+            @. ᶜρtkeₜ -= ν₄_vorticity * wdivₕ(ᶜρ * gradₕ(ᶜ∇²tke))
+        end
+
+        isempty(drafts) && return nothing
+        (ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs, ᶜTʲs, ᶜq_liqʲs, ᶜq_iceʲs) = drafts
         unrolled_foreach(draft_indices) do j
             @inline
+            if updraft_u₃ isa Val{true}
+                # Only the C3 component of ∇⁴uⱼ contributes to Yₜ.f.u₃ⱼ, so drop
+                # the grad-div term (its C3 is zero).
+                ᶜ∇²uʲ = ᶜ∇²uʲs.:($j)
+                @. ᶜ∇²uʲ = -C123(wcurlₕ(C123(curlₕ(ᶜ∇²uʲ))))
+            end
+            ᶜTʲ = ᶜTʲs.:($j)
             ᶜq_waterʲ = updraft_diffusing_water(
-                Yc.sgsʲs.:($j), drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j),
+                Yc.sgsʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
                 nonequilibrium_val,
             )
-            ᶜcp_diffusing!(drafts.ᶜcpʲs.:($j), thermo_params, ᶜq_waterʲ)
-            ᶜh_eff_minus_h_d!(
-                drafts.ᶜh_eff_minus_h_dʲs.:($j), thermo_params, drafts.ᶜTʲs.:($j),
-                ᶜq_waterʲ,
-            )
+            (ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ) = ᶜq_waterʲ
+            ᶜcpʲ = ᶜcp_diffusing!(nothing, thermo_params, ᶜq_waterʲ)
+            # `ᶜh_eff_minus_h_d!` in registers
+            ᶜh_eff_minus_h_dʲ =
+                @. h_eff(thermo_params, ᶜTʲ, ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ) -
+                   TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ᶜ∇²Tʲ = ᶜ∇²Tʲs.:($j)
+            ᶜ∇²q_tot_effʲ = ᶜ∇²q_tot_effʲs.:($j)
+            ᶜmseʲₜ = Yₜc.sgsʲs.:($j).mse
+            @. ᶜmseʲₜ -=
+                ν₄_scalar * (
+                    wdivₕ(ᶜcpʲ * gradₕ(ᶜ∇²Tʲ)) +
+                    wdivₕ(gradₕ(ᶜ∇²Φ_register)) +
+                    wdivₕ(ᶜh_eff_minus_h_dʲ * gradₕ(ᶜ∇²q_tot_effʲ))
+                )
             return nothing
         end
         return nothing
     end
 
-    if isnothing(ᶜq_water)
-        @. Yₜ.c.ρe_tot -=
-            ν₄_scalar *
-            (wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) + wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ)))
-    else
-        @. Yₜ.c.ρe_tot -=
-            ν₄_scalar * (
-                wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) +
-                wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ)) +
-                wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
-            )
-    end
-    if (turbconv_model isa AbstractEDMF) && diffuse_tke
-        @. Yₜ.c.ρtke -= ν₄_vorticity * wdivₕ(ᶜρ * gradₕ(ᶜ∇²tke))
-    end
-    for j in 1:n
-        if point_type <: Geometry.Abstract3DPoint
-            # Only the C3 component of ∇⁴uⱼ contributes to Yₜ.f.u₃ⱼ, so drop the
-            # grad-div term (its C3 is zero).
-            ᶜ∇⁴uⱼ = @. ᶜ∇²uʲs.:($$j) =
-                -C123(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴uⱼ))
+    # The horizontal momentum tendency and the face tendencies, which interpolate
+    # ∇⁴u vertically, in one column loop.
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜ∇⁴uʲs = is_edmf && updraft_u₃ isa Val{true} ? p.hyperdiff.ᶜ∇²uʲs : ()
+    DataLayouts.foreach_column(
+        Yₜ.c.uₕ, Yₜ.f, ᶜJ, Y.c.ρ, ᶜ∇²u, ᶜ∇⁴uʲs,
+    ) do ᶜuₕₜ, Yₜf, ᶜJ, ᶜρ, ᶜ∇⁴u, ᶜ∇⁴uʲs
+        @. ᶜuₕₜ -= ν₄_vorticity * C12(ᶜ∇⁴u)
+        ᶠu₃ₜ = Yₜf.u₃
+        @. ᶠu₃ₜ -= ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴u))
+        ᶜ∇⁴uʲs isa Fields.Field || return nothing
+        unrolled_foreach(draft_indices) do j
+            @inline
+            ᶠu₃ʲₜ = Yₜf.sgsʲs.:($j).u₃
+            ᶜ∇⁴uʲ = ᶜ∇⁴uʲs.:($j)
+            @. ᶠu₃ʲₜ -= ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴uʲ))
         end
-        @. Yₜ.c.sgsʲs.:($$j).mse -=
-            ν₄_scalar * (
-                wdivₕ(ᶜcpʲs.:($$j) * gradₕ(ᶜ∇²Tʲs.:($$j))) +
-                wdivₕ(gradₕ(ᶜ∇²Φ)) +
-                wdivₕ(ᶜh_eff_minus_h_dʲs.:($$j) * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
-            )
     end
     return nothing
 end
@@ -518,18 +551,27 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # dρχ = (ρχ/ρq) · dρq: for the number densities ρn_lcl and ρn_ice this
     # preserves the mean particle mass, and for the P3 rime mass ρq_rim and rime
     # volume ρb_rim it preserves the rime fraction and rime density of the ice.
+    #
+    # The divergences of the grid mean and of every updraft are computed in one
+    # slab loop, and distributed in a column loop.
     ᶜρq_tot_hyperdiff = p.scratch.ᶜtemp_scalar
-    if has_q_tot
-        (; ᶜ∇²q_tot_eff) = p.hyperdiff
-        @. ᶜρq_tot_hyperdiff = ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot_eff))
-    end
-    if is_edmf
-        (; ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        # Shares `ᶜscratchʲs` with `ᶜcpʲs` in `apply_hyperdiffusion_tendency!`.
-        ᶜq_tot_hyperdiffʲs = p.hyperdiff.ᶜscratchʲs
-        for j in 1:n
-            @. ᶜq_tot_hyperdiffʲs.:($$j) =
-                ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
+    ᶜq_tot_hyperdiffʲs = is_edmf ? p.hyperdiff.ᶜscratchʲs : ()
+    gs_hd = has_q_tot ? (ᶜρq_tot_hyperdiff, p.hyperdiff.ᶜ∇²q_tot_eff) : ()
+    sgs_hd = is_edmf ? (ᶜq_tot_hyperdiffʲs, p.hyperdiff.ᶜ∇²q_tot_effʲs) : ()
+    if has_q_tot || is_edmf
+        DataLayouts.foreach_slab(Y.c.ρ, gs_hd, sgs_hd) do ᶜρ, gs_hd, sgs_hd
+            if !isempty(gs_hd)
+                (ᶜρq_tot_hd, ᶜ∇²q_tot_eff) = gs_hd
+                @. ᶜρq_tot_hd = ν₄_scalar * wdivₕ(ᶜρ * gradₕ(ᶜ∇²q_tot_eff))
+            end
+            isempty(sgs_hd) && return nothing
+            (ᶜq_tot_hdʲs, ᶜ∇²q_tot_effʲs) = sgs_hd
+            unrolled_foreach(draft_indices) do j
+                @inline
+                ᶜq_tot_hdʲ = ᶜq_tot_hdʲs.:($j)
+                ᶜ∇²q_tot_effʲ = ᶜ∇²q_tot_effʲs.:($j)
+                @. ᶜq_tot_hdʲ = ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_tot_effʲ))
+            end
         end
     end
     gs_species = present_species(
@@ -548,7 +590,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if has_q_tot || n > 0
         DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜρq_tot_hyperdiff, is_edmf ? ᶜq_tot_hyperdiffʲs : (),
+            Yₜ.c, Y.c, ᶜρq_tot_hyperdiff, ᶜq_tot_hyperdiffʲs,
         ) do Yₜc, Yc, ᶜρq_tot_hd, ᶜq_tot_hdʲs
             if MatrixFields.has_field(Yc, @name(ρq_tot))
                 @. Yₜc.ρq_tot -= ᶜρq_tot_hd

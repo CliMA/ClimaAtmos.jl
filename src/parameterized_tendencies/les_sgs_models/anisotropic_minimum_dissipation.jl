@@ -4,11 +4,27 @@
 
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
-import ClimaCore: Geometry
+import ClimaCore: DataLayouts, Geometry
 import LinearAlgebra: norm_sqr
 
-horizontal_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-vertical_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+"""
+    amd_viscosity(c_amd, ∂̂u, S, ∇u)
+
+Return the AMD eddy viscosity at a point,
+
+    νₜ = max(0, -c (∂̂ₖuᵢ)(∂̂ₖuⱼ) Sᵢⱼ / (∂ₗuₘ)(∂ₗuₘ)),
+
+from the filter-scaled velocity gradient `∂̂u`, the strain rate `S`, and the velocity
+gradient `∇u` (`UVW × UVW` tensors), with the coefficient `c = c_amd`.
+"""
+@inline function amd_viscosity(c_amd, ∂̂u, S, ∇u)
+    FT = eltype(∇u)
+    M = (∂̂u * adjoint(∂̂u)) * S
+    tr_M = M.components.data.:1 + M.components.data.:5 + M.components.data.:9
+    return max(FT(0), -c_amd * tr_M / max(eps(FT), norm_sqr(∇u)))
+end
 
 """
     amd_scalar_diffusivity(c_amd, ∂̂u_uvw, Δ, ∇χ)
@@ -30,10 +46,10 @@ function amd_scalar_diffusivity(c_amd, ∂̂u_uvw, Δ, ∇χ)
 end
 
 """
-    horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
+    amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
 
-Add the horizontal Anisotropic Minimum Dissipation (AMD) subgrid-scale flux divergences to
-`Yₜ` in place; return `nothing`.
+Add the horizontal and vertical Anisotropic Minimum Dissipation (AMD) subgrid-scale flux
+divergences to `Yₜ` in place; return `nothing`.
 
 The AMD closure of [Akbar2016](@cite) builds the eddy viscosity and diffusivity from
 gradients scaled by the anisotropic filter widths, `∂̂ᵢ = Δᵢ ∂ᵢ` with `Δᵢ` the filter width
@@ -44,171 +60,68 @@ in direction `i` (horizontal node spacing and vertical layer thickness here):
 Dₜ = \\max(0, -c \\, (∂̂ₖuᵢ)(∂̂ₖχ) ∂ᵢχ / (∂ₗχ)(∂ₗχ)),
 ```
 
-with `c = les.c_amd` [-] and a separate `Dₜ` for each diffused scalar
-(`amd_scalar_diffusivity`). Momentum receives `-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux
-tensor `τ = -2 νₜ S`. Total energy receives the divergence of the enthalpy flux
-`-ρ [Dₜ(T) (c_p ∇ₕT + ∇ₕΦ) + Dₜ(q_tot) ((h_v + Φ) ∇ₕq_tot + (h_l - h_v) ∇ₕq_liq + (h_i - h_v) ∇ₕq_ice)]`,
-with `c_p` the heat capacity of the diffusing mixture (`add_sensible_heat_diffusionₕ!`),
-where `q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
-configurations. Total water diffuses with `Dₜ(q_tot)` (mirrored to `Yₜ.c.ρ` for mass
-conservation), each cloud and precipitation species diffuses down its own gradient with
-the same diffusivity (`add_moisture_diffusionₕ!` with `precipitation = true`), and each
-passive grid-scale tracer `χ` receives `+∇ₕ·(ρ Dₜ(χ) ∇ₕχ)`. Reads
-`ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
-
-This tendency is always applied explicitly, from `remaining_tendency!`. To remove it in
-debugging workflows, comment out the call in `remaining_tendency.jl`. See also
-`vertical_amd_tendency!`.
-"""
-function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
-    (; atmos, precomputed, scratch) = p
-    FT = eltype(Y)
-    c_amd = les.c_amd
-    (; ᶜu, ᶠu³) = precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
-    (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3) = scratch
-    (; ᶠtemp_scalar, ᶠtemp_scalar_2) = scratch
-    (; ᶜtemp_UVW, ᶠtemp_UVW) = scratch
-
-    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
-    ᶠgradᵥ_uvw = Operators.GradientC2F(
-        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
-        top = Operators.SetGradient(∇ᵥuvw_boundary),
-    )
-    axis_uvw = (Geometry.UVWAxis(),)
-
-    # Compute UVW velocities
-    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
-
-    # filter scales
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_h = Spaces.node_horizontal_length_scale(h_space)
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-
-    # Gradients
-    ## cell centers
-    ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
-    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
-    ## cell faces
-    ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
-    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
-
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = symmetric_part(∇ᶜu_uvw)
-    ᶠS = @. ᶠtemp_strain = symmetric_part(∇ᶠu_uvw)
-
-    # The viscosity denominator (∂ₗuₘ)(∂ₗuₘ), evaluated here because
-    # `∇ᶜu_uvw` and the scaled derivative below share `ᶜtemp_UVWxUVW`.
-    ᶜ∂ₗuₘ∂ₗuₘ = @. ᶜtemp_scalar_3 = norm_sqr(∇ᶜu_uvw)
-
-    # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
-
-    ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-
-    # AMD eddy viscosity
-    ᶜνₜ = @. ᶜtemp_scalar = max(
-        FT(0),
-        -c_amd *
-        (
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
-    )
-    ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
-
-    # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
-    ᶜτ_amd = @. lazy(-2 * ᶜνₜ * ᶜS)
-    ᶠτ_amd = @. lazy(-2 * ᶠνₜ * ᶠS)
-
-    ## Momentum tendencies
-    ᶠρ = @. ᶠtemp_scalar_2 = ᶠinterp(Y.c.ρ)
-    @. Yₜ.c.uₕ -= C12(wdivₕ(Y.c.ρ * ᶜτ_amd) / Y.c.ρ)
-    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_amd) / ᶠρ)
-
-    ## Total energy tendency: sensible heat and geopotential with D(∇T), then
-    ## the water enthalpy flux and the water species, precipitation included,
-    ## with D(∇q_tot)
-    ᶜT = p.precomputed.ᶜT
-    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation = true)
-    ∇T = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜT)))
-    ᶜD_amd = @. ᶜtemp_scalar = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇T)
-    add_sensible_heat_diffusionₕ!(
-        Yₜ.c.ρe_tot,
-        (@. lazy(Y.c.ρ * ᶜD_amd)),
-        ᶜT,
-        ᶜq_water,
-        p,
-        ᶜtemp_scalar_3,
-    )
-    if !(atmos.microphysics_model isa DryModel)
-        ᶜq_tot = ᶜq_water[1]
-        ∇q_tot = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜq_tot)))
-        @. ᶜD_amd = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇q_tot)
-        add_moisture_diffusionₕ!(
-            Yₜ,
-            Y,
-            p,
-            (@. lazy(Y.c.ρ * ᶜD_amd)),
-            ᶜtemp_scalar_3,
-            ᶜtemp_scalar_2;
-            precipitation = true,
-        )
-    end
-
-    # Passive (non-microphysics) grid-scale tracers
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜχ)))
-        @. ᶜD_amd = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇ᶜχ)
-        @. ᶜρχₜ += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜχ))
-    end
-end
-
-import UnrolledUtilities as UU
-
-
-"""
-    vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
-
-Add the vertical Anisotropic Minimum Dissipation (AMD) subgrid-scale flux divergences to
-`Yₜ` in place; return `nothing`.
-
-Computes the same [Akbar2016](@cite) eddy viscosity `νₜ` and scalar diffusivities `Dₜ` as
-`horizontal_amd_tendency!` (see that docstring for the formulas), with the scalar
-diffusivities evaluated on cell faces from vertical gradients. Momentum receives
-`-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ S`. Total energy receives the
+with `c = les.c_amd` [-], computed by `amd_viscosity`. The velocity gradients in `νₜ` are
+the full three-dimensional ones; each diffused scalar gets a horizontal `Dₜ` at cell centers
+from its horizontal gradient and a vertical `Dₜ` at cell faces from its vertical gradient
+(`amd_scalar_diffusivity`). Momentum receives `-∇·(ρ τ)/ρ` with the SGS momentum flux
+tensor `τ = -2 νₜ S`, as a horizontal and a vertical divergence. Total energy receives the
 divergence of the enthalpy flux
-`-ρ [Dₜ(T) (c_p ∇ᵥT + ∇ᵥΦ) + Dₜ(q_tot) ((h_v + Φ) ∇ᵥq_tot + (h_l - h_v) ∇ᵥq_liq + (h_i - h_v) ∇ᵥq_ice)]`,
-with `c_p` the heat capacity of the diffusing mixture (`add_sensible_heat_diffusionᵥ!`),
-where `q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
-configurations. Total water diffuses with `Dₜ(q_tot)` (mirrored to `Yₜ.c.ρ` for mass
-conservation), each cloud and precipitation species diffuses down its own gradient with
-the same diffusivity (`add_moisture_diffusionᵥ!` with `precipitation = true`), and each
-passive grid-scale tracer receives the vertical diffusive-flux divergence
-`-∇ᵥ·(-ρ Dₜ(χ) ∇ᵥχ)` with face diffusivity `ᶠρ Dₜ`.
-Reads `ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
+`-ρ [Dₜ(T) (c_p ∇T + ∇Φ) + Dₜ(q_tot) ((h_v + Φ) ∇q_tot + (h_l - h_v) ∇q_liq + (h_i - h_v) ∇q_ice)]`
+along each direction, with `c_p` the heat capacity of the diffusing mixture
+(`add_sensible_heat_diffusionₕ!`, `add_sensible_heat_diffusionᵥ!`), where `q_liq` and
+`q_ice` include rain and snow; its water terms are absent in dry configurations. Total
+water diffuses with `Dₜ(q_tot)` (mirrored to `Yₜ.c.ρ` for mass conservation), each cloud and
+precipitation species diffuses down its own gradient with the same diffusivity, except that
+cloud liquid and ice take the blended vertical flux of `add_cloud_species_diffusionᵥ!` when
+`blended_cloud_species_flux` holds, and each passive grid-scale tracer `χ` diffuses with its
+own `Dₜ(χ)`. Reads `ᶜu`, `ᶠu³`, `ᶜT`, `ᶜq_liq`, and `ᶜq_ice` from `p.precomputed`.
+
+The velocity gradients are evaluated once for both directions, in a sequence of fused
+loops whose intermediate values are register temporaries. Slab loops cannot apply vertical
+operators and column loops cannot apply horizontal ones, so the gradients that cross from
+one kind of loop to the other are stored in `p.scratch`:
+
+ 1. a column loop stores the face velocity (`ᶠtemp_UVW`), the vertical velocity
+    differences at centers (`ᶜtemp_UVW`, 3 values per point rather than the 9 of their
+    gradient), and the vertical velocity gradient at faces (`ᶠtemp_UVWxUVW`);
+ 2. a center slab loop applies the horizontal tendencies at cell centers and stores the
+    strain rate (`ᶜtemp_UVWxUVW`) and `νₜ` (`ᶜtemp_scalar`);
+ 3. a column loop stores the face values of `ρ νₜ` (`ᶠtemp_scalar`);
+ 4. a face slab loop replaces the vertical face gradient with the horizontal one and
+    `ρ νₜ` with the horizontal stress divergence of `u₃`;
+ 5. a column loop divides that divergence by the face density and applies the vertical
+    momentum tendencies; and
+ 6. a column loop applies the vertical scalar tendencies and stores the face weight of the
+    total water flux (`ᶠtemp_scalar_2`) for the blended cloud-species flux.
+
+The vertical momentum and scalar tendencies are in separate column loops, since a loop with
+both needs more registers than keep two blocks of 256 threads resident on a GPU
+multiprocessor.
 
 This tendency is always applied explicitly, from `remaining_tendency!`; it is not part of
 the implicit solver. To remove it in debugging workflows, comment out the call in
 `remaining_tendency.jl`.
 """
-function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
-    FT = eltype(Y)
-
-    c_amd = les.c_amd
-
-    ### AMD ###
-
-    (; ᶜu, ᶠu³) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = p.scratch
-    (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3) = p.scratch
-    (; ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) = p.scratch
-
+function amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
+    (; microphysics_model) = p.atmos
+    (; ᶜu, ᶠu³, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜtemp_UVW, ᶠtemp_UVW, ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW) = p.scratch
+    (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
+    ᶜΦ = p.core.ᶜΦ
+    ᶜΔ_z = Fields.Δz_field(Y.c)
+    ᶠΔ_z = Fields.Δz_field(Y.f)
+    blend = Val(blended_cloud_species_flux(Y, p))
+    consts = (;
+        microphysics_model,
+        thermo_params = CAP.thermodynamics_params(p.params),
+        c_amd = les.c_amd,
+        Δ_h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c))),
+        water_names = amd_water_species_names(Y, false),
+        passive_names = passive_gs_tracer_names(Y),
+    )
+    (; thermo_params, c_amd, Δ_h, passive_names) = consts
+    self_water_names = amd_water_species_names(Y, blend isa Val{true})
+    axis_uvw = (Geometry.UVWAxis(),)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ᶠgradᵥ_uvw = Operators.GradientC2F(
         bottom = Operators.SetGradient(∇ᵥuvw_boundary),
@@ -219,97 +132,175 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         top = Operators.SetGradient(UVW(0, 0, 0)),
     )
 
-    axis_uvw = (Geometry.UVWAxis(),)
-
-    # Compute UVW velocities
-    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
-
-    # filter scales
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_h = Spaces.node_horizontal_length_scale(h_space)
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶠΔ_z = Fields.Δz_field(Y.f)
-
-    # Gradients
-    ## cell centers
-    ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
-    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
-    ## cell faces
-    ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
-    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
-
-    # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = symmetric_part(∇ᶜu_uvw)
-    ᶠS = @. ᶠtemp_strain = symmetric_part(∇ᶠu_uvw)
-
-    # The viscosity denominator (∂ₗuₘ)(∂ₗuₘ), evaluated here because
-    # `∇ᶜu_uvw` and the scaled derivative below share `ᶜtemp_UVWxUVW`.
-    ᶜ∂ₗuₘ∂ₗuₘ = @. ᶜtemp_scalar_3 = norm_sqr(∇ᶜu_uvw)
-
-    # Scaled Derivatives ∂̂ᵢ = Δ₍ᵢ₎∂ᵢ
-    ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
-    @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
-
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
-
-    ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-
-    # AMD eddy viscosity
-    ᶜνₜ = @. ᶜtemp_scalar = max(
-        FT(0),
-        -c_amd *
-        (
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:1 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:5 +
-            (ᶜ∂ₖuᵢ∂ₖuⱼ * ᶜS).components.data.:9
-        ) / max.(eps(FT), ᶜ∂ₗuₘ∂ₗuₘ),
-    )
-    ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
-
-    # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
-    ᶜτ_amd = @. lazy(-2 * ᶜνₜ * ᶜS)
-    ᶠτ_amd = @. lazy(-2 * ᶠνₜ * ᶠS)
-
-    # Apply to tendencies
-    ## Horizontal momentum tendency
-    ᶠρ = @. lazy(ᶠinterp(Y.c.ρ))
-    @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(ᶠρ * ᶠτ_amd) / Y.c.ρ)
-    ## Vertical momentum tendency
-    @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(Y.c.ρ * ᶜτ_amd) / ᶠρ)
-
-    ## Total energy tendency: sensible heat and geopotential with D(∇T), then
-    ## the water enthalpy flux and the water species, precipitation included,
-    ## with D(∇q_tot)
-    ᶜT = p.precomputed.ᶜT
-    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation = true)
-    ∇T = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜT)))
-    ᶠD_amd = @. ᶠtemp_scalar = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇T)
-    ᶠρD = @. lazy(ᶠρ * ᶠD_amd)
-    add_sensible_heat_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρD, ᶜT, ᶜq_water, p, ᶜtemp_scalar_3)
-    if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot = ᶜq_water[1]
-        ∇q_tot = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜq_tot)))
-        @. ᶠD_amd = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇q_tot)
-        add_moisture_diffusionᵥ!(
-            Yₜ,
-            Y,
-            p,
-            ᶠρD,
-            ᶜtemp_scalar_3,
-            ᶜtemp_scalar_2;
-            precipitation = true,
-        )
+    DataLayouts.foreach_column(
+        ᶠtemp_UVW, ᶜtemp_UVW, ᶠtemp_UVWxUVW, Y.c.uₕ, ᶠu³, ᶜu,
+    ) do ᶠu_uvw, ᶜΔu, ᶠ∇ᵥu, ᶜuₕ, ᶠu³, ᶜu
+        @inline
+        ᶠu_uvw_column = @. UVW(ᶠinterp(ᶜuₕ)) + UVW(ᶠu³)
+        @. ᶠu_uvw = ᶠu_uvw_column
+        @. ᶜΔu = vertical_difference(ᶜgradᵥ(ᶠu_uvw_column))
+        ᶜu_uvw = @. UVW(ᶜu)
+        @. ᶠ∇ᵥu = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
     end
 
-    ## Passive (non-microphysics) grid-scale tracers
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜχ)))
-        @. ᶠD_amd = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇ᶜχ)
-        ᶠρD_tracer = @. lazy(ᶠρ * ᶠD_amd)
-        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρD_tracer * ᶠgradᵥ(ᶜχ)))
+    DataLayouts.foreach_slab(
+        Yₜ.c, Y.c, ᶜu, ᶜtemp_UVW, ᶜtemp_UVWxUVW, ᶜtemp_scalar, ᶜΔ_z, ᶜT, ᶜq_liq,
+        ᶜq_ice, ᶜΦ,
+    ) do Yₜc, Yc, ᶜu, ᶜΔu, ᶜS_out, ᶜνₜ_out, ᶜΔ_z, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ
+        @inline
+        ᶜu_uvw = @. UVW(ᶜu)
+        ᶜ∇ₕu = @. Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
+        ᶜ∇ᵥu = @. Geometry.project(axis_uvw, vertical_gradient(ᶜΔu))
+        ᶜ∇u = @. ᶜ∇ᵥu + ᶜ∇ₕu
+        ᶜS = @. symmetric_part(ᶜ∇u)
+        ᶜ∂̂u = @. Δ_h * ᶜ∇ₕu + ᶜΔ_z * ᶜ∇ᵥu
+        ᶜνₜ = @. amd_viscosity(c_amd, ᶜ∂̂u, ᶜS, ᶜ∇u)
+        ᶜuₕₜ = @. C12(wdivₕ(Yc.ρ * (-2 * ᶜνₜ * ᶜS)) / Yc.ρ)
+        @. ᶜS_out = ᶜS
+        @. ᶜνₜ_out = ᶜνₜ
+        @. Yₜc.uₕ -= ᶜuₕₜ
+        add_amd_scalar_diffusionₕ!(Yₜc, Yc, ᶜ∂̂u, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ, consts)
+    end
+
+    DataLayouts.foreach_column(ᶠtemp_scalar, Y.c.ρ, ᶜtemp_scalar) do ᶠρνₜ, ᶜρ, ᶜνₜ
+        @inline
+        @. ᶠρνₜ = ᶠinterp(ᶜρ) * ᶠinterp(ᶜνₜ)
+    end
+
+    # The slab loop stores the horizontal gradient over the vertical one and the
+    # divergence over `ρ νₜ`, after reading them (slab loops cannot interpolate the
+    # density that divides the divergence).
+    DataLayouts.foreach_slab(
+        ᶠtemp_UVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar,
+    ) do ᶠu_uvw, ᶠ∇u, ᶠρνₜ
+        @inline
+        ᶠ∇ᵥu = as_register(ᶠ∇u)
+        ᶠ∇ₕu = @. Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
+        @. ᶠ∇u = ᶠ∇ₕu
+        ᶠρu₃ₜ = @. first(parent(C3(wdivₕ(-2 * ᶠρνₜ * symmetric_part(ᶠ∇ᵥu + ᶠ∇ₕu)))))
+        @. ᶠρνₜ = ᶠρu₃ₜ
+    end
+
+    DataLayouts.foreach_column(
+        Yₜ.c, Yₜ.f, Y.c, ᶜu, ᶜtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_UVWxUVW, ᶠtemp_scalar,
+    ) do Yₜc, Yₜf, Yc, ᶜu, ᶜS, ᶜνₜ, ᶠ∇ₕu, ᶠρu₃ₜ
+        @inline
+        ᶠρ = @. ᶠinterp(Yc.ρ)
+        ᶠwₜ = Yₜf.u₃.components.data.:1
+        @. ᶠwₜ -= ᶠρu₃ₜ / ᶠρ
+        @. Yₜf.u₃ -= C3(ᶠdiffdivᵥ_u₃(Yc.ρ * (-2 * ᶜνₜ * ᶜS)) / ᶠρ)
+        ᶠνₜ = @. ᶠinterp(ᶜνₜ)
+        ᶜu_uvw = @. UVW(ᶜu)
+        ᶠS = @. symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw)) + ᶠ∇ₕu)
+        @. Yₜc.uₕ -= C12(ᶜdivᵥ(ᶠρ * (-2 * ᶠνₜ * ᶠS)) / Yc.ρ)
+    end
+
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶜu, ᶠtemp_UVWxUVW, ᶠtemp_scalar_2, ᶠΔ_z, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ,
+    ) do Yₜc, Yc, ᶜu, ᶠ∇ₕu, ᶠρD_out, ᶠΔ_z, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ
+        @inline
+        ᶠρ = @. ᶠinterp(Yc.ρ)
+        ᶜu_uvw = @. UVW(ᶜu)
+        ᶠ∂̂u = @. Δ_h * ᶠ∇ₕu + ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
+        ᶜT = as_register(ᶜT)
+        ᶜq_water = diffusing_water_phases(Yc, ᶜq_liq, ᶜq_ice, microphysics_model, Val(true))
+        ᶜq_water = isnothing(ᶜq_water) ? nothing : unrolled_map(as_register, ᶜq_water)
+        ᶜq_tot = isnothing(ᶜq_water) ? nothing : ᶜq_water[1]
+        ᶠρD_T = @. ᶠρ * amd_scalar_diffusivity(
+            c_amd, ᶠ∂̂u, ᶠΔ_z, Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜT)),
+        )
+        add_sensible_heat_diffusionᵥ!(Yₜc.ρe_tot, ᶠρD_T, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+        if !isnothing(ᶜq_tot)
+            ᶠρD_q = @. ᶠρ * amd_scalar_diffusivity(
+                c_amd, ᶠ∂̂u, ᶠΔ_z, Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜq_tot)),
+            )
+            add_water_diffusionᵥ!(Yₜc, nothing, ᶠρD_q, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+            unrolled_foreach(self_water_names) do ρχ_name
+                @inline
+                ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+                ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+                @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρD_q * ᶠgradᵥ(specific(ᶜρχ, Yc.ρ))))
+            end
+            blend isa Val{true} && @. ᶠρD_out = ᶠρD_q
+        end
+        unrolled_foreach(passive_names) do ρχ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            ᶜχ = @. specific(ᶜρχ, Yc.ρ)
+            ᶠρD_χ = @. ᶠρ * amd_scalar_diffusivity(
+                c_amd, ᶠ∂̂u, ᶠΔ_z, Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜχ)),
+            )
+            @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρD_χ * ᶠgradᵥ(ᶜχ)))
+        end
+    end
+    blend isa Val{true} || return nothing
+    add_blended_cloud_species_diffusionᵥ!(Yₜ, Y, p, ᶠtemp_scalar_2; precipitation = true)
+    return nothing
+end
+
+# The names of the water species that diffuse down their own gradients with the
+# diffusivity of total water (`diffused_water_species` with precipitation), without
+# cloud liquid and ice if `blend`.
+amd_water_species_names(Y, blend) = unrolled_map(
+    last,
+    unrolled_filter(diffused_water_species(true)) do (χ_name, ρχ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) &&
+            !(blend && !isnothing(cloud_species_phase(χ_name)))
+    end,
+)
+
+# Add the horizontal AMD diffusion of every scalar to the slab `Yₜc` of a fused center slab
+# loop, with the scaled velocity gradient `ᶜ∂̂u` of the slab. As in the slab form of
+# `add_scalar_diffusionₕ!`, every tendency stays a register temporary until all of them
+# are computed, and every diffused scalar is a register temporary of one type.
+@inline function add_amd_scalar_diffusionₕ!(
+    Yₜc, Yc, ᶜ∂̂u, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ, consts,
+)
+    (; microphysics_model, thermo_params, c_amd, Δ_h, water_names, passive_names) = consts
+    axis_uvw = (Geometry.UVWAxis(),)
+    ᶜT = as_register(ᶜT)
+    ᶜΦ = as_register(ᶜΦ)
+    ᶜq_water = diffusing_water_phases(Yc, ᶜq_liq, ᶜq_ice, microphysics_model, Val(true))
+    ᶜq_water = isnothing(ᶜq_water) ? nothing : unrolled_map(as_register, ᶜq_water)
+    ᶜq_tot = isnothing(ᶜq_water) ? nothing : ᶜq_water[1]
+    ᶜρD_T = @. Yc.ρ *
+       amd_scalar_diffusivity(c_amd, ᶜ∂̂u, Δ_h, Geometry.project(axis_uvw, gradₕ(ᶜT)))
+    ᶜρD_q =
+        isnothing(ᶜq_tot) ? nothing :
+        (@. Yc.ρ * amd_scalar_diffusivity(
+            c_amd, ᶜ∂̂u, Δ_h, Geometry.project(axis_uvw, gradₕ(ᶜq_tot)),
+        ))
+    ᶜρe_totₜ = as_register(Yₜc.ρe_tot)
+    add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜρD_T, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+    isnothing(ᶜq_water) ||
+        add_water_enthalpy_diffusionₕ!(ᶜρe_totₜ, ᶜρD_q, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+    ᶜρq_totₜ = isnothing(ᶜq_tot) ? nothing : diffusion_divₕ(ᶜρD_q, ᶜq_tot)
+    ᶜρχₜs_water = unrolled_map(water_names) do ρχ_name
+        @inline
+        ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+        ᶜχ = @. specific(ᶜρχ, Yc.ρ)
+        diffusion_divₕ(ᶜρD_q, ᶜχ)
+    end
+    ᶜρχₜs_passive = unrolled_map(passive_names) do ρχ_name
+        @inline
+        ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+        ᶜχ = @. specific(ᶜρχ, Yc.ρ)
+        ᶜρD_χ = @. Yc.ρ *
+           amd_scalar_diffusivity(c_amd, ᶜ∂̂u, Δ_h, Geometry.project(axis_uvw, gradₕ(ᶜχ)))
+        diffusion_divₕ(ᶜρD_χ, ᶜχ)
+    end
+    @. Yₜc.ρe_tot = ᶜρe_totₜ
+    if !isnothing(ᶜρq_totₜ)
+        @. Yₜc.ρq_tot += ᶜρq_totₜ
+        @. Yₜc.ρ += ᶜρq_totₜ
+    end
+    unrolled_foreach(
+        (water_names..., passive_names...),
+        (ᶜρχₜs_water..., ᶜρχₜs_passive...),
+    ) do ρχ_name, ᶜρχₜ_diffusion
+        @inline
+        ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+        @. ᶜρχₜ += ᶜρχₜ_diffusion
     end
 end

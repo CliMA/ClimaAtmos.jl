@@ -887,7 +887,7 @@ function update_implicit_1m_tendency!(
             p.precomputed
         opts = sgs_microphysics_options(p.params)
         ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
+        ᶜmu_S⁰ = Fields.Field(p.scratch.temp_data, axes(Y.c))
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
@@ -1243,7 +1243,7 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
     ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-    ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
+    ᶜmu_S⁰ = Fields.Field(p.scratch.temp_data, axes(Y.c))
     sgs_quad = p.atmos.sgs_quadrature
 
     DataLayouts.foreach_column(

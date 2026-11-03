@@ -642,7 +642,7 @@ diffusive fluxes live, this sets
 No-op (fields remain at their previous values) unless
 `p.atmos.turbconv_model isa AbstractEDMF`, which is also the condition under
 which `Y.c.ρtke` is available. Mutates `p.precomputed.ᶠbuoygrad`, `ᶠK_h`,
-`ᶠK_u` and uses three `p.scratch` face scalars; returns `nothing`.
+and `ᶠK_u`; returns `nothing`.
 
 # Extended help
 
@@ -926,6 +926,27 @@ callers pass a scratch field.
 @inline maybe_materialize!(ᶜscratch, ᶜχ) = @. ᶜscratch = ᶜχ
 
 """
+    materialize_into!(ᶜout, ᶜχ)
+
+Copy the lazy `ᶜχ` into the field `ᶜout` and return it, or, when `ᶜout` is
+`nothing`, return `ᶜχ` materialized as a register temporary of a fused loop.
+"""
+@inline materialize_into!(::Nothing, ᶜχ) = Base.materialize(ᶜχ)
+@inline materialize_into!(ᶜout, ᶜχ) = @. ᶜout = ᶜχ
+
+"""
+    as_register(ᶜχ)
+
+Return the values of a slice or lazy expression `ᶜχ` of a fused loop as a register
+temporary (`Base.materialize` returns a slice unchanged, and `copy` allocates a new
+array). Statements whose arguments are register temporaries of the same type
+share their inferred methods, which shortens the compilation of loop bodies that
+apply one expression to different inputs (e.g., to the environment and to every
+updraft).
+"""
+@inline as_register(ᶜχ) = identity.(ᶜχ)
+
+"""
     ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
 
 Write the isobaric specific heat capacity of the diffusing mixture,
@@ -1025,19 +1046,39 @@ add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscr
 
 """
     add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
+    add_sensible_heat_diffusionₕ!(
+        ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing,
+    )
 
 Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the weak
 divergence `wdivₕ(ᶜw (c_p ∇ₕT + ∇ₕΦ))` to `ᶜρe_totₜ`, with the center weight
-`ᶜw`.
+`ᶜw`. In a fused slab loop, `ᶜρe_totₜ` can be a register temporary (see the
+slab form of `add_scalar_diffusionₕ!`).
 """
-function add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
-    (; ᶜΦ) = p.core
-    thermo_params = CAP.thermodynamics_params(p.params)
+@inline function add_sensible_heat_diffusionₕ!(
+    ᶜρe_totₜ,
+    ᶜw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing,
+)
     ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
     @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜcp * gradₕ(ᶜT))
     @. ᶜρe_totₜ += wdivₕ(ᶜw * gradₕ(ᶜΦ))
     return nothing
 end
+add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch) =
+    add_sensible_heat_diffusionₕ!(
+        ᶜρe_totₜ,
+        ᶜw,
+        ᶜT,
+        ᶜq_water,
+        CAP.thermodynamics_params(p.params),
+        p.core.ᶜΦ,
+        ᶜscratch,
+    )
 
 """
     add_water_enthalpy_diffusionᵥ!(
@@ -1265,7 +1306,7 @@ end
 
 """
     ᶠliquid_ice_static_energy_flux!(
-        ᶠF_sl, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch, ᶜq_scratch,
+        ᶠF_sl, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, [ᶜscratch, ᶜq_scratch],
     )
 
 Write the face flux of the liquid–ice static energy of the diffusing mixture,
@@ -1275,22 +1316,25 @@ Write the face flux of the liquid–ice static energy of the diffusing mixture,
 into `ᶠF_sl`, with the same terms and face interpolation as
 `add_sensible_heat_diffusionᵥ!` and the condensate terms of
 `add_water_enthalpy_diffusionᵥ!`, so that the diffusive energy flux is
-`F_sl + (h_v + Φ) F_qt` to rounding.
+`F_sl + (h_v + Φ) F_qt` to rounding. With `ᶠF_sl === nothing`, the flux is a
+register temporary of a fused loop.
 """
-function ᶠliquid_ice_static_energy_flux!(
+@inline function ᶠliquid_ice_static_energy_flux!(
     ᶠF_sl,
     ᶠw,
     ᶜT,
     ᶜq_water,
-    p,
-    ᶜscratch,
-    ᶜq_scratch,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing,
+    ᶜq_scratch = nothing,
 )
-    (; ᶜΦ) = p.core
-    thermo_params = CAP.thermodynamics_params(p.params)
     _, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
-    @. ᶠF_sl = -(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ)))
+    ᶠF_sl = materialize_into!(
+        ᶠF_sl,
+        (@. lazy(-(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ))))),
+    )
     ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
     @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
@@ -1300,10 +1344,24 @@ function ᶠliquid_ice_static_energy_flux!(
     return ᶠF_sl
 end
 
+# The parameters of `add_cloud_species_diffusionᵥ!`. The Damköhler blend needs
+# the condensation / sublimation timescale regardless of which stage integrates
+# the process; pick whichever 1M mp carries the active formation. With
+# `sgs_cloud_species_constant_timescales > 0`, the constant timescales of the
+# phases replace the relaxation times of the processes.
+cloud_species_blend_params(p) = (;
+    thermo_params = CAP.thermodynamics_params(p.params),
+    cmp = CAP.cloud_formation_1m_params(p.params),
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params)),
+    constant_timescales = CAP.sgs_cloud_species_constant_timescales(p.params) > 0,
+    τ_liquid = CAP.condensation_evaporation_timescale(p.params),
+    τ_ice = CAP.sublimation_deposition_timescale(p.params),
+)
+
 """
     add_cloud_species_diffusionᵥ!(
-        ᶜρχₜ, Y, p, ᶠw, ᶠF_qt, ᶠF_sl, ᶜT, ᶜq_water, ᶜsgs_moments, ᶜq_μ, phase,
-        ᶜscratch,
+        ᶜρχₜ, ᶠw, ᶠF_qt, ᶠF_sl, ᶜT, ᶜq_water, ᶜsgs_moments, ᶜq_μ, phase,
+        ᶜscratch, blend_params, ᶜl_mix, ᶜp, ᶜtke,
     )
 
 Add the tendency `-∇·F_qμ` of the blended turbulent flux of the suspended
@@ -1322,7 +1380,10 @@ multiplier of `ᶜsgs_moments`, and `ᶠF_qt`, `ᶠF_sl` are the face fluxes
 of the diffusing total water and liquid–ice static energy with the same weight
 `ᶠw`. The coefficients are evaluated at cell centers and interpolated to the
 faces outside the gradients. `ᶜscratch` is a tuple of three center scalar
-fields.
+fields, or `nothing` in a fused loop, where the blend weight and the
+sensitivities are register temporaries. `blend_params` are the
+`cloud_species_blend_params`, `ᶜl_mix` the mixing length, `ᶜp` the pressure,
+and `ᶜtke` the specific TKE.
 
 The energy flux is not rebuilt from `F_qμ`: a parcel conserves `(s_l, q_t)` in
 transit whether or not its condensate equilibrates, so `F_sl + (h_v + Φ) F_qt`
@@ -1341,10 +1402,8 @@ rest in the cell, which the microphysics already relaxes toward equilibrium at
 the rate `1/τ_μ`; a blended value of `q_μ` itself would apply that relaxation
 twice.
 """
-function add_cloud_species_diffusionᵥ!(
+@inline function add_cloud_species_diffusionᵥ!(
     ᶜρχₜ,
-    Y,
-    p,
     ᶠw,
     ᶠF_qt,
     ᶠF_sl,
@@ -1354,47 +1413,48 @@ function add_cloud_species_diffusionᵥ!(
     ᶜq_μ,
     phase::TD.Phase,
     ᶜscratch,
+    blend_params,
+    ᶜl_mix,
+    ᶜp,
+    ᶜtke,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    # The Damköhler blend needs the condensation / sublimation timescale
-    # regardless of which stage integrates the process; pick whichever 1M mp
-    # carries the active formation.
-    cmp = CAP.cloud_formation_1m_params(p.params)
-    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
-    (; ᶜl_mix, ᶜp) = p.precomputed
-    ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch
+    (; thermo_params, cmp, c_d, constant_timescales, τ_liquid, τ_ice) = blend_params
+    (ᶜλ_out, ᶜc_qt_out, ᶜc_sl_out) = something(ᶜscratch, (nothing, nothing, nothing))
+    # In a fused loop, values that several expressions read are evaluated once.
+    fused = isnothing(ᶜscratch)
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
-    ᶜρ_air =
+    ᶜρ_air_lazy =
         @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
-    # The relaxation time of the species is that of the 1M process at the
-    # cell state or, with `sgs_cloud_species_constant_timescales > 0`, the
-    # constant parameter of the phase. One broadcast per branch keeps the
-    # time a concrete type in each.
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    if CAP.sgs_cloud_species_constant_timescales(p.params) > 0
-        τ_const =
-            phase isa TD.Liquid ?
-            CAP.condensation_evaporation_timescale(p.params) :
-            CAP.sublimation_deposition_timescale(p.params)
-        @. ᶜλ = cloud_species_flux_blend(ᶜl_mix, ᶜtke, c_d, τ_const)
-    else
-        @. ᶜλ = cloud_species_flux_blend(
-            ᶜl_mix,
-            ᶜtke,
-            c_d,
-            cloud_species_relaxation_time(
-                cmp,
-                thermo_params,
-                ᶜT,
-                ᶜρ_air,
-                ᶜq_tot,
-                ᶜq_liq,
-                ᶜq_ice,
-                phase,
+    ᶜρ_air = fused ? Base.materialize(ᶜρ_air_lazy) : ᶜρ_air_lazy
+    # The relaxation time of the species is that of the 1M process at the cell
+    # state or, with `sgs_cloud_species_constant_timescales > 0`, the constant
+    # timescale of the phase.
+    τ_phase = phase isa TD.Liquid ? τ_liquid : τ_ice
+    ᶜλ = materialize_into!(
+        ᶜλ_out,
+        (@. lazy(
+            cloud_species_flux_blend(
+                ᶜl_mix,
+                ᶜtke,
+                c_d,
+                ifelse(
+                    constant_timescales,
+                    τ_phase,
+                    cloud_species_relaxation_time(
+                        cmp,
+                        thermo_params,
+                        ᶜT,
+                        ᶜρ_air,
+                        ᶜq_tot,
+                        ᶜq_liq,
+                        ᶜq_ice,
+                        phase,
+                    ),
+                ),
             ),
-        )
-    end
-    ᶜsensitivities = @. lazy(
+        )),
+    )
+    ᶜsensitivities_lazy = @. lazy(
         equilibrium_condensate_sensitivities(
             thermo_params,
             ᶜT,
@@ -1407,8 +1467,10 @@ function add_cloud_species_diffusionᵥ!(
             phase,
         ),
     )
-    @. ᶜc_qt = first(ᶜsensitivities)
-    @. ᶜc_sl = last(ᶜsensitivities)
+    ᶜsensitivities =
+        fused ? Base.materialize(ᶜsensitivities_lazy) : ᶜsensitivities_lazy
+    ᶜc_qt = materialize_into!(ᶜc_qt_out, (@. lazy(first(ᶜsensitivities))))
+    ᶜc_sl = materialize_into!(ᶜc_sl_out, (@. lazy(last(ᶜsensitivities))))
     @. ᶜρχₜ -= ᶜdiffdivᵥ(
         -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
         ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),
@@ -1450,12 +1512,17 @@ cloud_species_phase(_) = nothing
     add_water_enthalpy_diffusionₕ!(
         ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
     )
+    add_water_enthalpy_diffusionₕ!(
+        ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing;
+        ᶜq_scratch = nothing,
+    )
 
 Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the weak
 divergence `wdivₕ(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
-to `ᶜρe_totₜ`, with the center weight `ᶜw`.
+to `ᶜρe_totₜ`, with the center weight `ᶜw`. In a fused slab loop, `ᶜρe_totₜ`
+can be a register temporary (see the slab form of `add_scalar_diffusionₕ!`).
 """
-function add_water_enthalpy_diffusionₕ!(
+add_water_enthalpy_diffusionₕ!(
     ᶜρe_totₜ,
     ᶜw,
     ᶜT,
@@ -1463,9 +1530,26 @@ function add_water_enthalpy_diffusionₕ!(
     p,
     ᶜscratch;
     ᶜq_scratch = nothing,
+) = add_water_enthalpy_diffusionₕ!(
+    ᶜρe_totₜ,
+    ᶜw,
+    ᶜT,
+    ᶜq_water,
+    CAP.thermodynamics_params(p.params),
+    p.core.ᶜΦ,
+    ᶜscratch;
+    ᶜq_scratch,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
+@inline function add_water_enthalpy_diffusionₕ!(
+    ᶜρe_totₜ,
+    ᶜw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing;
+    ᶜq_scratch = nothing,
+)
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
@@ -1489,6 +1573,23 @@ down their own gradients: `suspended_cloud_species`, followed by
 diffused_water_species(precipitation) =
     precipitation ? (suspended_cloud_species..., precipitation_species...) :
     suspended_cloud_species
+
+"""
+    self_diffused_tracer_names(Y, precipitation)
+
+Return the names (relative to `Y.c`) of the grid-scale tracers that diffuse
+down their own gradients: the species of `diffused_water_species(precipitation)`
+in `Y`, followed by the passive tracers (`passive_gs_tracer_names`).
+"""
+self_diffused_tracer_names(Y, precipitation) = (
+    unrolled_map(
+        last,
+        unrolled_filter(diffused_water_species(precipitation)) do (_, ρχ_name)
+            MatrixFields.has_field(Y.c, ρχ_name)
+        end,
+    )...,
+    passive_gs_tracer_names(Y)...,
+)
 
 """
     add_moisture_diffusionᵥ!(
@@ -1528,54 +1629,76 @@ function add_moisture_diffusionᵥ!(
     add_water_enthalpy_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρK, ᶜT, ᶜq_water, p, ᶜscratch)
     # Cloud liquid and ice take the blended flux of
     # add_cloud_species_diffusionᵥ! where the turbulence closure provides an
-    # eddy turnover time; the face fluxes of total water and liquid–ice static
-    # energy it needs share the weight ᶠρK. Each scratch field is bound once,
-    # outside the branch, so that the closure below captures it unboxed; the
-    # fields exist only with the 1M scheme
-    # (`cloud_species_diffusion_temporary_quantities`).
+    # eddy turnover time; the other species diffuse down their own gradients.
     blend = blended_cloud_species_flux(Y, p)
-    ᶠF_qt = blend ? p.scratch.ᶠtemp_C3 : nothing
-    ᶠF_sl = blend ? p.scratch.ᶠtemp_C3_2 : nothing
-    if blend
-        @. ᶠF_qt = -(ᶠρK * ᶠgradᵥ(ᶜq_tot))
-        ᶠliquid_ice_static_energy_flux!(
-            ᶠF_sl,
-            ᶠρK,
-            ᶜT,
-            ᶜq_water,
-            p,
-            ᶜscratch,
-            nothing,
-        )
-    end
     MatrixFields.unrolled_foreach(
         diffused_water_species(precipitation),
     ) do (χ_name, ρχ_name)
         MatrixFields.has_field(Y.c, ρχ_name) || return
+        (blend && !isnothing(cloud_species_phase(χ_name))) && return
         ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
         ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-        phase = cloud_species_phase(χ_name)
-        if isnothing(phase) || !blend
-            @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
-        else
-            ᶜq_μ = @. lazy(specific(ᶜρχ, ᶜρ))
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+    end
+    blend && add_blended_cloud_species_diffusionᵥ!(Yₜ, Y, p, ᶠρK; precipitation)
+    return nothing
+end
+
+"""
+    add_blended_cloud_species_diffusionᵥ!(Yₜ, Y, p, ᶠρK; precipitation = false)
+
+Add the blended flux of `add_cloud_species_diffusionᵥ!` with the face coefficient
+`ᶠρK` to the tendencies of cloud liquid and ice in one loop over columns, in which
+the face fluxes of total water and liquid–ice static energy, the blend weights, and
+the condensate sensitivities are register temporaries. Called from
+`add_moisture_diffusionᵥ!` when `blended_cloud_species_flux` holds.
+"""
+add_blended_cloud_species_diffusionᵥ!(Yₜ, Y, p, ᶠρK; precipitation = false) =
+    add_blended_cloud_species_diffusionᵥ!(Yₜ, Y, p, ᶠρK, Val(precipitation))
+# The loop is specialized on whether precipitation diffuses, which fixes the names of the
+# diffusing species.
+function add_blended_cloud_species_diffusionᵥ!(
+    Yₜ,
+    Y,
+    p,
+    ᶠρK,
+    precipitation_val::Val{precipitation},
+) where {precipitation}
+    (; microphysics_model) = p.atmos
+    (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜl_mix, ᶜp, ᶜsgs_moments) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    blend_params = cloud_species_blend_params(p)
+    cloud_names = unrolled_filter(
+        ((χ_name, ρχ_name),) ->
+            !isnothing(cloud_species_phase(χ_name)) &&
+            MatrixFields.has_field(Y.c, ρχ_name),
+        diffused_water_species(precipitation),
+    )
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶠρK, ᶜT, ᶜq_liq, ᶜq_ice, p.core.ᶜΦ, ᶜl_mix, ᶜp, ᶜsgs_moments,
+    ) do Yₜc, Yc, ᶠρK, ᶜT, ᶜq_liq, ᶜq_ice, ᶜΦ, ᶜl_mix, ᶜp, ᶜsgs_moments
+        ᶜT = as_register(ᶜT)
+        ᶜq_water = unrolled_map(
+            as_register,
+            diffusing_water_phases(
+                Yc, ᶜq_liq, ᶜq_ice, microphysics_model, precipitation_val,
+            ),
+        )
+        ᶜq_tot = ᶜq_water[1]
+        ᶠF_qt = @. -(ᶠρK * ᶠgradᵥ(ᶜq_tot))
+        ᶠF_sl = ᶠliquid_ice_static_energy_flux!(
+            nothing, ᶠρK, ᶜT, ᶜq_water, thermo_params, ᶜΦ,
+        )
+        ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+        MatrixFields.unrolled_foreach(cloud_names) do (χ_name, ρχ_name)
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            ᶜq_μ = @. lazy(specific(ᶜρχ, Yc.ρ))
             add_cloud_species_diffusionᵥ!(
-                ᶜρχₜ,
-                Y,
-                p,
-                ᶠρK,
-                ᶠF_qt,
-                ᶠF_sl,
-                ᶜT,
-                ᶜq_water,
-                p.precomputed.ᶜsgs_moments,
-                ᶜq_μ,
-                phase,
-                (
-                    p.scratch.ᶜtemp_scalar_8,
-                    p.scratch.ᶜtemp_scalar_9,
-                    p.scratch.ᶜtemp_scalar_10,
-                ),
+                ᶜρχₜ, ᶠρK, ᶠF_qt, ᶠF_sl, ᶜT, ᶜq_water, ᶜsgs_moments, ᶜq_μ,
+                cloud_species_phase(χ_name), nothing, blend_params, ᶜl_mix, ᶜp,
+                ᶜtke,
             )
         end
     end
@@ -1660,9 +1783,20 @@ end
 
 """
     add_scalar_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation = false)
+    add_scalar_diffusionₕ!(ᶜYₜ, ᶜY, ᶜρD, ᶜT, ᶜΦ, ᶜq_water, thermo_params, ρχ_names)
 
 Horizontal counterpart of `add_scalar_diffusionᵥ!`, with the center coefficient
 `ᶜρD` and the weak divergence `wdivₕ`.
+
+The second form adds the same tendencies in a fused slab loop, to the slab `ᶜYₜ`
+of `Yₜ.c` from the slab `ᶜY` of `Y.c`, with `ᶜq_water` the slab of
+`ᶜdiffusing_water_phases` (`nothing` in dry configurations) and `ρχ_names` the
+tracers that diffuse down their own gradients (`self_diffused_tracer_names`).
+Every tendency stays a register temporary until all of them are computed, since
+a store to global memory between two reads of a metric term makes the GPU
+compiler read the term again, and every diffused scalar is a register temporary
+of one type, so that the divergences share their inferred methods (see
+`as_register`).
 """
 function add_scalar_diffusionₕ!(
     Yₜ,
@@ -1690,6 +1824,50 @@ function add_scalar_diffusionₕ!(
     end
     return nothing
 end
+@inline function add_scalar_diffusionₕ!(
+    ᶜYₜ,
+    ᶜY,
+    ᶜρD,
+    ᶜT,
+    ᶜΦ,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ρχ_names,
+)
+    ᶜT = as_register(ᶜT)
+    ᶜΦ = as_register(ᶜΦ)
+    ᶜq_water = isnothing(ᶜq_water) ? nothing : unrolled_map(as_register, ᶜq_water)
+    ᶜρe_totₜ = as_register(ᶜYₜ.ρe_tot)
+    add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜρD, ᶜT, ᶜq_water, thermo_params, ᶜΦ)
+    isnothing(ᶜq_water) || add_water_enthalpy_diffusionₕ!(
+        ᶜρe_totₜ,
+        ᶜρD,
+        ᶜT,
+        ᶜq_water,
+        thermo_params,
+        ᶜΦ,
+    )
+    ᶜρq_totₜ = isnothing(ᶜq_water) ? nothing : diffusion_divₕ(ᶜρD, ᶜq_water[1])
+    ᶜρχₜs = unrolled_map(ρχ_names) do ρχ_name
+        @inline
+        ᶜρχ = MatrixFields.get_field(ᶜY, ρχ_name)
+        ᶜχ = @. specific(ᶜρχ, ᶜY.ρ)
+        diffusion_divₕ(ᶜρD, ᶜχ)
+    end
+    @. ᶜYₜ.ρe_tot = ᶜρe_totₜ
+    if !isnothing(ᶜρq_totₜ)
+        @. ᶜYₜ.ρq_tot += ᶜρq_totₜ
+        @. ᶜYₜ.ρ += ᶜρq_totₜ
+    end
+    unrolled_foreach(ρχ_names, ᶜρχₜs) do ρχ_name, ᶜρχₜ_diffusion
+        @inline
+        ᶜρχₜ = MatrixFields.get_field(ᶜYₜ, ρχ_name)
+        @. ᶜρχₜ += ᶜρχₜ_diffusion
+    end
+    return nothing
+end
+# The weak divergence of the horizontal diffusive flux of `ᶜχ` with the weight `ᶜw`.
+@inline diffusion_divₕ(ᶜw, ᶜχ) = @. wdivₕ(ᶜw * gradₕ(ᶜχ))
 
 """
     ᶜdiffusing_water_phases(Y, p; precipitation = false)
@@ -1715,10 +1893,11 @@ function ᶜdiffusing_water_phases(Y, p; precipitation = false)
     )
 end
 
-# `ᶜdiffusing_water_phases` of the center state `ᶜY`, a whole field or one column
+# `ᶜdiffusing_water_phases` of the center state `ᶜY`, a whole field or a slice
 # of a fused loop, with the cached diagnostic `ᶜq_liq` and `ᶜq_ice`.
 @inline diffusing_water_phases(ᶜY, ᶜq_liq, ᶜq_ice, microphysics_model, _) =
     ((@. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))), ᶜq_liq, ᶜq_ice)
+@inline diffusing_water_phases(ᶜY, ᶜq_liq, ᶜq_ice, ::DryModel, _) = nothing
 @inline diffusing_water_phases(
     ᶜY, ᶜq_liq, ᶜq_ice, ::NonEquilibriumMicrophysics, ::Val{true},
 ) = (

@@ -106,14 +106,12 @@ function implicit_precomputed_quantities(Y, atmos)
             )
         end
     sgs_quantities = (;)
-    # Picard sub-iteration snapshots: only allocated when the loop is on.
+    # Picard sub-iteration snapshot of the draft scalars: only allocated when the
+    # loop is on.
     picard_scratch =
         turbconv_model isa PrognosticEDMFX &&
         atmos.edmfx_model.updraft_picard_rounds > 0 ?
-        (;
-            ᶠsgsʲs_picard_snapshot = similar(Y.f.sgsʲs),
-            ᶜsgsʲs_picard_snapshot = similar(Y.c.sgsʲs),
-        ) : (;)
+        (; ᶜsgsʲs_picard_snapshot = similar(Y.c.sgsʲs)) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
