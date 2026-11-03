@@ -1,81 +1,86 @@
-# A pipeline for downstream performance checks
+# Temporary profiling pipeline (not for merging): times, checks, and profiles the
+# timestep components of the AMIP target configuration (perf/benchmark_components.jl)
+# for main (MAIN_COMMIT), for this branch with the released ClimaCore (branch_core),
+# and for this branch with the ClimaCore of its manifest (branch), on one A100.
 agents:
   queue: clima
-  slurm_time: 14:00:00
+  slurm_time: 8:00:00
   modules: climacommon/2025_05_15
 
 env:
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
-  COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "39743a7b576f833ea238aa9de76b512a60a95b3d"
-  CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
-  BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
-  # Packages whose [compat] bounds are dropped from the coupler projects at
-  # init, in the same convention (and with the same default list) as
-  # ClimaCoupler's nightly pipeline. Set it from the web API to widen or
-  # narrow the set for a single build.
-  UPSTREAM_PACKAGES: "${UPSTREAM_PACKAGES:-ClimaAtmos ClimaCore ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP}"
+  CLIMACOMMS_DEVICE: "CUDA"
+  CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+  # Source trees and environments shared by every step of this build
+  PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
+  MAIN_COMMIT: "cf9f7c0e1c4269eadf24d4aec0fbec89d20632f0"
+  NCU_METRICS: "gpu__time_duration.sum,smsp__inst_executed_op_global_ld.sum,dram__bytes_read.sum,dram__bytes_write.sum,lts__t_bytes.sum,sm__warps_active.avg.pct_of_peak_sustained_active"
 
-timeout_in_minutes: 840
+timeout_in_minutes: 480
 
 steps:
-  - label: "init :GPU:"
-    key: "init_gpu_env"
+  - label: "init: main, branch_core, and branch environments"
+    key: "init_profile"
     command:
-      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
-      # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
-      - "echo 'strict_params: false' >> $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml"
-      - "echo $$JULIA_DEPOT_PATH"
-      # Remove compat entries for packages in UPSTREAM_PACKAGES
+      - mkdir -p $$PROFILE_DIR/main $$PROFILE_DIR/branch_core $$PROFILE_DIR/branch $$PROFILE_DIR/bench
+      - git fetch origin $$MAIN_COMMIT
+      - git archive $$MAIN_COMMIT | tar -x -C $$PROFILE_DIR/main
+      - git archive HEAD | tar -x -C $$PROFILE_DIR/branch
+      - git archive HEAD | tar -x -C $$PROFILE_DIR/branch_core
+      - cp perf/profile_components.jl perf/ncu_summary.jl $$PROFILE_DIR/main/perf/
+      # branch_core: this branch with the ClimaCore release of main's manifest
       - |
         julia -e '
-          using TOML
-          upstream = [first(split(entry, r"[@#]")) for entry in split(ENV["UPSTREAM_PACKAGES"])]
-          coupler = ENV["COUPLER_PATH"]
-          for project in (coupler, joinpath(coupler, "experiments", "AMIP"))
-              file = joinpath(project, "Project.toml")
-              toml = TOML.parsefile(file)
-              haskey(toml, "compat") || continue
-              @info "Coupler perf: removing [compat] entries" project names = intersect(keys(toml["compat"]), upstream)
-              toml["compat"] = filter(entry -> !(first(entry) in upstream), toml["compat"])
-              open(io -> TOML.print(io, toml; sorted = true), file, "w")
-          end'
-      # Update package registry, since dev installs do not do that with a manifest
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
-      - echo "--- Instantiate AMIP env"
-      # Instantiate and dev install ClimaCore
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
-      # The ClimaCore branch of CliMA/ClimaCore.jl#2717, which this branch is tested with
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCore.jl.git", rev="dy/read_only_geometry")'''
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
+          import TOML
+          dir = ENV["PROFILE_DIR"]
+          entry(file) = TOML.parsefile(file)["deps"]["ClimaCore"][1]
+          released = entry(joinpath(dir, "main", ".buildkite", "Manifest-v1.11.toml"))
+          file = joinpath(dir, "branch_core", ".buildkite", "Manifest-v1.11.toml")
+          manifest = TOML.parsefile(file)
+          manifest["deps"]["ClimaCore"][1] = merge(
+              filter(p -> !(first(p) in ("repo-rev", "repo-url")), entry(file)),
+              Dict("git-tree-sha1" => released["git-tree-sha1"], "version" => released["version"]),
+          )
+          open(io -> TOML.print(io, manifest; sorted = true), file, "w")
+          @info "branch_core ClimaCore" entry(file)'
+      - for tree in main branch_core branch; do echo "--- Instantiate $$tree"; julia --project=$$PROFILE_DIR/$$tree/.buildkite -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(); Pkg.status("ClimaCore")' || exit 1; done
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
+      slurm_mem: 64GB
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
-      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
 
-  - label: "Flagship AMIP GPU with prognostic EDMF + 1M + integrated land (16 helems)"
-    key: "gpu_amip_progedmf_1M_land_he16"
-    depends_on: "init_gpu_env"
+  - label: "AMIP target components (A100): timings, GPU equivalence, and CUDA profiles of main, branch_core, and branch"
+    key: "profile_cuda"
+    depends_on: "init_profile"
     command:
-      - "srun julia --threads=3 --color=yes --project=$COUPLER_PATH/experiments/AMIP/ $COUPLER_PATH/experiments/AMIP/run_simulation.jl --config_file $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml --job_id gpu_amip_progedmf_1M_land_he16"
-      - echo "--- Checking SYPD from artifacts"
-      - bash .buildkite/coupler_perf/check-sypd.sh
-    artifact_paths: "output/gpu_amip_progedmf_1M_land_he16/artifacts/*"
-    env:
-      CLIMACOMMS_DEVICE: "CUDA"
-      # Fallback used when no passing main build metadata is available yet.
-      BASELINE_SYPD: "0.279"
-      MIN_PERCENT_CHANGE: "-1"
+      - nvidia-smi -L
+      - echo "--- main (MAIN_COMMIT) timings, reference outputs, and CUDA profiles"
+      - julia --color=yes --project=$$PROFILE_DIR/main/.buildkite $$PROFILE_DIR/main/perf/profile_components.jl Float32 save $$PROFILE_DIR/bench cuda
+      - echo "--- branch_core timings, equivalence with main, and CUDA profiles"
+      - julia --color=yes --project=$$PROFILE_DIR/branch_core/.buildkite $$PROFILE_DIR/branch_core/perf/profile_components.jl Float32 compare $$PROFILE_DIR/bench cuda
+      - echo "--- branch timings, equivalence with main, and CUDA profiles"
+      - julia --color=yes --project=$$PROFILE_DIR/branch/.buildkite $$PROFILE_DIR/branch/perf/profile_components.jl Float32 compare $$PROFILE_DIR/bench cuda
     agents:
-      slurm_gpus_per_task: 1
-      slurm_cpus_per_task: 4
-      slurm_ntasks: 1
-      slurm_mem: 16GB
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  # After the timings, so that kernel replays on the same node do not perturb them
+  - label: "AMIP target components (A100): Nsight Compute counters of main, branch_core, and branch"
+    key: "profile_ncu"
+    depends_on: "profile_cuda"
+    soft_fail: true
+    command:
+      - nvidia-smi -L
+      - for tree in main branch_core branch; do echo "--- $$tree under Nsight Compute"; ncu --profile-from-start off --nvtx --print-units base --csv --page raw --metrics $$NCU_METRICS --log-file ncu_$$tree.csv julia --project=$$PROFILE_DIR/$$tree/.buildkite $$PROFILE_DIR/$$tree/perf/profile_components.jl Float32 run $$PROFILE_DIR/bench ncu || exit 1; done
+      - echo "--- Nsight Compute totals per component"
+      - julia perf/ncu_summary.jl main=ncu_main.csv branch_core=ncu_branch_core.csv branch=ncu_branch.csv
+    artifact_paths: "ncu_*.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
