@@ -1,4 +1,4 @@
-452
+453
 
 # **README**
 #
@@ -32,6 +32,21 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+453
+- The cloud-fraction width is floored by `σ_abs` alone; condensate is
+  partitioned into its equilibrium part, normalized by that width, and the
+  non-equilibrium excess, normalized with the subsaturation deficit of the
+  cloud-available water; the updraft cover is evaluated against the updraft
+  vapor deficit and sets the updraft's in-cloud variance in the shortwave
+  inhomogeneity factor, and under `PrognosticEDMFX` the θ→T Jacobian, the
+  curvature slope, the moisture-variance bound and the correlation guard are
+  evaluated at the environment state.
+
+452
+- Stretched vertical grids use the two-scale
+  `BoundaryLayerHyperbolicTangentStretching` rule with `dz_top` and `z_pbl`,
+  so every stretched CI grid changes (#4949).
+
 451
 - The fused covariance loop reads the surface TKE at the first level, and
   `ᶜbuoygrad` is written for models without covariances.

@@ -76,10 +76,14 @@ import ClimaAtmos as CA
 
     @testset "Environment and updraft mixture" begin
         L = CA.log_gamma_effective_thickness
-        χ_mix(cf, a_env, q_env, as, qs, rv_floor) =
+        # Updraft moments as `_updraft_cloud_moments_j!` builds them, with
+        # the relative variances `rvs` of the updrafts' in-cloud condensate;
+        # `rv = 0` is a homogeneous updraft.
+        χ_mix(cf, a_env, q_env, as, qs, rv_floor; rvs = zero(as)) =
             CA.cloud_optical_depth_factor(
-                cf, a_env, q_env, sum(as), sum(as .* qs), sum(as .* qs .^ 2),
-                sum(as .* log.(qs)), rv_floor,
+                cf, a_env, q_env, sum(as), sum(as .* qs),
+                sum(as .* qs .^ 2 .* (1 .+ rvs)),
+                sum(as .* (log.(qs) .+ L.(1 ./ rvs))), rv_floor,
             )
         χ_single(cf, rv_floor) = CA.cloud_optical_depth_factor(
             cf, one(FT), FT(1e-4), zero(FT), zero(FT), zero(FT), zero(FT),
@@ -130,5 +134,30 @@ import ClimaAtmos as CA
             @test χ isa FT
             @test 0 <= χ <= 1
         end
+        # An updraft with the in-cloud variance of its partial cover is more
+        # inhomogeneous than a homogeneous one of the same area and
+        # condensate, and a single such updraft without environment cloud
+        # has the Gamma factor of its own relative variance.
+        cf_up = FT(0.5)
+        rv_up = CA.cloud_condensate_relative_variance(cf_up, rv_floor)
+        @test CA._updraft_relative_variance(
+            cf_up, rv_floor, CA.NonEquilibriumMicrophysics1M(),
+        ) == rv_up
+        @test CA._updraft_relative_variance(
+            cf_up, rv_floor, CA.EquilibriumMicrophysics0M(),
+        ) == rv_floor
+        a_up, q_up = FT(0.1), FT(2e-3)
+        a_env = 1 - a_up
+        cf = a_env * FT(0.3) + a_up * cf_up
+        χ_hom = χ_mix(cf, a_env, FT(1e-4), [a_up * cf_up], [q_up], rv_floor)
+        χ_tg = χ_mix(
+            cf, a_env, FT(1e-4), [a_up * cf_up], [q_up], rv_floor;
+            rvs = [rv_up],
+        )
+        @test χ_tg < χ_hom
+        @test χ_mix(
+            a_up * cf_up, a_env, zero(FT), [a_up * cf_up], [q_up], rv_floor;
+            rvs = [rv_up],
+        ) ≈ exp(L(1 / rv_up)) rtol = FT(1e-4)
     end
 end

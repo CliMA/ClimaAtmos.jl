@@ -512,7 +512,8 @@ grid mean is not. `edmfx_filter` is enabled in all PROPHET configurations in
   - Negative TKE is relaxed to zero within one timestep rather than being
     clipped, in `edmfx_sgs_diffusive_flux_tendency!`.
   - The subgrid total-water standard deviation is bounded by
-    ``\sigma_q \le r_{\max} q_t`` (`sgs_variance_max_rel_std`, default 0.5)
+    ``\sigma_q \le r_{\max} q_t`` (`sgs_variance_max_rel_std`, default 0.5),
+    with ``q_t`` the mean of the subdomain on which the quadrature is centred,
     before the quadrature, in `set_covariance_cache!`; see
     [Closures](prophet_closures.md#Variances-and-cloud-fraction).
   - Draft entrainment prefactors return zero at or below the surface, where

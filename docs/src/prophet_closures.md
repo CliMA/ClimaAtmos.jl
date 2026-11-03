@@ -597,11 +597,14 @@ variances vanish the diagnosed value falls back to the prescribed
 `Tq_correlation_coefficient`, which `tq_correlation_model: constant` uses
 everywhere.
 
-The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``),
-because a wider Gaussian places a quadrature node at negative total water, and
-condensing the clamped excess can drive the grid-mean vapor negative. The σ_q
-bound rescales ``\Sigma_{T q_t}`` by the same factor so the diagnosed
-correlation is invariant under the clamp.
+The total-water standard deviation is then bounded by
+``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``), with ``q_t`` the mean of
+the subdomain on which the quadrature is centred (the environment under
+`PrognosticEDMFX`, the grid mean otherwise), because a wider Gaussian places a
+quadrature node at negative total water, and condensing the clamped excess can
+drive the subdomain vapor negative. The ``\sigma_q`` bound rescales
+``\Sigma_{T q_t}`` by the same factor so the diagnosed correlation is invariant
+under the clamp.
 
 The total grid-mean subgrid covariance adds the inter-subdomain spread to this
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),
@@ -674,14 +677,23 @@ With the default ``c = 3`` (``s c \approx 3.04``), the condensate of a cell
 comes from within three standard deviations of its mean excess.
 ``c = \infty`` restores the Gaussian.
 The cloud fraction is then the fraction of the distribution carrying positive
-local condensate, evaluated with a variance augmented by a non-equilibrium floor
-that scales with the saturation specific humidity and is released as the
-subdomain mean saturates. That floor keeps the cloud fraction from being driven
-to one by a vanishing equilibrium variance, and loosely parallels the
-critical-relative-humidity scaling of
-statistical cloud schemes [Quaas2012](@cite). Microphysical rates are evaluated
-at each node and aggregated linearly, which preserves total water and total
-energy at the subdomain level because the bulk rates preserve them pointwise.
+local condensate. Its width ``\sigma_{\mathrm{aug}}`` is the gradient width
+floored by an absolute ``\sigma_{\mathrm{abs}}`` (`_sgs_augmented_sigma`).
+Condensate up to the equilibrium amount ``\min(q_c, q_{c,\mathrm{eq}})``, which
+the subdomain's own saturation-excess fluctuations support, is normalized by
+``\sigma_{\mathrm{aug}}``; in subsaturated air, ``q_{c,\mathrm{eq}}`` vanishes
+faster than ``\sigma_S`` as the deficit grows, so this part stays patchy on its
+own. Condensate beyond it, ``\max(0, q_c - q_{c,\mathrm{eq}})``, such as
+condensate detrained from updrafts into subsaturated air, is normalized by
+``\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}``, with the
+subsaturation deficit ``\delta_{\mathrm{sub}} = \max(0, -\mu_S)`` of the
+cloud-available water (`_compute_cloud_fraction`), because filling the clear
+fraction at mean deficit ``\delta_{\mathrm{sub}}`` takes condensate of that
+order. Subsaturated air with detrained or residual condensate therefore stays
+patchy, and quiescent saturated decks become overcast. Microphysical rates are
+evaluated at each node and aggregated linearly, which preserves total water
+and total energy at the subdomain level because the bulk rates preserve them
+pointwise.
 
 The one-moment microphysics nodes are placed from the conditional moments of
 the Gaussian. Every quantity the one-moment evaluator reads at a node is a
@@ -727,12 +739,13 @@ by a guarded Aitken ``\Delta^2`` extrapolation, which is applied only when
 successive increments change sign, so that the accelerated value lies between
 computed iterates.
 
-The grid-mean cloud fraction is the volume-fraction-weighted sum
-``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation the
-cloud fraction is a single-domain quantity: the environment's PDF
-inversion is applied to the grid-mean cloud condensate,
-``f_c = f_c^0\!\left(a^0 q_c^0 + \sum_j a^j q_c^j\right)``, with no area weighting and
-no separate draft term.
+The grid-mean cloud fraction is the area-fraction-weighted sum
+``f_c^{\mathrm{tot}} = a^0 f_c^0 + \sum_j a^j f_c^j``
+(`_edmf_weight_cloud_fraction!`), where ``f_c^0`` is the truncated-Gaussian
+cover of the environment cloud condensate ``q_c^0`` and ``f_c^j``
+(`_updraft_cloud_fraction`) is binary under equilibrium microphysics and the
+truncated-Gaussian cover against the updraft vapor subsaturation deficit under
+non-equilibrium microphysics.
 
 !!! note "Under active development"
 

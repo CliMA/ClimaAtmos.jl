@@ -292,9 +292,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     its support is `±s c σ` with `s ≥ 1`, and `Inf` restores the untruncated
     Gaussian. Must be at least 1 [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
-    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
-    applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
-    at negative total water; `0.5` keeps all nodes non-negative [-].
+    deviation relative to the subdomain-mean total water,
+    `σ_q ≤ sgs_variance_max_rel_std * q_mean`, applied to the diagnosed `q′q′`
+    whatever closure produced it. A wider variance puts a quadrature node at
+    negative total water; `0.5` keeps all nodes non-negative [-].
   - `sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`: Fractions `ξ` of
     cloud liquid and cloud ice that are uniform over the SGS quadrature nodes in
     the 1-moment microphysics, in `[0, 1]`: at each node a species is
@@ -319,25 +320,25 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     cloud-fraction/condensate relationship; 1 for an exact Gaussian SGS
     distribution [-].
   - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
-    Shared ClimaParams/CloudMicrophysics relaxation timescales `τ_cond`,
-    `τ_sub` of the SGS variance fidelity (`sgs_microphysics_relaxation_time`)
-    with the schemes other than 1M, which takes the relaxation times of its
-    own processes [s].
+    Relaxation timescales `τ_cond`, `τ_sub` shared with ClimaParams and
+    CloudMicrophysics. The SGS variance fidelity
+    (`sgs_microphysics_relaxation_time`) uses them with every scheme except 1M;
+    with 1M, it and the cloud-species flux blend
+    (`add_cloud_species_diffusionᵥ!`) use them where
+    `sgs_cloud_species_constant_timescales > 0` [s].
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
-  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
-  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
-    saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
+    width (`_sgs_augmented_sigma`) and on the updraft cover width
+    (`_updraft_cloud_fraction`) [kg/kg].
+  - `sgs_cloud_species_constant_timescales`: Switch for the 1M scheme. A
+    positive value makes the Damköhler factor of the variance fidelity
+    (`sgs_microphysics_relaxation_time`) and the cloud-species flux blend
+    (`add_cloud_species_diffusionᵥ!`) use the constant
+    `condensation_evaporation_timescale` and
+    `sublimation_deposition_timescale`; `0` (default) uses the per-cell
+    relaxation times of the 1M processes (`cloud_species_relaxation_time`) [-].
   - `cloud_condensate_relative_variance_floor`: Relative variance of an
     unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
     truncated-Gaussian in-cloud distribution in the radiative
@@ -369,12 +370,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     condensation_evaporation_timescale::FT
     sublimation_deposition_timescale::FT
     sgs_fidelity_equilibrium_weight::FT
-    cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
-    cloud_fraction_floor_release_margin::FT
-    cloud_fraction_floor_release_abs_margin::FT
-    cloud_fraction_floor_release_sharpness::FT
-    cloud_fraction_floor_residual::FT
+    sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
 end
 
