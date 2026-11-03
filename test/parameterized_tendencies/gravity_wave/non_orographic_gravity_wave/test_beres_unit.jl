@@ -740,6 +740,27 @@ const FREEZE_MELT_TERMS = (
                 toml_dict;
                 rain_autoconversion = CMP.PrescribedNd(toml_dict),
             )
+            # `_beres_latent_heating` sums CM BMT on both the bulk and
+            # implicit 1M parameter sets. Here we exercise the "no implicit
+            # split" case: all processes live on `mp`, and `mp_imp` has every
+            # process nulled so its BMT contribution is zero.
+            mp_imp = CMP.Microphysics1MParams(
+                toml_dict;
+                cloud_liquid_formation = nothing,
+                cloud_ice_formation = nothing,
+                cloud_ice_melt = nothing,
+                cloud_liquid_freezing = nothing,
+                rain_autoconversion = nothing,
+                snow_autoconversion = nothing,
+                rain_condensation_evaporation = nothing,
+                snow_deposition_sublimation = nothing,
+                snow_melt = nothing,
+                cloud_liquid_rain_accretion = nothing,
+                cloud_liquid_snow_accretion = nothing,
+                cloud_ice_rain_accretion = nothing,
+                cloud_ice_snow_accretion = nothing,
+                rain_snow_accretion = nothing,
+            )
             thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
             ρ = FT(0.7)  # kg/m³, mid-troposphere
@@ -763,6 +784,7 @@ const FREEZE_MELT_TERMS = (
             for T in Ts, (q_tot, q_lcl, q_icl, q_rai, q_sno) in qs
                 shipped = CA._beres_latent_heating(
                     mp,
+                    mp_imp,
                     thp,
                     ρ,
                     T,
@@ -824,6 +846,24 @@ end
         toml_dict;
         rain_autoconversion = CMP.PrescribedNd(toml_dict),
     )
+    # Null implicit set; the single-mp sum collapses to `mp`'s contribution.
+    mp_imp = CMP.Microphysics1MParams(
+        toml_dict;
+        cloud_liquid_formation = nothing,
+        cloud_ice_formation = nothing,
+        cloud_ice_melt = nothing,
+        cloud_liquid_freezing = nothing,
+        rain_autoconversion = nothing,
+        snow_autoconversion = nothing,
+        rain_condensation_evaporation = nothing,
+        snow_deposition_sublimation = nothing,
+        snow_melt = nothing,
+        cloud_liquid_rain_accretion = nothing,
+        cloud_liquid_snow_accretion = nothing,
+        cloud_ice_rain_accretion = nothing,
+        cloud_ice_snow_accretion = nothing,
+        rain_snow_accretion = nothing,
+    )
     thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
     ρ = FT(0.7)
 
@@ -832,6 +872,7 @@ end
     q_sat_warm = TD.q_vap_saturation(thp, T_warm, ρ)
     Q_cond = CA._beres_latent_heating(
         mp,
+        mp_imp,
         thp,
         ρ,
         T_warm,
@@ -847,6 +888,7 @@ end
     # Warm, strongly subsaturated, rain present → net evaporation → cooling.
     Q_evap = CA._beres_latent_heating(
         mp,
+        mp_imp,
         thp,
         ρ,
         T_warm,

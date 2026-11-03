@@ -35,10 +35,10 @@ For `PrognosticEDMFX`:
     values exactly. `ᶜmp_tendencyʲs` is held fixed through Newton so the
     Jacobian — which does not include its derivatives — stays consistent.
 
- 3. With the implicit 1M cloud-liquid source and at least one Picard round,
-    set the grid-mean `ρq_lcl` of the guess so that the environment cloud
-    liquid keeps its stage-initial value
-    (`warm_start_grid_mean_cloud_liquid!`).
+ 3. With 1M microphysics and at least one Picard round, set the grid-mean
+    `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`, `ρq_tot`, and `ρe_tot` of the
+    guess so that each environment specific content / mse keeps its
+    stage-initial value (`warm_start_grid_mean_tracers!`).
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
@@ -101,7 +101,7 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
-    n_picard > 0 && warm_start_grid_mean_cloud_liquid!(Y, p)
+    n_picard > 0 && warm_start_grid_mean_tracers!(Y, p)
 
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) += Y.f.sgsʲs.:($$j).u₃ / dtγ
@@ -111,49 +111,91 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 end
 
 """
-    warm_start_grid_mean_cloud_liquid!(Y, p)
+    warm_start_grid_mean_tracers!(Y, p)
 
-Set the grid-mean `ρq_lcl` of the Newton initial guess so that the
-environment cloud liquid equals its stage-initial value, floored at zero,
+Set the grid-mean `ρq_χ` of the Newton initial guess for each 1M water
+tracer `χ ∈ {q_lcl, q_icl, q_rai, q_sno, q_tot}` so that the environment
+specific content equals its stage-initial value, floored at zero,
 
-    ρq_lcl = ρa⁰ max(0, q_lcl⁰_old) + Σⱼ ρaʲ q_lclʲ,
+    ρq_χ = ρa⁰ max(0, q_χ⁰_old) + Σⱼ ρaʲ q_χʲ,
 
-with `ρa⁰`, `ρaʲ`, and `q_lclʲ` the Picard-converged draft state and
-`q_lcl⁰_old` diagnosed from `Y.c.ρq_lcl` and the stage-initial draft scalars
-in `p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor condenses
-into `q_lclʲ`; without this update the environment of the guess loses
-`Σⱼ ρaʲ Δq_lclʲ / ρa⁰` and goes negative where the environment is clear, the
-branch on which the environment source has zero derivative. The floor keeps
-the guess off that branch.
+with `ρa⁰`, `ρaʲ`, and `q_χʲ` the Picard-converged draft state and
+`q_χ⁰_old` diagnosed from `Y.c.ρq_χ` and the stage-initial draft scalars in
+`p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor moves `q_χʲ`
+(by transport, entrainment, and the explicit / implicit microphysics
+sources); without this update the environment of the guess loses
+`Σⱼ ρaʲ Δq_χʲ / ρa⁰` and goes negative where the environment is clear.
+For `q_lcl` / `q_icl` the environment source has zero derivative on that
+clipped branch; for `q_rai` / `q_sno` the same holds for the precip
+evaporation / sublimation branches; for `q_tot` the floor is a safety that
+rarely fires in practice.
 
-Applies only to the implicit 1M cloud-liquid source with `PrognosticEDMFX`
-and at least one Picard round. Cloud liquid is a partition of `ρq_tot`, and
-`ρq_tot` and `ρe_tot` are unchanged, so the guess conserves water and energy.
-Writes `p.scratch.ᶜtemp_scalar`.
+The energy warm-start uses the EDMFX decomposition
+
+    ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
+
+(from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`) with `mse⁰`
+and `(ρK − p)` held at their stage-initial values and `ρaʲ`, `mseʲ`, `ρa⁰`
+taken from the Picard-converged state. `mse⁰_old` is recovered from the
+stage-initial draft scalars via `specific_env_mse` and the current
+precomputed `ᶜh_tot`, `ᶜK`.
+
+Applies with `PrognosticEDMFX` 1M microphysics, regardless of which
+implicit microphysics sources are on. Writes `p.scratch.ᶜtemp_scalar`.
 """
-function warm_start_grid_mean_cloud_liquid!(Y, p)
+function warm_start_grid_mean_tracers!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
     microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
-    MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
-    isnothing(
-        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
-    ) && return nothing
     ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
-    ᶜq_lcl⁰_old = p.scratch.ᶜtemp_scalar
+    ᶜq⁰_old = p.scratch.ᶜtemp_scalar
     FT = eltype(p.params)
-    @. ᶜq_lcl⁰_old = max(
-        zero(FT),
-        specific(
-            env_value(Y.c.ρq_lcl, sgsʲ -> sgsʲ.ρa * sgsʲ.q_lcl, ᶜsnapshot),
-            ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
-            Y.c.ρq_lcl,
-            Y.c.ρ,
-            turbconv_model,
-        ),
+
+    tracer_names = (
+        (@name(c.ρq_lcl), @name(q_lcl)),
+        (@name(c.ρq_icl), @name(q_icl)),
+        (@name(c.ρq_rai), @name(q_rai)),
+        (@name(c.ρq_sno), @name(q_sno)),
+        (@name(c.ρq_tot), @name(q_tot)),
     )
-    @. Y.c.ρq_lcl =
-        ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) * ᶜq_lcl⁰_old +
-        draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_lcl, Y.c.sgsʲs)
+    MatrixFields.unrolled_foreach(tracer_names) do (gm_name, sgs_name)
+        MatrixFields.has_field(Y, gm_name) || return nothing
+        ρq_χ = MatrixFields.get_field(Y, gm_name)
+        contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
+        @. ᶜq⁰_old = max(
+            zero(FT),
+            specific(
+                env_value(ρq_χ, contrib, ᶜsnapshot),
+                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
+                ρq_χ,
+                Y.c.ρ,
+                turbconv_model,
+            ),
+        )
+        @. ρq_χ =
+            ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) * ᶜq⁰_old +
+            draft_sum(contrib, Y.c.sgsʲs)
+        return nothing
+    end
+
+    # Energy warm-start. The EDMFX decomposition
+    #   ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
+    # follows from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`.
+    # Holding `mse⁰` and `(ρK − p)` at their stage-initial values while
+    # swapping in the predictor's updated `ρaʲ`, `mseʲ`, `ρa⁰` gives
+    #   Δρe_tot = (ρa⁰_new − ρa⁰_old)·mse⁰_old
+    #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
+    if MatrixFields.has_field(Y, @name(c.ρe_tot))
+        (; ᶜh_tot, ᶜK) = p.precomputed
+        ᶜmse⁰_old = p.scratch.ᶜtemp_scalar
+        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
+        @. ᶜmse⁰_old =
+            specific_env_mse(Y.c.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model)
+        @. Y.c.ρe_tot +=
+            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜmse⁰_old +
+            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs) -
+            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsnapshot)
+    end
+
     return nothing
 end
 
@@ -499,8 +541,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         p.atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
     implicit_0m_mp =
-        p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
-        p.atmos.microphysics_tendency_timestepping == Implicit()
+        p.atmos.microphysics_model isa EquilibriumMicrophysics0M
 
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
@@ -696,50 +737,35 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
         Y, p, microphysics_model, turbconv_model, dtγ,
     )
 
-    # Implicit condensation source: evaluated at the transport state (before the
-    # explicit sources below change it). The increment
-    # Δq_lcl = dtγ·S / (1 + dtγ/τ) is the backward-Euler solution of
-    # dq_lcl/dt = S(q_lcl), whose rate falls by Δq_lcl/τ as q_lcl rises at
-    # fixed q_tot and mse. It is the fixed point of the Newton solve, so the
-    # draft residual of the initial guess vanishes to first order in Δq_lcl.
-    if microphysics_model isa NonEquilibriumMicrophysics1M
-        mp = CAP.microphysics_1m_implicit_params(p.params)
-        if !isnothing(mp.processes.cloud_liquid_formation)
-            thp = CAP.thermodynamics_params(p.params)
-            τ_cond = CAP.condensation_evaporation_timescale(p.params)
-            for j in 1:n_mass_flux_subdomains(turbconv_model)
-                sgsʲ = Y.c.sgsʲs.:($j)
-                MatrixFields.has_field(sgsʲ, @name(q_lcl)) || continue
-                ᶜTʲ = p.precomputed.ᶜTʲs.:($j)
-                ᶜρʲ = p.precomputed.ᶜρʲs.:($j)
-                ᶜq_tot_nonnegʲ = p.precomputed.ᶜq_tot_nonnegʲs.:($j)
-                @. sgsʲ.q_lcl +=
-                    dtγ / (1 + dtγ / τ_cond) *
-                    _cm_condensation_rate(
-                        mp, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                    )
-            end
-        end
-    end
-
-    # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs`; a pair
-    # with either name missing is skipped.
+    # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs` /
+    # `ᶜmp_tendency_implicitʲs`; a pair with either name missing is skipped.
+    # Reading the implicit tendency from CM BMT (substep-averaged) directly
+    # subsumes the earlier manual τ·(1 − exp(−dtγ/τ))·S damping and the
+    # single-shot backward-Euler draft increment `dtγ·S / (1 + dtγ/τ)`.
     condensate_sources = (
         (@name(q_lcl), @name(dq_lcl_dt)),
         (@name(q_icl), @name(dq_icl_dt)),
         (@name(q_rai), @name(dq_rai_dt)),
         (@name(q_sno), @name(dq_sno_dt)),
     )
+    has_implicit_mp =
+        microphysics_model isa NonEquilibriumMicrophysics1M
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
         ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
+        ᶜmp_tendency_implicitʲ =
+            has_implicit_mp ?
+            p.precomputed.ᶜmp_tendency_implicitʲs.:($j) : nothing
         MatrixFields.unrolled_foreach(condensate_sources) do (χ_name, S_name)
             MatrixFields.has_field(sgsʲ, χ_name) &&
             MatrixFields.has_field(ᶜmp_tendencyʲ, S_name) || return
             χ = MatrixFields.get_field(sgsʲ, χ_name)
             S = MatrixFields.get_field(ᶜmp_tendencyʲ, S_name)
             @. χ += dtγ * S
+            if has_implicit_mp
+                S_i = MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name)
+                @. χ += dtγ * S_i
+            end
         end
     end
 

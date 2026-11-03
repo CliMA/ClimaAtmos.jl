@@ -52,10 +52,12 @@ The remaining keys select the process-option type that controls dispatch inside
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
-  - `cloud_liquid_formation`: `"CloudLiquidFormation"` (CM's bulk-averaged
-    tendency), `"ImplicitCloudLiquidFormation"` (SGS-integrated implicit source).
+  - `cloud_liquid_formation`: `"CloudLiquidFormation"`. The `implicit_microphysics`
+    config toggle routes it between CM's bulk-averaged tendency and the
+    SGS-integrated implicit source.
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"TemperatureDependentIceNumber"`,
-    `"ConstantTimescale"`, `"TemperatureDependent"`.
+    `"ConstantTimescale"`, `"TemperatureDependent"`. Routed by `implicit_microphysics`
+    the same way as `cloud_liquid_formation`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
   - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`, `"KK2000"`. `Kessler1M` is the Kessler
@@ -87,10 +89,7 @@ function get_microphysics_1m_options(parsed_args)
 
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
-        Dict(
-            "CloudLiquidFormation" => CMP.CloudLiquidFormation(),
-            "ImplicitCloudLiquidFormation" => ImplicitCloudLiquidFormation(),
-        ),
+        Dict("CloudLiquidFormation" => CMP.CloudLiquidFormation()),
         "cloud_liquid_formation",
     )
     cloud_ice_formation = parse_option(
@@ -1227,13 +1226,13 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     terminal_velocity_snow =
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
-    implicit_microphysics = pa["implicit_microphysics"]
-
+    # `implicit_microphysics` only controls whether 1M condensation /
+    # sublimation flow through the implicit cache with a Jacobian; the
+    # microphysics tendency itself is always applied in the implicit stage.
     return AtmosWater(;
         microphysics_model,
         cloud_model,
-        microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
-                                             Explicit(),
+        microphysics_tendency_timestepping = Implicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         tq_correlation_model,
