@@ -3,14 +3,46 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] With
-  `ImplicitCloudLiquidFormation` and `PrognosticEDMFX`, set the grid-mean
-  `ρq_lcl` of the Newton initial guess so that the environment cloud liquid
-  keeps its stage-initial value (`warm_start_grid_mean_cloud_liquid!`), and
-  use the backward-Euler increment `dtγ / (1 + dtγ / τ)` for the draft
-  condensation in the implicit-stage predictor. The draft cloud liquid then
-  passes `enforce_edmf_updraft_constraints!` unclipped after one Newton
-  iteration, which strengthens cumulus and deep convection.
+- ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
+  the implicit path with cloud-liquid condensation / evaporation. A single
+  `implicit_microphysics` toggle controls both: when `true` (default), the
+  user's `cloud_liquid_formation` and `cloud_ice_formation` are moved from
+  `microphysics_1m_params` (bulk CM BMT) to `microphysics_1m_implicit_params`,
+  and a second CM BMT call with that implicit set fills a new
+  `ᶜmp_tendency_implicit` cache. The implicit stage applies this cache
+  tendency, with CM's state-dependent `τ_vap_to_q_lcl` / `τ_vap_to_q_icl`
+  driving the Jacobian diagonals (so the ice diagonal tracks the configured
+  ice-formation variant rather than the constant
+  `sublimation_deposition_timescale` parameter). The Picard predictor reads
+  the same cache, so the manual `τ·(1 − exp(−dtγ/τ))·S` damping is gone.
+  The `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is
+  removed; `implicit_microphysics: false` reverts to the previous behavior
+  (bulk CM BMT covers condensation).
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Reformulate the
+  non-equilibrium SGS cloud-fraction closure. The cloud-fraction width
+  (`_sgs_augmented_sigma`) is the gradient width floored by `σ_abs` alone.
+  Condensate up to the equilibrium amount `q_c_eq` is normalized by it, and
+  the non-equilibrium excess `max(0, q_c − q_c_eq)` by `√(σ_aug² + δ_sub²)`
+  with the subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available
+  water (`_compute_cloud_fraction`), so the cloud fraction is `C¹`-smooth
+  across saturation and saturated cloud decks reach overcast. Under
+  `PrognosticEDMFX`, the θ→T Jacobian, the displacement curvature, the
+  moisture-variance bound and the correlation round-off guard of
+  `set_covariance_cache!` are evaluated at the environment state. The
+  non-equilibrium updraft cloud fraction (`_updraft_cloud_fraction`) is the
+  truncated-Gaussian cover against the updraft vapor subsaturation deficit.
+  The conditional-moment node rule (`conditional_rule`) collapses a sliver
+  interval between nearly coincident actual and equilibrium cloud edges onto
+  the actual edge. In the shortwave cloud-inhomogeneity factor
+  (`cloud_optical_depth_factor`), each non-equilibrium updraft has the
+  in-cloud relative variance its cover implies. The parameters
+  `cloud_fraction_eps_rel`, `cloud_fraction_floor_release_margin`,
+  `cloud_fraction_floor_release_abs_margin`,
+  `cloud_fraction_floor_release_sharpness` and `cloud_fraction_floor_residual`
+  are removed. The provisional parameter `sgs_cloud_species_constant_timescales`
+  (default `0`) is added: a positive value makes the 1M scheme use the constant
+  `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
+  in the variance-fidelity Damköhler factor and the cloud-species flux blend.
 - ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
   grids (`z_stretch: true`) use the two-scale
   `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the

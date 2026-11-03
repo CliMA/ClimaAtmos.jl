@@ -57,7 +57,12 @@ end
     params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
     processes = params.microphysics_1m_params.processes
     @test processes.rain_autoconversion isa CMP.PrescribedNd
-    @test processes.cloud_ice_formation isa CMP.TemperatureDependent
+    # `cloud_ice_formation` lives on `microphysics_1m_implicit_params` when
+    # `implicit_microphysics: true` (the default) and on `microphysics_1m_params`
+    # otherwise; `cloud_formation_1m_params` returns whichever set carries it.
+    @test CAP.cloud_formation_1m_params(
+        params,
+    ).processes.cloud_ice_formation isa CMP.TemperatureDependent
     @test isnothing(processes.rain_snow_accretion)
     @test isnothing(
         params.microphysics_1m_params.process_params.rain_snow_accretion,

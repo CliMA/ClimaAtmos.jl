@@ -99,7 +99,7 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
-    @safetestset "Implicit condensation tests" begin @time include("parameterized_tendencies/microphysics/implicit_condensation.jl") end
+    @safetestset "Implicit microphysics split tests" begin @time include("parameterized_tendencies/microphysics/implicit_microphysics_split.jl") end
     @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
     @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end

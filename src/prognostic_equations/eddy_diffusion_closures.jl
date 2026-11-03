@@ -1312,8 +1312,11 @@ cloud species `q_μ` of `phase`,
     F_qμ = (1 - λ_μ) (-ᶠw ∇q_μ) + λ_μ (c_qt F_qt + c_sl F_sl),
 
 to the extensive tendency `ᶜρχₜ`. `λ_μ` is `cloud_species_flux_blend` with
-the mixing length, the TKE, and the relaxation time of the 1M process at the
-cell state (`cloud_species_relaxation_time`), `(c_qt, c_sl)` are
+the mixing length, the TKE, and the relaxation time of the phase: that of the
+1M process at the cell state (`cloud_species_relaxation_time`) or, with
+`sgs_cloud_species_constant_timescales > 0`, the constant
+`condensation_evaporation_timescale` or `sublimation_deposition_timescale`;
+`(c_qt, c_sl)` are
 `equilibrium_condensate_sensitivities` with the width and equilibrium
 multiplier of `ᶜsgs_moments`, and `ᶠF_qt`, `ᶠF_sl` are the face fluxes
 of the diffusing total water and liquid–ice static energy with the same weight
@@ -1353,30 +1356,44 @@ function add_cloud_species_diffusionᵥ!(
     ᶜscratch,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    # The Damköhler blend needs the condensation timescale regardless of
-    # which path integrates condensation; pick whichever 1M mp carries it.
-    cmp = CAP.cloud_liquid_formation_1m_params(p.params)
+    # The Damköhler blend needs the condensation / sublimation timescale
+    # regardless of which stage integrates the process; pick whichever 1M mp
+    # carries the active formation.
+    cmp = CAP.cloud_formation_1m_params(p.params)
     c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
     (; ᶜl_mix, ᶜp) = p.precomputed
     ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜρ_air =
         @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
-    @. ᶜλ = cloud_species_flux_blend(
-        ᶜl_mix,
-        specific(Y.c.ρtke, Y.c.ρ),
-        c_d,
-        cloud_species_relaxation_time(
-            cmp,
-            thermo_params,
-            ᶜT,
-            ᶜρ_air,
-            ᶜq_tot,
-            ᶜq_liq,
-            ᶜq_ice,
-            phase,
-        ),
-    )
+    # The relaxation time of the species is that of the 1M process at the
+    # cell state or, with `sgs_cloud_species_constant_timescales > 0`, the
+    # constant parameter of the phase. One broadcast per branch keeps the
+    # time a concrete type in each.
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    if CAP.sgs_cloud_species_constant_timescales(p.params) > 0
+        τ_const =
+            phase isa TD.Liquid ?
+            CAP.condensation_evaporation_timescale(p.params) :
+            CAP.sublimation_deposition_timescale(p.params)
+        @. ᶜλ = cloud_species_flux_blend(ᶜl_mix, ᶜtke, c_d, τ_const)
+    else
+        @. ᶜλ = cloud_species_flux_blend(
+            ᶜl_mix,
+            ᶜtke,
+            c_d,
+            cloud_species_relaxation_time(
+                cmp,
+                thermo_params,
+                ᶜT,
+                ᶜρ_air,
+                ᶜq_tot,
+                ᶜq_liq,
+                ᶜq_ice,
+                phase,
+            ),
+        )
+    end
     ᶜsensitivities = @. lazy(
         equilibrium_condensate_sensitivities(
             thermo_params,

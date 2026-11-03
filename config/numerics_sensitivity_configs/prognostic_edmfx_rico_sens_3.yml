@@ -1,6 +1,0 @@
-# Sensitivity 3: dt=120s, picard=2, update_cache_every=step, explicit cond, 1 Newton
-dt: "120secs"
-edmfx_updraft_picard_rounds: 2
-update_cache_every: "step"
-cloud_liquid_formation: "CloudLiquidFormation"
-max_newton_iters_ode: 1
