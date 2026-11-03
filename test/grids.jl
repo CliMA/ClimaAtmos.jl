@@ -18,7 +18,51 @@ import ClimaCore as CC
         # The spacefillingcurve order is not the same as the linear order
         linearorder = vec(collect(CC.Meshes.elements(mesh)))
         @test linearorder != sfc_elemorder
+    end
 
+    @testset "Vertical stretching" begin
+        stretching(grid) = CC.Grids.vertical_topology(grid).mesh.stretch
+
+        uniform_grid = CA.ColumnGrid(Float64)
+        @test stretching(uniform_grid) isa CC.Meshes.Uniform
+
+        fine_grid = CA.ColumnGrid(
+            Float64;
+            z_elem = 63,
+            z_max = 60000.0,
+            z_stretch = true,
+            dz_bottom = 30.0,
+        )
+        @test stretching(fine_grid) isa
+              CC.Meshes.BoundaryLayerHyperbolicTangentStretching{Float64}
+        @test stretching(fine_grid).dz_surface == 30.0
+        @test stretching(fine_grid).dz_top == 3000.0
+        @test stretching(fine_grid).z_pbl == 2200.0
+
+        fine_sphere = CA.SphereGrid(
+            Float64;
+            h_elem = 3,
+            z_elem = 79,
+            z_max = 60000.0,
+            z_stretch = true,
+            dz_bottom = 28.0,
+            dz_top = 2500.0,
+            z_pbl = 2000.0,
+        )
+        @test stretching(fine_sphere).dz_top == 2500.0
+        @test stretching(fine_sphere).z_pbl == 2000.0
+
+        # The two-scale rule rejects a `z_elem` outside its admissible range:
+        # the 10-level default grid lies below it, and 200 levels with
+        # `dz_bottom = 30` m up to 45 km lie above it.
+        @test_throws ArgumentError CA.ColumnGrid(Float64; z_stretch = true)
+        @test_throws ArgumentError CA.ColumnGrid(
+            Float64;
+            z_elem = 200,
+            z_max = 45000.0,
+            z_stretch = true,
+            dz_bottom = 30.0,
+        )
     end
 
     @testset "BoxGrid" begin

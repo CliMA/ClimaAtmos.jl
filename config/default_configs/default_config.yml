@@ -1,10 +1,16 @@
 # Default Configuration for ClimaAtmos.jl
 # Resolution
 dz_bottom:
-  help: "Model bottom grid depth. Default: 500m"
+  help: "Bottom layer thickness of the two-scale vertical stretching. Default: 500m"
   value: 500.0
+dz_top:
+  help: "Top layer thickness of the two-scale vertical stretching. Default: 3000m"
+  value: 3000.0
+z_pbl:
+  help: "Scale height of the boundary-layer refinement of the two-scale vertical stretching. Default: 2200m"
+  value: 2200.0
 z_stretch:
-  help: "Stretch grid in z-direction. [`true` (default), `false`]"
+  help: "Stretch the vertical grid with the two-scale rule, which rejects a `z_elem` outside the range that `dz_bottom`, `dz_top`, `z_pbl`, and `z_max` admit. [`true` (default), `false`]"
   value: true
 h_elem:
   help: "number of elements per edge on a cubed sphere"

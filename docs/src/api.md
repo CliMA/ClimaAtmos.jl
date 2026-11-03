@@ -46,6 +46,7 @@ ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
+ClimaAtmos.get_z_mesh
 ```
 
 ## Topography

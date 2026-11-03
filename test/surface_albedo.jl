@@ -12,6 +12,7 @@ Random.seed!(1234)
         "initial_condition" => "DYCOMS_RF02",
         "microphysics_model" => "0M",
         "config" => "column",
+        "z_stretch" => false,
         "rad" => "clearsky",
         "FLOAT_TYPE" => string(FT),
         "output_default_diagnostics" => false,

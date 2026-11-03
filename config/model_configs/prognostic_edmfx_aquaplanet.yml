@@ -1,7 +1,7 @@
 # This job takes too long so we use a lower top and coarser vertical resolution
 z_max: 30000.0
 z_elem: 10
-dz_bottom: 500.0
+z_stretch: false # z_elem lies outside the range the two-scale stretching admits
 dt: 20secs
 surface_setup: DefaultMoninObukhov
 rad: clearsky

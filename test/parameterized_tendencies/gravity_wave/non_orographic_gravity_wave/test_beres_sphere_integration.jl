@@ -66,6 +66,8 @@ import ClimaCore.Geometry as Geometry
     config.parsed_args["z_elem"] = 30
     config.parsed_args["z_max"] = 45000.0
     config.parsed_args["dz_bottom"] = 500.0
+    # This grid lies outside the range the two-scale stretching admits.
+    config.parsed_args["z_stretch"] = false
     config.parsed_args["dt"] = "120secs"
     config.parsed_args["t_end"] = "0secs"
     config.parsed_args["dt_save_state_to_disk"] = "Inf"

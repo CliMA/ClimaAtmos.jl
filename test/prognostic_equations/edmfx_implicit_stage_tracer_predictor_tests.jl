@@ -8,7 +8,9 @@ at the transported state, and the cell-1 surface relaxation of `mse` and
 sloped terrain, leaves cell 1 unadvected. Two limits follow: fast entrainment
 pulls every scalar to the environment value, and with advection and
 entrainment off only cell 1 of `mse` and `q_tot` moves, to the surface-relaxed
-value, while each condensate moves by `dtγ` times its source.
+value, while each condensate moves by `dtγ` times its source. The grid-mean
+warm start keeps the environment cloud liquid of the Newton guess at its
+stage-initial value.
 =#
 using Test
 import ClimaComms
@@ -167,8 +169,8 @@ column(f) = vec(Array(parent(f)))
     S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
 
     # Implicit condensation runs between the transport sweep and the explicit
-    # `ᶜmp_tendencyʲ` sources, with the stage-averaged factor
-    # `τ·(1 − exp(−dtγ/τ))` on CM's instantaneous rate. The rate is evaluated
+    # `ᶜmp_tendencyʲ` sources, with the backward-Euler factor
+    # `dtγ / (1 + dtγ/τ)` on CM's instantaneous rate. The rate is evaluated
     # at the transport-state condensates with thermo at the transported draft
     # state. Both `ᶜTʲ` and `ᶜρʲ` are refreshed inside the solve just before
     # the condensation block, so reading `p.precomputed.ᶜTʲs` after the solve
@@ -179,7 +181,7 @@ column(f) = vec(Array(parent(f)))
     cm_cond_predictor_active =
         !isnothing(mp_imp.processes.cloud_liquid_formation)
     @test cm_cond_predictor_active  # config should enable the implicit path
-    τ_factor = τ_cond * (one(FT) - exp(-dtγ / τ_cond))
+    τ_factor = dtγ / (one(FT) + dtγ / τ_cond)
     function s_cond_predictor(q_lcl, q_icl, q_rai, q_sno)
         cm_cond_predictor_active || return zeros(FT, nz)
         ρʲ_col = column(p.precomputed.ᶜρʲs.:(1))
@@ -344,6 +346,46 @@ column(f) = vec(Array(parent(f)))
         for block in blocks
             diag_per_level = vec(sum(parent(block); dims = 4))
             @test all(≈(expected_entry), diag_per_level)
+        end
+        # Equal grid-mean and draft diagonals map a residual of the draft
+        # source alone, R_ρq_lcl = ρaʲ R_q_lclʲ, to Δρq_lcl = ρaʲ Δq_lclʲ, so
+        # one Newton step leaves the environment cloud liquid unchanged.
+        @test vec(sum(parent(blocks[1]); dims = 4)) ==
+              vec(sum(parent(blocks[2]); dims = 4))
+    end
+
+    @testset "grid-mean cloud liquid warm start keeps q_lcl⁰" begin
+        Y .= Y_init
+        turbconv_model = p.atmos.turbconv_model
+        function env_q_lcl(Y)
+            @. ᶜtmp = CA.specific(
+                CA.env_value(Y.c.ρq_lcl, s -> s.ρa * s.q_lcl, Y.c.sgsʲs),
+                CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),
+                Y.c.ρq_lcl,
+                Y.c.ρ,
+                turbconv_model,
+            )
+            return column(ᶜtmp)
+        end
+        # A depleted grid mean aloft leaves a negative environment value there,
+        # which the guess floors at zero.
+        @. Y.c.ρq_lcl *= ifelse(ᶜz > 3 * z_max / 4, FT(0.1), FT(1))
+        q_lcl⁰_old = env_q_lcl(Y)
+        @test any(<(0), q_lcl⁰_old) && any(>(0), q_lcl⁰_old)
+        Y_old = similar(Y)
+        Y_old .= Y
+        p.precomputed.ᶜsgsʲs_picard_snapshot.:(1) .= sgsʲ
+        # The draft grows in the lower half of the column and decays above,
+        # and condenses throughout, as after a Picard round.
+        @. sgsʲ.ρa *= ifelse(ᶜz < z_max / 2, FT(1.5), FT(0.5))
+        @. sgsʲ.q_lcl += FT(4e-4)
+        CA.warm_start_grid_mean_cloud_liquid!(Y, p)
+        @test env_q_lcl(Y) ≈ max.(q_lcl⁰_old, 0) rtol = 1e4 * eps(FT) atol =
+            eps(FT)
+        @test parent(Y.c.ρq_lcl) != parent(Y_old.c.ρq_lcl)
+        for name in (@name(c.ρ), @name(c.ρq_tot), @name(c.ρe_tot))
+            @test parent(MatrixFields.get_field(Y, name)) ==
+                  parent(MatrixFields.get_field(Y_old, name))
         end
     end
 end

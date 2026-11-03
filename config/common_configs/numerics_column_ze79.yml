@@ -1,0 +1,7 @@
+config: column
+z_elem: 79
+z_max: 60000.0
+dz_bottom: 28.0
+dt: 90secs
+ode_algo: ARS343
+hyperdiff: ~

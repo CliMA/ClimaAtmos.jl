@@ -22,6 +22,7 @@ include("../test_helpers.jl")
     config = CA.AtmosConfig(
         Dict(
             "config" => "plane",
+            "z_stretch" => false,
             "initial_condition" => "ConstantBuoyancyFrequencyProfile",
             "microphysics_model" => "1M",
             "topography" => "Schar",
@@ -31,7 +32,6 @@ include("../test_helpers.jl")
             "x_elem" => 8,
             "z_max" => 21e3,
             "z_elem" => 20,
-            "dz_bottom" => 500.0,
             "dt" => "1secs",
             "t_end" => "10secs",
             "implicit_microphysics" => false,

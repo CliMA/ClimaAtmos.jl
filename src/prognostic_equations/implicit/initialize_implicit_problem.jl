@@ -34,6 +34,11 @@ For `PrognosticEDMFX`:
     routines feed these to the Newton solve so it reproduces the analytic
     values exactly. `ᶜmp_tendencyʲs` is held fixed through Newton so the
     Jacobian — which does not include its derivatives — stays consistent.
+
+ 3. With the implicit 1M cloud-liquid source and at least one Picard round,
+    set the grid-mean `ρq_lcl` of the guess so that the environment cloud
+    liquid keeps its stage-initial value
+    (`warm_start_grid_mean_cloud_liquid!`).
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
@@ -96,11 +101,59 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+    n_picard > 0 && warm_start_grid_mean_cloud_liquid!(Y, p)
 
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) += Y.f.sgsʲs.:($$j).u₃ / dtγ
         @. ᶜρa_tendencyʲs.:($$j) += Y.c.sgsʲs.:($$j).ρa / dtγ
     end
+    return nothing
+end
+
+"""
+    warm_start_grid_mean_cloud_liquid!(Y, p)
+
+Set the grid-mean `ρq_lcl` of the Newton initial guess so that the
+environment cloud liquid equals its stage-initial value, floored at zero,
+
+    ρq_lcl = ρa⁰ max(0, q_lcl⁰_old) + Σⱼ ρaʲ q_lclʲ,
+
+with `ρa⁰`, `ρaʲ`, and `q_lclʲ` the Picard-converged draft state and
+`q_lcl⁰_old` diagnosed from `Y.c.ρq_lcl` and the stage-initial draft scalars
+in `p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor condenses
+into `q_lclʲ`; without this update the environment of the guess loses
+`Σⱼ ρaʲ Δq_lclʲ / ρa⁰` and goes negative where the environment is clear, the
+branch on which the environment source has zero derivative. The floor keeps
+the guess off that branch.
+
+Applies only to the implicit 1M cloud-liquid source with `PrognosticEDMFX`
+and at least one Picard round. Cloud liquid is a partition of `ρq_tot`, and
+`ρq_tot` and `ρe_tot` are unchanged, so the guess conserves water and energy.
+Writes `p.scratch.ᶜtemp_scalar`.
+"""
+function warm_start_grid_mean_cloud_liquid!(Y, p)
+    (; microphysics_model, turbconv_model) = p.atmos
+    microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
+    MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
+    isnothing(
+        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
+    ) && return nothing
+    ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
+    ᶜq_lcl⁰_old = p.scratch.ᶜtemp_scalar
+    FT = eltype(p.params)
+    @. ᶜq_lcl⁰_old = max(
+        zero(FT),
+        specific(
+            env_value(Y.c.ρq_lcl, sgsʲ -> sgsʲ.ρa * sgsʲ.q_lcl, ᶜsnapshot),
+            ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
+            Y.c.ρq_lcl,
+            Y.c.ρ,
+            turbconv_model,
+        ),
+    )
+    @. Y.c.ρq_lcl =
+        ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) * ᶜq_lcl⁰_old +
+        draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_lcl, Y.c.sgsʲs)
     return nothing
 end
 
@@ -644,10 +697,11 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     )
 
     # Implicit condensation source: evaluated at the transport state (before the
-    # explicit sources below change it). Stage-averaged along the adiabat as
-    # Δq_lcl = τ·S·(1−exp(−dtγ/τ)) — what CM's bulk averaging would produce if
-    # condensation were the only process in the window. Reduces to dtγ·S for
-    # dtγ ≪ τ, saturates at (q_v − q_sat)/Γ_cp for dtγ ≫ τ.
+    # explicit sources below change it). The increment
+    # Δq_lcl = dtγ·S / (1 + dtγ/τ) is the backward-Euler solution of
+    # dq_lcl/dt = S(q_lcl), whose rate falls by Δq_lcl/τ as q_lcl rises at
+    # fixed q_tot and mse. It is the fixed point of the Newton solve, so the
+    # draft residual of the initial guess vanishes to first order in Δq_lcl.
     if microphysics_model isa NonEquilibriumMicrophysics1M
         mp = CAP.microphysics_1m_implicit_params(p.params)
         if !isnothing(mp.processes.cloud_liquid_formation)
@@ -660,7 +714,7 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
                 ᶜρʲ = p.precomputed.ᶜρʲs.:($j)
                 ᶜq_tot_nonnegʲ = p.precomputed.ᶜq_tot_nonnegʲs.:($j)
                 @. sgsʲ.q_lcl +=
-                    τ_cond * (1 - exp(-dtγ / τ_cond)) *
+                    dtγ / (1 + dtγ / τ_cond) *
                     _cm_condensation_rate(
                         mp, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
                         sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,

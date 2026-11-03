@@ -9,10 +9,10 @@ import ClimaAtmos as CA
     config = CA.AtmosConfig(
         Dict(
             "config" => "sphere",
+            "z_stretch" => false,
             "h_elem" => 4,
             "z_elem" => 15,
             "z_max" => 60000.0,
-            "dz_bottom" => 30.0,
             "ode_algo" => "ARS343",
             "hyperdiff" => "Hyperdiffusion",
             "implicit_diffusion" => true,
