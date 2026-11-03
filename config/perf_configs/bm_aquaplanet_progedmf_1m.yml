@@ -1,6 +1,4 @@
 h_elem: 12
-z_elem: 25
-z_stretch: false # z_elem lies outside the range the two-scale stretching admits
 dt: 10secs
 t_end: 61mins
 dt_save_state_to_disk: "Inf"

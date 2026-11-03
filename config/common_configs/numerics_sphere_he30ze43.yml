@@ -3,7 +3,7 @@ h_elem: 30 # 110 km
 nh_poly: 3
 z_elem: 43
 z_max: 30000.0
-dz_bottom: 30.0
+dz_bottom: 28.0
 dt: 90secs
 ode_algo: ARS343
 hyperdiff: Hyperdiffusion

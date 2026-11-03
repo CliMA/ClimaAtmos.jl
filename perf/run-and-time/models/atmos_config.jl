@@ -11,7 +11,7 @@ import ClimaAtmos as CA
 function get_base_atmos_config()
     config_path = "config"
     config_file = [
-        joinpath(pkgdir(CA), config_path, "common_configs", "numerics_sphere_he16ze63.yml"),
+        joinpath(pkgdir(CA), config_path, "common_configs", "numerics_sphere_he16ze79.yml"),
         joinpath(
             pkgdir(CA),
             config_path,

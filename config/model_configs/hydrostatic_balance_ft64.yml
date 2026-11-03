@@ -5,4 +5,3 @@ hyperdiff: ~
 perturb_initstate: false
 disable_surface_flux_tendency: true
 FLOAT_TYPE: "Float64"
-z_stretch: false

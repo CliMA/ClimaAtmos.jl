@@ -50,16 +50,25 @@ main
   matching the layer thickness `dz_bottom` at the surface and `dz_top` (new key,
   default 3000 m) at the model top. The rule admits `z_elem` within a range set
   by these thicknesses and `z_max`, and building the grid raises an error that
-  names the range otherwise. Configurations whose grids lie outside the range,
-  among them every run on the 10-level default grid and the 25-level
-  performance benchmarks, set `z_stretch: false` and run with uniform layers;
-  `numerics_sphere_he6ze31.yml`, the 200-level ERA5-driven column, and the
-  RCEMIP box CRM set a `dz_top` inside the range the rule admits for them, and
-  the shallow LARC, ARM, and Schar-mountain cases set a `dz_top` near the top
-  spacing they have under the single-scale rule. The grid constructors
-  `SphereGrid`, `ColumnGrid`, `BoxGrid`, and `PlaneGrid` default to
-  `z_stretch = false`. Requires ClimaCore 1.0.8. Added the 79-level
-  configurations `numerics_sphere_he24ze79.yml` and `numerics_column_ze79.yml`.
+  names the range otherwise. `numerics_sphere_he6ze31.yml`, the 200-level
+  ERA5-driven column, and the RCEMIP box CRM set a `dz_top` inside the range
+  the rule admits for them, and `numerics_sphere_he6ze10.yml` (6500 m) and the
+  shallow LARC, ARM, and Schar-mountain cases set a `dz_top` near the top
+  spacing they have under the single-scale rule. The CI jobs for the
+  conservation, hydrostatic-balance, and MPI configurations pair them with
+  `numerics_sphere_he6ze10.yml`, and the prognostic EDMF aquaplanet, Beres
+  verification, gray radiative-equilibrium column, and performance benchmark
+  configurations take the vertical grid of the common numerics configuration
+  they are paired with in CI. The grid constructors `SphereGrid`,
+  `ColumnGrid`, `BoxGrid`, and `PlaneGrid` default to `z_stretch = false`.
+  Requires ClimaCore 1.0.8. The 63-level common configurations moved to 79
+  levels with `dz_bottom: 28.0` and are renamed: `numerics_column_ze63.yml` to
+  `numerics_column_ze79.yml`, `numerics_sphere_he16ze63.yml` to
+  `numerics_sphere_he16ze79.yml`, and `numerics_sphere_he30ze63.yml` to
+  `numerics_sphere_he30ze79.yml`. The prognostic EDMF column cases keep their
+  `z_max` and use stretched grids (`dz_bottom: 28.0` and a `dz_top` and
+  `z_elem` per case) whose spacing follows `numerics_column_ze79.yml` to within
+  about 15%.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] ERA5 forcing files take the
   sign of the horizontal advective tendencies from the coordinate order of the
   raw input. Raw CDS ERA5 latitude descends, so the meridional advection of

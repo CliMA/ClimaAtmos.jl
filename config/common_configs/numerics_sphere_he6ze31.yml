@@ -4,7 +4,7 @@ nh_poly: 3
 z_elem: 31
 z_max: 60000.0
 dz_bottom: 50.0
-dz_top: 8000.0 # the two-scale rule admits 31 levels for dz_top in 6.1-30 km
+dz_top: 8000.0
 dt: 400secs
 ode_algo: ARS343
 hyperdiff: Hyperdiffusion
