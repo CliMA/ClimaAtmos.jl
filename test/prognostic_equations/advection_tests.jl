@@ -382,6 +382,187 @@ include("../test_helpers.jl")
     @. p.precomputed.ᶜT⁰ = T⁰_orig
 end
 
+@testset "Column-max velocity in sedimentation Jacobian super-diagonal" begin
+    # Non-uniform rain shaft: `q_raiʲ` and `wᵣʲ` are nonzero only in the upper
+    # half of the column. With a pointwise `-wʲ` super-diagonal the Jacobian
+    # block collapses in the empty cells below the shaft; the running column
+    # max keeps it nonzero so one Newton step can transport `q_rai` across
+    # those cells at CFL > 1.
+    config = CA.AtmosConfig(
+        Dict{String, Any}(
+            "initial_condition" => "Bomex",
+            "FLOAT_TYPE" => "Float64",
+            "config" => "column",
+            "turbconv" => "prognostic_edmfx",
+            "edmfx_entr_model" => "Generalized",
+            "edmfx_detr_model" => "Generalized",
+            "edmfx_sgs_mass_flux" => true,
+            "edmfx_sgs_diffusive_flux" => false,
+            "edmfx_vertical_diffusion" => false,
+            "edmfx_nh_pressure" => true,
+            "implicit_diffusion" => false,
+            "prognostic_tke" => false,
+            "microphysics_model" => "1M",
+            "z_max" => 3000.0,
+            "z_elem" => 15,
+            "z_stretch" => false,
+            "dt" => "10secs",
+            "t_end" => "10secs",
+            "ode_algo" => "SSP333",
+            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "output_default_diagnostics" => false,
+        );
+        job_id = "advection_column_max_test",
+    )
+    (; Y, p) = generate_test_simulation(config)
+    FT = eltype(Y)
+    sgsʲ = Y.c.sgsʲs.:(1)
+    arr(field) = Array(parent(field))
+
+    # Zero updraft velocity and entrainment/detrainment so only sedimentation
+    # contributes to the (q_rai, q_rai) super-diagonal; set ρaʲ to 10% of ρʲ.
+    fill!(Y.f.sgsʲs.:(1).u₃, Geometry.Covariant3Vector(FT(0)))
+    fill!(p.precomputed.ᶠu³ʲs.:(1), Geometry.Contravariant3Vector(FT(0)))
+    for name in (
+        :ᶜρ_diffʲs,
+        :ᶜentr_vel_scaleʲs,
+        :ᶜentr_nonvel_rateʲs,
+        :ᶜarea_bounding_entr_detrʲs,
+        :sfc_mass_flux_sourceʲs,
+    )
+        fill!(getproperty(p.precomputed, name).:(1), FT(0))
+    end
+    @. sgsʲ.ρa = FT(0.1) * p.precomputed.ᶜρʲs.:(1)
+
+    # Build a shaft: non-zero only in the upper half.
+    velocity_fields = (;
+        q_lcl = (:ᶜwₗʲs, :ᶜwₗ),
+        q_icl = (:ᶜwᵢʲs, :ᶜwᵢ),
+        q_rai = (:ᶜwᵣʲs, :ᶜwᵣ),
+        q_sno = (:ᶜwₛʲs, :ᶜwₛ),
+    )
+    for (name, (wʲ, w_gs)) in pairs(velocity_fields)
+        fill!(getproperty(sgsʲ, name), FT(0))
+        fill!(getproperty(Y.c, Symbol(:ρ, name)), FT(0))
+        fill!(getproperty(p.precomputed, wʲ).:(1), FT(0))
+        fill!(getproperty(p.precomputed, w_gs), FT(0))
+    end
+    n = size(arr(sgsʲ.q_rai), 1)
+    shaft_start = n ÷ 2 + 1
+    q_rai_vals = arr(sgsʲ.q_rai)
+    q_rai_vals[shaft_start:n, :, :, :, :] .= FT(1e-3)
+    parent(sgsʲ.q_rai) .= q_rai_vals
+    @. Y.c.ρq_rai = Y.c.ρ * sgsʲ.q_rai
+    w_vals = arr(p.precomputed.ᶜwᵣʲs.:(1))
+    w_vals[shaft_start:n, :, :, :, :] .= FT(4)
+    parent(p.precomputed.ᶜwᵣʲs.:(1)) .= w_vals
+    parent(p.precomputed.ᶜwᵣ) .= w_vals
+
+    # fill_column_max!: at each cell i, the value is max of w over cells ≥ i.
+    w_max = similar(p.precomputed.ᶜwᵣʲs.:(1))
+    CA.fill_column_max!(w_max, p.precomputed.ᶜwᵣʲs.:(1))
+    w_max_vals = arr(w_max)
+    for i in 1:n
+        @test w_max_vals[i, 1, 1, 1, 1] ≈
+              maximum(w_vals[i:n, 1, 1, 1, 1])
+    end
+    @test all(w_max_vals[1:(shaft_start - 1), 1, 1, 1, 1] .== FT(4))
+    @test w_max_vals[n, 1, 1, 1, 1] == FT(4)
+
+    # Build the SGS Jacobian with the column-max super-diagonal and extract
+    # the (q_rai, q_rai) block's super-diagonal via a probe `v`: `(M v)[i] =
+    # M[i, i+1]` when `v[i+1] = 1` and `v[k] = 0` otherwise. The empty cells
+    # below the shaft must have nonzero super-diagonal.
+    jac_cache = CA.jacobian_cache(CA.ManualSparseJacobian(), Y, p.atmos)
+    matrix = jac_cache.matrix.matrix
+    CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
+    q_rai_state = CA.@name(c.sgsʲs.:(1).q_rai)
+    ∂q_rai = matrix[q_rai_state, q_rai_state]
+    ᶜprobe = similar(sgsʲ.q_rai)
+    ᶜMv = similar(sgsʲ.q_rai)
+    for i in 1:(shaft_start - 1)
+        fill!(ᶜprobe, FT(0))
+        probe_vals = arr(ᶜprobe)
+        probe_vals[i + 1, :, :, :, :] .= FT(1)
+        parent(ᶜprobe) .= probe_vals
+        @. ᶜMv = ∂q_rai * ᶜprobe
+        @test arr(ᶜMv)[i, 1, 1, 1, 1] != FT(0)
+    end
+
+    # Updraft snow shaft: same geometry, verify (q_sno, q_sno) super-diagonal
+    # is nonzero in every empty cell below the shaft.
+    for (name, (wʲ, w_gs)) in pairs(velocity_fields)
+        fill!(getproperty(sgsʲ, name), FT(0))
+        fill!(getproperty(Y.c, Symbol(:ρ, name)), FT(0))
+        fill!(getproperty(p.precomputed, wʲ).:(1), FT(0))
+        fill!(getproperty(p.precomputed, w_gs), FT(0))
+    end
+    q_sno_vals = zeros(FT, size(arr(sgsʲ.q_sno)))
+    q_sno_vals[shaft_start:n, :, :, :, :] .= FT(5e-4)
+    parent(sgsʲ.q_sno) .= q_sno_vals
+    @. Y.c.ρq_sno = Y.c.ρ * sgsʲ.q_sno
+    ws_vals = zeros(FT, size(arr(p.precomputed.ᶜwₛʲs.:(1))))
+    ws_vals[shaft_start:n, :, :, :, :] .= FT(1.5)
+    parent(p.precomputed.ᶜwₛʲs.:(1)) .= ws_vals
+    parent(p.precomputed.ᶜwₛ) .= ws_vals
+    CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
+    q_sno_state = CA.@name(c.sgsʲs.:(1).q_sno)
+    ∂q_sno = matrix[q_sno_state, q_sno_state]
+    for i in 1:(shaft_start - 1)
+        fill!(ᶜprobe, FT(0))
+        probe_vals = arr(ᶜprobe)
+        probe_vals[i + 1, :, :, :, :] .= FT(1)
+        parent(ᶜprobe) .= probe_vals
+        @. ᶜMv = ∂q_sno * ᶜprobe
+        @test arr(ᶜMv)[i, 1, 1, 1, 1] != FT(0)
+    end
+
+    # Grid-mean rain and snow shafts: verify update_sedimentation_jacobian!
+    # gives a nonzero super-diagonal in every empty cell below the shaft.
+    # The pointwise velocity collapses to zero there; the column-max must not.
+    for (name, (wʲ, w_gs)) in pairs(velocity_fields)
+        fill!(getproperty(sgsʲ, name), FT(0))
+        fill!(getproperty(Y.c, Symbol(:ρ, name)), FT(0))
+        fill!(getproperty(p.precomputed, wʲ).:(1), FT(0))
+        fill!(getproperty(p.precomputed, w_gs), FT(0))
+    end
+    wr_gm = zeros(FT, size(arr(p.precomputed.ᶜwᵣ)))
+    wr_gm[shaft_start:n, :, :, :, :] .= FT(4)
+    parent(p.precomputed.ᶜwᵣ) .= wr_gm
+    q_rai_gm = zeros(FT, size(arr(Y.c.ρq_rai)))
+    q_rai_gm[shaft_start:n, :, :, :, :] .= FT(1e-3)
+    parent(Y.c.ρq_rai) .= q_rai_gm
+    ws_gm = zeros(FT, size(arr(p.precomputed.ᶜwₛ)))
+    ws_gm[shaft_start:n, :, :, :, :] .= FT(1.5)
+    parent(p.precomputed.ᶜwₛ) .= ws_gm
+    q_sno_gm = zeros(FT, size(arr(Y.c.ρq_sno)))
+    q_sno_gm[shaft_start:n, :, :, :, :] .= FT(5e-4)
+    parent(Y.c.ρq_sno) .= q_sno_gm
+    CA.update_sedimentation_jacobian!(matrix, Y, p, FT(1))
+    ᶜprobe_rai = similar(Y.c.ρq_rai)
+    ᶜMv_rai = similar(Y.c.ρq_rai)
+    ∂ρq_rai = matrix[CA.@name(c.ρq_rai), CA.@name(c.ρq_rai)]
+    for i in 1:(shaft_start - 1)
+        fill!(ᶜprobe_rai, FT(0))
+        probe_vals = arr(ᶜprobe_rai)
+        probe_vals[i + 1, :, :, :, :] .= FT(1)
+        parent(ᶜprobe_rai) .= probe_vals
+        @. ᶜMv_rai = ∂ρq_rai * ᶜprobe_rai
+        @test arr(ᶜMv_rai)[i, 1, 1, 1, 1] != FT(0)
+    end
+    ᶜprobe_sno = similar(Y.c.ρq_sno)
+    ᶜMv_sno = similar(Y.c.ρq_sno)
+    ∂ρq_sno = matrix[CA.@name(c.ρq_sno), CA.@name(c.ρq_sno)]
+    for i in 1:(shaft_start - 1)
+        fill!(ᶜprobe_sno, FT(0))
+        probe_vals = arr(ᶜprobe_sno)
+        probe_vals[i + 1, :, :, :, :] .= FT(1)
+        parent(ᶜprobe_sno) .= probe_vals
+        @. ᶜMv_sno = ∂ρq_sno * ᶜprobe_sno
+        @test arr(ᶜMv_sno)[i, 1, 1, 1, 1] != FT(0)
+    end
+end
+
 @testset "Impenetrable boundary condition over topography" begin
     # Uniform 10 m/s wind over a Schar mountain with linear mesh warping, so
     # coordinate surfaces are sloped up to the model top and ᶠuₕ³ ≠ 0 there.
