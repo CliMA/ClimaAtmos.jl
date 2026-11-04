@@ -84,9 +84,10 @@ Build `p.tracers`, the cache of prescribed aerosol and trace-gas inputs.
 Each requested aerosol species contributes a `TimeVaryingInput` reading the
 matching variable from the aerosol concentration file; the concentrations
 themselves live in the single field `prescribed_aerosols_field`, a field of
-`NamedTuple`s keyed by species name and updated in the radiation callback. Ozone
-and CO₂ are added by `ozone_cache` and `co2_cache` when `"O3"` and `"CO2"` appear
-in `time_varying_trace_gases`.
+`NamedTuple`s keyed by species name, zero-initialized at construction and
+updated in the RRTMGP radiation callback. Ozone and CO₂ are added by
+`ozone_cache` and `co2_cache` when `"O3"` and `"CO2"` appear in
+`time_varying_trace_gases`.
 
 # Arguments
 
@@ -130,7 +131,11 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
             ) for name in prescribed_aerosol_names
         ]
 
-        # Field is updated in the radiation callback
+        # The field is evaluated only in the RRTMGP radiation callback
+        # (`update_aerosol_concentrations!`). It is zero-initialized, so it
+        # reads zero before the first callback and for the whole run with gray
+        # or no radiation, including in the 2M aerosol activation.
+        # TODO: evaluate the aerosol inputs outside the radiation callback.
         prescribed_aerosols_field = similar(
             Y.c,
             NamedTuple{
@@ -141,6 +146,7 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
                 },
             },
         )
+        fill!(parent(prescribed_aerosols_field), zero(eltype(Y.c.ρ)))
         prescribed_aerosol_timevaryinginputs =
             (; zip(prescribed_aerosol_names_as_symbols, timevaryinginputs)...)
         aerosol_cache =

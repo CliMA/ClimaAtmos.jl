@@ -439,14 +439,13 @@ end
     aerosol_ml_parameters(toml_dict)
 
 Return the coefficients of the ML-based aerosol-activation correction as a
-`NamedTuple`: the reference droplet number `N₀` [1/m³], the calibration
-coefficients `α_dust`, `α_seasalt`, `α_SO4`, and `α_q_liq` [-], and the
-reference concentrations `c₀_dust`, `c₀_seasalt`, `c₀_SO4` [kg/m³] and `q₀_liq`
-[kg/kg].
+`NamedTuple`: the calibration coefficients `α_dust`, `α_seasalt`, `α_SO4`, and
+`α_q_liq` [-], and the reference concentrations `c₀_dust`, `c₀_seasalt`,
+`c₀_SO4`, and `q₀_liq` [kg/kg]. The reference droplet number is the prescribed
+`N_cloud_liquid_droplets` of `cloud_parameters`.
 """
 function aerosol_ml_parameters(toml_dict)
     name_map = (;
-        :prescribed_cloud_droplet_number_concentration => :N₀,
         :dust_calibration_coefficient => :α_dust,
         :seasalt_calibration_coefficient => :α_seasalt,
         :ammonium_sulfate_calibration_coefficient => :α_SO4,
