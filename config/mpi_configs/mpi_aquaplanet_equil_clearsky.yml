@@ -9,4 +9,3 @@ diagnostics:
   - short_name: [pfull, wa, va, rv]
     period: 1days
     writer: h5
-z_stretch: false

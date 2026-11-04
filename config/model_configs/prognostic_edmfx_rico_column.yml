@@ -14,14 +14,15 @@ prognostic_tke: true
 microphysics_model: "1M"
 config: "column"
 z_max: 6e3
+z_elem: 50
+dz_bottom: 28.0
+dz_top: 570.0
 x_elem: 2
 y_elem: 2
-z_elem: 100
-z_stretch: false
 perturb_initstate: false
 dt: "120secs"
 t_end: "24hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
-netcdf_interpolation_num_points: [8, 8, 100]
+netcdf_interpolation_num_points: [8, 8, 50]
 ode_algo: "ARS222"

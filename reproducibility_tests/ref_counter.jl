@@ -1,4 +1,4 @@
-454
+455
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+455
+- `numerics_sphere_he6ze10.yml` stretches its 10 levels with `dz_top: 6500.0`,
+  `prognostic_edmfx_aquaplanet` takes the 31-level grid of
+  `numerics_sphere_he6ze31.yml`, and the single-column CI jobs on
+  `numerics_column_ze63.yml` use `numerics_column_ze79.yml`.
+- The prognostic EDMF column cases use stretched grids whose spacing follows
+  `numerics_column_ze79.yml` up to their own `z_max`.
+
 454
 - `implicit_microphysics: true` (default) now additionally routes 1M
   `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT

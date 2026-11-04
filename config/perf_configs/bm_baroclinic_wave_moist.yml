@@ -1,7 +1,5 @@
 apply_sem_quasimonotone_limiter: true
 h_elem: 12
-z_elem: 25
-z_stretch: false # z_elem lies outside the range the two-scale stretching admits
 dt: "1secs"
 t_end: "1mins"
 log_progress: false
