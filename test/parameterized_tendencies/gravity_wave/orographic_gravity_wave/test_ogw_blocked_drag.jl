@@ -97,16 +97,15 @@ const half = Utilities.half
     )
 
     # First face above z_pbl + pi * V / N, i.e. the first face where
-    # Sigma Delta z * N/V > pi. The inverted (z - z_pbl) accumulation
-    # would reach pi much lower.
+    # Sigma Delta z * N/V > pi.
     z_ref = Fields.maximum(f_z_ref)
     expected_depth = FT(pi) * Vtau / N
     dz = z_max / z_elem
     @test z_ref ≈ z_pbl + ceil(expected_depth / dz) * dz
     @test z_ref > z_pbl + expected_depth
-    # Old bug: phase += (z - z_pbl)*N/V at every face reaches pi far lower, so
-    # z_ref would sit well below z_pbl + pi V/N (~3141 m). The fixed depth here is
-    # ceil(pi V/N / dz)*dz = 3250 m, comfortably above this discriminating bound.
+    # Accumulating (z - z_pbl)*N/V at every face instead of the layer thickness
+    # reaches pi far below z_pbl + pi V/N (~3141 m); the expected depth here is
+    # ceil(pi V/N / dz)*dz = 3250 m, comfortably above this bound.
     @test z_ref > z_pbl + FT(3_000)
 
     # Column-integrated blocked stress: Sigma (du/dt) Delta p / g = tau_x tau_np / tau_l.

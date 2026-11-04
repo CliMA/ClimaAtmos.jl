@@ -1,10 +1,11 @@
 #=
 Unit tests for the Beljaars (2004) turbulent orographic form drag (TOFD).
 
-Calls `tofd_drag_coefficient!` on a single column with a flat surface (z_sfc = 0)
-so the coefficient profile has a closed-form target:
+Calls `tofd_drag_coefficient!` on a single column, passing the bottom face level
+as the surface height (as the OGW cache does), so the coefficient profile has a
+closed-form target in the height above ground z_agl = z - z_sfc:
 
-  Cd(z) = a_tofd * K * (0.5 * hmax)^2 * exp(-(z/1500)^1.5) * z^-1.2,
+  Cd(z) = a_tofd * K * (0.5 * hmax)^2 * exp(-(z_agl/1500)^1.5) * z_agl^-1.2,
   K = alpha*beta*Ccorr*Cmd*2.109*Cavar,
   Cavar = k1^(n1-n2) / (Cih * kflt^n1),
 
@@ -18,7 +19,9 @@ using Test
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-import ClimaCore: CommonSpaces, Fields, Grids, Spaces
+import ClimaCore: CommonSpaces, Fields, Grids, Spaces, Utilities
+
+const half = Utilities.half
 
 # Reference Beljaars (2004) drag coefficient, independent of the source under test.
 function beljaars_Cd(z, hmax, a_tofd)
@@ -32,21 +35,28 @@ function beljaars_Cd(z, hmax, a_tofd)
     return a_tofd * K * σ^2 * exp(-(zc / 1500)^1.5) * zc^(-1.2)
 end
 
+function tofd_column(FT, z_min)
+    center_space = CommonSpaces.ColumnSpace(
+        FT;
+        z_min,
+        z_max = FT(20_000),
+        z_elem = 80,
+        staggering = Grids.CellCenter(),
+    )
+    face_space = Spaces.face_space(center_space)
+    c_z = Fields.coordinate_field(center_space).z
+    # Surface height from the bottom face level, exactly as the OGW cache passes it.
+    z_sfc = Fields.level(Fields.coordinate_field(face_space).z, half)
+    return center_space, c_z, z_sfc
+end
+
 @testset "OGW TOFD: Beljaars coefficient profile" begin
     FT = Float64
     hmax = FT(500)
     a_tofd = FT(1)
 
-    center_space = CommonSpaces.ColumnSpace(
-        FT;
-        z_min = 0,
-        z_max = FT(20_000),
-        z_elem = 80,
-        staggering = Grids.CellCenter(),
-    )
-    c_z = Fields.coordinate_field(center_space).z
+    center_space, c_z, z_sfc = tofd_column(FT, 0)  # flat surface at z = 0
     surf_c = Spaces.level(center_space, 1)
-    z_sfc = Fields.zeros(surf_c)          # flat surface at z = 0
     hmax_f = Fields.ones(surf_c) .* hmax
 
     Cd = Fields.zeros(center_space)
@@ -68,6 +78,18 @@ end
     Cd0 = Fields.ones(center_space)
     CA.tofd_drag_coefficient!(Cd0, c_z, z_sfc, hmax_f, FT(0))
     @test iszero(maximum(abs.(parent(Cd0))))
+
+    # On elevated terrain the profile follows the height above ground, not altitude.
+    z_ground = FT(1_000)
+    center_hi, c_z_hi, z_sfc_hi = tofd_column(FT, z_ground)
+    hmax_hi = Fields.ones(Spaces.level(center_hi, 1)) .* hmax
+    Cd_hi = Fields.zeros(center_hi)
+    CA.tofd_drag_coefficient!(Cd_hi, c_z_hi, z_sfc_hi, hmax_hi, a_tofd)
+    cd_hi = vec(parent(Cd_hi))
+    zc_hi = vec(parent(c_z_hi))
+    for i in eachindex(cd_hi)
+        @test cd_hi[i] ≈ beljaars_Cd(zc_hi[i] - z_ground, hmax, a_tofd) rtol = 1e-10
+    end
 end
 
 @testset "OGW TOFD: backward-Euler rate" begin

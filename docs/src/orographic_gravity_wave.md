@@ -389,8 +389,9 @@ To avoid instability from large tendencies under the explicit application, we li
 forcing *magnitude* to $\epsilon_V = 3\times10^{-3}\sqrt{2}\,\mathrm{m/s^2}$ while preserving
 its direction, by scaling the horizontal vector by a single factor rather than clipping each
 component independently (which would rotate the drag away from the flow). The cap is the
-diagonal of the former $\pm 3\times10^{-3}$ per-component box, so the limiter is isotropic yet
-no tighter than that box in any direction:
+diagonal of the $\pm 3\times10^{-3}\,\mathrm{m/s^2}$ per-component box used by GFDL
+`topo_drag` (`max_udt`), so the limiter is isotropic and no tighter than that box in any
+direction:
 
 ```math
 {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} \leftarrow
@@ -456,13 +457,13 @@ For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosi
 
 ## Where this is implemented
 
-| Concept                                                                | Source                                                                                                                                                                                                                       |
-|:---------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Concept                                                                       | Source                                                                                                                                                                                                                       |
+|:----------------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Base flux, saturation profile, propagating, blocked-flow, and TOFD tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
-| Orographic statistics and tensor helpers                               | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
-| Offline topography preprocessing                                       | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
-| Callback scheduling at `dt_ogw`                                        | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
-| Model types                                                            | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref)                                                                                                                                   |
+| Orographic statistics and tensor helpers                                      | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
+| Offline topography preprocessing                                              | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
+| Callback scheduling at `dt_ogw`                                               | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
+| Model types                                                                   | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref)                                                                                                                                   |
 
 The scheme is selected with the `orographic_gravity_wave` key
 (`nothing`, `gfdl_restart`, or `raw_topo`) and its update interval

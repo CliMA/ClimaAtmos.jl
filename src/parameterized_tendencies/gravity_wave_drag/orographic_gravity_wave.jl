@@ -161,13 +161,10 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
     # built once here and combined with the current wind every step.
     ᶜtofd_Cd = zero(Y.c.ρ)
     if !iszero(a_tofd)
-        ᶜz_sfc = similar(Fields.level(Y.c.ρ, 1))
-        Fields.field_values(ᶜz_sfc) .=
-            Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
         tofd_drag_coefficient!(
             ᶜtofd_Cd,
             Fields.coordinate_field(Y.c).z,
-            ᶜz_sfc,
+            Fields.level(Fields.coordinate_field(Y.f).z, half),
             topo_info.hmax,
             a_tofd,
         )
@@ -427,8 +424,8 @@ Steps, in order:
     reference level.
  5. The forcing vector magnitude is limited to 3e-3·√2 m/s² (scaling `(u, v)` together so
     the drag direction is preserved) so a large tendency cannot destabilize the integrator.
-    The cap is the diagonal of the old ±3e-3 per-component box, so it is isotropic yet no
-    tighter than that box in any direction.
+    The cap is the diagonal of the ±3e-3 m/s² per-component box of GFDL `topo_drag`
+    (`max_udt`), so it is isotropic and no tighter than that box in any direction.
 
 Clobbers `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `temp_field_level`, and
 `ᶠtemp_field_level`.
@@ -573,15 +570,25 @@ function orographic_gravity_wave_forcing!(
         grav,
     )
 
-    # Constrain the forcing magnitude as a numerical safety rail for the explicit
-    # application, but preserve its direction: scale the (u, v) vector by
-    # min(1, F_max/|F|) instead of clipping each component independently (which would
-    # rotate the drag away from the flow whenever only one component saturates). The
-    # scale is materialized first so scaling ᶜuforcing does not change the |F| seen by
-    # ᶜvforcing.
-    # The cap is the diagonal of the old ±3e-3 per-component box (|F| = 3e-3·√2), so
-    # the limiter is isotropic yet no tighter than the previous (already stable) clamp
-    # in any direction: the box inscribes this circle, reaching 3e-3·√2 at its corners.
+    # Check before the limiter: it maps an infinite component to NaN (F_max/Inf = 0,
+    # then 0·Inf), which would hide the original problem.
+    @debug begin
+        if !all(isfinite, ᶜuforcing) || !all(isfinite, ᶜvforcing)
+            @error "Non-finite OGWD forcing before the magnitude limiter!"
+            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), has_inf=$(any(isinf, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
+            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), has_inf=$(any(isinf, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
+            error("OGWD produced non-finite forcing - aborting")
+        end
+    end
+
+    # Limit the forcing magnitude as a numerical safety rail for the explicit
+    # application, preserving its direction: the (u, v) vector is scaled by
+    # min(1, F_max/|F|), so the drag stays antiparallel to the flow where the limiter
+    # binds (clipping each component separately would rotate it). The scale is
+    # materialized first so scaling ᶜuforcing does not change the |F| seen by
+    # ᶜvforcing. F_max = 3e-3·√2 m/s² is the diagonal of the ±3e-3 m/s² per-component
+    # box of GFDL topo_drag, so the limit is isotropic and no tighter than that box in
+    # any direction.
     F_max = FT(3e-3) * sqrt(FT(2))
     ᶜdrag_scale = p.scratch.ᶜtemp_scalar
     @. ᶜdrag_scale = ifelse(
@@ -591,16 +598,6 @@ function orographic_gravity_wave_forcing!(
     )
     @. ᶜuforcing *= ᶜdrag_scale
     @. ᶜvforcing *= ᶜdrag_scale
-
-    @debug begin
-        # DEBUG: Check for NaNs in OGWD forcing
-        if any(isnan, ᶜuforcing) || any(isnan, ᶜvforcing)
-            @error "NaN detected in OGWD forcing!"
-            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
-            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
-            error("OGWD produced NaN forcing - aborting")
-        end
-    end
 end
 
 """
@@ -618,16 +615,15 @@ The drag is confined to the layer between the PBL top and a reference level `z_r
 distributed within it by pressure weighting, which concentrates it near the surface. `z_ref`
 is the first face above `z_pbl` at which the accumulated vertical phase of a stationary
 hydrostatic wave, `Σ Δz·N/V_τ` over the layers above `z_pbl`, exceeds `π`, i.e. half a
-vertical wavelength; `N`
-is clamped to `[0.7e-2, 1.7e-2]` 1/s and `V_τ` floored at 1 m/s so the layer depth stays
-physical. If the phase never reaches `π`, `z_ref` ends up at the model top.
+vertical wavelength; `N` is clamped to `[0.7e-2, 1.7e-2]` 1/s and `V_τ` floored at 1 m/s so
+the layer depth stays physical. If the phase never reaches `π`, `z_ref` ends up at the model top.
 
 The mask keeps cells overlapping `[z_pbl, z_ref)` (upper face above `z_pbl` and lower face
 below `z_ref`, so at least one cell survives whenever `z_ref > z_pbl`) and drops cells of
 zero weight, which contribute nothing to the pressure-weighted sum. The tendency is then
 `g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to zero in columns where
-the mask is empty. `wtsum = Σ Δp·weight` (not `Σ Δp/weight`), matching GFDL `topo_drag` so
-that the column-integrated blocked stress equals `τ_np/τ_l · τ`.
+the mask is empty. `wtsum = Σ Δp·weight`, as in GFDL `topo_drag`, so that the
+column-integrated blocked stress equals `τ_np/τ_l · τ`.
 
 # Arguments
 
@@ -704,8 +700,8 @@ function calc_nonpropagating_forcing!(
             return (z_ref_acc, ᶠz_pbl_acc, phase_acc, true)
         end
         if (z_face > ᶠz_pbl_itr)
-            # Accumulate the WKB phase over the LOCAL layer thickness, i.e.
-            # Σ Δz·N/V_τ (matches GFDL topo_drag). The lower edge of the first
+            # Accumulate the WKB phase over the local layer thickness,
+            # Σ Δz·N/V_τ, as in GFDL topo_drag. The lower edge of the first
             # increment is z_pbl; above that it is the previous face height,
             # carried in z_ref_acc (0 while still below z_pbl, so the max picks
             # z_pbl for the first face above the PBL top).
@@ -760,8 +756,8 @@ function calc_nonpropagating_forcing!(
     ᶜweights .= ᶜweights .* ᶜmask
 
     # Column stress sum wtsum = Σ Δp·weight (GFDL topo_drag: `wtsum += dp*weight`).
-    # The forcing below divides by wtsum, so this normalization conserves the
-    # column-integrated blocked stress; multiplying (not dividing) is essential.
+    # The forcing below divides by wtsum, so the column-integrated blocked stress is
+    # τ_np/τ_l · τ.
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff * ᶜweights, FT(0)))
 
     Operators.column_reduce!(ᶜwtsum, input; init = FT(0)) do acc, wtsum_field
@@ -818,8 +814,8 @@ IFS-nominal amplitude.
 # Arguments
 
   - `ᶜz`: Cell-center height (altitude) [m].
-  - `z_sfc`: Terrain surface height (bottom face), on the center-level space so it
-    broadcasts against `ᶜz` [m]; `z − z_sfc` is height above ground.
+  - `z_sfc`: Terrain surface height, e.g. the bottom face level `Fields.level(ᶠz, half)`
+    [m]; it broadcasts up the column, so `z − z_sfc` is height above ground.
   - `hmax`: Effective maximum subgrid obstacle height on the surface space [m].
   - `a_tofd`: Master TOFD amplitude coefficient [-].
 """
