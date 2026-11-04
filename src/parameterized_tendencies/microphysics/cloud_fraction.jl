@@ -698,7 +698,7 @@ function set_covariance_cache!(
     )
     ᶜinv_pack = @. lazy(tuple(ᶜinv_q, ᶜinv_θq, ᶜinv_θ))
 
-    _set_covariance_cache_loop!(
+    _set_covariance_cache_loop_dispatch!(
         Y, thermo_params,
         ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
         ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
@@ -939,6 +939,270 @@ function _set_covariance_cache_loop!(
                     has_tke && is_edmf ? ᶜl_mix_disp : one_FT,
                     w_eq,
                     _4(ᶜenv_pack),
+                    ᶜmu_S,
+                    ᶜsigma_S,
+                    q_min,
+                    has_curvature ? _disp_lin(ᶜdisp_S) : zero_FT,
+                    has_curvature ? _disp_curv(ᶜdisp_S) : zero_FT,
+                    c_trunc,
+                )
+            end
+        end
+        return nothing
+    end
+    return nothing
+end
+
+function _set_covariance_cache_loop_dispatch!(args...)
+    mode = LAB_MODE[]
+    mode === :skip && return nothing
+    mode === :base && return _set_covariance_cache_loop!(args...)
+    return _set_covariance_cache_loop_lab!(Val(mode), args...)
+end
+
+function _set_covariance_cache_loop_lab!(
+    ::Val{mode},
+    Y, thermo_params,
+    ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜenv_pack, ᶜinv_pack,
+    ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+    sfc_conditions, ᶜstrain_rate_norm,
+    c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
+    κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
+    A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
+    turbconv_params, sf_params, scale_blending_method,
+    zero_FT, one_FT, ϵ_FT, inf_FT,
+    ::Val{is_edmf},
+    ::Val{has_tke},
+    ::Val{diag_corr},
+    ::Val{has_curvature},
+    ::Val{has_α},
+    ::Val{is_0m},
+) where {
+    is_edmf,
+    has_tke,
+    diag_corr,
+    has_curvature,
+    has_α,
+    is_0m,
+    mode,
+}
+    val_master = Val{:master}()
+    # (outputs in one container: a loop over more than 31 arguments would not infer)
+    DataLayouts.foreach_column(
+        (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+        map(
+            x -> mode === :inv ? lab_invariant(x) : x,
+            (
+                Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+                ᶠ∂θli∂z, ᶠ∂qt∂z,
+                ᶜenv_pack, ᶜinv_pack,
+                ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+                sfc_conditions, ᶜstrain_rate_norm,
+            ),
+        )...,
+    ) do (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+    Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜenv_pack, ᶜinv_pack,
+    ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+    sfc_conditions, ᶜstrain_rate_norm
+        reg = mode === :reg || mode === :reg_struct
+        ᶜenv_pack = mode === :reg_struct ? Base.materialize(ᶜenv_pack) : ᶜenv_pack
+        ᶜinv_pack = mode === :reg_struct ? Base.materialize(ᶜinv_pack) : ᶜinv_pack
+        ᶜbg_coeffs = mode === :reg_struct ? as_register(ᶜbg_coeffs) : ᶜbg_coeffs
+        ᶜenv_1 = mode === :reg ? (@. _1(ᶜenv_pack)) : (@. lazy(_1(ᶜenv_pack)))
+        ᶜenv_2 = mode === :reg ? (@. _2(ᶜenv_pack)) : (@. lazy(_2(ᶜenv_pack)))
+        ᶜenv_3 = mode === :reg ? (@. _3(ᶜenv_pack)) : (@. lazy(_3(ᶜenv_pack)))
+        ᶜenv_4 = mode === :reg ? (@. _4(ᶜenv_pack)) : (@. lazy(_4(ᶜenv_pack)))
+        ᶜenv_5 = mode === :reg ? (@. _5(ᶜenv_pack)) : (@. lazy(_5(ᶜenv_pack)))
+        ᶜenv_6 = mode === :reg ? (@. _6(ᶜenv_pack)) : (@. lazy(_6(ᶜenv_pack)))
+        ᶜenv_7 = mode === :reg ? (@. _7(ᶜenv_pack)) : (@. lazy(_7(ᶜenv_pack)))
+        ᶜz = ᶜlg.coordinates.z
+        ᶜtke =
+            has_tke ?
+            (reg ? (@. specific(Yc.ρtke, Yc.ρ)) : (@. lazy(specific(Yc.ρtke, Yc.ρ)))) :
+            zero_FT
+        sfc_tke =
+            has_tke ?
+            (lazy.(specific.(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
+            zero_FT
+        if is_edmf
+            @. ᶜbuoygrad = blended_N²(
+                ᶜbg_coeffs,
+                ᶜcloud_fraction,
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+            )
+        end
+        if is_edmf
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm),
+            )
+            ᶜml = @. lazy(
+                mixing_length_lopez_gomez_2020(
+                    turbconv_params,
+                    sf_params,
+                    vkc,
+                    sfc_conditions.ustar,
+                    ᶜz,
+                    z_sfc,
+                    ᶜΔ_f,
+                    sfc_tke,
+                    ᶜbuoygrad,
+                    ᶜtke,
+                    sfc_conditions.obukhov_length,
+                    ᶜstrain_rate_norm,
+                    ᶜprandtl_nvec,
+                    scale_blending_method,
+                ),
+            )
+            @. ᶜl_mix = get_mixing_length_field(ᶜml, val_master)
+        end
+
+        nc = Spaces.nlevels(axes(ᶜbuoygrad))
+        ᶜθ_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+        )
+        ᶜθ_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+        )
+        ᶜq_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+        )
+        ᶜq_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+        )
+        ᶜN²_disp = @. max(
+            dry_N²(ᶜbg_coeffs, ᶜθ_below(ᶠ∂θli∂z), ᶜq_below(ᶠ∂qt∂z)),
+            dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
+        )
+
+        if has_tke
+            ᶜtke_pos = @. lazy(max(ᶜtke, zero_FT))
+            ᶜl_mix_disp = @. buoyancy_bounded_mixing_length(
+                ᶜl_mix,
+                κ_b_per_tke * ᶜtke_pos,
+                ᶜN²_disp,
+            )
+            ᶜτ_turb = @. lazy(
+                turbulent_lagrangian_time(ᶜl_mix_disp, κ_b_per_tke * ᶜtke_pos),
+            )
+            ᶜl_d = @. displacement_length(
+                ᶜl_mix_disp,
+                floor_displacement_length(
+                    c_b_κ_min, ᶜN²_disp, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
+                ),
+                ᶜz - z_sfc,
+            )
+        else
+            ᶜl_mix_disp = one_FT
+            ᶜl_d = @. displacement_length(
+                ᶜl_mix,
+                floor_displacement_length(
+                    c_b_κ_min, ᶜN²_disp, inf_FT, τ_0, ᶜz - z_sfc, ᶜΔz,
+                ),
+                ᶜz - z_sfc,
+            )
+        end
+
+        ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
+        ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
+        ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
+        ᶜ∂q∂z =
+            reg ? (@. projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg)) :
+            (@. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg)))
+        ᶜ∂θ∂z =
+            reg ? (@. projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg)) :
+            (@. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg)))
+
+        # The Jacobian at the mean state of the domain that carries the SGS
+        # closure, with its total water and cloud condensate.
+        ᶜρ_mean = @. lazy(ᶜenv_1)
+        ᶜT_mean = @. lazy(ᶜenv_2)
+        ᶜq_mean = @. lazy(ᶜenv_7)
+        ᶜθ_li_mean = @. lazy(
+            TD.liquid_ice_pottemp(
+                thermo_params, ᶜT_mean, ᶜρ_mean, ᶜq_mean, ᶜenv_5, ᶜenv_6,
+            ),
+        )
+        ᶜ∂T_∂θ = @. ∂T_∂θ_li(
+            thermo_params, ᶜT_mean, ᶜθ_li_mean, ᶜenv_5, ᶜenv_6,
+            ᶜq_mean, ᶜρ_mean,
+        )
+
+        @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², _1(ᶜinv_pack), ᶜ∂q∂z, ᶜ∂q∂z)
+        @. ᶜT′T′ =
+            ᶜ∂T_∂θ^2 *
+            displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², _3(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂θ∂z)
+        if diag_corr
+            @. ᶜT′q′ =
+                ᶜ∂T_∂θ *
+                displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, _2(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂q∂z)
+            @. ᶜT′q′ *= sqrt(min(
+                one_FT,
+                (r_max * ᶜq_mean)^2 / max(ᶜq′q′, ϵ_FT^2),
+            ))
+        end
+        if has_curvature
+            ᶜχ = @. lazy(
+                r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean) * ᶜ∂T_∂θ,
+            )
+            @. ᶜdisp_S = displacement_curvature_coefficients(
+                sqrt(2 * c_σ) * ᶜl_d,
+                ᶜχ,
+                ᶜ∂q∂z,
+                ᶜ∂θ∂z,
+                (ᶜq_above(ᶠ∂qt∂z) - ᶜq_below(ᶠ∂qt∂z)) / ᶜΔz,
+                (ᶜθ_above(ᶠ∂θli∂z) - ᶜθ_below(ᶠ∂θli∂z)) / ᶜΔz,
+            )
+        end
+        @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_mean)^2)
+
+        if diag_corr
+            @. ᶜcorr_Tq = sgs_correlation_Tq(
+                ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT_mean, ᶜq_mean, corr_fallback,
+            )
+        else
+            @. ᶜcorr_Tq = corr_fallback
+        end
+
+        if has_α
+            if is_0m
+                @. ᶜα = one_FT / A
+            else
+                ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thermo_params, ᶜenv_2, ᶜenv_1))
+                ᶜsigma_S = @. lazy(
+                    sqrt(
+                        max(
+                            ᶜq′q′ - 2 * ᶜγ * ᶜcorr_Tq * sqrt(max(ᶜT′T′ * ᶜq′q′, zero_FT)) +
+                            ᶜγ^2 * ᶜT′T′,
+                            zero_FT,
+                        ),
+                    ),
+                )
+                ᶜmu_S = @. lazy(
+                    ᶜenv_3 -
+                    TD.q_vap_saturation(thermo_params, ᶜenv_2, ᶜenv_1),
+                )
+                @. ᶜα = sgs_variance_fidelity(
+                    A,
+                    sgs_microphysics_relaxation_time(
+                        τ_mp_params,
+                        thermo_params,
+                        ᶜenv_2,
+                        ᶜenv_1,
+                        ᶜenv_3,
+                        ᶜenv_5,
+                        ᶜenv_6,
+                    ),
+                    c_d,
+                    max(ᶜtke, zero_FT),
+                    has_tke && is_edmf ? ᶜl_mix_disp : one_FT,
+                    w_eq,
+                    ᶜenv_4,
                     ᶜmu_S,
                     ᶜsigma_S,
                     q_min,

@@ -101,6 +101,7 @@ function set_precipitation_velocities!(Y, p, _, _)
     @. ᶜwₕhₜ = WVec(0)
     return nothing
 end
+
 function set_precipitation_velocities!(
     Y,
     p,
@@ -152,7 +153,23 @@ function set_precipitation_velocities!(
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
     return nothing
 end
+
 function set_precipitation_velocities!(
+    Y,
+    p,
+    microphysics_model::NonEquilibriumMicrophysics1M,
+    turbconv_model::PrognosticEDMFX,
+)
+    mode = LAB_MODE[]
+    mode === :skip && return nothing
+    mode === :base &&
+        return set_precipitation_velocities_base!(Y, p, microphysics_model, turbconv_model)
+    return set_precipitation_velocities_lab!(
+        Y, p, microphysics_model, turbconv_model, Val(mode),
+    )
+end
+
+function set_precipitation_velocities_base!(
     Y,
     p,
     microphysics_model::NonEquilibriumMicrophysics1M,
@@ -266,6 +283,148 @@ function set_precipitation_velocities!(
     end
     return nothing
 end
+
+function set_precipitation_velocities_lab!(
+    Y,
+    p,
+    microphysics_model::NonEquilibriumMicrophysics1M,
+    turbconv_model::PrognosticEDMFX,
+    ::Val{mode},
+) where {mode}
+    (; ᶜΦ) = p.core
+    (; ᶜp) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs, ᶜuʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+    # `velocity_mode` reads the terminal velocity modes from the water model, so
+    # the loop does not capture the whole `p.atmos`, which is not a bits type.
+    water = p.atmos.water
+    params = p.params
+
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    thp = CAP.thermodynamics_params(params)
+    draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
+
+    terminal_velocity_function(name, ρ, q) = terminal_velocity(
+        microphysics_model,
+        velocity_mode(water, name),
+        name,
+        params,
+        cmc,
+        cmp,
+        ρ,
+        q,
+    )
+
+    # Fuse the column loop across all 4 species and the final WVec outputs so
+    # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
+    # TODO: use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging
+    # velocities over subdomains once negative subdomain mass issues are
+    # resolved
+    species_names = (
+        (@name(q_lcl), @name(ρq_lcl)),
+        (@name(q_icl), @name(ρq_icl)),
+        (@name(q_rai), @name(ρq_rai)),
+        (@name(q_sno), @name(ρq_sno)),
+    )
+    DataLayouts.foreach_column(
+        ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
+        map(
+            x -> mode === :inv ? lab_invariant(x) : x,
+            (Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰),
+        )...,
+    ) do ᶜw_pairs, ᶜwₕhₜ,
+    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰
+        reg = mode === :reg || mode === :reg_struct
+        ᶜΦ = reg ? as_register(ᶜΦ) : ᶜΦ
+        ᶜT⁰ = reg ? as_register(ᶜT⁰) : ᶜT⁰
+        ᶜρʲ_values = unrolled_map(
+            @inline(j -> reg ? as_register(ᶜρʲs.:($j)) : ᶜρʲs.:($j)),
+            draft_indices,
+        )
+        ᶜTʲ_values = unrolled_map(
+            @inline(j -> reg ? as_register(ᶜTʲs.:($j)) : ᶜTʲs.:($j)),
+            draft_indices,
+        )
+        ᶜρ = reg ? as_register(Yc.ρ) : Yc.ρ
+        ᶜsgsʲs = mode === :reg_struct ? as_register(Yc.sgsʲs) : Yc.sgsʲs
+        ᶜρaʲ_values = unrolled_map(
+            @inline(j -> mode === :reg ? as_register(ᶜsgsʲs.:($j).ρa) : ᶜsgsʲs.:($j).ρa),
+            draft_indices,
+        )
+        ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜρa⁰ = @. ρa⁰(ᶜρ, ᶜsgsʲs, turbconv_model)
+        ᶜρa⁰_pos = @. max(zero(ᶜρ), ᶜρa⁰)
+        ᶜρwₕhₜ = @. zero(ᶜρ)
+        # Velocities in UVW components, converted once for all species
+        ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
+        ᶜuvwʲs = unrolled_map(
+            @inline(j -> (@. Geometry.UVWVector(ᶜuʲs.:($$j)))),
+            draft_indices,
+        )
+
+        MatrixFields.unrolled_foreach(
+            map(tuple, species_names, ᶜw_pairs),
+        ) do ((χ_name, ρχ_name), (ᶜw, ᶜwʲs))
+            @inline
+            e_int_func = internal_energy_func(χ_name)
+            ᶜρχ_gs =
+                reg ? as_register(MatrixFields.get_field(Yc, ρχ_name)) :
+                MatrixFields.get_field(Yc, ρχ_name)
+            ᶜχ⁰ = @. specific_env_value(
+                χ_name, ᶜρχ_gs, ᶜρ, ᶜsgsʲs, ᶜρa⁰, turbconv_model,
+            )
+
+            ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(ᶜρ), ᶜχ⁰)
+            ᶜρχ = @. ᶜρa⁰χ⁰
+            @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
+            ᶜimplied_env_mass_flux = @. zero(ᶜρ)
+
+            unrolled_foreach(draft_indices) do j
+                @inline
+                ᶜsgsʲ = ᶜsgsʲs.:($j)
+                ᶜχʲ =
+                    reg ? as_register(MatrixFields.get_field(ᶜsgsʲ, χ_name)) :
+                    MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜρaʲ = ᶜρaʲ_values[j]
+                ᶜwʲ = ᶜwʲs.:($j)
+                ᶜρʲ = ᶜρʲ_values[j]
+                ᶜTʲ = ᶜTʲ_values[j]
+                ᶜuʲ = ᶜuvwʲs[j]
+
+                ᶜρaʲχʲ = @. max(zero(ᶜρ), ᶜρaʲ) * max(zero(ᶜρ), ᶜχʲ)
+                @. ᶜρχ += ᶜρaʲχʲ
+                @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲ, max(zero(ᶜρ), ᶜχʲ))
+                @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
+                @. ᶜimplied_env_mass_flux -= ᶜρaʲ * ᶜχʲ * ᶜwʲ
+                @. ᶜρwₕhₜ +=
+                    ᶜρaʲ * ᶜwʲ * ᶜχʲ *
+                    (e_int_func(thp, ᶜTʲ) + ᶜΦ + $(Kin(ᶜwʲ, ᶜuʲ)))
+                return nothing
+            end
+
+            @. ᶜw = gs_terminal_velocity(
+                microphysics_model,
+                velocity_mode(water, χ_name),
+                χ_name,
+                params,
+                ᶜw,
+                ᶜρχ,
+            )
+            @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
+            @. ᶜρwₕhₜ +=
+                ᶜimplied_env_mass_flux *
+                (e_int_func(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜw, ᶜuvw⁰)))
+            return nothing
+        end
+
+        @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / ᶜρ
+        return nothing
+    end
+    return nothing
+end
+
 function set_precipitation_velocities!(
     Y,
     p,
@@ -347,6 +506,7 @@ function set_precipitation_velocities!(
         ) / Y.c.ρ
     return nothing
 end
+
 function set_precipitation_velocities!(
     Y,
     p,
@@ -606,6 +766,7 @@ function set_precipitation_velocities!(
 
     return nothing
 end
+
 function set_precipitation_velocities!(
     Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )

@@ -1,7 +1,17 @@
-# A pipeline for downstream performance checks
+# Temporary comparison pipeline (not for merging), on one A100 per job:
+# - register vs invariant_data: perf/register_vs_invariant.jl times the first call and the
+#   runtime of three fused loops of this branch in the modes of CA.LAB_MODE, one process
+#   per mode;
+# - flagship AMIP components: perf/profile_amip_steps.jl traces 20 coupling steps of the
+#   flagship AMIP benchmark for main (MAIN_COMMIT) and for CliMA/ClimaAtmos.jl#4953
+#   (PR_COMMIT, with the ClimaCore of CliMA/ClimaCore.jl#2717 at CLIMACORE_COMMIT), with
+#   the same coupler and package versions and the cache, tendency, and Jacobian functions
+#   of both trees marked with NVTX ranges (perf/annotate_components.py), sums Nsight
+#   Compute counters of one coupling step, and attributes both to the components
+#   (perf/attribute_trace.py).
 agents:
   queue: clima
-  slurm_time: 14:00:00
+  slurm_time: 8:00:00
   modules: climacommon/2025_05_15
 
 env:
@@ -9,73 +19,158 @@ env:
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
-  COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
+  CLIMACOMMS_DEVICE: "CUDA"
+  CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+  PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "df7923109fd5d45fdf9de603bbb89a90d959bc66"
-  CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
-  BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
-  # Packages whose [compat] bounds are dropped from the coupler projects at
-  # init, in the same convention (and with the same default list) as
-  # ClimaCoupler's nightly pipeline. Set it from the web API to widen or
-  # narrow the set for a single build.
-  UPSTREAM_PACKAGES: "${UPSTREAM_PACKAGES:-ClimaAtmos ClimaCore ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP}"
+  MAIN_COMMIT: "d9e7b974d8fe91383885afd890cb4170503255bf"
+  PR_COMMIT: "aec642818e8b041c92c4407b1437987b725de20f"
+  CLIMACORE_COMMIT: "aef0f5a02264c3bba853a37548fdd4581c4a5105"
+  AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
+  # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
+  # the end-to-end performance pipeline
+  UPSTREAM_PACKAGES: "ClimaAtmos ClimaCore ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP"
 
-timeout_in_minutes: 840
+timeout_in_minutes: 480
 
 steps:
-  - label: "init :GPU:"
-    key: "init_gpu_env"
+  - label: "init: ClimaCore of CliMA/ClimaCore.jl#2717 and source trees"
+    key: "init_trees"
     command:
-      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
+      - mkdir -p $$PROFILE_DIR
+      - git clone https://github.com/CliMA/ClimaCore.jl.git $$PROFILE_DIR/ClimaCore_pr
+      - bash -c "cd $$PROFILE_DIR/ClimaCore_pr && git fetch origin $$CLIMACORE_COMMIT && git checkout $$CLIMACORE_COMMIT"
+      - git fetch origin $$MAIN_COMMIT $$PR_COMMIT
+      - mkdir -p $$PROFILE_DIR/lab $$PROFILE_DIR/ClimaAtmos_main $$PROFILE_DIR/ClimaAtmos_pr
+      - git archive HEAD | tar -x -C $$PROFILE_DIR/lab
+      - git archive $$MAIN_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_main
+      - git archive $$PR_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_pr
+      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_main
+      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_pr
+      - cp perf/profile_amip_steps.jl perf/attribute_trace.py perf/annotate_components.py $$PROFILE_DIR/
+    agents:
+      slurm_cpus_per_task: 1
+
+  - label: "init: register vs invariant_data environment"
+    key: "init_lab"
+    depends_on: "init_trees"
+    command:
+      # The lab tree's manifest with the ClimaCore checkout of CLIMACORE_COMMIT
+      - |
+        julia -e '
+          import TOML
+          dir = ENV["PROFILE_DIR"]
+          file = joinpath(dir, "lab", ".buildkite", "Manifest-v1.11.toml")
+          manifest = TOML.parsefile(file)
+          entry = manifest["deps"]["ClimaCore"][1]
+          manifest["deps"]["ClimaCore"][1] = merge(
+              filter(p -> !(first(p) in ("repo-rev", "repo-url", "git-tree-sha1")), entry),
+              Dict("path" => joinpath(dir, "ClimaCore_pr")),
+          )
+          open(io -> TOML.print(io, manifest; sorted = true), file, "w")'
+      - julia --project=$$PROFILE_DIR/lab/.buildkite -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(); Pkg.status(["ClimaCore", "ClimaAtmos", "CUDA"])'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environments of main and the PR"
+    key: "init_amip"
+    depends_on: "init_trees"
+    command:
+      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $$PROFILE_DIR/coupler_main
+      - bash -c "cd $$PROFILE_DIR/coupler_main && git checkout $$COUPLER_COMMIT"
       # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
-      - "echo 'strict_params: false' >> $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml"
-      - "echo $$JULIA_DEPOT_PATH"
-      # Remove compat entries for packages in UPSTREAM_PACKAGES
+      - "echo 'strict_params: false' >> $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG"
       - |
         julia -e '
           using TOML
-          upstream = [first(split(entry, r"[@#]")) for entry in split(ENV["UPSTREAM_PACKAGES"])]
-          coupler = ENV["COUPLER_PATH"]
+          upstream = split(ENV["UPSTREAM_PACKAGES"])
+          coupler = joinpath(ENV["PROFILE_DIR"], "coupler_main")
           for project in (coupler, joinpath(coupler, "experiments", "AMIP"))
               file = joinpath(project, "Project.toml")
               toml = TOML.parsefile(file)
               haskey(toml, "compat") || continue
-              @info "Coupler perf: removing [compat] entries" project names = intersect(keys(toml["compat"]), upstream)
               toml["compat"] = filter(entry -> !(first(entry) in upstream), toml["compat"])
               open(io -> TOML.print(io, toml; sorted = true), file, "w")
           end'
-      # Update package registry, since dev installs do not do that with a manifest
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
-      - echo "--- Instantiate AMIP env"
-      # Instantiate and dev install ClimaCore
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
-      # The ClimaCore branch of CliMA/ClimaCore.jl#2717, which this branch is tested with
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCore.jl.git", rev="dy/read_only_geometry")'''
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
+      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.Registry.update()'
+      - echo "--- main environment"
+      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.instantiate()'
+      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_main")); Pkg.add("MPI")'
+      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+      # The PR environment differs from the main environment only in ClimaAtmos and ClimaCore
+      - echo "--- PR environment"
+      - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop([PackageSpec(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr")), PackageSpec(path = joinpath(ENV["PROFILE_DIR"], "ClimaCore_pr"))])'
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+      - echo "--- Manifest differences between the PR and main environments"
+      - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest-v1.11.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest-v1.11.toml || true
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
+      slurm_mem: 64GB
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
-      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
 
-  - label: "Flagship AMIP GPU with prognostic EDMF + 1M + integrated land (16 helems)"
-    key: "gpu_amip_progedmf_1M_land_he16"
-    depends_on: "init_gpu_env"
+  - label: "register vs invariant_data (A100): first calls, runtimes, kernels, and outputs of each mode"
+    key: "lab"
+    depends_on: "init_lab"
     command:
-      - "srun julia --threads=3 --color=yes --project=$COUPLER_PATH/experiments/AMIP/ $COUPLER_PATH/experiments/AMIP/run_simulation.jl --config_file $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml --job_id gpu_amip_progedmf_1M_land_he16"
-      - echo "--- Checking SYPD from artifacts"
-      - bash .buildkite/coupler_perf/check-sypd.sh
-    artifact_paths: "output/gpu_amip_progedmf_1M_land_he16/artifacts/*"
-    env:
-      CLIMACOMMS_DEVICE: "CUDA"
-      # Fallback used when no passing main build metadata is available yet.
-      BASELINE_SYPD: "0.279"
-      MIN_PERCENT_CHANGE: "-1"
+      - nvidia-smi -L
+      - for mode in base inv reg reg_struct base; do echo "--- mode $$mode"; julia --color=yes --project=$$PROFILE_DIR/lab/.buildkite $$PROFILE_DIR/lab/perf/register_vs_invariant.jl $$mode || exit 1; done
     agents:
-      slurm_gpus_per_task: 1
-      slurm_cpus_per_task: 4
-      slurm_ntasks: 1
-      slurm_mem: 16GB
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP components (A100): CUDA traces of 20 coupling steps of main and the PR"
+    key: "amip_trace"
+    depends_on: "init_amip"
+    command:
+      - nvidia-smi -L
+      - for tree in main pr; do echo "--- $$tree"; PROFILE_OUT=$$PROFILE_DIR/trace_$$tree COUPLER_DIR=$$PROFILE_DIR/coupler_$$tree julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_$$tree/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_$$tree/$$AMIP_CONFIG --job_id trace_$$tree || exit 1; tar czf trace_$$tree.tgz -C $$PROFILE_DIR trace_$$tree; done
+      - echo "--- Device time per component and step"
+      - cd $$PROFILE_DIR && python3 attribute_trace.py pr=trace_pr main=trace_main
+    artifact_paths: "trace_*.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP components (A100): Nsight Compute counters of one coupling step of main and the PR"
+    key: "amip_ncu"
+    depends_on: "init_amip"
+    soft_fail: true
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        echo "metrics: $$metrics"
+        for tree in main pr; do
+            echo "--- $$tree under Nsight Compute"
+            PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_$$tree COUPLER_DIR=$$PROFILE_DIR/coupler_$$tree ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_$$tree.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_$$tree/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_$$tree/$$AMIP_CONFIG --job_id ncu_$$tree || exit 1
+            cp ncu_$$tree.csv $$PROFILE_DIR/
+        done
+    artifact_paths: "ncu_*.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP components: device time and counters per component"
+    key: "amip_summary"
+    depends_on:
+      - "amip_trace"
+      - "amip_ncu"
+    allow_dependency_failure: true
+    command:
+      - cd $$PROFILE_DIR && python3 attribute_trace.py pr=trace_pr,ncu_pr.csv main=trace_main,ncu_main.csv
+    agents:
+      slurm_cpus_per_task: 1

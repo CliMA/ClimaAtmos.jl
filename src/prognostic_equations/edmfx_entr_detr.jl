@@ -587,6 +587,13 @@ The generic method is a no-op; the `PrognosticEDMFX` method mutates
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+    mode = LAB_MODE[]
+    mode === :skip && return nothing
+    mode === :base && return edmfx_entr_detr_tendency_base!(Yₜ, Y, p, t, turbconv_model)
+    return edmfx_entr_detr_tendency_lab!(Yₜ, Y, p, t, turbconv_model, Val(mode))
+end
+
+function edmfx_entr_detr_tendency_base!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
     (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
@@ -610,6 +617,62 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         end
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             ᶜsgsʲ = Yc.sgsʲs.:($j)
+            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶜentr_totʲ = @. compute_entrainment(
+                ᶜentr_vel_scaleʲs.:($$j),
+                ᶜentr_nonvel_rateʲs.:($$j),
+                ᶜarea_bounding_entr_detrʲs.:($$j),
+                get_physical_w(ᶜuʲ, ᶜlg),
+            ) + ᶜturb_entrʲs.:($$j)
+            @. ᶜsgsʲₜ.mse += ᶜentr_totʲ * (ᶜmse⁰ - ᶜsgsʲ.mse)
+            unrolled_foreach((@name(q_tot), χ_names...), ᶜχ⁰s) do χ_name, ᶜχ⁰
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                @. ᶜχʲₜ += ᶜentr_totʲ * (ᶜχ⁰ - ᶜχʲ)
+            end
+        end
+    end
+    return nothing
+end
+
+function edmfx_entr_detr_tendency_lab!(
+    Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX, ::Val{mode},
+) where {mode}
+    (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
+        p.precomputed
+    χ_names = sgs_tracer_names(Y)
+    # One fused column loop for every draft and scalar: the environment values
+    # and the entrainment rate of each draft are register temporaries.
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        map(
+            x -> mode === :inv ? lab_invariant(x) : x,
+            (
+                Y.c, Fields.local_geometry_field(Y.c), ᶜK, ᶜh_tot,
+                (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
+                ᶜarea_bounding_entr_detrʲs,
+            ),
+        )...,
+    ) do Yₜc, Yc, ᶜlg, ᶜK, ᶜh_tot,
+    (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
+    ᶜarea_bounding_entr_detrʲs
+        reg = mode === :reg || mode === :reg_struct
+        ᶜρ = reg ? as_register(Yc.ρ) : Yc.ρ
+        ᶜsgsʲs = mode === :reg_struct ? as_register(Yc.sgsʲs) : Yc.sgsʲs
+        ᶜρa⁰ = @. ρa⁰(ᶜρ, ᶜsgsʲs, turbconv_model)
+        ᶜmse⁰ = @. specific_env_mse(
+            ᶜρ, ᶜsgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model,
+        )
+        ᶜχ⁰s = unrolled_map((@name(q_tot), χ_names...)) do χ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+            @. specific_env_value(χ_name, ᶜρχ, ᶜρ, ᶜsgsʲs, ᶜρa⁰, turbconv_model)
+        end
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            ᶜsgsʲ = ᶜsgsʲs.:($j)
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
             ᶜuʲ = ᶜuʲs.:($j)
             ᶜentr_totʲ = @. compute_entrainment(

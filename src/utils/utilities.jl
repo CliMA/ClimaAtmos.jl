@@ -1087,3 +1087,16 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
     q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end
+
+# Temporary (comparison branch): how three fused loops read their inputs. `:base` runs the
+# original loops, `:inv` wraps their read-only inputs with `invariant_data`, `:reg` copies
+# scalar inputs that they read repeatedly into register temporaries, and `:reg_struct` also
+# copies struct-valued inputs into register temporaries. `:skip` skips the loops.
+const LAB_MODE = Ref(:base)
+
+# `invariant_data` of the fields in a tuple or a lazy broadcast, leaving their spaces as they are
+lab_invariant(field::Fields.Field) = DataLayouts.invariant_data(field)
+lab_invariant(fields::Tuple) = map(lab_invariant, fields)
+lab_invariant(bc::Base.Broadcast.Broadcasted{S}) where {S} =
+    Base.Broadcast.Broadcasted{S}(bc.f, map(lab_invariant, bc.args), bc.axes)
+lab_invariant(x) = x
