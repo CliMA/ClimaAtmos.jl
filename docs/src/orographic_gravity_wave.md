@@ -327,38 +327,49 @@ where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calcula
 The propagating and blocked components both act at and above the PBL top, so they
 supply no drag in the layer right next to the surface. Small-scale orography
 (scales too short to launch resolved gravity waves) nonetheless exerts a
-form drag there. Following [beljaars2004](@cite) — the IFS / SURFEX
-`sso_beljaars04` formulation — this turbulent orographic form drag is added as a
-low-level term
+form drag there. This turbulent orographic form drag (TOFD) of [beljaars2004](@cite)
+is added as a low-level term, in the form and with the constants of the IFS
+(IFS Documentation CY47R1, Part IV, Section 3.4):
 
 ```math
 {}^c \left( \frac{d\mathbf{u}}{dt}[k] \right)_{\mathrm{TOFD}} = - C_d(z)\, |\mathbf{u}|\, \mathbf{u},
 \qquad
-C_d(z) = a_{\mathrm{tofd}}\, K\, \sigma^2\, e^{-(z/1500)^{1.5}}\, z^{-1.2},
-```
-
-where $z$ is height above the local surface (floored at 1 m so $z^{-1.2}$ stays
-finite), $\sigma = 0.5\, h_{\mathrm{max}}$ is the standard deviation of the
-filtered small-scale orography ($h_{\mathrm{max}}$ used as the $\sigma_{\mathrm{oro}}$
-proxy, $0.5$ the IFS $\sigma_{\mathrm{flt}}/\sigma_{\mathrm{oro}}$ ratio), and
-
-```math
-K = \alpha\, \beta\, C_{\mathrm{corr}}\, C_{md}\, 2.109\, C_{\mathrm{avar}},
+C_d(z) = a_{\mathrm{tofd}}\, \alpha\, \beta\, C_{md}\, C_{\mathrm{corr}}\, 2.109\,
+e^{-(z/1500)^{1.5}}\, a_2\, z^{-1.2},
 \qquad
-C_{\mathrm{avar}} = \frac{k_1^{\,n_1-n_2}}{C_{ih}\, k_{\mathrm{flt}}^{\,n_1}},
+a_2 = \frac{\sigma_{\mathrm{flt}}^2\, k_1^{\,n_1-n_2}}{I_H\, k_{\mathrm{flt}}^{\,n_1}},
 ```
 
-with the Beljaars constants $\alpha = 12$, $\beta = 1$, $C_{md} = 0.005$,
-$C_{\mathrm{corr}} = 0.6$, $C_{ih} = 1.02\times10^{-3}\,\mathrm{m^{-1}}$,
-$k_{\mathrm{flt}} = 3.5\times10^{-4}\,\mathrm{m^{-1}}$,
-$k_1 = 3\times10^{-3}\,\mathrm{m^{-1}}$, $n_1 = -1.9$, $n_2 = -2.8$. The
-$e^{-(z/1500)^{1.5}} z^{-1.2}$ structure concentrates the drag in the lowest
-$\sim 1\,\mathrm{km}$.
+where $z$ is the height above the local surface (floored at 1 m so $z^{-1.2}$ stays
+finite). The vertical profile is an analytic fit of the drag integrated over a
+power-law orography spectrum with slopes $n_1 = -1.9$ and $n_2 = -2.8$ and a break at
+$k_1 = 3\times10^{-3}\,\mathrm{m^{-1}}$; it concentrates the drag in the lowest
+$\sim 1\,\mathrm{km}$. The other constants are $\beta = 1$, $C_{md} = 0.005$,
+$C_{\mathrm{corr}} = 0.6$, and $\alpha = 35$: [beljaars2004](@cite) obtained 12 from
+large-eddy simulations, and the IFS multiplies it by $1.7^2$ after tuning.
 
-The master amplitude $a_{\mathrm{tofd}}$ is set by the `ogw_tofd_coefficient`
-parameter: $a_{\mathrm{tofd}} = 0$ (the default) disables TOFD and reproduces the
-GWD-only forcing exactly, while $a_{\mathrm{tofd}} = 1$ is the IFS-nominal
-amplitude.
+The only geographical input is $\sigma_{\mathrm{flt}}$, the standard deviation of the
+filtered orography, computed at initialization from the 60 arc-second ETOPO 2022
+elevation as in the IFS (IFS Documentation CY47R1, Part IV, Section 11.3.3):
+
+ 1. the orography, with ocean bathymetry set to zero, is smoothed twice with the IFS
+    operator (a top hat of width $\Delta$ with cosine edges of width $\delta = 1$ km),
+    with $\Delta_1 = 2$ km and $\Delta_2 = 20$ km;
+ 2. the squared difference of the two smoothed fields, which keeps horizontal scales
+    of roughly 3 to 22 km (half wavelengths), is averaged over blocks of about the
+    model's horizontal node spacing and regridded to the model surface, giving
+    $\sigma_{\mathrm{flt}}^2$.
+
+$I_H = 1.02\times10^{-3}\,\mathrm{m^{-1}}$ and
+$k_{\mathrm{flt}} = 3.5\times10^{-4}\,\mathrm{m^{-1}}$ are the integral and the
+representative wavenumber of this band-pass filter, so they are tied to this
+definition of $\sigma_{\mathrm{flt}}$. TOFD is computed only when the gravity-wave
+drag uses Earth orography (`topography` is `Earth` or `NoWarp` and
+`orographic_gravity_wave` is `gfdl_restart`, `raw_topo`, or `raw_topo_online`).
+
+The amplitude $a_{\mathrm{tofd}}$ is the parameter `ogw_tofd_coefficient`:
+$a_{\mathrm{tofd}} = 1$ (the default) reproduces the IFS, and
+$a_{\mathrm{tofd}} = 0$ disables TOFD.
 
 Near steep orography the damping time $(C_d |\mathbf{u}|)^{-1}$ in the lowest
 model levels is minutes, far shorter than both `dt_ogw` and the integrator step,
@@ -436,6 +447,13 @@ initialization for raw_topo_online:
     └─ regrid_OGW_info          → SpaceVaryingInput to spectral element
   write_computed_drag! → HDF5 artifact (raw_topo; loadable via ClimaArtifacts)
 
+TOFD input, at initialization when a_tofd > 0 (Earth orography only):
+  compute_filtered_orography_variance
+    ├─ calc_filtered_orography_variance_latlon → (S_2km h − S_20km h)² on the ETOPO grid
+    ├─ block_average_latlon                    → average over ~model node spacing
+    └─ SpaceVaryingInput                       → σ_flt² on the model surface
+  tofd_drag_coefficient!                       → ᶜtofd_Cd
+
 Every dt_ogw seconds:
   ogw_model_callback!
     └─ orographic_gravity_wave_compute_tendency!
@@ -449,8 +467,7 @@ Every dt_ogw seconds:
 Every dt (integrator step):
   orographic_gravity_wave_apply_tendency!
     ├─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
-    └─ Yₜ.c.uₕ -= tofd_implicit_rate(ᶜtofd_Cd, |uₕ|, dt) · uₕ   (if a_tofd > 0;
-                  ᶜtofd_Cd from tofd_drag_coefficient! at initialization)
+    └─ Yₜ.c.uₕ -= tofd_implicit_rate(ᶜtofd_Cd, |uₕ|, dt) · uₕ   (if a_tofd > 0)
 ```
 
 For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly at startup using ClimaCore horizontal gradient operators in place of the offline pipeline.

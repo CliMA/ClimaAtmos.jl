@@ -11,11 +11,17 @@ main
 - ![][badge-🔥behavioralΔ] The orographic gravity-wave forcing limiter caps the
   magnitude of the `(u, v)` tendency at `3e-3·√2 m/s²` instead of clamping each
   component to `±3e-3 m/s²`, so the drag keeps its direction where the limiter binds.
-- ![][badge-✨feature/enhancement] Optional Beljaars (2004) turbulent orographic
-  form drag (TOFD) in the orographic gravity-wave scheme, scaled by the new
-  parameter `ogw_tofd_coefficient` (default `0`, off). It is applied every step
-  with the current wind in a backward-Euler form, so it cannot reverse the wind.
-  See the Orographic Gravity Waves docs page.
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] The orographic
+  gravity-wave scheme includes the turbulent orographic form drag (TOFD) of
+  Beljaars et al. (2004) in its IFS form, a near-surface drag from orography
+  with scales below about 5 km. Its input, the standard deviation of the
+  filtered orography, is computed at initialization from the 60 arc-second
+  ETOPO 2022 elevation as in the IFS. It is on by default at the IFS amplitude
+  (new ClimaParams parameter `ogw_tofd_coefficient = 1`, which requires
+  ClimaParams 1.3.8; `0` disables it) whenever the gravity-wave drag uses Earth
+  orography, and it is applied every step with the current wind in a
+  backward-Euler form, so it cannot reverse the wind. See the Orographic
+  Gravity Waves docs page.
 - ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
   the implicit path with cloud-liquid condensation / evaporation. A single
   `implicit_microphysics` toggle controls both: when `true` (default), the

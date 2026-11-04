@@ -160,8 +160,8 @@ end
         @test ogw.topo_info == Val(Symbol(name))
         @test ogw.α_smoothing == ogw_params.α_smoothing
         @test ogw.a_tofd == ogw_params.a_tofd
-        # TOFD defaults to off unless a run TOML sets `ogw_tofd_coefficient`.
-        @test ogw.a_tofd == 0
+        # TOFD is on at the IFS amplitude by default (`ogw_tofd_coefficient = 1`).
+        @test ogw.a_tofd == 1
     end
 
     @test CA.get_orographic_gravity_wave_model(

@@ -158,16 +158,34 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     # The TOFD drag coefficient depends only on the grid and the orography, so it is
-    # built once here and combined with the current wind every step.
+    # built once here and combined with the current wind every step. Its input, the
+    # filtered-orography variance, is computed from the Earth elevation data in the same
+    # cases in which the gravity-wave drag uses Earth orography.
     ᶜtofd_Cd = zero(Y.c.ρ)
     if !iszero(a_tofd)
-        tofd_drag_coefficient!(
-            ᶜtofd_Cd,
-            Fields.coordinate_field(Y.c).z,
-            Fields.level(Fields.coordinate_field(Y.f).z, half),
-            topo_info.hmax,
-            a_tofd,
-        )
+        uses_earth_orography =
+            ogw.topography in (Val(:Earth), Val(:NoWarp)) &&
+            ogw.topo_info in (Val(:gfdl_restart), Val(:raw_topo), Val(:raw_topo_online))
+        if uses_earth_orography
+            earth_radius =
+                Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain.radius
+            σ²_flt = compute_filtered_orography_variance(
+                Y,
+                AA.earth_orography_file_path(context = ClimaComms.context(Y.c)),
+                earth_radius,
+            )
+            tofd_drag_coefficient!(
+                ᶜtofd_Cd,
+                Fields.coordinate_field(Y.c).z,
+                Fields.level(Fields.coordinate_field(Y.f).z, half),
+                σ²_flt,
+                a_tofd,
+            )
+        else
+            @warn "Turbulent orographic form drag needs Earth orography; it is off for \
+                   topography = $(ogw.topography) and orographic_gravity_wave = \
+                   $(ogw.topo_info)."
+        end
     end
 
     # Prepare cache
@@ -785,68 +803,70 @@ function calc_nonpropagating_forcing!(
 end
 
 """
-    tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, hmax, a_tofd)
+    tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, σ²_flt, a_tofd)
 
-Fill `ᶜCd` [m⁻¹] with the Beljaars (2004) turbulent orographic form drag (TOFD) coefficient.
+Fill `ᶜCd` [m⁻¹] with the turbulent orographic form drag (TOFD) coefficient of
+[beljaars2004](@cite).
 
-TOFD represents the form drag of orographic scales too small to launch resolved gravity
-waves. Following [beljaars2004](@cite) (and the IFS / SURFEX `sso_beljaars04`
-implementation) the deceleration is `∂u/∂t = −C_d(z)·|U|·u` with
+TOFD represents the form drag of orography with horizontal scales below about 5 km, too small
+to launch resolved gravity waves. The deceleration is `∂u/∂t = −C_d(z)·|U|·u` with the IFS
+form of the scheme (IFS Documentation CY47R1, Part IV, Eqs. 3.58 to 3.60)
 
 ```
-C_d(z) = a_tofd · K · σ² · exp[−(z/1500)^{1.5}] · z^{−1.2},
-K = α·β·C_corr·C_md·2.109·C_avar,   C_avar = k1^{n1−n2} / (C_ih · k_flt^{n1}),
+C_d(z) = a_tofd · α · β · C_md · C_corr · 2.109 · exp[−(z/1500)^{1.5}] · a₂ · z^{−1.2},
+a₂ = σ_flt² · k₁^{n₁−n₂} / (I_H · k_flt^{n₁}),
 ```
 
-where `z` is the height above the local surface (floored at 1 m so `z^{−1.2}` stays finite),
-`σ = 0.5·hmax` is the standard deviation of the filtered small-scale orography (`hmax` is
-used as the `σ_oro` proxy and the `0.5` is the IFS `σ_flt/σ_oro` ratio), and the Beljaars
-constants are `α = 12`, `β = 1`, `C_md = 0.005`, `C_corr = 0.6`, `C_ih = 0.00102 m⁻¹`,
-`k_flt = 0.00035 m⁻¹`, `k1 = 0.003 m⁻¹`, `n1 = −1.9`, `n2 = −2.8`. The profile concentrates
-the drag in the lowest ~1 km, below the PBL-top layer where the propagating and blocked
-components act.
+where `z` is the height above the local surface (floored at 1 m so `z^{−1.2}` stays finite)
+and `σ_flt²` is the variance of the band-pass-filtered orography from
+`compute_filtered_orography_variance`. The constants are those of the IFS:
+`α = 35` (the large-eddy-simulation value 12 of Beljaars et al., multiplied by 1.7² in the IFS
+tuning), `β = 1`, `C_md = 0.005`, `C_corr = 0.6`, the orography spectrum slopes `n₁ = −1.9`
+and `n₂ = −2.8` with the break at `k₁ = 0.003 m⁻¹`, and the filter integral
+`I_H = 0.00102 m⁻¹` and representative wavenumber `k_flt = 0.00035 m⁻¹` of the band pass that
+defines `σ_flt`. The profile concentrates the drag in the lowest ~1 km, below the PBL-top
+layer where the propagating and blocked components act.
 
 `C_d` depends only on the grid and the orography, so it is computed once when the cache is
 built; `orographic_gravity_wave_apply_tendency!` combines it with the current wind through
-`tofd_implicit_rate`. `a_tofd` is the master amplitude: `0` gives `C_d ≡ 0`, `1` is the
-IFS-nominal amplitude.
+`tofd_implicit_rate`. `a_tofd` scales the IFS amplitude: `1` reproduces the IFS and `0` gives
+`C_d ≡ 0`.
 
 # Arguments
 
   - `ᶜz`: Cell-center height (altitude) [m].
   - `z_sfc`: Terrain surface height, e.g. the bottom face level `Fields.level(ᶠz, half)`
     [m]; it broadcasts up the column, so `z − z_sfc` is height above ground.
-  - `hmax`: Effective maximum subgrid obstacle height on the surface space [m].
-  - `a_tofd`: Master TOFD amplitude coefficient [-].
+  - `σ²_flt`: Variance of the filtered orography on the surface space [m²].
+  - `a_tofd`: TOFD amplitude relative to the IFS [-].
 """
-function tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, hmax, a_tofd)
+function tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, σ²_flt, a_tofd)
     FT = eltype(ᶜCd)
 
-    # Beljaars et al. (2004) constants (IFS / SURFEX sso_beljaars04).
-    c_alpha = FT(12)
-    c_beta = FT(1)
-    c_cmd = FT(0.005)
-    c_cor = FT(0.6)
-    c_ih = FT(0.00102)      # m⁻¹
-    c_kflt = FT(0.00035)    # m⁻¹
-    c_k1 = FT(0.003)        # m⁻¹
-    c_n1 = FT(-1.9)
-    c_n2 = FT(-2.8)
-    c_avar = c_k1^(c_n1 - c_n2) / (c_ih * c_kflt^c_n1)   # m^(1+n2) = m^-1.8
-    beljaars_const = c_alpha * c_beta * c_cor * c_cmd * FT(2.109) * c_avar
+    # IFS constants (IFS Documentation CY47R1, Part IV, Eq. 3.58).
+    α_tofd = FT(35)        # 12·1.7²
+    β_tofd = FT(1)
+    C_md = FT(0.005)
+    C_corr = FT(0.6)
+    I_H = FT(0.00102)      # m⁻¹
+    k_flt = FT(0.00035)    # m⁻¹
+    k₁ = FT(0.003)         # m⁻¹
+    n₁ = FT(-1.9)
+    n₂ = FT(-2.8)
+    # a₂ / σ_flt², in m^(1+n₂) = m^-1.8
+    spectrum_const = k₁^(n₁ - n₂) / (I_H * k_flt^n₁)
+    amplitude = α_tofd * β_tofd * C_md * C_corr * FT(2.109) * spectrum_const
 
-    z_decay = FT(1500)         # e-folding-like decay scale [m]
+    z_decay = FT(1500)     # [m]
     decay_exp = FT(1.5)
     power_exp = FT(-1.2)
-    σ_over_hmax = FT(0.5)      # σ_flt = 0.5·σ_oro, with hmax as the σ_oro proxy
-    z_floor = FT(1)            # floor on height-above-ground so z^-1.2 stays finite [m]
+    z_floor = FT(1)        # keeps z^-1.2 finite [m]
 
-    # σ² is a surface field and broadcasts up the column.
+    # σ²_flt is a surface field and broadcasts up the column.
     z_agl = @. lazy(max(z_floor, ᶜz - z_sfc))
-    σ_sq = @. lazy((σ_over_hmax * max(FT(0), hmax))^2)
     @. ᶜCd =
-        FT(a_tofd) * beljaars_const * σ_sq * exp(-(z_agl / z_decay)^decay_exp) *
-        z_agl^power_exp
+        FT(a_tofd) * amplitude * max(FT(0), σ²_flt) *
+        exp(-(z_agl / z_decay)^decay_exp) * z_agl^power_exp
     return nothing
 end
 

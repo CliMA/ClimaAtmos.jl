@@ -1131,9 +1131,9 @@ with the shape parameters taken from `params.orographic_gravity_wave_params`.
   - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
     spacing, `L = α · Δx`. Applied by `compute_OGW_info` for `raw_topo_online` (and
     when regenerating `raw_topo` artifacts offline) [-].
-  - `a_tofd`: Master amplitude of the Beljaars (2004) turbulent orographic form
-    drag (TOFD); `0` disables the low-level TOFD term, `1` is the IFS-nominal
-    amplitude [-].
+  - `a_tofd`: Amplitude of the Beljaars (2004) turbulent orographic form drag (TOFD)
+    relative to the IFS; `1` reproduces the IFS and `0` disables the low-level TOFD
+    term [-].
   - `topo_info`: `Val(:raw_topo)`, `Val(:raw_topo_online)`, or
     `Val(:gfdl_restart)`, selecting how the orographic drag tensor is built (see
     `get_topo_info`).

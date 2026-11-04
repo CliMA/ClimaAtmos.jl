@@ -36,9 +36,9 @@
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
   `topo_drag`), and the forcing limiter caps the vector magnitude at
-  `3e-3·√2 m/s²` instead of clamping each component. Changes the output of
-  `aquaplanet_equil_allsky_gw_raw`. TOFD is off by default and does not enter
-  the reference.
+  `3e-3·√2 m/s²` instead of clamping each component, and the turbulent
+  orographic form drag (IFS form) is on by default. Changes the output of
+  `aquaplanet_equil_allsky_gw_raw`.
 
 454
 - `implicit_microphysics: true` (default) now additionally routes 1M
