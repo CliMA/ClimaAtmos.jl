@@ -49,8 +49,9 @@ steps:
       # Instantiate and dev install ClimaCore
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.develop(path=".")'''
-      # The ClimaCore branch of CliMA/ClimaCore.jl#2717, which this branch is tested with
-      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCore.jl.git", rev="dy/read_only_geometry")'''
+      # Temporary: ClimaCore main at the merge base of CliMA/ClimaCore.jl#2717, to measure this
+      # branch without the invariant loads of local geometry
+      - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCore.jl.git", rev="09a157b036784ab20d9584ba69e990f53d3b28cf")'''
       - 'julia --project=$COUPLER_PATH/experiments/AMIP/ -e ''using Pkg; Pkg.add("MPI")'''
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.status()'"
