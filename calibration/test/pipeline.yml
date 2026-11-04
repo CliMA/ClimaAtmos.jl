@@ -13,8 +13,6 @@ env:
 steps:
   - label: "init :computer:"
     key: "init_cpu_env"
-    concurrency: 1
-    concurrency_group: 'depot/climaatmos-calibration'
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
