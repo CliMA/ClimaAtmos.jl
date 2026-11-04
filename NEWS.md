@@ -43,6 +43,17 @@ main
   (default `0`) is added: a positive value makes the 1M scheme use the constant
   `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
   in the variance-fidelity Damköhler factor and the cloud-species flux blend.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Pass in-cloud liquid specific
+  humidity `q_liq / cf` [kg/kg] to `ml_N_cloud_liquid_droplets` in
+  `update_cloud_properties!`, bound the diagnosed droplet number concentration
+  in `[N₀ / 3, 3 N₀]` with a hyperbolic-tangent log-saturation law, and
+  zero-initialize `prescribed_aerosols_field` at cache construction. Aerosol
+  species with no prescribed bins enter the closure at their reference
+  concentration and leave the droplet number unchanged. Calibration
+  coefficients `α` fitted to the linear closure need refitting; with the
+  default `α = 0`, the droplet number and the radiative fluxes are unchanged.
+  The liquid, ice, and snow effective radii, and the `reffclw` and `reffcli`
+  diagnostics, are zero where the cloud fraction is zero.
 - ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
   grids (`z_stretch: true`) use the two-scale
   `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the
