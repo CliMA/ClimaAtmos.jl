@@ -694,15 +694,15 @@ end
     update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
 
 Refresh the microphysics precomputed quantities that depend on the current Newton
-iterate `Y`. Called from `set_implicit_precomputed_quantities!` at every Newton
-iteration of the implicit solve, and only when
-`p.atmos.microphysics_tendency_timestepping == Implicit()`. Returns `nothing`.
+iterate `Y`. Called from `set_implicit_precomputed_quantities_core!` at every
+Newton iteration of the implicit solve. Returns `nothing`.
 
-All schemes freeze the specific microphysics tendencies (`ᶜmp_tendency` and its
-subdomain counterparts) computed in the explicit stage; only density-weighted
-source terms and surface fluxes are refreshed here. The refreshed fields have
-Dual-typed copies in `implicit_precomputed_quantities`, so autodiff can write
-into them safely.
+The bulk microphysics tendency is frozen after `set_microphysics_tendency_cache!`;
+only density-weighted source terms, sedimentation velocities, and surface fluxes
+are refreshed here. The 1M implicit tendency `ᶜmp_tendency_implicit*` is refreshed
+separately by `set_implicit_precomputed_quantities!` (Newton inner loop) and by
+`set_precomputed_quantities!` after the covariance pass (step cache), gated on
+`has_implicit_1m_microphysics`.
 
 Dispatch on `microphysics_model` and `turbconv_model`:
 
@@ -775,22 +775,144 @@ function update_implicit_microphysics_cache!(
     else
         set_precipitation_velocities!(Y, p, mm, tm)
     end
-    # Refresh `ᶜsgs_moments` from the current Newton iterate when the implicit
-    # 1M condensation source is active: `λ_lagrange` follows
-    # `q_c = q_lcl + q_icl`, which Newton moves. `microphysics_1m_implicit_params`
-    # is nulled for 2M/2MP3, so guard the whole block on `1M`.
-    if mm isa NonEquilibriumMicrophysics1M &&
-       hasproperty(p.precomputed, :ᶜsgs_moments) &&
-       !isnothing(
-           CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
-       )
-        thermo_params = CAP.thermodynamics_params(p.params)
-        materialize = tm isa PrognosticEDMFX
-        env_state = cloud_env_state(Y, p, thermo_params; materialize)
-        set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
-        set_precip_fraction!(Y, p, env_state.ᶜq_precip)
-    end
     set_precipitation_surface_fluxes!(Y, p, mm)
+    return nothing
+end
+
+"""
+    has_implicit_1m_microphysics(p)
+
+Whether the implicit 1M condensation / sublimation tendency is active: 1M
+microphysics with `cloud_liquid_formation` or `cloud_ice_formation` assigned to
+`microphysics_1m_implicit_params` (`implicit_microphysics: true`). When it is
+not, `ᶜmp_tendency_implicit*` keep their zero initialization.
+"""
+function has_implicit_1m_microphysics(p)
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return false
+    procs = CAP.microphysics_1m_implicit_params(p.params).processes
+    return !isnothing(procs.cloud_liquid_formation) ||
+           !isnothing(procs.cloud_ice_formation)
+end
+
+"""
+    update_implicit_1m_tendency!(Y, p, mp1m, turbconv_model)
+
+Refresh `ᶜmp_tendency_implicit` (and `ᶜmp_tendency_implicit⁰` /
+`ᶜmp_tendency_implicitʲs` under `PrognosticEDMFX`) with CM BMT on
+`microphysics_1m_implicit_params` at the current Newton iterate.
+
+Runs CM BMT in `BMT.Instantaneous()` mode so the rate matches the Jacobian's
+`-dtγ/τ` linearization; the substep window and count passed to
+`microphysics_tendencies_1m` are ignored on the `Instantaneous` dispatch and
+only kept to share the signature with `set_microphysics_tendency_cache!`.
+Mirrors that function, but writes to the implicit siblings.
+"""
+function update_implicit_1m_tendency!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
+)
+    # Instantaneous BMT rates: Newton iterates on the frozen `S(Y)` with the
+    # Jacobian `-dtγ/τ`; the stage-averaged `LinearizedAverage` tendency would
+    # not match that linearization.
+    dt = p.dtγ
+    (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency_implicit) = p.precomputed
+
+    thp = CAP.thermodynamics_params(p.params)
+    cmp_i = CAP.microphysics_1m_implicit_params(p.params)
+
+    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+    sgs_quad = p.atmos.sgs_quadrature
+    nsubs = mp1m.n_substeps
+    nsubs_quad = mp1m.n_substeps_quad
+    ᶜw_air = @. lazy(w_component(WVec(ᶜu)))
+    mode = BMT.Instantaneous()
+    if not_quadrature(sgs_quad)
+        @. ᶜmp_tendency_implicit = microphysics_tendencies_1m(
+            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ᶜT, ᶜw_air, cmp_i, thp, dt, nsubs, mode,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
+            p.precomputed
+        opts = sgs_microphysics_options(p.params)
+        @. ᶜmp_tendency_implicit = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, cmp_i, thp, Y.c.ρ, ᶜT, ᶜw_air,
+            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+            TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
+            ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
+            ᶜprecip_frac, opts, mode,
+        )
+    end
+    return nothing
+end
+
+function update_implicit_1m_tendency!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
+)
+    # Instantaneous BMT rates: Newton iterates on the frozen `S(Y)` with the
+    # Jacobian `-dtγ/τ`; the stage-averaged `LinearizedAverage` tendency would
+    # not match that linearization.
+    dt = p.dtγ
+    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs) = p.precomputed
+
+    thp = CAP.thermodynamics_params(p.params)
+    cmp_i = CAP.microphysics_1m_implicit_params(p.params)
+    dev = ClimaComms.device(Y.c)
+    vcmp_i, vthp = _fold(dev, cmp_i), _fold(dev, thp)
+
+    n = n_mass_flux_subdomains(tm)
+    nsubs = mp1m.n_substeps
+    nsubs_quad = mp1m.n_substeps_quad
+    mode = BMT.Instantaneous()
+
+    for j in 1:n
+        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+        @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
+            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dt, nsubs, mode,
+        )
+    end
+
+    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
+    ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
+    ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
+    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
+    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
+    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
+    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    sgs_quad = p.atmos.sgs_quadrature
+    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
+    if not_quadrature(sgs_quad)
+        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
+            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜT⁰, ᶜw⁰_air, vcmp_i, vthp, dt, nsubs, mode,
+        )
+    else
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
+            p.precomputed
+        opts = sgs_microphysics_options(p.params)
+        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
+        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
+        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
+        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, vcmp_i, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode,
+        )
+    end
     return nothing
 end
 
@@ -806,6 +928,16 @@ Writes `p.precomputed.ᶜmp_tendency` on the non-EDMF path, and
 sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt` are also written here; for the other
 schemes the density weighting is applied at tendency-evaluation time in
 `tendency.jl`. The 2M+P3 method additionally writes `ᶜScoll`.
+
+For 1M, this is the **stage-initial** cache update (runs once per IMEX stage,
+before the Newton solve starts): it writes only the bulk CM BMT tendency
+(`microphysics_1m_params`). The implicit tendency (`ᶜmp_tendency_implicit*`,
+driven by `microphysics_1m_implicit_params`) is refreshed by
+`set_implicit_precomputed_quantities!` at every Newton iterate, by
+`set_precomputed_quantities!` once per step (after the covariance pass), and
+by `update_updraft_microphysics_tendency_cache!` at every Picard round; it
+stays zero when `implicit_microphysics: false` (`has_implicit_1m_microphysics`
+is `false`, so none of those three refreshes fires).
 
 **Dispatch table** (`microphysics_model` × `turbconv_model`):
 
@@ -851,17 +983,19 @@ set_microphysics_tendency_cache!(Y, p, _, _) = nothing
     )
 
 Refresh the per-updraft microphysics tendency `ᶜmp_tendencyʲs` against the
-current `Y`, using `dtγ` as the integration window. The expensive
-SGS-quadrature environment tendency `ᶜmp_tendency⁰` is left at its last
-`cache!` value.
+current `Y`, using `dtγ` as the integration window. For 1M, also refreshes
+`ᶜmp_tendency_implicitʲs` so the Picard predictor sees the implicit cond/subl
+rates at the transported updraft state. The expensive SGS-quadrature
+environment tendency `ᶜmp_tendency⁰` is left at its last `cache!` value.
 
 Called from the implicit-stage tracer predictor
 (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) for the
 non-equilibrium schemes, after its transport sweep, and from the Picard loop
-of `initialize_implicit_stage_problem!` for the 0-moment scheme. The result is
-frozen through the Newton solve, keeping it consistent with the Jacobian
-(which does not include derivatives of `ᶜmp_tendencyʲs`). A no-op for any
-combination not covered by a specialization.
+of `initialize_implicit_stage_problem!` for the 0-moment scheme. The bulk
+`ᶜmp_tendencyʲs` is frozen through the Newton solve, matching the Jacobian
+(no derivative of `ᶜmp_tendencyʲs`); `ᶜmp_tendency_implicitʲs` is overwritten
+on each Newton iterate by `set_implicit_precomputed_quantities!`. A no-op for
+any combination not covered by a specialization.
 """
 update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
 
@@ -885,14 +1019,38 @@ end
 function update_updraft_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, dtγ,
 )
-    (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    # Refresh both bulk and implicit updraft tendencies at the Picard-
+    # transported state. The Picard predictor applies the sum; Newton later
+    # overwrites the implicit entries via `set_implicit_precomputed_quantities!`.
+    # Skip the implicit BMT call entirely when the split is off: the implicit
+    # entries stay zero from their allocation-time initialization.
+    #
+    # Mode choice: `ᶜmp_tendency_implicitʲs` is deliberately overwritten with
+    # different BMT modes at different solver phases. Here the default
+    # `microphysics_tendencies_1m` call uses `BMT.LinearizedAverage()`, which
+    # is the stage-averaged rate the Picard predictor wants (so the predictor
+    # move matches the time-averaged implicit response). The subsequent
+    # `update_implicit_1m_tendency!` in Newton reads `BMT.Instantaneous()` into
+    # the same field, matching the Jacobian's `-dtγ/τ` linearization of the
+    # un-averaged rate. Immediately after the Picard loop and before Newton,
+    # the field therefore holds a `LinearizedAverage` tendency; after any
+    # Newton iterate it holds an `Instantaneous` tendency.
+    (;
+        ᶜmp_tendencyʲs,
+        ᶜmp_tendency_implicitʲs,
+        ᶜρʲs,
+        ᶜTʲs,
+        ᶜuʲs,
+        ᶜq_tot_nonnegʲs,
+    ) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
-    # Carried into the kernel in the type, so the parameters fold to literals
-    # there instead of being read from a struct per point.
+    cmp_i = CAP.microphysics_1m_implicit_params(p.params)
     dev = ClimaComms.device(Y.c)
     vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
+    vcmp_i = _fold(dev, cmp_i)
     nsubs = mp1m.n_substeps
+    refresh_implicit = has_implicit_1m_microphysics(p)
     for j in 1:n_mass_flux_subdomains(tm)
         ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
@@ -901,6 +1059,14 @@ function update_updraft_microphysics_tendency_cache!(
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
             ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
         )
+        if refresh_implicit
+            @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+                Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
+            )
+        end
     end
     return nothing
 end
@@ -1011,22 +1177,19 @@ function set_microphysics_tendency_cache!(
 )
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
+    # Bulk CM BMT only; the implicit cache is refreshed per Newton iterate
+    # by `set_implicit_precomputed_quantities!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
-    # `microphysics_1m_params` strips condensation (built with
-    # `cloud_liquid_formation = nothing` in `create_parameters.jl`).
     cmp = CAP.microphysics_1m_params(p.params)
 
-    # Get specific humidities
     ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
     ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
-    # Grid mean or quadrature sum over the SGS fluctuations
-    # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
@@ -1037,9 +1200,8 @@ function set_microphysics_tendency_cache!(
             ᶜT, ᶜw_air, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
-        # One packed scalar-options argument keeps the broadcast short enough
-        # for the GPU kernel (see `sgs_microphysics_options`).
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
+            p.precomputed
         opts = sgs_microphysics_options(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
@@ -1058,7 +1220,9 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
-    # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
+    # `p.dtγ` under stage-fired `cache!`. Bulk CM BMT only; the implicit cache
+    # is refreshed per Newton iterate by `set_implicit_precomputed_quantities!`
+    # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
@@ -1066,8 +1230,6 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
-    # Carried into the two heavy kernels in the type, so the parameters fold to
-    # literals there instead of being read from a struct per quadrature point.
     dev = ClimaComms.device(Y.c)
     vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
 

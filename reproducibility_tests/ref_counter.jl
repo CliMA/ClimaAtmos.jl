@@ -1,4 +1,4 @@
-452
+454
 
 # **README**
 #
@@ -32,6 +32,34 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+454
+- `implicit_microphysics: true` (default) now additionally routes 1M
+  `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT
+  call driven by `microphysics_1m_implicit_params`, applied as
+  `ᶜmp_tendency_implicit` with a `−dtγ / τ_cond` and `−dtγ / τ_subl`
+  Jacobian on the `q_lcl` / `q_icl` diagonals. The
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is removed.
+  The default of `update_cache_every` also flips from `"step"` to
+  `"stage"`, so `set_precomputed_quantities!` fires once per IMEX stage
+  instead of once per step; the 1M `allocs_limit` entries in `perf/flame.jl`
+  (`flame_default_1m`, `flame_aquaplanet_progedmf_1m`) are bumped to
+  accommodate this.
+
+453
+- The cloud-fraction width is floored by `σ_abs` alone; condensate is
+  partitioned into its equilibrium part, normalized by that width, and the
+  non-equilibrium excess, normalized with the subsaturation deficit of the
+  cloud-available water; the updraft cover is evaluated against the updraft
+  vapor deficit and sets the updraft's in-cloud variance in the shortwave
+  inhomogeneity factor, and under `PrognosticEDMFX` the θ→T Jacobian, the
+  curvature slope, the moisture-variance bound and the correlation guard are
+  evaluated at the environment state.
+
+452
+- Stretched vertical grids use the two-scale
+  `BoundaryLayerHyperbolicTangentStretching` rule with `dz_top` and `z_pbl`,
+  so every stretched CI grid changes (#4949).
+
 451
 - The fused covariance loop reads the surface TKE at the first level, and
   `ᶜbuoygrad` is written for models without covariances.
@@ -47,8 +75,8 @@
 448
 - 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
   via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
-  routes it through an SGS-integrated implicit source with a
-  `−dtγ / (τ_cond · Γₗ)` Jacobian diagonal.
+  routes it through an SGS-integrated implicit source with a `−dtγ / τ_cond`
+  Jacobian diagonal.
 
 447
 - Snow falls at the Chen et al. (2022) speed by default;

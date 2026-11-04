@@ -424,14 +424,14 @@ end
 """
     sgs_correlation_Tq(T′T′, q′q′, T′q′, T, q_tot, fallback)
 
-Diagnosed SGS T–q correlation `clamp(T′q′ / (√T′T′ √q′q′), -1, 1)`, or
-`fallback` where either variance vanishes relative to its own mean, i.e. is at
-the round-off floor of the grid-mean value: `q′q′ ≤ (ε q_tot)²` or
-`T′T′ ≤ (ε T)²` with `ε = eps(FT)`. The test is relative so that it does not
-depend on the units or magnitude of the variables: an absolute floor on
-`T′T′ q′q′` (such as `eps(FT)²`) is crossed in the dry upper troposphere, where
-`q_tot` and hence `q′q′` are small but well resolved, and would replace a
-diagnosed (typically negative) correlation with the prescribed value there.
+Diagnosed SGS T–q correlation `clamp(T′q′ / (√T′T′ √q′q′), -1, 1)` [-], or
+`fallback` where either variance is at the round-off floor of its subdomain
+mean, `q′q′ ≤ (ε q_tot)²` or `T′T′ ≤ (ε T)²` with `ε = eps(FT)`. The test is
+relative, so it is independent of the units and magnitudes of the variables.
+An absolute floor on `T′T′ q′q′` (such as `eps(FT)²`) would be crossed in the
+dry upper troposphere, where `q_tot` and hence `q′q′` are small but well
+resolved, and would replace a diagnosed (typically negative) correlation with
+the prescribed value there.
 
 In exact arithmetic the covariance comes from correlated displacements of
 `θ_li` and `q_tot` whose cross-correlation lies in `[-1, 1]`
@@ -466,6 +466,7 @@ end
 @inline _4(t) = t[4]
 @inline _5(t) = t[5]
 @inline _6(t) = t[6]
+@inline _7(t) = t[7]
 
 """
     set_covariance_cache!(Y, p, thermo_params; env_state = nothing)
@@ -497,8 +498,11 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
     mixing length (`buoyancy_bounded_mixing_length`; `l_mix` without TKE) and the
     floor displacement scale (`floor_displacement_length`), both with the
     face-maximum dry buoyancy gradient `N²_disp` of the two bounding faces.
- 3. The θ→T Jacobian `∂T/∂θ_li` (`∂T_∂θ_li`), from the grid-mean variables,
-    consistent with the gradients.
+ 3. The θ→T Jacobian `∂T/∂θ_li` (`∂T_∂θ_li`) at the mean state of the domain
+    that carries the SGS closure (`cloud_env_state`): the environment under
+    `PrognosticEDMFX`, the grid mean otherwise. It converts the `θ_li` variance
+    and covariance of the displacement closure to the `T` basis the quadrature
+    samples.
  4. θ′θ′, q′q′ and, for the diagnosed correlation, θ′q′ from the displacement,
     transformed to T. The caller fills the horizontal gradient invariants of
     `q_tot`, `θ_li` and their cross term (`hgrad_invariant!`,
@@ -507,20 +511,26 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
  5. With `sgs_variance_curvature`, the displacement coefficients `ᶜdisp_S`
     (`displacement_curvature_coefficients`) from `ℓ_v = √(2 c_σ) l_d`, the Van Leer
     centre gradients, and the second derivatives `(∂ψ∂z⁺ − ∂ψ∂z⁻) / Δz` of the two
-    bounding face gradients `ᶠ∂qt∂z` and `ᶠ∂θli∂z`. At the domain boundaries the
-    adjacent interior face gradient stands in for the boundary face, so the
-    curvature is zero in the bottom and top cells. `lin` uses the
+    bounding face gradients `ᶠ∂qt∂z` and `ᶠ∂θli∂z`. The slope `∂q_sat/∂T` in
+    `χ` is evaluated at the same mean state as the Jacobian. At the domain
+    boundaries the adjacent interior face gradient stands in for the boundary
+    face, so the curvature is zero in the bottom and top cells. `lin` uses the
     harmonic-mean-limited centre gradient that the covariance uses, so `lin²`
     stays the vertical part of `σ_S²`; the limiter zeros it in a cell whose two
     face gradients differ in sign, where `curv` is at its largest and the whole
     vertical effect is the bound of the quadratic.
- 6. The closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`. For the
-    diagnosed correlation, the covariance is rescaled with the bound first, so the
+ 6. The closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_mean`, with
+    `q_mean` the total water of the same domain. The default ratio `0.5` keeps
+    every quadrature node at non-negative total water. A wider Gaussian puts a
+    node below zero; clamping that node adds water to the quadrature, and
+    condensing it can drive the subdomain vapor negative. For the diagnosed
+    correlation, the covariance is rescaled with the bound first, so the
     correlation is invariant under it.
  7. The T–q correlation `ᶜcorr_Tq` that the quadrature samples: the prescribed
     `Tq_correlation_coefficient` for `ConstantTqCorrelation`, and
     `T′q′ / √(T′T′ q′q′)` (`sgs_correlation_Tq`) for `DiagnosedTqCorrelation`,
-    with the prescribed value where a variance vanishes relative to its grid mean.
+    with the prescribed value where a variance is at the round-off floor of the
+    subdomain mean `(T, q_mean)`.
  8. The variance fidelity `ᶜα` (`sgs_variance_fidelity`), at the state of the
     domain that carries the SGS closure, as in
     `set_sgs_moments_and_cloud_fraction!`: the environment for PrognosticEDMFX,
@@ -530,12 +540,14 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
     closures compute their own `σ_S`. The condensate relaxes toward the excess
     `q_tot − q_rai − q_sno − q_sat`, since rain and snow are not in equilibrium
     with vapor. The relaxation time of the Damköhler factor is
-    `sgs_microphysics_relaxation_time`, from the 1M process rates under the 1M
-    scheme. Without TKE, `TKE = 0` and `l_mix = 1 m`, so the Damköhler factor is
-    1; under 0M microphysics, `ᶜα = 1 / A`.
+    `sgs_microphysics_relaxation_time`: the 1M process rates under the 1M
+    scheme where `sgs_cloud_species_constant_timescales` is zero, the constant
+    `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
+    otherwise. Without TKE, `TKE = 0` and `l_mix = 1 m`, so the Damköhler
+    factor is 1; under 0M microphysics, `ᶜα = 1 / A`.
 
 Scratch: the caller fills `ᶜtemp_scalar_5`, `temp_data`, and `ᶜtemp_scalar_6`
-with the moisture, potential-temperature, and cross invariants. For `ᶜα`,
+with the moisture, potential-temperature, and cross invariants.
 `ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3` hold the environment
 density and cloud condensates, and `ᶜtemp_C3` the precipitation, when they are
 not fields already and `env_state` does not provide them.
@@ -559,10 +571,6 @@ function set_covariance_cache!(
         ᶜgradᵥ_θ_liq_ice,
         ᶠ∂θli∂z,
         ᶠ∂qt∂z,
-        ᶜq_tot_nonneg,
-        ᶜT,
-        ᶜq_liq,
-        ᶜq_ice,
         ᶜbuoygrad,
         ᶜbg_coeffs,
         ᶜcloud_fraction,
@@ -624,13 +632,16 @@ function set_covariance_cache!(
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
 
     has_tke = hasproperty(Y.c, :ρtke)
-    is_dry_or_0m = p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
     is_0m = p.atmos.microphysics_model isa EquilibriumMicrophysics0M
     has_α = hasproperty(p.precomputed, :ᶜα)
     A = FT(CAP.cloud_fraction_steepness_scale(p.params))
+    # The 1M scheme takes the relaxation times of its own processes unless the
+    # constant-timescale switch is on (`sgs_microphysics_relaxation_time`).
+    uses_1m_times =
+        p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+        CAP.sgs_cloud_species_constant_timescales(p.params) <= 0
     τ_mp_params =
-        p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
-        CAP.cloud_liquid_formation_1m_params(p.params) :
+        uses_1m_times ? CAP.cloud_formation_1m_params(p.params) :
         ConstantMicrophysicsTimescales(
             FT(CAP.condensation_evaporation_timescale(p.params)),
             FT(CAP.sublimation_deposition_timescale(p.params)),
@@ -649,18 +660,19 @@ function set_covariance_cache!(
     ᶜdisp_S = has_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
     (zero_FT, one_FT, ϵ_FT, inf_FT) = (zero(FT), one(FT), eps(FT), FT(Inf))
 
-    if has_α && !is_0m
-        (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) =
-            isnothing(env_state) ?
-            cloud_env_state(Y, p, thermo_params; materialize = true) : env_state
-        ᶜenv_pack = @. lazy(
-            tuple(ᶜρ_env, ᶜT_mean, ᶜq_mean - ᶜq_precip, ᶜq_lcl + ᶜq_icl, ᶜq_lcl, ᶜq_icl),
-        )
-    else
-        ᶜenv_pack = @. lazy(
-            tuple(ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq),
-        )
-    end
+    # The mean state of the domain that carries the SGS closure
+    # (`cloud_env_state`): the environment under `PrognosticEDMFX`, the grid
+    # mean otherwise. The Jacobian, the curvature slope, the variance bound,
+    # the correlation guard and the fidelity are all evaluated at this state.
+    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) =
+        isnothing(env_state) ?
+        cloud_env_state(Y, p, thermo_params; materialize = true) : env_state
+    ᶜenv_pack = @. lazy(
+        tuple(
+            ᶜρ_env, ᶜT_mean, ᶜq_mean - ᶜq_precip, ᶜq_lcl + ᶜq_icl, ᶜq_lcl, ᶜq_icl,
+            ᶜq_mean,
+        ),
+    )
     ᶜinv_pack = @. lazy(tuple(ᶜinv_q, ᶜinv_θq, ᶜinv_θ))
 
     _set_covariance_cache_loop!(
@@ -668,7 +680,6 @@ function set_covariance_cache!(
         ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
         ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
         ᶠ∂θli∂z, ᶠ∂qt∂z,
-        ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
@@ -681,7 +692,6 @@ function set_covariance_cache!(
         Val(has_tke),
         Val(diag_corr),
         Val(has_curvature),
-        Val(is_dry_or_0m),
         Val(has_α),
         Val(is_0m),
     )
@@ -693,7 +703,6 @@ function _set_covariance_cache_loop!(
     ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
     ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
     ᶠ∂θli∂z, ᶠ∂qt∂z,
-    ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm,
@@ -706,7 +715,6 @@ function _set_covariance_cache_loop!(
     ::Val{has_tke},
     ::Val{diag_corr},
     ::Val{has_curvature},
-    ::Val{is_dry_or_0m},
     ::Val{has_α},
     ::Val{is_0m},
 ) where {
@@ -714,7 +722,6 @@ function _set_covariance_cache_loop!(
     has_tke,
     diag_corr,
     has_curvature,
-    is_dry_or_0m,
     has_α,
     is_0m,
 }
@@ -724,14 +731,12 @@ function _set_covariance_cache_loop!(
         (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
         Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
         ᶠ∂θli∂z, ᶠ∂qt∂z,
-        ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
     ) do (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
     Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
     ᶠ∂θli∂z, ᶠ∂qt∂z,
-    ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm
@@ -826,20 +831,19 @@ function _set_covariance_cache_loop!(
         ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
         ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
 
-        if is_dry_or_0m
-            ᶜq_l_jac = ᶜq_liq
-            ᶜq_i_jac = ᶜq_ice
-            ᶜq_t_jac = ᶜq_tot_nonneg
-        else
-            ᶜq_l_jac = @. lazy(specific(Yc.ρq_lcl, Yc.ρ))
-            ᶜq_i_jac = @. lazy(specific(Yc.ρq_icl, Yc.ρ))
-            ᶜq_t_jac = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
-        end
-        ᶜθ_li_jac = @. lazy(
-            TD.liquid_ice_pottemp(thermo_params, ᶜT, Yc.ρ, ᶜq_t_jac, ᶜq_l_jac, ᶜq_i_jac),
+        # The Jacobian at the mean state of the domain that carries the SGS
+        # closure, with its total water and cloud condensate.
+        ᶜρ_mean = @. lazy(_1(ᶜenv_pack))
+        ᶜT_mean = @. lazy(_2(ᶜenv_pack))
+        ᶜq_mean = @. lazy(_7(ᶜenv_pack))
+        ᶜθ_li_mean = @. lazy(
+            TD.liquid_ice_pottemp(
+                thermo_params, ᶜT_mean, ᶜρ_mean, ᶜq_mean, _5(ᶜenv_pack), _6(ᶜenv_pack),
+            ),
         )
         ᶜ∂T_∂θ = @. ∂T_∂θ_li(
-            thermo_params, ᶜT, ᶜθ_li_jac, ᶜq_l_jac, ᶜq_i_jac, ᶜq_t_jac, Yc.ρ,
+            thermo_params, ᶜT_mean, ᶜθ_li_mean, _5(ᶜenv_pack), _6(ᶜenv_pack),
+            ᶜq_mean, ᶜρ_mean,
         )
 
         @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², _1(ᶜinv_pack), ᶜ∂q∂z, ᶜ∂q∂z)
@@ -852,11 +856,13 @@ function _set_covariance_cache_loop!(
                 displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, _2(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂q∂z)
             @. ᶜT′q′ *= sqrt(min(
                 one_FT,
-                (r_max * ᶜq_tot_nonneg)^2 / max(ᶜq′q′, ϵ_FT^2),
+                (r_max * ᶜq_mean)^2 / max(ᶜq′q′, ϵ_FT^2),
             ))
         end
         if has_curvature
-            ᶜχ = @. lazy(r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT, Yc.ρ) * ᶜ∂T_∂θ)
+            ᶜχ = @. lazy(
+                r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean) * ᶜ∂T_∂θ,
+            )
             @. ᶜdisp_S = displacement_curvature_coefficients(
                 sqrt(2 * c_σ) * ᶜl_d,
                 ᶜχ,
@@ -866,11 +872,11 @@ function _set_covariance_cache_loop!(
                 (ᶜθ_above(ᶠ∂θli∂z) - ᶜθ_below(ᶠ∂θli∂z)) / ᶜΔz,
             )
         end
-        @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
+        @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_mean)^2)
 
         if diag_corr
             @. ᶜcorr_Tq = sgs_correlation_Tq(
-                ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT, ᶜq_tot_nonneg, corr_fallback,
+                ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT_mean, ᶜq_mean, corr_fallback,
             )
         else
             @. ᶜcorr_Tq = corr_fallback
@@ -1011,18 +1017,16 @@ end
 # microphysics integrates the kinked integrand max(0, ·) exactly, so the
 # continuous multiplier conserves the condensate at its nodes.
 #
-# For the *cloud fraction* we use an augmented variance with a fixed
-# non-equilibrium floor `σ_S_floor` (defined inside
-# `_compute_cloud_fraction`):
+# The *cloud fraction* uses the augmented width (`_sgs_augmented_sigma`)
 #
-#     σ_aug = sqrt((α · σ_S)² + σ_S_floor²),
+#     σ_aug = sqrt((α · σ_S)² + σ_abs²),
 #
-# which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
-# always computed by solving the truncated-Gaussian closure with `σ_aug`,
-# i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`;
-# it is a probability under the continuous Gaussian model. `λ_lagrange` is
-# *not* used to recover CF (the natural shortcut `Φ(λ/σ_aug)` would be
-# inconsistent because `λ` is solved with `σ_S_eff`, not `σ_aug`).
+# whose absolute floor `σ_abs` keeps CF finite in the singular limit
+# `(q_c, σ_S²) → 0`. Equilibrium condensate `min(q_c, q_c_eq)` is normalized
+# by `σ_aug` and the non-equilibrium excess `max(0, q_c − q_c_eq)` by
+# `sqrt(σ_aug² + δ_sub²)`, with the subsaturation deficit
+# `δ_sub = max(0, −μ_S)` (`_compute_cloud_fraction`). Saturated cloud decks
+# (`μ_S ≥ 0`) reach overcast.
 #
 # Inverting C = z·Φ(z)+φ(z) for z uses Newton iteration on
 # F(z) = z·Φ(z)+φ(z)−C with F′(z) = Φ(z):
@@ -1049,7 +1053,7 @@ ramp. Used by `sgs_variance_fidelity`.
 """
 @inline function sgs_microphysics_timescale(thp, T, τ_cond, τ_sub)
     FT = typeof(T)
-    λ_eq = FT(TD.liquid_fraction_ramp(thp, T))
+    λ_eq = FT(TD.liquid_fraction_ramp(_unwrapped(thp), T))
     τ_l, τ_i = FT(τ_cond), FT(τ_sub)
     return ifelse(
         λ_eq >= one(FT),
@@ -1063,7 +1067,8 @@ end
 
 The constant liquid and ice relaxation times (`condensation_evaporation_timescale`,
 `sublimation_deposition_timescale`) of `sgs_microphysics_relaxation_time` for the
-schemes other than 1M. It broadcasts as a scalar, so it can be passed inside `@.`.
+schemes other than 1M, and for 1M where `sgs_cloud_species_constant_timescales`
+is positive. It broadcasts as a scalar, so it can be passed inside `@.`.
 """
 struct ConstantMicrophysicsTimescales{FT}
     τ_cond::FT
@@ -1074,17 +1079,19 @@ Base.broadcastable(τ::ConstantMicrophysicsTimescales) = tuple(τ)
 """
     sgs_microphysics_relaxation_time(τ_params, thp, T, ρ, q_cloud, q_lcl, q_icl)
 
-The phase-blended relaxation time `sgs_microphysics_timescale` of the Damköhler
-factor of `sgs_variance_fidelity`, at a point. With the 1M scheme (`τ_params` its
-`CAP.cloud_liquid_formation_1m_params`), the liquid and ice times are those of its
-condensation–evaporation and deposition–sublimation processes at the state
-`(T, ρ, q_cloud, q_lcl, q_icl)` (`cloud_species_relaxation_time`, with
-`q_cloud = q_tot − q_rai − q_sno` the cloud-available water), so the factor
-follows the configured ice-formation variant; with the other schemes
-(`τ_params` a `ConstantMicrophysicsTimescales`), they are the constant parameters
-`condensation_evaporation_timescale` and `sublimation_deposition_timescale`,
-which are the relaxation times of the 2M scheme. Evaluated inside the fused
-column loop of `set_covariance_cache!`.
+factor of `sgs_variance_fidelity`, at a point.
+
+With `τ_params` the `CAP.cloud_formation_1m_params` of the 1M scheme,
+the liquid and ice times are those of its condensation–evaporation and
+deposition–sublimation processes at the state `(T, ρ, q_cloud, q_lcl, q_icl)`
+(`cloud_species_relaxation_time`, with `q_cloud = q_tot − q_rai − q_sno` the
+cloud-available water), so the factor follows the configured ice-formation
+variant. With `τ_params` a `ConstantMicrophysicsTimescales`, they are the
+constant parameters `condensation_evaporation_timescale` and
+`sublimation_deposition_timescale`, the relaxation times of the 2M scheme: used
+with every scheme except 1M, and with 1M where
+`sgs_cloud_species_constant_timescales > 0`. Evaluated inside the fused column
+loop of `set_covariance_cache!`.
 """
 @inline sgs_microphysics_relaxation_time(
     τ::ConstantMicrophysicsTimescales,
@@ -1531,119 +1538,94 @@ high.
 end
 
 """
-    _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
+    _sgs_augmented_sigma(sigma_S, α, σ_abs)
 
-Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
-relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see `_compute_z`) with
-`σ_aug = sqrt((α · σ_S)² + σ_S_floor²)`. `α` scales only the equilibrium
-part; the non-equilibrium floor adds in quadrature. `floor` is a
-`CloudFractionFloorParams` bundle (see `cloud_fraction_floor_params`).
+Augmented saturation-excess standard deviation of the cloud-fraction closure
+[kg/kg],
 
-Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
-fluctuates partly through the equilibrium variations of (T, q_tot) captured by
-the quadrature (`σ_S`), and partly through non-equilibrium variations not
-captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
-with the saturation specific humidity,
+    σ_aug = sqrt((α · σ_S)² + σ_abs²),
 
-    σ_S_floor² = (D · ε_rel · q_sat)² + σ_abs².
+floored at `ϵ_numerics(FT)`.
 
-The q_sat-scaling implies saturation-excess fluctuations scale with q_sat.
-The parameter `ε_rel` is a condensate-patchiness scale: it indicates the
-condensate-to-q_sat ratio at which a subdomain saturates over its full area
-(`q_c ≫ ε_rel·q_sat ⇒ CF→1`; `q_c ≪ ε_rel·q_sat ⇒` patchy, `CF→0`).
-This is loosely the critical-relative-humidity idea (subgrid humidity
-variance ∝ q_sat, `ε_rel ~ 1 − RH_crit`; Quaas, 2012,
-doi:10.1029/2012JD017495). However, this is an inexact analogy because
-the PDF here is Gaussian (rather than a bounded top-hat as in Quaas 2012),
-so there is no sharp onset, and `ε_rel` is the *intra*-subdomain width
-only; the inter-subdomain (convective) spread is carried explicitly by the
-drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
-with grid spacing.
-
-Saturation-margin release `D`. Non-equilibrium patchiness is a property of
-*partially* saturated air: in a subdomain whose equilibrium PDF sits
-inside saturation (an equilibrated overcast deck maintained by radiative
-cooling), the patchiness the floor parameterizes is near zero, and an
-undamped floor spuriously caps CF well below 1 whenever `q_c ≲ ε_rel·q_sat`.
-(This would cut cloud-top longwave cooling in the stratocumulus regime.)
-The relative floor is therefore released only where the mean saturation
-excess `μ_S = q_tot − q_sat` is positive by a margin relative to the
-release width `w`:
-
-    w  = sqrt((c_w)²·((α·σ_S)² + σ_abs²) + (c_a·ε_rel·q_sat)²),
-    x  = max(μ_S, 0) / w,
-    D  = D_min + (1 − D_min) · (1 + x²)^(−s/2),
-
-with four calibratable shape parameters (see
-`cloud_fraction_floor_params`):
-
-  - `margin` `c_w`: saturation margin in equilibrium PDF widths at which
-    the release transitions. With `abs_margin = 0`, `w` is the equilibrium
-    width itself, so the floor is released exactly where the unfloored
-    closure already predicts overcast (under saturation adjustment
-    `μ_S = q_c`, so `x` is the unfloored normalized condensate `C`).
-  - `abs_margin` `c_a`: absolute margin in floor units, added in
-    quadrature. Guards against release driven by a spuriously small
-    quadrature `σ_S`: for `c_a > 0` (the default), release additionally
-    requires `μ_S ≳ c_a·ε_rel·q_sat` regardless of how small the equilibrium
-    width is.
-  - `sharpness` `s`: transition exponent; larger `s` approaches a switch
-    at `x ≈ 1`, smaller `s` gives a gentler algebraic release.
-  - `residual` `D_min`: fraction of the relative floor retained deep
-    inside a saturated deck, bounding CF below 1 even at full release.
-
-For any parameter values, the floor is fully active (`D = 1`) for a
-subsaturated or marginally saturated mean (cumulus, cloud edges — `μ_S ≤ 0`
-retains the constant-floor behavior exactly).
-
-The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
-`_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
-`E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
+`σ_S` is the saturation-excess width from the resolved gradients, scaled by
+the variance fidelity `α`, and `σ_abs` the absolute floor that keeps the width
+finite where `σ_S` vanishes. The equilibrium condensate `q_c_eq` vanishes with
+`σ_S` in subsaturated air, so the absolute floor suffices for the equilibrium
+part of the condensate; the subsaturation deficit widens the normalization of
+the non-equilibrium excess only (`_compute_cloud_fraction`).
 """
-@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
-    FT = typeof(q_c)
-    q_c <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
-    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
-    # Release the relative floor only where the mean is saturated by a
-    # margin relative to the release width `w` — by default the
-    # *equilibrium* PDF width, so the floor is released where the unfloored
-    # closure already predicts overcast (x is then the unfloored normalized
-    # condensate when μ_S ≈ q_c). Subsaturated or marginally saturated means
-    # (μ_S ≤ 0: cumulus, cloud edges) keep the full floor for any parameter
-    # values. The denominator guard covers only the w → 0 limit: the
-    # smallness of the equilibrium width relative to ε_rel·q_sat is exactly
-    # what drives the release in a quiescent deck, so it must not be floored
-    # away.
-    w = sqrt(
-        margin^2 * ((α * sigma_S)^2 + σ_abs^2) +
-        (abs_margin * ε_rel * q_sat)^2,
+@inline function _sgs_augmented_sigma(sigma_S, α, σ_abs)
+    FT = typeof(sigma_S)
+    σ_var = FT(α) * FT(sigma_S)
+    return max(sqrt(σ_var^2 + FT(σ_abs)^2), ϵ_numerics(FT))
+end
+
+"""
+    _compute_cloud_fraction(
+        q_c, mu_S, sigma_S, α, σ_abs,
+        lin = zero(mu_S), curv = zero(mu_S), c = oftype(mu_S, 3),
     )
-    x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
-    # `sharpness == 1` is the default release profile; the fast path keeps
-    # it identical to the plain saturation-margin release.
-    D_shape =
-        sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
-    D = residual + (1 - residual) * D_shape
-    σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
-    # α scales only the equilibrium part; the non-eq floor adds in quadrature.
-    σ_aug = sqrt((α * sigma_S)^2 + σ_S_floor_sq)
-    C = q_c / σ_aug
-    z = _compute_z(C)
-    return normal_cdf(z)
+
+Cloud fraction `CF = Φ(z)` [-] of a subdomain holding condensate `q_c`, where
+`z` solves the truncated-Gaussian condensate relation `C = z·Φ(z) + φ(z)`
+(`_compute_z`) for the normalized condensate
+
+    C = min(q_c, q_c_eq) / σ_aug + max(0, q_c − q_c_eq) / √(σ_aug² + δ_sub²).
+
+Here `σ_aug = _sgs_augmented_sigma(sigma_S, α, σ_abs)` is the augmented
+width, `δ_sub = max(0, −μ_S)` the subsaturation deficit, and
+`q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c)` the condensate
+that the subdomain's own saturation-excess fluctuations support.
+
+Condensate up to `q_c_eq` is normalized by `σ_aug`. In subsaturated air,
+`q_c_eq` vanishes faster than `σ_S` as the deficit grows, so this part stays
+patchy on its own. The excess `max(0, q_c − q_c_eq)`, such as condensate
+detrained into subsaturated air, is normalized by `√(σ_aug² + δ_sub²)`:
+filling the clear fraction at mean deficit `δ_sub` takes condensate of that
+order, so the excess covers less area than the same amount of equilibrium
+condensate. The sum amounts to one effective width `σ_eff = q_c / C`, the
+condensate-weighted harmonic mean of the two widths, over which the
+truncated-Gaussian relation spreads the whole condensate. Where
+`q_c ≤ q_c_eq` or `μ_S ≥ 0`, `C` reduces to `q_c / σ_aug`. Without condensate
+the cloud fraction is zero.
+"""
+@inline function _compute_cloud_fraction(
+    q_c,
+    mu_S,
+    sigma_S,
+    α,
+    σ_abs,
+    lin = zero(mu_S),
+    curv = zero(mu_S),
+    c = oftype(mu_S, 3),
+)
+    FT = typeof(mu_S)
+    FT(q_c) <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
+    σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_abs)
+    q_c_eq =
+        equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
+    q_c_eq_part = min(FT(q_c), q_c_eq)
+    q_c_neq_part = max(zero(FT), FT(q_c) - q_c_eq)
+    δ_sub = max(zero(FT), -FT(mu_S))
+    σ_neq = sqrt(σ_aug^2 + δ_sub^2)
+    return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
 end
 
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α, floor,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, σ_abs, c,
     )
 
-Fused production overload: compute the hybrid cloud fraction in a single
-inlined call that obtains `σ_S` (`_sgs_saturation_moments`, the linearized
-width) and evaluates the truncated-Gaussian approximate closure in one
-broadcast kernel. Used by
-`set_quadrature_cloud_fraction!` so the moments are never
-materialized to a Field.
+Fused overload for the Picard iterates of `set_quadrature_cloud_fraction!`.
+
+`μ_S` and `σ_S` come from `_sgs_saturation_moments` at the cloud-available
+water `q_tot` (total water less precipitation), and the cloud fraction from the
+scalar method with zero displacement coefficients and the displacement
+truncation `c` (`equilibrium_condensate_truncation`), in one broadcast kernel,
+so the moments are never materialized to a `Field`. After the Picard
+iteration, `set_sgs_moments_and_cloud_fraction!` evaluates the final cloud
+fraction with the curvature-aware coefficients where they are configured.
 """
 @inline function _compute_cloud_fraction(
     thermo_params,
@@ -1657,7 +1639,8 @@ materialized to a Field.
     q′q′,
     corr_Tq,
     α,
-    floor,
+    σ_abs,
+    c,
 )
     q_c = q_liq + q_ice
     FT = typeof(q_c)
@@ -1665,47 +1648,11 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    q_sat = TD.q_vap_saturation(_unwrapped(thermo_params), T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_c, moments.mu_S, moments.sigma_S, q_sat, α, floor,
+        q_c, moments.mu_S, moments.sigma_S, α, σ_abs,
+        zero(moments.mu_S), zero(moments.mu_S), c,
     )
 end
-
-"""
-    CloudFractionFloorParams{FT}
-
-Augmented-σ floor magnitude and release-shape parameters for
-`_compute_cloud_fraction`, bundled into one isbits broadcast scalar
-(a struct rather than a NamedTuple, which Base reserves from broadcasting):
-
-  - `ε_rel`, `σ_abs`: relative and absolute floor magnitudes,
-  - `margin`, `abs_margin`, `sharpness`, `residual`: release shape (see the
-    saturation-margin release section of `_compute_cloud_fraction`).
-"""
-Base.@kwdef struct CloudFractionFloorParams{FT}
-    ε_rel::FT
-    σ_abs::FT
-    margin::FT
-    abs_margin::FT
-    sharpness::FT
-    residual::FT
-end
-Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
-
-"""
-    cloud_fraction_floor_params(params)
-
-Build the `CloudFractionFloorParams` bundle from the model
-parameter set.
-"""
-cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
-    ε_rel = CAP.cloud_fraction_eps_rel(params),
-    σ_abs = CAP.cloud_fraction_sigma_abs(params),
-    margin = CAP.cloud_fraction_floor_release_margin(params),
-    abs_margin = CAP.cloud_fraction_floor_release_abs_margin(params),
-    sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
-    residual = CAP.cloud_fraction_floor_residual(params),
-)
 
 """
     _compute_sgs_moments(
@@ -1825,7 +1772,8 @@ _materialized(dest, src) = (dest .= src)
 
 Picard update of the `QuadratureCloud` cloud fraction in one column loop: the
 truncated-Gaussian closure with the linearized `σ_S` (see
-`_compute_cloud_fraction`) at the state `env_state` (`cloud_env_state`), with
+`_compute_cloud_fraction`) at the state `env_state` (`cloud_env_state`),
+centred on the cloud-available water (total water less precipitation), with
 EDMF updraft weighting (`_edmf_weight_cloud_fraction!`). Without `aitken`, the
 result is also stored in the first Picard iterate `c1`; with it, the result is
 the guarded Aitken acceleration of `c0`, `c1`, and the new iterate.
@@ -1833,25 +1781,32 @@ the guarded Aitken acceleration of `c0`, `c1`, and the new iterate.
 function set_quadrature_cloud_fraction!(
     Y, p, env_state, c0, c1, ::Val{aitken},
 ) where {aitken}
-    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl) = env_state
+    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
     (; ᶜcloud_fraction, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
+    zero_FT = zero(eltype(p.params))
     sgs_quad = p.atmos.sgs_quadrature
-    floor = cloud_fraction_floor_params(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    c = equilibrium_condensate_truncation(p)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+    # The cloud-available water enters the loop as a lazy field: without
+    # prognostic precipitation `ᶜq_precip` is a number, which the column loop
+    # cannot slice on its own.
+    ᶜq_cloud = @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))
     DataLayouts.foreach_column(
-        ᶜcloud_fraction, c0, c1, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+        ᶜcloud_fraction, c0, c1, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
         ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p),
-    ) do ᶜcloud_fraction, c0, c1, Yc, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+    ) do ᶜcloud_fraction, c0, c1, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
         @. ᶜcloud_fraction = _compute_cloud_fraction(
-            $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
+            $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c),
         )
         _edmf_weight_cloud_fraction!(
-            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
+            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
+            thermo_params, σ_abs,
         )
         if aitken
             @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, ᶜcloud_fraction)
@@ -1876,11 +1831,11 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
         p.precomputed
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     zero_FT = zero(eltype(p.params))
     sgs_quad = p.atmos.sgs_quadrature
-    floor = cloud_fraction_floor_params(p.params)
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     c = equilibrium_condensate_truncation(p)
@@ -1901,12 +1856,66 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             (@. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
             ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             (@. lazy(_disp_lin(ᶜdisp_S))), (@. lazy(_disp_curv(ᶜdisp_S))),
-            c, vthermo, thermo_params, sgs_quad, floor,
+            c, vthermo, thermo_params, sgs_quad, σ_abs,
         )
         _edmf_weight_cloud_fraction!(
-            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
+            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
+            thermo_params, σ_abs,
         )
         return nothing
+    end
+    return nothing
+end
+
+"""
+    set_sgs_moments!(Y, p)
+
+Refresh `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` from the current state
+`Y` without touching `ᶜcloud_fraction` or `ᶜprecip_frac`. Used by
+`set_implicit_precomputed_quantities!` on each Newton iterate (`λ_lagrange`
+follows `q_lcl + q_icl`, which Newton moves): the implicit 1M BMT reads
+`ᶜsgs_moments` directly, while `ᶜcloud_fraction` is not a BMT input and
+`ᶜprecip_frac` only enters the BMT when `sgs_precip_incloud_fraction > 0`
+(off by default). `set_precomputed_quantities!` does not call this helper
+because `set_covariance_cache_and_cloud_fraction!` in its explicit half
+already left `ᶜsgs_moments` current. No-op when `ᶜsgs_moments` is not
+allocated (dry / 0M).
+"""
+NVTX.@annotate function set_sgs_moments!(Y, p)
+    hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
+
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    microphysics_model = p.atmos.microphysics_model
+
+    ᶜρ_env, ᶜT_mean, ᶜq_mean =
+        _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜq_lcl, ᶜq_icl =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_precip =
+        _get_precip_mean(Y, p, turbconv_model, microphysics_model)
+    sgs_quad = p.atmos.sgs_quadrature
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
+
+    FT = eltype(p.params)
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+    c = equilibrium_condensate_truncation(p)
+
+    if p.atmos.sgs_variance_curvature
+        ᶜdisp_S = p.precomputed.ᶜdisp_S
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
+        )
+    else
+        lin₀ = zero(FT)
+        curv₀ = zero(FT)
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
+        )
     end
     return nothing
 end
@@ -1915,7 +1924,7 @@ end
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
         ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
-        vthermo, thermo_params, sgs_quad, floor,
+        vthermo, thermo_params, sgs_quad, σ_abs,
     )
 
 Part of the column loop of `set_sgs_moments_and_cloud_fraction!`: fill the SGS
@@ -1930,77 +1939,166 @@ calls beside it.
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
     ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
-    vthermo, thermo_params, sgs_quad, floor,
+    vthermo, thermo_params, sgs_quad, σ_abs,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
         vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv, c,
     )
-    # Recompute CF from q_c and σ_S using the augmented-σ closure. `Φ(λ/σ_aug)`
-    # is not usable because λ was computed with the equilibrium σ_S_eff, not
-    # σ_aug, so it would not match the truncated-Gaussian closure for the
-    # augmented variance. This overwrites the Picard iterate
-    # with a value consistent with the final SGS moments, so the caller
-    # re-applies the EDMF weighting (`_edmf_weight_cloud_fraction!`).
+    # The cloud fraction from `q_c` and `σ_S` with the augmented-width closure,
+    # centred on the cloud-available water and with the curvature-aware
+    # coefficients where they are configured. `Φ(λ/σ_aug)` is not usable
+    # because `λ` is solved with the equilibrium `σ_S_eff`, not `σ_aug`. This
+    # overwrites the Picard iterate with a value consistent with the final SGS
+    # moments, so the caller re-applies the EDMF weighting
+    # (`_edmf_weight_cloud_fraction!`).
     @. ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
-        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+        ᶜq_cloud - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         ᶜsgs_moments.sigma_S,
-        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         ᶜα,
-        $(floor),
+        $(σ_abs),
+        lin,
+        curv,
+        c,
     )
     return nothing
 end
 
 """
     _edmf_weight_cloud_fraction!(
-        ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
+        ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
+        thermo_params, σ_abs,
     )
 
 Column body of the EDMF cloud weighting in fused loops: scale the environment
 cloud fraction by the environment area fraction and add the cloudy area of each
-updraft, which is binary: `draft_area(ρaʲ, ρʲ)` where the updraft carries cloud
-condensate and `0` otherwise. With non-equilibrium microphysics, the condensate is
-the prognostic `q_lclʲ + q_iclʲ` (the cached `ᶜq_liqʲs` and `ᶜq_iceʲs` include
-precipitation); otherwise, it is the cached `ᶜq_liqʲs + ᶜq_iceʲs`. No-op without
-`PrognosticEDMFX`. The draft fields come from `_edmf_weighting_fields`.
+updraft, `draft_area(ρaʲ, ρʲ)` times its cover `_updraft_cloud_fraction`. The
+cover is binary under equilibrium microphysics. Under non-equilibrium
+microphysics it is the truncated-Gaussian cover against the updraft vapor
+subsaturation deficit, floored by `σ_abs`, of the prognostic cloud condensate
+`q_lclʲ + q_iclʲ` (the cached `ᶜq_liqʲs` and `ᶜq_iceʲs` include
+precipitation). No-op without `PrognosticEDMFX`. The draft fields come from
+`_edmf_weighting_fields`.
 """
 @inline _edmf_weight_cloud_fraction!(
-    ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, thermo_params,
+    ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
+    thermo_params, σ_abs,
 ) = nothing
 @inline function _edmf_weight_cloud_fraction!(
     ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model::PrognosticEDMFX,
-    thermo_params,
+    microphysics_model, thermo_params, σ_abs,
 )
     ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
     @. ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ_env)
+    is_noneq = microphysics_model isa NonEquilibriumMicrophysics
     unrolled_foreach(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
         @inline
         ᶜsgsʲ = Yc.sgsʲs.:($j)
         ᶜq_lclʲ, ᶜq_iclʲ =
-            haskey(drafts, :ᶜq_liqʲs) ?
-            (drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j)) :
-            (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl)
-        @. ᶜcloud_fraction += updraft_cloudy_area(
-            thermo_params, max(0, ᶜq_lclʲ + ᶜq_iclʲ), ᶜsgsʲ.ρa, drafts.ᶜρʲs.:($$j),
-        )
+            is_noneq ? (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl) :
+            (drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j))
+        @. ᶜcloud_fraction +=
+            draft_area(ᶜsgsʲ.ρa, drafts.ᶜρʲs.:($$j)) * _updraft_cloud_fraction(
+                thermo_params,
+                drafts.ᶜTʲs.:($$j),
+                drafts.ᶜρʲs.:($$j),
+                drafts.ᶜq_tot_nonnegʲs.:($$j),
+                drafts.ᶜq_liqʲs.:($$j),
+                drafts.ᶜq_iceʲs.:($$j),
+                ᶜq_lclʲ,
+                ᶜq_iclʲ,
+                σ_abs,
+                microphysics_model,
+            )
         return nothing
     end
     return nothing
 end
 
-# The binary cloudy area of an updraft with non-negative cloud condensate `qʲ`.
-@inline updraft_cloudy_area(thermo_params, qʲ, ρaʲ, ρʲ) =
-    ifelse(TD.has_condensate(thermo_params, qʲ), draft_area(ρaʲ, ρʲ), zero(qʲ))
+"""
+    _updraft_cloud_fraction(
+        thermo_params, Tʲ, ρʲ, q_totʲ, q_liq_totʲ, q_ice_totʲ,
+        q_lclʲ, q_iclʲ, σ_abs, microphysics_model,
+    )
 
-# The draft densities and cached draft condensate the EDMF cloud weighting reads in
-# fused loops.
+Cloud fraction within updraft `j` [-].
+
+Under equilibrium microphysics, `1` where `TD.has_condensate` holds for
+`q_lclʲ + q_iclʲ` and `0` otherwise. Under non-equilibrium microphysics, the
+truncated-Gaussian cover `Φ(z)`, with `z` from `_compute_z` at the normalized
+condensate
+
+    C = q_cʲ / max(√(δ_subʲ² + σ_abs²), ϵ_numerics),
+
+where `q_cʲ = max(0, q_lclʲ + q_iclʲ)` is the cloud condensate and
+`δ_subʲ = max(0, q_sat(Tʲ, ρʲ, q_lclʲ, q_iclʲ) − q_vapʲ)` the vapor
+subsaturation deficit, with `q_vapʲ = q_totʲ − q_liq_totʲ − q_ice_totʲ` (the
+condensed water includes precipitation). The cover is `0` where
+`TD.has_condensate` fails. Above the lifting condensation level (`δ_subʲ = 0`,
+`q_cʲ ≫ σ_abs`) the updraft is fully cloudy; below it (`δ_subʲ ≫ q_cʲ`), trace
+entrained or diffused condensate gives almost no cover.
+"""
+@inline function _updraft_cloud_fraction(
+    thermo_params,
+    Tʲ,
+    ρʲ,
+    q_totʲ,
+    q_liq_totʲ,
+    q_ice_totʲ,
+    q_lclʲ,
+    q_iclʲ,
+    σ_abs,
+    ::NonEquilibriumMicrophysics,
+)
+    FT = typeof(Tʲ)
+    q_cʲ = max(zero(FT), q_lclʲ + q_iclʲ)
+    q_vapʲ = max(
+        zero(FT),
+        q_totʲ - max(zero(FT), q_liq_totʲ) - max(zero(FT), q_ice_totʲ),
+    )
+    q_satʲ = TD.q_vap_saturation(
+        thermo_params,
+        Tʲ,
+        ρʲ,
+        max(zero(FT), q_lclʲ),
+        max(zero(FT), q_iclʲ),
+    )
+    δ_subʲ = max(zero(FT), q_satʲ - q_vapʲ)
+    σ_upʲ = max(sqrt(δ_subʲ^2 + FT(σ_abs)^2), ϵ_numerics(FT))
+    # Both arms evaluate, so the kernel has no branch on the condensate test.
+    return ifelse(
+        TD.has_condensate(thermo_params, q_cʲ),
+        normal_cdf(_compute_z(q_cʲ / σ_upʲ)),
+        zero(FT),
+    )
+end
+@inline function _updraft_cloud_fraction(
+    thermo_params,
+    Tʲ,
+    ρʲ,
+    q_totʲ,
+    q_liq_totʲ,
+    q_ice_totʲ,
+    q_lclʲ,
+    q_iclʲ,
+    σ_abs,
+    microphysics_model,
+)
+    FT = typeof(Tʲ)
+    return ifelse(
+        TD.has_condensate(thermo_params, max(zero(FT), q_lclʲ + q_iclʲ)),
+        one(FT),
+        zero(FT),
+    )
+end
+
+# The draft densities, temperatures, total water and condensate that the EDMF
+# cloud weighting reads in fused loops.
 function _edmf_weighting_fields(Y, p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return (;)
-    (; ᶜρʲs) = p.precomputed
-    p.atmos.microphysics_model isa NonEquilibriumMicrophysics && return (; ᶜρʲs)
-    return (; ᶜρʲs, p.precomputed.ᶜq_liqʲs, p.precomputed.ᶜq_iceʲs)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    return (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs)
 end
 
 """
@@ -2243,8 +2341,12 @@ _env_area_fraction(Y, p, thermo_params, turbconv_model) = one(eltype(p.params))
 """
     _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
-Get environment density, temperature, and specific humidity for cloud fraction.
-Lightweight alternative to `_compute_cloud_state` when only ρ, T, and q are needed.
+Return the density, temperature and total specific humidity `(ᶜρ, ᶜT, ᶜq_tot)`
+of the subdomain that holds the SGS closure: the environment (`ᶜT⁰`,
+`ᶜq_tot_nonneg⁰`, `_env_air_density`) under `PrognosticEDMFX`, the grid mean
+otherwise. The SGS quadrature, its moisture-variance bound and the θ→T
+Jacobian are all evaluated at this state (`cloud_env_state`).
+`_compute_cloud_state` adds the condensate means and variances.
 """
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
@@ -2372,7 +2474,7 @@ _env_precipitation(Y, p, microphysics_model) = zero(eltype(p.params))
 """
     _updraft_cloud_condensate(Y, p, j, microphysics_model)
 
-Cloud condensate of updraft `j`, used for the binary updraft cloud check.
+Cloud condensate of updraft `j`, used by `_updraft_cloud_fraction`.
 With non-equilibrium microphysics, uses the prognostic cloud condensate
 (`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
 precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
@@ -2383,24 +2485,49 @@ _updraft_cloud_condensate(Y, p, j, microphysics_model) =
     (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
 
 """
-    _updraft_cloud_condensate_and_area(Y, p, j, thermo_params, microphysics_model)
+    _updraft_cloud_condensate_and_area!(
+        ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model,
+    )
 
-Non-negative cloud condensate `ᶜqʲ` [kg/kg] and binary cloudy area fraction
-`ᶜaʲ` [-] of updraft `j`, equal to `draft_area(ρaʲ, ρʲ)` where
-`TD.has_condensate(thermo_params, ᶜqʲ)` holds and `0` otherwise.
+Mean in-cloud condensate `ᶜμʲ` [kg/kg] and cloudy area fraction `ᶜaʲ` [-] of
+updraft `j`, as lazy fields on its cover `cf_upʲ` (`_updraft_cloud_fraction`),
+which is written to `ᶜcf_upʲ`: `ᶜaʲ = draft_area(ρaʲ, ρʲ) · cf_upʲ` and
+`ᶜμʲ = q_draftʲ / cf_upʲ` (`0` where clear), so that `ᶜaʲ · ᶜμʲ` is the
+updraft's total cloud condensate `draft_area · q_draftʲ`. The cover is
+materialized because the broadcasts that read `ᶜμʲ` and `ᶜaʲ` repeat it, and
+each repetition of its eight updraft fields adds to the parameter block of
+the GPU kernel, which is limited to 4 KiB on pre-Volta devices.
 """
-function _updraft_cloud_condensate_and_area(
-    Y, p, j, thermo_params, microphysics_model,
+function _updraft_cloud_condensate_and_area!(
+    ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model,
 )
     FT = eltype(p.params)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
-    ᶜqʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
-    ᶜaʲ = @. lazy(
-        updraft_cloudy_area(
-            thermo_params, ᶜqʲ, Y.c.sgsʲs.:($$j).ρa, p.precomputed.ᶜρʲs.:($$j),
+    ᶜq_draftʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
+    @. ᶜcf_upʲ = _updraft_cloud_fraction(
+        thermo_params,
+        ᶜTʲs.:($$j),
+        ᶜρʲs.:($$j),
+        ᶜq_tot_nonnegʲs.:($$j),
+        ᶜq_liqʲs.:($$j),
+        ᶜq_iceʲs.:($$j),
+        ᶜq_liqʲ,
+        ᶜq_iceʲ,
+        σ_abs,
+        microphysics_model,
+    )
+    ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) * ᶜcf_upʲ)
+    # The divisor is floored before the `ifelse`, whose arms both evaluate.
+    ᶜμʲ = @. lazy(
+        ifelse(
+            ᶜcf_upʲ > zero(FT),
+            ᶜq_draftʲ / max(ᶜcf_upʲ, floatmin(FT)),
+            zero(FT),
         ),
     )
-    return ᶜqʲ, ᶜaʲ
+    return ᶜμʲ, ᶜaʲ
 end
 
 # ============================================================================

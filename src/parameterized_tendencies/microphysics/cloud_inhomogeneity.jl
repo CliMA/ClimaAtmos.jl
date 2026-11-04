@@ -18,9 +18,9 @@
 # longwave radiation. The closures below evaluate `χ` for the cloudy part of
 # a cell as PROPHET represents it: the truncated-Gaussian cloud of the
 # subdomain with the SGS closure (the environment under PrognosticEDMFX, the
-# grid mean otherwise) plus the homogeneous cloudy updrafts, with an
-# unresolved multiplicative inhomogeneity that applies to every cloudy
-# component.
+# grid mean otherwise) plus the cloudy updrafts, each with the in-cloud
+# variance its cover implies, and an unresolved multiplicative inhomogeneity
+# that applies to every cloudy component.
 
 """
     log_gamma_effective_thickness(ν)
@@ -134,7 +134,9 @@ passed to radiation is scaled.
 
 The cloud is a mixture of components `k` with cloudy area `A_k`, mean in-cloud
 condensate `μ_k`, and Gamma-distributed in-cloud condensate of shape `ν_k`
-(relative variance `1/ν_k`). `χ` is the larger of two estimates of
+(relative variance `1/ν_k = cloud_condensate_relative_variance(cf_k, rv_floor)`
+for a component with the truncated-Gaussian cover `cf_k`). `χ` is the larger
+of two estimates of
 `exp(E[ln q]) / E[q]`, which coincide for a single component:
 
   - the geometric mean of the mixture, exact for the effective-thickness
@@ -145,11 +147,11 @@ condensate `μ_k`, and Gamma-distributed in-cloud condensate of shape `ν_k`
 
 Each underestimates `χ` where the other holds. The geometric mean diverges to
 zero when a component holds almost no condensate, such as an updraft that the
-binary cover test (`_edmf_weight_cloud_fraction!`) counts as cloudy with trace
-condensate, although such a component is optically clear and reflects linearly
-in its optical depth. The moment-matched Gamma puts the excess of a small,
-dense component into a heavy tail near zero, whereas the geometric mean weighs
-that component by its area.
+binary cover of `_updraft_cloud_fraction` under 0-moment microphysics counts
+as cloudy with trace condensate, although such a component is optically clear
+and reflects linearly in its optical depth. The moment-matched Gamma puts the
+excess of a small, dense component into a heavy tail near zero, whereas the
+geometric mean weighs that component by its area.
 
 The components are
 
@@ -158,11 +160,20 @@ The components are
     `cf_env = (cf − a_up) / a_env` inverts the EDMF cover weighting, its
     cloudy area is `a_env cf_env`, its in-cloud mean `q_env / cf_env`, and its
     relative variance `cloud_condensate_relative_variance(cf_env, rv_floor)`;
-  - the cloudy updrafts, homogeneous apart from the unresolved inhomogeneity
-    `rv_floor` [-], entering through their summed area `a_up = Σ a_j` [-],
-    condensate `aq_up = Σ a_j q_j` [kg/kg], squared condensate
-    `aq2_up = Σ a_j q_j²` [kg²/kg²], and log-condensate
-    `alnq_up = Σ a_j ln q_j` [-].
+  - the cloudy updrafts, entering through their summed area `a_up = Σ a_j`
+    [-], condensate `aq_up = Σ a_j q_j` [kg/kg], second moment
+    `aq2_up = Σ a_j q_j² (1 + 1/ν_j)` [kg²/kg²], and log-condensate
+    `alnq_up = Σ a_j (ln q_j + ψ(ν_j) − ln ν_j)` [-], each including the
+    Gamma shape `ν_j` of the updraft (`_updraft_cloud_moments_j!`). The cloudy
+    area `a_j` of updraft `j` is its area fraction times its cover
+    `_updraft_cloud_fraction`, and `q_j` its in-cloud condensate, the draft
+    condensate over that cover (`_updraft_cloud_condensate_and_area!`), so the
+    cover of the updrafts enters `χ` through the same weighting as the cloud
+    fraction `cf`. Under non-equilibrium microphysics, the cover is the
+    truncated-Gaussian cover against the updraft vapor deficit and `1/ν_j` is
+    its `cloud_condensate_relative_variance(cf_j, rv_floor)`; under the binary
+    cover of equilibrium microphysics, the updraft is homogeneous apart from
+    `rv_floor` (`_updraft_relative_variance`).
 
 For a single grid-mean domain (`a_env = 1` and vanishing updraft sums),
 `χ = exp(ψ(ν) − ln ν)` depends only on `cf`. Returns `1` where the cell has
@@ -177,7 +188,6 @@ no cloudy component.
     A_env = ifelse(has_env, a_env * cf_env, zero(FT))
     μ_env = max(q_env / max(cf_env, eps(FT)), floatmin(FT))
     rv_env = cloud_condensate_relative_variance(cf_env, rv_floor)
-    rv_up = max(rv_floor, zero(FT))
     A = A_env + a_up
     A_safe = max(A, eps(FT))
     mean_q = max((A_env * μ_env + aq_up) / A_safe, floatmin(FT))
@@ -185,14 +195,11 @@ no cloudy component.
     mean_lnq =
         (
             A_env * (log(μ_env) + log_gamma_effective_thickness(inv(rv_env))) +
-            alnq_up +
-            a_up * log_gamma_effective_thickness(inv(rv_up))
+            alnq_up
         ) / A_safe
     χ_geometric = exp(mean_lnq - log(mean_q))
     # Gamma matched to the mixture's mean and variance.
-    mean_q2 =
-        (A_env * μ_env^2 * (one(FT) + rv_env) + aq2_up * (one(FT) + rv_up)) /
-        A_safe
+    mean_q2 = (A_env * μ_env^2 * (one(FT) + rv_env) + aq2_up) / A_safe
     rv_mixture = max(mean_q2 / mean_q / mean_q - one(FT), zero(FT))
     χ_moments = exp(log_gamma_effective_thickness(inv(rv_mixture)))
     χ = max(χ_geometric, χ_moments)
@@ -204,53 +211,104 @@ no cloudy component.
 end
 
 """
-    _updraft_cloud_moments_j(Y, p, j, thermo_params, microphysics_model)
+    _updraft_relative_variance(cf_up, rv_floor, microphysics_model)
+
+Relative variance `1/ν_j` [-] of the in-cloud condensate of an updraft with
+cover `cf_up` [-]. Under non-equilibrium microphysics, the cover is the
+truncated-Gaussian cover of `_updraft_cloud_fraction`, so the in-cloud
+condensate has the relative variance of its positive tail times the
+unresolved inhomogeneity, `cloud_condensate_relative_variance(cf_up, rv_floor)`,
+as for the environment. Under the binary cover of equilibrium microphysics,
+the updraft is homogeneous apart from `rv_floor`.
+"""
+@inline _updraft_relative_variance(cf_up, rv_floor, ::NonEquilibriumMicrophysics) =
+    cloud_condensate_relative_variance(cf_up, rv_floor)
+@inline _updraft_relative_variance(cf_up, rv_floor, microphysics_model) =
+    max(rv_floor, zero(cf_up))
+
+"""
+    _updraft_cloud_moments_j!(
+        ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model, rv_floor,
+    )
 
 Lazy contributions of updraft `j` to the cloudy-updraft sums of
 `cloud_optical_depth_factor`: its cloudy area `a_j` [-], condensate
-`a_j q_j` [kg/kg], squared condensate `a_j q_j²` [kg²/kg²], and
-log-condensate `a_j ln q_j` [-], the last `0` where the updraft is clear.
+`a_j q_j` [kg/kg], second moment `a_j q_j² (1 + 1/ν_j)` [kg²/kg²], and
+log-condensate `a_j (ln q_j + ψ(ν_j) − ln ν_j)` [-], the last `0` where the
+updraft is clear, with the Gamma shape `ν_j` from its cover
+(`_updraft_relative_variance`). The cover of the updraft is written to
+`ᶜcf_upʲ` (`_updraft_cloud_condensate_and_area!`), and the lazy fields read
+it.
 """
-function _updraft_cloud_moments_j(Y, p, j, thermo_params, microphysics_model)
+function _updraft_cloud_moments_j!(
+    ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model, rv_floor,
+)
     FT = eltype(p.params)
-    ᶜqʲ, ᶜaʲ = _updraft_cloud_condensate_and_area(
-        Y, p, j, thermo_params, microphysics_model,
+    ᶜqʲ, ᶜaʲ = _updraft_cloud_condensate_and_area!(
+        ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model,
+    )
+    ᶜrvʲ = @. lazy(
+        _updraft_relative_variance(ᶜcf_upʲ, rv_floor, microphysics_model),
     )
     ᶜaqʲ = @. lazy(ᶜaʲ * ᶜqʲ)
-    ᶜaq2ʲ = @. lazy(ᶜaʲ * ᶜqʲ * ᶜqʲ)
+    ᶜaq2ʲ = @. lazy(ᶜaʲ * ᶜqʲ * ᶜqʲ * (one(FT) + ᶜrvʲ))
     ᶜalnqʲ = @. lazy(
-        ifelse(ᶜaʲ > zero(FT), ᶜaʲ * log(max(ᶜqʲ, floatmin(FT))), zero(FT)),
+        ifelse(
+            ᶜaʲ > zero(FT),
+            ᶜaʲ * (
+                log(max(ᶜqʲ, floatmin(FT))) +
+                log_gamma_effective_thickness(inv(ᶜrvʲ))
+            ),
+            zero(FT),
+        ),
     )
     return ᶜaʲ, ᶜaqʲ, ᶜaq2ʲ, ᶜalnqʲ
 end
 
 """
-    _updraft_cloud_moments(Y, p, thermo_params, turbconv_model)
+    _updraft_cloud_moments!(
+        ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up, ᶜcf_upʲ, Y, p, thermo_params,
+        rv_floor, turbconv_model,
+    )
 
-Lazy sums over the mass-flux updrafts of the moments of
-`_updraft_cloud_moments_j`, `(a_up, aq_up, aq2_up, alnq_up)`, which enter
-the single broadcast of `set_sw_cloud_optical_depth_factor!`; four zeros
-without `PrognosticEDMFX`. The broadcast repeats the cloudy-area test of
-each updraft in all four moments, so its expression, and with it the GPU
-kernel's parameter size, grows with the number of updrafts.
+Sums over the mass-flux updrafts of the moments of
+`_updraft_cloud_moments_j!`, `(a_up, aq_up, aq2_up, alnq_up)`, accumulated
+one updraft at a time into the four fields of the same names, with `ᶜcf_upʲ`
+holding the cover of the current updraft; returns the four fields. Without
+`PrognosticEDMFX`, returns four zeros and leaves the fields untouched.
+Accumulating keeps every broadcast at the size of one updraft's moment,
+whatever the number of updrafts, so the GPU kernels stay within their
+parameter limit.
 """
-function _updraft_cloud_moments(Y, p, thermo_params, turbconv_model)
+function _updraft_cloud_moments!(
+    ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up, ᶜcf_upʲ, Y, p, thermo_params,
+    rv_floor, turbconv_model,
+)
     FT = eltype(p.params)
     z = zero(FT)
     return z, z, z, z
 end
 
-function _updraft_cloud_moments(
-    Y, p, thermo_params, ::PrognosticEDMFX{N},
+function _updraft_cloud_moments!(
+    ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up, ᶜcf_upʲ, Y, p, thermo_params,
+    rv_floor, ::PrognosticEDMFX{N},
 ) where {N}
+    FT = eltype(p.params)
     microphysics_model = p.atmos.microphysics_model
-    return mapreduce(
-        j -> _updraft_cloud_moments_j(
-            Y, p, j, thermo_params, microphysics_model,
-        ),
-        (m1, m2) -> map((x, y) -> (@. lazy(x + y)), m1, m2),
-        ntuple(identity, Val(N)),
-    )
+    @. ᶜa_up = zero(FT)
+    @. ᶜaq_up = zero(FT)
+    @. ᶜaq2_up = zero(FT)
+    @. ᶜalnq_up = zero(FT)
+    for j in 1:N
+        ᶜaʲ, ᶜaqʲ, ᶜaq2ʲ, ᶜalnqʲ = _updraft_cloud_moments_j!(
+            ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model, rv_floor,
+        )
+        @. ᶜa_up += ᶜaʲ
+        @. ᶜaq_up += ᶜaqʲ
+        @. ᶜaq2_up += ᶜaq2ʲ
+        @. ᶜalnq_up += ᶜalnqʲ
+    end
+    return ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up
 end
 
 """
@@ -262,7 +320,8 @@ and ice water paths, from the current cloud fraction and condensate; return
 `nothing`. No-op where the radiation cache has no such field: radiation
 without interactive clouds, idealized clouds, non-quadrature cloud models, or
 `cloud_inhomogeneity_in_sw_radiation: false`, which leaves the shortwave water
-paths unscaled (`χ = 1`) for comparison runs.
+paths unscaled (`χ = 1`) for comparison runs. Under `PrognosticEDMFX`, writes
+`p.scratch.ᶜtemp_scalar` and `ᶜtemp_scalar_4` to `ᶜtemp_scalar_7`.
 
 Dispatches on the cloud model: `QuadratureCloud` uses the truncated-Gaussian
 closure (`cloud_optical_depth_factor`), whose subgrid PDF also sets the cloud
@@ -297,8 +356,14 @@ function set_sw_cloud_optical_depth_factor!(
     ᶜa⁰ = _env_area_fraction(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl, ᶜq_icl =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up =
-        _updraft_cloud_moments(Y, p, thermo_params, turbconv_model)
+    ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up = _updraft_cloud_moments!(
+        p.scratch.ᶜtemp_scalar_4,
+        p.scratch.ᶜtemp_scalar_5,
+        p.scratch.ᶜtemp_scalar_6,
+        p.scratch.ᶜtemp_scalar_7,
+        p.scratch.ᶜtemp_scalar,
+        Y, p, thermo_params, rv_floor, turbconv_model,
+    )
     @. ᶜχ = cloud_optical_depth_factor(
         ᶜcloud_fraction, ᶜa⁰, ᶜq_lcl + ᶜq_icl, ᶜa_up, ᶜaq_up, ᶜaq2_up,
         ᶜalnq_up, rv_floor,
