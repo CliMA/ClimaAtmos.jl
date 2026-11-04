@@ -74,14 +74,14 @@ steps:
           end'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.Registry.update()'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.instantiate()'
-      - echo "--- main: ClimaAtmos main, ClimaCore main"
+      - echo "--- main (ClimaAtmos main, ClimaCore main)"
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.develop([PackageSpec(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_main")), PackageSpec(path = joinpath(ENV["PROFILE_DIR"], "ClimaCore_main"))]); Pkg.add("MPI")'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- ccmain: ClimaAtmos PR, ClimaCore main"
+      - echo "--- ccmain (ClimaAtmos PR, ClimaCore main)"
       - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_ccmain
       - julia --project=$$PROFILE_DIR/coupler_ccmain/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
       - julia --project=$$PROFILE_DIR/coupler_ccmain/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- pr: ClimaAtmos PR, ClimaCore PR"
+      - echo "--- pr (ClimaAtmos PR, ClimaCore PR)"
       - cp -r $$PROFILE_DIR/coupler_ccmain $$PROFILE_DIR/coupler_pr
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaCore_pr"))'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
