@@ -56,10 +56,12 @@ function amip_target(context, output_dir)
     add_isothermal_boundary_layer = true
     aerosol_radiation = true
     reset_rng_seed = false
-    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(
+    sw_cloud_inhomogeneity = true
+    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(;
         idealized_h2o,
         idealized_clouds,
         cloud,
+        sw_cloud_inhomogeneity,
         add_isothermal_boundary_layer,
         aerosol_radiation,
         reset_rng_seed,
@@ -86,9 +88,8 @@ function amip_target(context, output_dir)
     h_elem = 4
     z_elem = 15
     z_max = 60000.0
-    dz_bottom = 30.0
 
-    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
+    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, context)
 
     model = CA.AtmosModel(
         grid;
@@ -223,7 +224,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             # DataHandlers contains caches, so they are stateful
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
-            :ᶜT′T′, :ᶜq′q′,
+            :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
@@ -278,7 +279,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :ᶜmp_tendency,
-            :ᶜT′T′, :ᶜq′q′,
+            :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
             :rc,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its

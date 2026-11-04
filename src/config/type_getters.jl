@@ -16,6 +16,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
+        implicit_microphysics = get(pa, "implicit_microphysics", true),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
@@ -475,12 +476,13 @@ Build the computational grid selected by the `config` key: `"sphere"` gives a
 `SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
 `PlaneGrid`.
 
-All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
-`dz_bottom`. Every grid except the column also reads the topography keys `topography`,
-`topography_damping_factor`, `mesh_warp_type`, and `topo_smoothing`. The sphere reads
-`h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
-`params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
-and are periodic in the horizontal.
+All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`,
+`dz_bottom`, `dz_top`, and `z_pbl`. Every grid except the column also reads the
+topography keys `topography`, `topography_damping_factor`, `mesh_warp_type`, and
+`topo_smoothing`. The sphere reads `h_elem`, `nh_poly`, `bubble`, and
+`deep_atmosphere`, with the planet radius taken from `params`; the box and plane read
+`x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`) and are periodic in the
+horizontal.
 """
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)
@@ -495,6 +497,8 @@ function get_grid(parsed_args, params, context)
         z_max = parsed_args["z_max"],
         z_stretch = parsed_args["z_stretch"],
         dz_bottom = parsed_args["dz_bottom"],
+        dz_top = parsed_args["dz_top"],
+        z_pbl = parsed_args["z_pbl"],
     )
 
     # Add topography parameters for non-column grids

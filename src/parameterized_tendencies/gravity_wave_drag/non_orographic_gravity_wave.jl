@@ -11,7 +11,7 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
 Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
@@ -29,11 +29,15 @@ transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`, so
 
     Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
 
-with reference-`T₀` constants `L_v` and `L_s`. Called from
-`compute_beres_convective_heating!` when `heating_latent` is enabled.
+with reference-`T₀` constants `L_v` and `L_s`. The 1M species tendencies are the sum of
+two CM BMT calls — one on the bulk parameter set (every explicit process) and one on the
+isolated implicit set (`cloud_liquid_formation` / `cloud_ice_formation` only) — so the
+latent heating reflects every active 1M process regardless of which stage integrates each.
+Called from `compute_beres_convective_heating!` when `heating_latent` is enabled.
 """
 @inline function _beres_latent_heating(
-    mp,
+    mp_bulk,
+    mp_imp,
     thp,
     ρ,
     T,
@@ -44,10 +48,24 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     q_rai,
     q_sno,
 )
-    src = BMT.bulk_microphysics_tendencies(
+    src_bulk = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
         BMT.Microphysics1Moment(),
-        mp,
+        mp_bulk,
+        thp,
+        ρ,
+        T,
+        w,
+        q_tot,
+        q_lcl,
+        q_icl,
+        q_rai,
+        q_sno,
+    )
+    src_imp = BMT.bulk_microphysics_tendencies(
+        BMT.InstantaneousVerbose(),
+        BMT.Microphysics1Moment(),
+        mp_imp,
         thp,
         ρ,
         T,
@@ -61,10 +79,11 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     Lv = TD.Parameters.LH_v0(thp)
     Ls = TD.Parameters.LH_s0(thp)
     cpʲ = TD.cp_m(thp, q_tot, q_lcl, q_icl)
-    return (
-        Lv * (src.dq_lcl_dt + src.dq_rai_dt) +
-        Ls * (src.dq_icl_dt + src.dq_sno_dt)
-    ) / cpʲ
+    dq_lcl_dt = src_bulk.dq_lcl_dt + src_imp.dq_lcl_dt
+    dq_icl_dt = src_bulk.dq_icl_dt + src_imp.dq_icl_dt
+    dq_rai_dt = src_bulk.dq_rai_dt + src_imp.dq_rai_dt
+    dq_sno_dt = src_bulk.dq_sno_dt + src_imp.dq_sno_dt
+    return (Lv * (dq_lcl_dt + dq_rai_dt) + Ls * (dq_icl_dt + dq_sno_dt)) / cpʲ
 end
 
 """
@@ -641,7 +660,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # The grid-mean gw_Q_conv (Q₁) above is left untouched, as it still drives activation criteria and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        mp = CAP.microphysics_1m_params(p.params)
+        # Run CM BMT on both 1M parameter sets and sum: the bulk set carries
+        # every explicit process; the implicit set carries only
+        # `cloud_liquid_formation` and `cloud_ice_formation` (nulled when
+        # `implicit_microphysics: false`). The sum is the full latent heating
+        # regardless of which stage integrates cond/subl, without double-
+        # counting (the two sets are process-disjoint by construction).
+        mp_bulk = CAP.microphysics_1m_params(p.params)
+        mp_imp = CAP.microphysics_1m_implicit_params(p.params)
         thp = CAP.thermodynamics_params(p.params)
         ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
         gw_Q_conv_ic .= FT(0)
@@ -661,7 +687,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             @. gw_Q_conv_ic += ifelse(
                 ᶜρʲ > eps(FT),
                 max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
-                    mp,
+                    mp_bulk,
+                    mp_imp,
                     thp,
                     ᶜρʲ,
                     ᶜTʲ,
@@ -1433,6 +1460,7 @@ function waveforcing_column_accumulate!(
     source_mode::Val{MODE},
 ) where {nc, MODE}
     FT = eltype(waveforcing)
+    kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000) # wave number of gravity waves
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
     Operators.column_accumulate!(
         waveforcing,
@@ -1475,7 +1503,6 @@ function waveforcing_column_accumulate!(
         N_val = MODE == :ad99 ? zero(FT1) : inp[12]
         beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
 
-        kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
 
         fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1

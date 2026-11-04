@@ -72,27 +72,27 @@ it.
 Any process that is not passed keeps its default, so
 `NonEquilibriumMicrophysics1M()` turns every process on with these variants:
 
-| Process                         | Default variant                 |
-|:------------------------------- |:------------------------------- |
-| `cloud_liquid_formation`        | `CloudLiquidFormation()`        |
-| `cloud_ice_formation`           | `PrescribedIceNumber()`         |
-| `cloud_ice_melt`                | `CloudIceMelt()`                |
-| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()` |
-| `rain_autoconversion`           | `Kessler1M()`                   |
-| `snow_autoconversion`           | `NoSupersaturation()`           |
-| `rain_condensation_evaporation` | `RainEvaporation()`             |
-| `snow_deposition_sublimation`   | `DepositionAndSublimation()`    |
-| `snow_melt`                     | `SnowMelt()`                    |
-| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`    |
-| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`    |
-| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`       |
-| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`       |
-| `rain_snow_accretion`           | `RainSnowAccretion()`           |
+| Process                         | Default variant                   |
+|:------------------------------- |:--------------------------------- |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`          |
+| `cloud_ice_formation`           | `TemperatureDependentIceNumber()` |
+| `cloud_ice_melt`                | `CloudIceMelt()`                  |
+| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`   |
+| `rain_autoconversion`           | `Kessler1M()`                     |
+| `snow_autoconversion`           | `NoSupersaturation()`             |
+| `rain_condensation_evaporation` | `RainEvaporation()`               |
+| `snow_deposition_sublimation`   | `DepositionAndSublimation()`      |
+| `snow_melt`                     | `SnowMelt()`                      |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`      |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`      |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`         |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`         |
+| `rain_snow_accretion`           | `RainSnowAccretion()`             |
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` and `cloud_liquid_freezing`
-override the `CMP.Microphysics1MOptions` defaults.
+`get_microphysics_1m_options`). `cloud_ice_formation` overrides the
+`CMP.Microphysics1MOptions` default.
 
 # Fields
 
@@ -101,6 +101,10 @@ override the `CMP.Microphysics1MOptions` defaults.
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
+    `cloud_liquid_formation` and `cloud_ice_formation` are routed to either
+    `microphysics_1m_params` (bulk CM BMT) or `microphysics_1m_implicit_params`
+    (SGS-integrated implicit source) by `create_parameters.jl`, driven by the
+    `implicit_microphysics` config toggle.
 
 # Examples
 
@@ -125,10 +129,13 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # `cloud_ice_formation` overrides the CloudMicrophysics default
-        # (`ConstantTimescale`) so that these defaults match `default_config.yml`
+        # Override CM's `ConstantTimescale` ice formation default to match
+        # `default_config.yml`. `create_parameters.jl` splits
+        # `cloud_liquid_formation` and `cloud_ice_formation` between
+        # `microphysics_1m_params` (bulk) and `microphysics_1m_implicit_params`
+        # (implicit) based on `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
-            cloud_ice_formation = CMP.PrescribedIceNumber(),
+            cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
@@ -1765,8 +1772,9 @@ end
 Whether a process is integrated explicitly or implicitly.
 
 Subtypes: `Explicit` and `Implicit`. Used for the `diff_mode` numerics option
-(config key `implicit_diffusion`) and for
-`microphysics_tendency_timestepping` (config key `implicit_microphysics`).
+(config key `implicit_diffusion`) and for `microphysics_tendency_timestepping`
+(hard-coded to `Implicit()` when microphysics is active; `implicit_microphysics`
+instead controls whether 1M cond/subl flow through the implicit cache).
 """
 abstract type AbstractTimesteppingMode end
 
@@ -2003,6 +2011,10 @@ value. The keyword constructor accepts plain `Bool`s for all of them.
     (`edmfx_filter`).
   - `scale_blending_method`: `AbstractScaleBlendingMethod` used to blend the
     mixing-length scales (`edmfx_scale_blending`).
+  - `updraft_picard_rounds`: Number of velocity ↔ buoyancy-affecting-tracers
+    Picard rounds inside `initialize_implicit_stage_problem!` before the final
+    `u₃` and `ρa` analytic solves. `0` reproduces the single-pass behavior
+    (`edmfx_updraft_picard_rounds`).
 """
 struct EDMFXModel{
     EEM, EDM, ESDFH <: ValTF, EHD <: ValTF,
@@ -2018,6 +2030,7 @@ struct EDMFXModel{
     horizontal_diffusion::EHD
     filter::Bool
     scale_blending_method::SBM
+    updraft_picard_rounds::Int
 end
 
 
@@ -2041,10 +2054,11 @@ and storing the rest as plain `Bool`s.
     diffusive flux.
   - `nh_pressure = false`: Enable the non-hydrostatic pressure drag.
   - `vertical_diffusion = false`: Enable vertical diffusion of the updrafts.
-  - `horizontal_diffusion = false`: Apply the grid-mean horizontal diffusion
-    tendencies to the updraft scalars.
+  - `horizontal_diffusion = false`: Enable horizontal diffusion of the updrafts.
   - `filter = false`: Enable relaxation of negative updraft velocities.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
+  - `updraft_picard_rounds = 0`: Picard rounds for the velocity ↔ tracer
+    sub-solve at implicit-stage initialization; `0` disables the loop.
 
 Each switch may also be given as an already-wrapped `Val{true}`/`Val{false}`.
 An unrecognized keyword, such as a misspelled switch, raises a `MethodError`.
@@ -2072,11 +2086,15 @@ function EDMFXModel(;
     horizontal_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
     scale_blending_method,
+    updraft_picard_rounds::Integer = 0,
 )
     parse_val_tf(x::Bool) = Val(x)
     parse_val_tf(x::ValTF) = x
     parse_bool(x::Bool) = x
     parse_bool(::Val{B}) where {B} = B
+    updraft_picard_rounds ≥ 0 || error(
+        "`updraft_picard_rounds` must be non-negative, got $updraft_picard_rounds",
+    )
     return EDMFXModel(
         entr_model,
         detr_model,
@@ -2088,6 +2106,7 @@ function EDMFXModel(;
         parse_val_tf(horizontal_diffusion),
         parse_bool(filter),
         scale_blending_method,
+        Int(updraft_picard_rounds),
     )
 end
 
@@ -2156,7 +2175,26 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractTqCorrelationModel
+
+Closure for the SGS T–q correlation sampled by the joint-PDF quadrature.
+Selected by the YAML key `tq_correlation_model`.
+
+  - `DiagnosedTqCorrelation` (`"diagnosed"`, default): `ρ = T′q′ / √(T′T′ q′q′)`
+    from the covariance `T′q′` of the subgrid displacement that produces the
+    variances (`displacement_covariance`), transformed to T basis and rescaled
+    under the σ_q bound so `ρ` is clamp-invariant. Falls back to the
+    prescribed value where the variances vanish, and is clamped to `[-1, 1]`
+    to absorb Float32 roundoff at the Cauchy-Schwarz boundary.
+  - `ConstantTqCorrelation` (`"constant"`): the prescribed
+    `Tq_correlation_coefficient` everywhere.
+"""
+abstract type AbstractTqCorrelationModel end
+struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
+struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2165,13 +2203,25 @@ Group of moisture, cloud, and microphysics choices inside an
 
   - `microphysics_model`: An `AbstractMicrophysicsModel`; `DryModel()` by default.
   - `cloud_model`: An `AbstractCloudModel`; `QuadratureCloud()` by default.
-  - `microphysics_tendency_timestepping`: `Explicit()`, `Implicit()`, or
-    `nothing` when there is no microphysics.
+  - `microphysics_tendency_timestepping`: always `Implicit()` when microphysics
+    is active, `nothing` otherwise. Retained as a field so the 2M tendency
+    limiter (`apply_2m_tendency_limits!`) can still dispatch on it.
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
-  - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
-    `FixedTerminalVelocity`.
+  - `tq_correlation_model`: An `AbstractTqCorrelationModel`;
+    `DiagnosedTqCorrelation()` by default (`ConstantTqCorrelation()`
+    prescribes the T–q correlation).
+  - `sgs_variance_curvature`: `true` evaluates the equilibrium SGS condensate
+    under the vertical displacement acting on the curved profile of the
+    saturation excess (`displacement_condensate`), which bounds the moist tail
+    by the largest excess the displaced (quadratic) profile reaches; `false`
+    (default) keeps
+    the truncated-Gaussian expectation.
+  - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
+    `FixedTerminalVelocity()` for cloud liquid, cloud ice and rain, and
+    `Chen2022TerminalVelocity()` for snow by default.
 
 # Examples
 
@@ -2182,16 +2232,18 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    tq_correlation_model::TQC = DiagnosedTqCorrelation()
+    sgs_variance_curvature::Bool = false
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
-    terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()
-    terminal_velocity_snow::TVS = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = FixedTerminalVelocity()
+    terminal_velocity_snow::TVS = Chen2022TerminalVelocity()
 end
 
 """
@@ -2635,8 +2687,9 @@ struct's docstring for the full list of admissible values.
 
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
-    `sgs_quadrature`, `terminal_velocity_liquid`, `terminal_velocity_ice`,
-    `terminal_velocity_rain`, `terminal_velocity_snow`.
+    `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
+    `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
   - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`, `aerosol_names`,
@@ -2695,7 +2748,17 @@ function AtmosModel(
     spaces = get_spaces(grid)
     FT = Spaces.undertype(spaces.center_space)
 
-    params = isnothing(params) ? ClimaAtmosParameters(FT) : params
+    # Thread the caller's microphysics_model so default params pick up its 1M
+    # process selections; otherwise they silently fall back to the defaults.
+    params =
+        isnothing(params) ?
+        ClimaAtmosParameters(
+            FT;
+            microphysics_model = get(
+                kwargs, :microphysics_model,
+                get(defaults, :microphysics_model, nothing),
+            ),
+        ) : params
     eltype(params) == FT || error(
         "Float-type mismatch: the grid is $FT but `params` is " *
         "$(eltype(params)). Use `ClimaAtmosParameters($FT)`.",

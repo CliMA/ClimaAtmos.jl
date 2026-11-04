@@ -21,6 +21,7 @@ z_max: 45e3
 z_elem: 200
 z_stretch: true
 dz_bottom: 30
+dz_top: 500 # the two-scale rule admits 200 levels only for dz_top in 490-500 m
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "10mins"

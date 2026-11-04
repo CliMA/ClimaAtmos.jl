@@ -51,6 +51,28 @@ function implicit_temporary_quantities(Y, atmos)
     )
 end
 """
+    cloud_species_diffusion_temporary_quantities(Y, atmos)
+
+Allocate the scratch fields of the blended cloud-species flux
+(`add_cloud_species_diffusionᵥ!`): the face fluxes of total water and
+liquid–ice static energy, and the center blend weight and condensate
+sensitivities. The 1-moment microphysics is the only scheme that blends, so
+every other scheme gets an empty `NamedTuple`.
+"""
+function cloud_species_diffusion_temporary_quantities(Y, atmos)
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return (;)
+    center_space, face_space = axes(Y.c), axes(Y.f)
+    FT = Spaces.undertype(center_space)
+    return (;
+        ᶠtemp_C3 = Fields.Field(C3{FT}, face_space), # ᶠF_qt
+        ᶠtemp_C3_2 = Fields.Field(C3{FT}, face_space), # ᶠF_sl
+        ᶜtemp_scalar_8 = Fields.Field(FT, center_space), # ᶜλ
+        ᶜtemp_scalar_9 = Fields.Field(FT, center_space), # ᶜc_qt
+        ᶜtemp_scalar_10 = Fields.Field(FT, center_space), # ᶜc_sl
+    )
+end
+
+"""
     temporary_quantities(Y, atmos)
 
 Allocate the scratch fields stored in `p.scratch`.
@@ -78,9 +100,8 @@ function temporary_quantities(Y, atmos)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h; ᶠκ in set_face_diffusivities!
-        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u; ᶠN²_eff in set_face_diffusivities!
-        ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠstrain in set_face_diffusivities!
-        ᶠtemp_scalar_4 = Fields.Field(FT, face_space), # ᶠPr in set_face_diffusivities!
+        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u; ᶠstrain in set_face_diffusivities!
+        ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠPr in set_face_diffusivities!
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
@@ -88,6 +109,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
+        cloud_species_diffusion_temporary_quantities(Y, atmos)...,
         cosp_temporary_quantities(Y, atmos.cosp)...,
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
@@ -113,11 +135,11 @@ function temporary_quantities(Y, atmos)
             Fields.level(Fields.Field(FT, center_space), 1),
         ),
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
-        # DSS buffer for the horizontal gradient vector of the geometric SGS variance
-        # (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
-        ᶜC12_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
-                          Spaces.create_dss_buffer(Fields.Field(C12{FT}, center_space)) :
-                          nothing,
+        # DSS buffer for the element-filtered gradient invariant of the geometric SGS
+        # variance (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
+        ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
+                             Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
+                             nothing,
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
@@ -127,10 +149,6 @@ function temporary_quantities(Y, atmos)
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
         ), # ᶠω¹²ʲs
-        ᶜbidiagonal_adjoint_matrix_c3 = Fields.Field(
-            BidiagonalMatrixRow{typeof(C3(FT(0))')},
-            center_space,
-        ),
         ᶜtemp_bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜtemp_bdmr_2 = similar(Y.c, BidiagonalMatrixRow{FT}),
         ᶜtemp_bdmr_3 = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -142,47 +160,17 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
-        sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
-        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}),
-        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{typeof(CT3(FT(0))')}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
-        ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
-        ᶠband_matrix_wvec = similar(
-            Y.f,
-            ClimaCore.MatrixFields.BandMatrixRow{
-                ClimaCore.Utilities.PlusHalf{Int64}(0),
-                1,
-                ClimaCore.Geometry.WVector{FT},
-            },
-        ),
         ᶠsed_tracer_advection = similar(
             Y.f,
             ClimaCore.MatrixFields.BandMatrixRow{
                 ClimaCore.Utilities.PlusHalf{Int64}(0),
                 1,
-                ClimaCore.Geometry.WVector{FT},
+                FT,
             },
         ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
-        ᶠbidiagonal_matrix_ct3xct12 = similar(
-            Y.f,
-            BidiagonalMatrixRow{
-                ClimaCore.Geometry.Tensor{
-                    2,
-                    FT,
-                    Tuple{
-                        ClimaCore.Geometry.Contravariant3Axis,
-                        ClimaCore.Geometry.Contravariant12Axis,
-                    },
-                    SMatrix{1, 2, FT, 2},
-                },
-            },
-        ),
-        ᶜadvection_matrix = similar(
-            Y.c,
-            BidiagonalMatrixRow{typeof(C3(FT(0))')},
-        ),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),

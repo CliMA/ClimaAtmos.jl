@@ -11,7 +11,7 @@ import ..NonEquilibriumMicrophysics1M
 import ..GridScaleCloud
 import ..SurfaceConditions
 import ..IdealizedInsolation
-import ..Explicit
+import ..Explicit, ..Implicit
 import ..PrognosticEDMFX
 import ..EDMFXModel
 import ..InvZEntrainment, ..BuoyancyVelocityDetrainment
@@ -78,7 +78,7 @@ equil_moist_0m(; kwargs...) = (;
     nonequil_moist_1m(; kwargs...)
 
 [`equil_moist_0m`](@ref) with 1-moment non-equilibrium microphysics and
-explicit microphysics tendency timestepping in place of 0-moment equilibrium.
+implicit microphysics tendency timestepping in place of 0-moment equilibrium.
 Keyword arguments are merged in, and override the preset. Any `AtmosModel`
 field keyword argument is accepted (see [`AtmosModel`](@ref)); names that
 are not fields raise an error when the model is built.
@@ -96,7 +96,7 @@ model = CA.AtmosModel(grid; defaults = CA.Presets.nonequil_moist_1m())
 """
 nonequil_moist_1m(; kwargs...) = (;
     microphysics_model = NonEquilibriumMicrophysics1M(),
-    microphysics_tendency_timestepping = Explicit(),
+    microphysics_tendency_timestepping = Implicit(),
     cloud_model = GridScaleCloud(),
     temperature = SurfaceConditions.AnalyticTemperature(
         Setups.zonally_symmetric_temperature,
@@ -171,7 +171,7 @@ end
 """
     prognostic_edmf_1m([FT = Float32]; kwargs...)
 
-[`prognostic_edmf`](@ref) with 1-moment non-equilibrium microphysics and explicit
+[`prognostic_edmf`](@ref) with 1-moment non-equilibrium microphysics and implicit
 microphysics tendency timestepping (matches the canonical `prognostic_edmfx_*`
 configs that use `microphysics_model: "1M"`). All keyword arguments are
 forwarded to [`prognostic_edmf`](@ref).
@@ -191,7 +191,7 @@ function prognostic_edmf_1m(::Type{FT} = Float32; kwargs...) where {FT}
     return prognostic_edmf(
         FT;
         microphysics_model = NonEquilibriumMicrophysics1M(),
-        microphysics_tendency_timestepping = Explicit(),
+        microphysics_tendency_timestepping = Implicit(),
         kwargs...,
     )
 end

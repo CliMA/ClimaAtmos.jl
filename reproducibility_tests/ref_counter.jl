@@ -1,4 +1,4 @@
-415
+454
 
 # **README**
 #
@@ -32,6 +32,196 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+454
+- `implicit_microphysics: true` (default) now additionally routes 1M
+  `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT
+  call driven by `microphysics_1m_implicit_params`, applied as
+  `ᶜmp_tendency_implicit` with a `−dtγ / τ_cond` and `−dtγ / τ_subl`
+  Jacobian on the `q_lcl` / `q_icl` diagonals. The
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is removed.
+  The default of `update_cache_every` also flips from `"step"` to
+  `"stage"`, so `set_precomputed_quantities!` fires once per IMEX stage
+  instead of once per step; the 1M `allocs_limit` entries in `perf/flame.jl`
+  (`flame_default_1m`, `flame_aquaplanet_progedmf_1m`) are bumped to
+  accommodate this.
+
+453
+- The cloud-fraction width is floored by `σ_abs` alone; condensate is
+  partitioned into its equilibrium part, normalized by that width, and the
+  non-equilibrium excess, normalized with the subsaturation deficit of the
+  cloud-available water; the updraft cover is evaluated against the updraft
+  vapor deficit and sets the updraft's in-cloud variance in the shortwave
+  inhomogeneity factor, and under `PrognosticEDMFX` the θ→T Jacobian, the
+  curvature slope, the moisture-variance bound and the correlation guard are
+  evaluated at the environment state.
+
+452
+- Stretched vertical grids use the two-scale
+  `BoundaryLayerHyperbolicTangentStretching` rule with `dz_top` and `z_pbl`,
+  so every stretched CI grid changes (#4949).
+
+451
+- The fused covariance loop reads the surface TKE at the first level, and
+  `ᶜbuoygrad` is written for models without covariances.
+
+450
+- Fused column loops (`DataLayouts.foreach_column`) for the implicit and explicit
+  tendencies, the precomputed quantities and caches (including the SGS covariance
+  cache and cloud fraction), and the manual sparse Jacobian.
+
+449
+- Release v0.42.17: SurfaceFluxes v1.5.1 -> v1.6.0, ClimaCore v1.0.4 -> v1.0.6.
+
+448
+- 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
+  via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
+  routes it through an SGS-integrated implicit source with a `−dtγ / τ_cond`
+  Jacobian diagonal.
+
+447
+- Snow falls at the Chen et al. (2022) speed by default;
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 200.
+
+446
+- Include condensate and precipitation sedimentation enthalpy and mass-source
+  dilution in `PrognosticEDMFX` updraft `mse` and `ρaʲ`, clamp laterally
+  entrained environment sedimentation fluxes to non-negative values, refresh
+  terminal velocities after the Picard updraft predictor, and fix 0M updraft
+  precipitation removal `mse` weighting.
+
+445
+- `radiation_tendency!` for `RadiationDYCOMS` selects the inversion height `z_i`
+  as the highest level with `q_tot >= 0.008` kg/kg (falling back to the closest
+  level to `0.008` kg/kg when the entire column is drier), uses `p.precomputed.ᶜq_liq`,
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`.
+
+444
+- Fix the sign of the environment lateral term in `updraft_sedimentation!`
+  (where the updraft widens downward, environment sedimentation flux enters the
+  updraft), and include the area fraction in its Jacobian diagonal.
+
+443
+- With the 1M microphysics and prognostic TKE, the turbulent flux of cloud
+  liquid and ice blends down-gradient self-diffusion with the flux implied by
+  the total-water and liquid–ice static energy fluxes (#4923).
+
+442
+- The implicit-stage Picard updraft tracer predictor includes lateral and
+  turbulent entrainment toward the environment and the first-cell surface
+  mass-flux source (`solve_sgs_updraft_tracers_implicit_stage_analytic!`).
+
+441
+- The equilibrium SGS condensate is evaluated under the Gaussian displacement
+  truncated at `sgs_displacement_truncation` (3) standard deviations
+  (`truncated_displacement_condensate`), which removes the tail condensate at
+  the capping inversion of dry convective boundary layers.
+
+440
+- The SGS variance fidelity `ᶜα` is evaluated on the domain that carries the
+  SGS closure (the environment under PrognosticEDMFX), and its equilibrium
+  condensate uses the cloud-available excess `q_tot − q_rai − q_sno − q_sat`.
+
+439
+- Enable the EDMFX implicit-stage Picard sub-iteration by default
+  (`edmfx_updraft_picard_rounds: 2`), and raise the TRMM reproducibility
+  `dt` from 120 s to 180 s.
+
+438
+- TKE shear production matches the work of the SGS stresses: the vertical
+  production uses `|∂_z uₕ|²/2` (no `(∂_z w)²`), and the horizontal production
+  is `2 K_u,h S : Sₕ`, including the `∂ₓw ∂_z u` cross terms. The vertical
+  production is the face product `2 ᶠK_u ‖𝔈‖²` interpolated to centers. The
+  same shear norm enters `Ri` on the grid-mean (non-EDMF) Smagorinsky-Lilly
+  path.
+
+437
+- The 1M microphysics is integrated over the Gaussian SGS distribution by the
+  conditional-moment node rule; σ_S is the linearized width for the nodes, multipliers,
+  cloud fraction and SGS saturation adjustment.
+
+436
+- Turbulent diffusion carries the enthalpy of each diffusing water phase
+  (Yatunin et al. 2026, Eqs. 30 and 33), with the sensible heat at the heat
+  capacity of the diffusing mixture, and diffuses suspended cloud species
+  down their own gradients in all second-order closures and the viscous sponge;
+  PROPHET grid-mean diffusive fluxes are assembled from environment and draft
+  subdomain gradients; updraft mse diffusion and hyperdiffusion are invariant
+  under Kirchhoff reference-temperature shifts.
+
+435
+- Smooth harmonic buoyancy bound and `1 / √(2 c_σ)` normalization for the
+  turbulent vertical displacement in `materialized_displacement_length!`, with
+  SGS displacement covariance defaults calibrated to MPAS DYAMOND moments on the
+  model's own grid and operators (c_Δx 1.24, w_ref 1.08, τ_0 300 s, r 0.88/0.38/0.74).
+
+434
+- New version of SurfaceFluxes.jl v1.4.0 -> v1.5.1
+- SGS (θ_li, q_tot) covariance from subgrid displacements (per-variable scales,
+  floored buoyancy displacement), replacing the turbulent and geometric blocks;
+  diagnosed T–q correlation by default; equilibrium condensate target λ_eq;
+  snow falls at its fixed terminal velocity by default.
+
+433
+- Bound the along-surface SGS q variance by the variance of q_sat along the displacement.
+
+432
+- Combine the geometric vertical-displacement SGS variance with the turbulent block as a maximum
+  instead of their sum.
+
+431
+- Fix sgs variance fidelity: estimate qc_eq by using the Gaussian approximation of eq condensate
+- Restore per-subdomain QuadratureCloud: env condensate + EDMF updraft weighting.
+
+430
+- Snow falls at the Chen et al. (2022) speed by default; snow_apparent_density 300
+
+429
+- Local SGS variance fidelity α(TKE, l_mix, τ_mp, q_c/q_c^eq).
+
+428
+- Geometric SGS variance as a conditional parcel displacement on the
+  θ_li surface
+- Update to CloudMicrophysics v0.45 (joint relaxation of the vapor-driven phase changes is the default)
+
+427
+- Change the horizontal geometric SGS variance term to the isentropic form
+
+426
+- Update to CloudMicrophysics v0.44 from v0.43
+
+425
+- Add SGS T–q correlation closure and resolved vertical-gradient variance block.
+
+424
+- Van Leer-limited centered vertical gradients for θ_li and q_tot
+
+423
+- Update to SurfaceFluxes from 1.2.1 to 1.3.0
+
+422
+- Use LumpedRestriction for some horizontal gradients
+
+421
+- Change cloud fraction formulation and default ice depostion scheme
+
+420
+- Remove interface_effective_N² and interface_entrainment_diffusivity (fix GABLS)
+
+419
+- Add empirical l_TKE
+
+418
+- Compute the EDMF surface scalar coefficient and other constants in `FT`
+  instead of Float64, which changes Float32 results in the last bits
+
+417
+- Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
+
+416
+- Update to ClimaParams 1.1.14 from ClimaParams 1.1.13, which changes the default
+  `EDMF_interface_entr_efficiency` from 0.4 to 0.0 (2026-09-25)
+
 415
 - Share the pressure drag coefficient of the implicit updraft velocity solve with the
   TKE source, split the LES enthalpy flux, correct the AMD viscosity denominator, and

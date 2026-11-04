@@ -80,6 +80,7 @@ matches yours:
 
       + [Installation](installation.md): install the package, or run from a clone
       + [Your First Simulation](first_simulation.md): build, run, and inspect a simulation
+      + [Example: Moist Baroclinic Wave](moist_baroclinic_wave.md): a global run small enough for a laptop, with plots
       + [Script vs Config Interface](interfaces.md): the two ways to configure a run
 
   - **How-to Guides**: task recipes for running and configuring simulations.

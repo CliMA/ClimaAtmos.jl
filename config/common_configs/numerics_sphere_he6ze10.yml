@@ -2,8 +2,8 @@ config: sphere
 h_elem: 6 # 550 km
 nh_poly: 3
 z_elem: 10
+z_stretch: false # z_elem lies outside the range the two-scale stretching admits
 z_max: 30000.0
-dz_bottom: 500.0
 dt: 400secs
 ode_algo: ARS343
 hyperdiff: Hyperdiffusion

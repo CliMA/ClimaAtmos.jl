@@ -51,6 +51,7 @@ function generate_perfect_model_data(interface::PerfectAtmosModelInterface; toml
     # diagnostics to use for the observations, so we will not output the default
     # diagnostics or the debug tendency diagnostics
     config_dict["output_default_diagnostics"] = false
+    config_dict["snow_terminal_velocity"] = "Fixed"
     config_dict["debug_tendency_diagnostics"] = false
     replace_diagnostic_dicts!(config_dict, diagnostic_dicts)
 

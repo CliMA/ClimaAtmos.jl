@@ -13,6 +13,7 @@ import Thermodynamics as TD
         # Verify sub-components types
         @test params.thermodynamics_params isa CAP.TD.Parameters.ThermodynamicsParameters
         @test params.turbconv_params isa CAP.TurbulenceConvectionParameters
+        @test params.sgs_quadrature_params isa CAP.SGSQuadratureParameters
         @test params.microphysics_cloud_params isa NamedTuple
         @test params.microphysics_cloud_params.liquid isa CAP.CM.Parameters.CloudLiquid
 
@@ -33,7 +34,8 @@ end
     # picks another variant
     defaults = CA.NonEquilibriumMicrophysics1M()
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
-    @test defaults.processes.cloud_ice_formation isa CMP.PrescribedIceNumber
+    @test defaults.processes.cloud_ice_formation isa
+          CMP.TemperatureDependentIceNumber
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
 
@@ -55,7 +57,12 @@ end
     params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
     processes = params.microphysics_1m_params.processes
     @test processes.rain_autoconversion isa CMP.PrescribedNd
-    @test processes.cloud_ice_formation isa CMP.TemperatureDependent
+    # `cloud_ice_formation` lives on `microphysics_1m_implicit_params` when
+    # `implicit_microphysics: true` (the default) and on `microphysics_1m_params`
+    # otherwise; `cloud_formation_1m_params` returns whichever set carries it.
+    @test CAP.cloud_formation_1m_params(
+        params,
+    ).processes.cloud_ice_formation isa CMP.TemperatureDependent
     @test isnothing(processes.rain_snow_accretion)
     @test isnothing(
         params.microphysics_1m_params.process_params.rain_snow_accretion,
@@ -73,6 +80,23 @@ end
     yaml_processes =
         CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
     @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
+
+    # Khairoutdinov and Kogan (2000) warm-rain options
+    kk_config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "KK2000",
+            "cloud_liquid_rain_accretion" => "KK2000",
+        );
+        job_id = "kk2000_options",
+    )
+    kk_processes = CA.get_microphysics_model(kk_config.parsed_args).processes
+    @test kk_processes.rain_autoconversion isa CMP.KK2000Autoconversion
+    @test kk_processes.cloud_liquid_rain_accretion isa CMP.KK2000Accretion
+    kk_mp = CA.Parameters.microphysics_1m_params(CA.ClimaAtmosParameters(kk_config))
+    # the prescribed droplet number is the one the radiation effective radius uses
+    @test kk_mp.process_params.rain_autoconversion.Nc ==
+          CA.Parameters.microphysics_cloud_params(CA.ClimaAtmosParameters(kk_config)).N_cloud_liquid_droplets
     @test isnothing(yaml_processes.rain_snow_accretion)
 end
 
@@ -110,16 +134,32 @@ end
 end
 
 @testset "Geometric SGS variance parameters" begin
-    # The horizontal scale factor is the switch for the resolved-gradient variance
-    # term; it must default to 0 so the historical closure is reproduced bitwise.
+    # Defaults from ClimaParams (name_map) or the provisional block of
+    # `SGSQuadratureParameters`.
     for FT in (Float32, Float64)
-        tc = CA.ClimaAtmosParameters(FT).turbconv_params
-        @test CAP.sgs_variance_horizontal_scale_factor(tc) == FT(0)
-        @test CAP.sgs_variance_geometric_coeff(tc) == FT(1 // 12)
-        @test CAP.sgs_variance_max_rel_std(tc) == FT(0.5)
-        @test CAP.sgs_variance_geometric_Ri_factor(tc) == FT(0)
+        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == FT(1.24)
+        @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
+        @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
+        @test CAP.sgs_variance_vertical_velocity_floor(sq) == FT(1.08)
+        @test CAP.sgs_variance_floor_reference_resolution(sq) == FT(1.2e5)
+        @test CAP.sgs_variance_floor_resolution_exponent(sq) == FT(2 // 3)
+        @test CAP.sgs_variance_floor_time_scale(sq) == FT(300)
+        @test CAP.sgs_variance_theta_horizontal_scale_ratio(sq) == FT(0.88)
+        @test CAP.sgs_variance_theta_vertical_scale_ratio(sq) == FT(0.38)
+        @test CAP.sgs_variance_horizontal_cross_correlation(sq) == FT(0.74)
+        @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
+        @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
+        @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
+        @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
+        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
+        @test CAP.sgs_displacement_truncation(sq) == FT(3)
     end
-    # A run toml can enable the term and its Richardson weight.
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; sgs_displacement_truncation = 0.5),
+    )
+    # A run toml overrides the defaults.
     mktemp() do path, io
         write(
             io,
@@ -127,8 +167,8 @@ end
   [sgs_variance_horizontal_scale_factor]
   value = 2.0
   type = "float"
-  [sgs_variance_geometric_Ri_factor]
-  value = 1.0
+  [sgs_ice_uniform_fraction]
+  value = 0.5
   type = "float"
   """,
         )
@@ -137,10 +177,31 @@ end
             Dict("toml" => [path]),
             job_id = "parameter_test_sgs_variance_scale_factor",
         )
-        tc = CA.ClimaAtmosParameters(config).turbconv_params
-        @test CAP.sgs_variance_horizontal_scale_factor(tc) == 2.0
-        @test CAP.sgs_variance_geometric_Ri_factor(tc) == 1.0
+        sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
+        @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
+    # The parameter log leaves out the superseded ClimaParams value of `c_Δx`,
+    # so a rerun from the log keeps the code default, while an override equal
+    # to the ClimaParams value still wins.
+    c_Δx(toml_dict) = CAP.sgs_variance_horizontal_scale_factor(
+        CA.SGSQuadratureParameters(toml_dict),
+    )
+    toml_dict = CP.create_toml_dict(Float64)
+    @test c_Δx(toml_dict) == 1.24
+    log_file = tempname() * ".toml"
+    CP.log_parameter_information(toml_dict, log_file)
+    @test c_Δx(CP.create_toml_dict(Float64; override_file = log_file)) == 1.24
+    climaparams_c_Δx =
+        toml_dict.data["sgs_variance_horizontal_scale_factor"]["value"]
+    @test climaparams_c_Δx != 1.24
+    override = Dict(
+        "sgs_variance_horizontal_scale_factor" =>
+            Dict("value" => climaparams_c_Δx, "type" => "float"),
+    )
+    @test c_Δx(CP.create_toml_dict(Float64; override_file = override)) ==
+          climaparams_c_Δx
 end
 
 @testset "AtmosConfig Parameter Overrides" begin

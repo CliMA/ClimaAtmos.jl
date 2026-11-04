@@ -37,6 +37,7 @@ nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
 # z_elem: 43  # Note: Set sponge height (`zd_viscous`) in toml file to cover top ~5 points
 z_elem: 86
 dz_bottom: 30.0
+dz_top: 2000.0 # the two-scale rule admits 86 levels for dz_top in 840-2960 m
 
 #~8km grid
 # x_elem: 4

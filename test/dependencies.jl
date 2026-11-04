@@ -46,6 +46,7 @@ known_dependencies = Set([
     "ClimaComms",
     "ClimaCore",
     "ClimaDiagnostics",
+    "ClimaInitialConditions",
     "ClimaInterpolations",
     "ClimaParams",
     "ClimaTimeSteppers",

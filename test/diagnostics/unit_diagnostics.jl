@@ -482,8 +482,6 @@ VALID_CASES = [
     # cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
-    # Interfacial entrainment diffusivity (EDMFX only)
-    case("kentr", :m0_pedmfx),
     # Horizontal SGS-flux coefficients (EDMF only)
     cases(("lmixh", "edth", "evuh"), :m0_pedmfx_h)...,
     # GasPhaseChem + PrognosticEDMFX

@@ -24,10 +24,9 @@ device = ClimaComms.device(config.comms_ctx)
 
 CTS.step!(integrator) # compile first
 
-are_boundschecks_forced = Base.JLOptions().check_bounds == 1
 # Benchmark allocation tests
 @testset "Benchmark allocation tests" begin
-    if device isa ClimaComms.CPUSingleThreaded && !are_boundschecks_forced
+    if device isa ClimaComms.CPUSingleThreaded
         function compare_mem(trials, name, mem)
             if haskey(trials, name)
                 if trials[name].memory ≤ mem
@@ -49,7 +48,7 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "constrain_state!", 0)
         @test compare_mem(trials, "initialize_imp!", 0)
-        @test compare_mem(trials, "cache!", 256)
+        @test compare_mem(trials, "cache!", 912)
         @test compare_mem(trials, "cache_imp!", 0)
 
         # It's difficult to guarantee zero allocations,

@@ -55,7 +55,8 @@ setup = CA.Setups.ForcingFromFile(
     forcing = (CA.HorizontalAdvection(),),
 )
 
-grid = CA.ColumnGrid(FT; z_elem = 63, z_max = FT(60e3), z_stretch = true)
+grid =
+    CA.ColumnGrid(FT; z_elem = 63, z_max = FT(60e3), z_stretch = true, dz_bottom = FT(30))
 model = CA.AtmosModel(grid; params, setup)  # setup's forcing/surface applied
 simulation = CA.AtmosSimulation(model;
     start_date = Dates.DateTime(2007, 7, 1), dt = 50, t_end = 30 * 3600,

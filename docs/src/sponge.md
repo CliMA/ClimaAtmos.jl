@@ -41,11 +41,13 @@ height is set by the `zd_rayleigh` and `zd_viscous` parameters.
 
 The viscous sponge applies horizontal viscous damping to the velocities
 (grid-mean and updraft vertical velocities), the total energy, the water, and
-the passive grid-scale tracers. As in
-[hyperdiffusion](hyperdiffusion.md), the precipitating species are exempt:
-water is damped through the effective total water
-``q_t^{\mathrm{eff}} = q_t - q_{rai} - q_{sno}``, and the resulting mass
-tendency is distributed over the suspended cloud species. Turbulence kinetic
+the passive grid-scale tracers. As in the second-order
+[diffusion closures](diffusion.md), the precipitating species are exempt:
+total water is damped through the effective total water
+``q_t^{\mathrm{eff}} = q_t - q_{rai} - q_{sno}`` (mirrored to ``\rho`` for moist
+mass conservation), and in the non-equilibrium schemes the suspended cloud
+species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and
+`ρb_rim`) are damped down their own specific gradients. Turbulence kinetic
 energy and the PROPHET subdomain scalars are also exempt; they receive only the
 Rayleigh tracer damping described below. For a scalar ``\psi``, the tendency is
 
@@ -64,12 +66,13 @@ Viscous damping of all variables absorbs waves without applying the zonal-mean
 torque that Rayleigh damping of horizontal velocities produces
 [Shepherd1996](@cite).
 
-Energy is damped through the same two-piece decomposition that
-[hyperdiffusion](hyperdiffusion.md) and the vertical diffusion use, rather than
-through ``\rho e_{tot}`` directly: a dry-static-energy flux
-``\rho \nabla_h s_d``, which applies in every configuration, plus a
-water-enthalpy flux ``\rho h_{\mathrm{tot,cl}} \nabla_h q_t^{\mathrm{eff}}``
-in moist configurations. Damping the two pieces separately keeps the sponge
+Energy is damped through the sensible-heat and water-enthalpy decomposition
+shared with the second-order [diffusion closures](diffusion.md): a
+sensible-heat and geopotential flux ``\rho (c_p \nabla_h T + \nabla_h \Phi)``,
+with ``c_p`` the heat capacity of the diffusing mixture, which applies in every
+configuration, plus the water-enthalpy flux of [Yatunin2026](@cite) (Eq. 33)
+``\rho \left[ (h_v + \Phi) \nabla_h q_t^{\mathrm{eff}} + (h_l - h_v) \nabla_h q_l^{\mathrm{cl}} + (h_i - h_v) \nabla_h q_i^{\mathrm{cl}} \right]``
+in moist configurations. Damping these terms separately keeps the sponge
 consistent with the [enthalpy-based formulation](thermodynamics.md) used
 elsewhere in the model.
 

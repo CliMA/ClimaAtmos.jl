@@ -64,6 +64,7 @@ makedocs(;
         "Getting Started" => [
             "Installation" => "installation.md",
             "Your First Simulation" => "first_simulation.md",
+            "Example: Moist Baroclinic Wave" => "moist_baroclinic_wave.md",
             "Script vs Config Interface" => "interfaces.md",
         ],
         "How-to Guides" => [

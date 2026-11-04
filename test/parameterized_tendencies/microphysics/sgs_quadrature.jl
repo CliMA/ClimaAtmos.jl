@@ -50,10 +50,10 @@ using ClimaAtmos
                 quad5 = ClimaAtmos.SGSQuadrature(
                     FT;
                     quadrature_order = 5,
-                    distribution = ClimaAtmos.LogNormalSGS(),
+                    distribution = ClimaAtmos.GaussianSGS(),
                 )
                 @test ClimaAtmos.quadrature_order(quad5) == 5
-                @test quad5.dist isa ClimaAtmos.LogNormalSGS
+                @test quad5.dist isa ClimaAtmos.GaussianSGS
 
                 # GridMeanSGS: 0th-order quadrature (grid-mean only)
                 quad_gridmean =
@@ -226,14 +226,6 @@ using ClimaAtmos
                 @test T_hat ≈ μ_T atol = FT(0.1)
                 @test q_hat ≈ μ_q atol = FT(0.001)
 
-                # LogNormalSGS
-                ln_t = ClimaAtmos.create_physical_transform(
-                    ClimaAtmos.LogNormalSGS(), μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max,
-                )
-                T_hat_ln, q_hat_ln = ln_t(FT(0), FT(0))
-                @test T_hat_ln ≈ μ_T atol = FT(0.1)
-                @test q_hat_ln > 0  # log-normal is always positive
-
                 # GridMeanSGS always returns grid mean regardless of χ values
                 gm_t = ClimaAtmos.create_physical_transform(
                     ClimaAtmos.GridMeanSGS(), μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max,
@@ -347,21 +339,21 @@ using ClimaAtmos
                 nsubs = 1
                 nsubs_quad = 1
 
-                # Test 1: Single quadrature point should match grid-mean evaluation.
-                # With 1-point quadrature all weight is at the mean, S′_hat = 0,
-                # so shifted_excess = λ_lagrange = q_c → q_lcl_hat = λ·q_c = q_lcl_mean.
-                @testset "Single Point = Grid Mean" begin
+                # Test 1: Without SGS sampling (GridMeanSGS) the quadrature form is the
+                # grid-mean evaluation: shifted_excess = λ_lagrange = q_c at the mean
+                # → q_lcl_hat = λ·q_c = q_lcl_mean.
+                @testset "GridMeanSGS = Grid Mean" begin
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
                         T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
@@ -384,11 +376,11 @@ using ClimaAtmos
                 # independent of q_rai / q_sno.
                 # Mixed-phase T so both the liquid (vs q_rai) and ice (vs q_sno)
                 # partitions are exercised.
-                @testset "Single Point = Grid Mean (precipitating)" begin
+                @testset "GridMeanSGS = Grid Mean (precipitating)" begin
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     T_mix = FT(263.15)  # mixed-phase: 0 < λ < 1
@@ -407,7 +399,8 @@ using ClimaAtmos
                         quad_1pt, mp, tps, ρ,
                         T_mix, FT(0), q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p,
                         q_sno_p,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, FT(0), FT(0), dt,
+                        nsubs_quad,
                     )
 
                     # Reference: BMT called with the condensate the closure must
@@ -426,7 +419,7 @@ using ClimaAtmos
                     @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
                 end
 
-                # Test 2: Zero variance collapses to single-point → same as grid mean.
+                # Test 2: Zero variance collapses the nodes onto the mean → same as grid mean.
                 @testset "Zero Variance = Grid Mean" begin
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
@@ -434,7 +427,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
@@ -456,7 +449,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                     )
 
                     @test haskey(result, :dq_lcl_dt)
@@ -474,18 +467,45 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.8), λ_lagrange, α, dt, nsubs_quad,
+                        FT(4.0), FT(1e-5), FT(0.8), λ_lagrange, α, FT(0), FT(0), dt,
+                        nsubs_quad,
                     )
 
                     result_no_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                     )
 
                     @test isfinite(result_var.dq_lcl_dt)
                     @test isfinite(result_no_var.dq_lcl_dt)
+                end
+
+                # Test 4b: Subsaturated tail (μ_S < -√3 σ_S, beyond every node of a
+                # 3-point Gauss–Hermite rule): λ_eq is the mean cloud excess, and the
+                # node rule's supersaturated tail condenses toward q_c_eq > 0 when q_c = 0.
+                @testset "Subsaturated Tail Condensation (μ_S < -√3 σ_S)" begin
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    σ_q = FT(1e-3)
+                    q_tot_sub = q_sat_mean - FT(2) * σ_q
+                    m_sub = ClimaAtmos._compute_sgs_moments(
+                        tps, ρ, T_mean, q_tot_sub, FT(0),
+                        quad, FT(0), σ_q^2, FT(0), FT(1),
+                    )
+                    @test q_tot_sub - q_sat_mean < -sqrt(FT(3)) * m_sub.sigma_S
+                    @test m_sub.λ_eq == q_tot_sub - q_sat_mean
+                    opts = ClimaAtmos.SGSMicrophysicsOptions(
+                        FT(0), FT(0), FT(0), FT(0.5),
+                    )
+                    res_sub = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(),
+                        quad, mp, tps, ρ,
+                        T_mean, FT(0), q_tot_sub, FT(0), FT(0), FT(0), FT(0),
+                        FT(0), σ_q^2, FT(0), m_sub, FT(1), dt, nsubs_quad,
+                        FT(1), q_tot_sub - q_sat_mean, FT(1), opts,
+                    )
+                    @test res_sub.dq_lcl_dt + res_sub.dq_icl_dt > FT(0)
                 end
 
                 # Test 5: Non-quadrature (direct) evaluation
@@ -556,7 +576,7 @@ using ClimaAtmos
                 result = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                 )
 
                 # Total condensed water tendency
@@ -625,7 +645,7 @@ using ClimaAtmos
                 result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(0), FT(0), dt, nsubs_quad,
                 )
 
                 # Verify return type
@@ -675,10 +695,11 @@ using ClimaAtmos
                     BMT.Microphysics1Moment(),
                     mp, thp, ρ, FT(0),
                     q_rai, q_sno,
-                    λ, λ_lagrange, mu_S, FT(1),
+                    λ, FT(0), FT(0), FT(0), FT(0),
+                    λ_lagrange, mu_S, FT(1),
+                    FT(0), FT(1),   # β_precip, shaft_frac: no placement
                     dt, nsubs_quad,
-                    (),
-                )
+                    ())
 
                 # Verify it's a proper functor (not a closure)
                 @test evaluator isa Microphysics1MEvaluator
@@ -687,10 +708,10 @@ using ClimaAtmos
                 # Verify it's callable
                 T_hat = FT(280.0)
                 q_tot_hat = FT(0.01)
-                @test applicable(evaluator, T_hat, q_tot_hat)
+                @test applicable(evaluator, T_hat, q_tot_hat, FT(0))
 
                 # Call it and verify result
-                result = evaluator(T_hat, q_tot_hat)
+                result = evaluator(T_hat, q_tot_hat, FT(0))   # node outside the shaft
                 @test result isa NamedTuple
                 @test isfinite(result.dq_lcl_dt)
                 @test isfinite(result.dq_icl_dt)
@@ -753,7 +774,8 @@ using ClimaAtmos
                     BMT.Microphysics1Moment(),
                     quad_gm, mp, tps, ρ,
                     T_mean, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange_gm, α_gm, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange_gm, α_gm, FT(0), FT(0), dt,
+                    nsubs_quad,
                 )
 
                 # Direct BMT call
@@ -935,7 +957,7 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange_gm, α_gm, dt,
+                        FT(0), FT(0), FT(0), λ_lagrange_gm, α_gm, FT(0), FT(0), dt,
                         nsubs_quad,
                     )
 
@@ -960,7 +982,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.6), λ_lagrange_gm, α_gm, dt,
+                        FT(4.0), FT(1e-5), FT(0.6), λ_lagrange_gm, α_gm, FT(0), FT(0),
+                        dt,
                         nsubs_quad,
                     )
                     for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
@@ -1122,7 +1145,7 @@ using ClimaAtmos
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, FT(0), FT(0), dt,
                         nsubs_quad,
                     )
                 end
@@ -1130,7 +1153,7 @@ using ClimaAtmos
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, FT(0), FT(0), dt,
                         nsubs_quad,
                     )
                 end

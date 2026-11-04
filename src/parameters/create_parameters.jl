@@ -12,6 +12,7 @@ import StaticArrays as SA
     ClimaAtmosParameters(
         toml_dict;
         microphysics_model = nothing,
+        implicit_microphysics = true,
         has_non_orographic_gw = false,
         has_orographic_gw = false,
         has_beres_source = false,
@@ -41,6 +42,12 @@ set is loaded only when its flag is `true`. Passing `microphysics_model = nothin
 
   - `microphysics_model = nothing`: Microphysics model; selects which
     microphysics parameter sets to keep. `nothing` keeps all of them.
+  - `implicit_microphysics = true`: Whether 1M `cloud_liquid_formation` and
+    `cloud_ice_formation` go to the implicit 1M parameter set (cond/subl only)
+    instead of the bulk 1M parameter set. Default matches
+    `default_config.yml`'s `implicit_microphysics: true`, so direct
+    constructor calls (e.g. in `test/parameter_tests.jl`) agree with the
+    config-driven path.
   - `has_non_orographic_gw = false`: Load the non-orographic gravity-wave
     parameters.
   - `has_orographic_gw = false`: Load the orographic gravity-wave parameters.
@@ -63,6 +70,7 @@ ClimaAtmosParameters(::Type{FT}; kwargs...) where {FT <: AbstractFloat} =
 function ClimaAtmosParameters(
     toml_dict::TD;
     microphysics_model = nothing,
+    implicit_microphysics::Bool = true,
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
     has_beres_source::Bool = false,
@@ -71,6 +79,9 @@ function ClimaAtmosParameters(
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
     TCP = typeof(turbconv_params)
+
+    sgs_quadrature_params = SGSQuadratureParameters(toml_dict)
+    SQP = typeof(sgs_quadrature_params)
 
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
     TP = typeof(thermodynamics_params)
@@ -95,9 +106,49 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    # Two 1M parameter sets: `bulk` carries the user's process choices for CM
+    # BMT; `implicit` carries ONLY `cloud_liquid_formation` and
+    # `cloud_ice_formation` (all other processes nulled) so a second CM BMT
+    # call isolates the condensation / sublimation tendency the implicit stage
+    # treats separately. `implicit_microphysics` moves the two formation
+    # options from `bulk` to `implicit`.
+    _mp1m_opts = microphysics_1m_options(microphysics_model)
+    _clf =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.cloud_liquid_formation :
+        CM.Parameters.CloudLiquidFormation()
+    _cif =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.cloud_ice_formation :
+        CM.Parameters.ConstantTimescale()
+    _bulk_clf, _implicit_clf = _split_formation(_clf, implicit_microphysics)
+    _bulk_cif, _implicit_cif = _split_formation(_cif, implicit_microphysics)
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
-        microphysics_1m_options(microphysics_model)...,
+        _mp1m_opts...,
+        cloud_liquid_formation = _bulk_clf,
+        cloud_ice_formation = _bulk_cif,
+    )
+    # Null out every other process on the implicit set so CM BMT with this
+    # set returns only the cond/subl contribution. Explicitly list the other
+    # processes rather than merging options to keep the implicit kernel's
+    # output narrow regardless of `_mp1m_opts`.
+    microphysics_1m_implicit_params = microphys_1m_parameters(
+        toml_dict;
+        cloud_liquid_formation = _implicit_clf,
+        cloud_ice_formation = _implicit_cif,
+        cloud_ice_melt = nothing,
+        cloud_liquid_freezing = nothing,
+        rain_autoconversion = nothing,
+        snow_autoconversion = nothing,
+        rain_condensation_evaporation = nothing,
+        snow_deposition_sublimation = nothing,
+        snow_melt = nothing,
+        cloud_liquid_rain_accretion = nothing,
+        cloud_liquid_snow_accretion = nothing,
+        cloud_ice_rain_accretion = nothing,
+        cloud_ice_snow_accretion = nothing,
+        rain_snow_accretion = nothing,
     )
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
@@ -107,9 +158,13 @@ function ClimaAtmosParameters(
     if !isnothing(microphysics_model)
         microphysics_model isa EquilibriumMicrophysics0M ||
             (microphysics_0m_params = nothing)
-        microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-            (microphysics_1m_params = nothing)
+        if !(
+            microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        )
+            microphysics_1m_params = nothing
+            microphysics_1m_implicit_params = nothing
+        end
         microphysics_model isa
         Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
             (microphysics_2m_params = nothing)
@@ -118,6 +173,7 @@ function ClimaAtmosParameters(
     end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
+    MP1MI = typeof(microphysics_1m_implicit_params)
     MP2M = typeof(microphysics_2m_params)
     MP2MP3 = typeof(microphysics_2mp3_params)
 
@@ -152,10 +208,12 @@ function ClimaAtmosParameters(
         MPC,
         MP0M,
         MP1M,
+        MP1MI,
         MP2M,
         MP2MP3,
         SFP,
         TCP,
+        SQP,
         STP,
         VDP,
         EFP,
@@ -172,10 +230,12 @@ function ClimaAtmosParameters(
         microphysics_cloud_params,
         microphysics_0m_params,
         microphysics_1m_params,
+        microphysics_1m_implicit_params,
         microphysics_2m_params,
         microphysics_2mp3_params,
         surface_fluxes_params,
         turbconv_params,
+        sgs_quadrature_params,
         surface_temp_params,
         vert_diff_params,
         external_forcing_params,
@@ -279,6 +339,18 @@ function microphysics_1m_options(
 end
 
 """
+    _split_formation(opt, is_implicit)
+
+Translate a user-selected `cloud_liquid_formation` or `cloud_ice_formation`
+option into the pair `(bulk, implicit)` of CM-recognised values threaded into
+`microphysics_1m_params` and `microphysics_1m_implicit_params`. `is_implicit`
+is the `implicit_microphysics` config toggle.
+"""
+_split_formation(::Nothing, ::Bool) = (nothing, nothing)
+_split_formation(opt, is_implicit::Bool) =
+    is_implicit ? (nothing, opt) : (opt, nothing)
+
+"""
     microphys_1m_parameters(FT; options_kwargs...)
     microphys_1m_parameters(toml_dict; options_kwargs...)
 
@@ -367,14 +439,13 @@ end
     aerosol_ml_parameters(toml_dict)
 
 Return the coefficients of the ML-based aerosol-activation correction as a
-`NamedTuple`: the reference droplet number `N₀` [1/m³], the calibration
-coefficients `α_dust`, `α_seasalt`, `α_SO4`, and `α_q_liq` [-], and the
-reference concentrations `c₀_dust`, `c₀_seasalt`, `c₀_SO4` [kg/m³] and `q₀_liq`
-[kg/kg].
+`NamedTuple`: the calibration coefficients `α_dust`, `α_seasalt`, `α_SO4`, and
+`α_q_liq` [-], and the reference concentrations `c₀_dust`, `c₀_seasalt`,
+`c₀_SO4`, and `q₀_liq` [kg/kg]. The reference droplet number is the prescribed
+`N_cloud_liquid_droplets` of `cloud_parameters`.
 """
 function aerosol_ml_parameters(toml_dict)
     name_map = (;
-        :prescribed_cloud_droplet_number_concentration => :N₀,
         :dust_calibration_coefficient => :α_dust,
         :seasalt_calibration_coefficient => :α_seasalt,
         :ammonium_sulfate_calibration_coefficient => :α_SO4,
@@ -462,19 +533,8 @@ to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
     TurbulenceConvectionParameters(FT, overrides = NamedTuple())
     TurbulenceConvectionParameters(toml_dict, overrides = NamedTuple())
 
-Build the PROPHET (prognostic EDMF) parameter set.
-
-Most values come from ClimaParams through an explicit name map. The geometric
-SGS-variance term parameters (`sgs_variance_*`), a few
-cloud-fraction release-shape parameters and the updraft sedimentation
-coefficient are not yet in ClimaParams' default TOML: they fall back to the
-defaults set here, and are read from `toml_dict` only when a run or calibration
-TOML defines them. The defaults `margin = abs_margin = sharpness = 1` and
-`residual = 0` release the cloud-fraction floor on a one-width saturation
-margin guarded by an absolute margin of one floor width.
-
-`overrides` is merged last, so it wins over both the TOML values and the
-defaults above.
+Build the PROPHET (prognostic EDMF) parameter set from ClimaParams through an
+explicit name map. `overrides` is merged last, so it wins over the TOML values.
 """
 TurbulenceConvectionParameters(
     ::Type{FT},
@@ -492,8 +552,6 @@ function TurbulenceConvectionParameters(
         :mixing_length_tke_surf_scale => :tke_surf_scale,
         :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
         :mixing_length_Ri_crit => :Ri_crit,
-        :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
-        :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
@@ -519,47 +577,23 @@ function TurbulenceConvectionParameters(
         :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
         :mixing_length_Prandtl_maximum => :Pr_max,
         :mixing_length_static_stab_coeff => :static_stab_coeff,
+        :mixing_length_tke_coeff => :mixing_length_tke_coeff,
+        :mixing_length_tke_l_inf => :mixing_length_tke_l_inf,
+        :mixing_length_tke_tau_max => :mixing_length_tke_tau_max,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
         :detr_inv_tau => :detr_inv_tau,
         :entr_inv_tau => :entr_inv_tau,
         :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
         :cloud_fraction_param_vec => :cloud_fraction_param_vec,
-        :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
-        :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
-        :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
-        :EDMF_interface_entr_efficiency => :interface_entr_efficiency,
         :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
         :EDMF_convective_zi => :convective_zi,
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    # Provisional parameters: not yet in ClimaParams' default toml. Each is
-    # read from the run/calibration toml when defined there and otherwise
-    # falls back to the default below.
-    # TODO: promote each to ClimaParams (and the name_map above) once it has
-    # been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Horizontal resolved-gradient (geometric) SGS variance term (see
-        # `set_covariance_cache!`). geometric_coeff is the variance of a linear field
-        # over a uniform cell and horizontal_scale_factor scales the horizontal grid length; 0
-        # disables the term (default). The max_rel_std bound applies to the diagnosed q′q′
-        # and keeps the quadrature nodes non-negative.
-        sgs_variance_geometric_coeff = FT(1 // 12),
-        sgs_variance_horizontal_scale_factor = FT(0),
-        sgs_variance_max_rel_std = FT(0.5),
-        # Richardson (stability) weight on the geometric term (k = 0: weight ≡ 1,
-        # see `set_covariance_cache!`).
-        sgs_variance_geometric_Ri_factor = FT(0),
-        # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
-        # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
-        # a one-width saturation margin guarded by an absolute margin of one
-        # floor width.
-        cloud_fraction_floor_release_margin = FT(1),
-        cloud_fraction_floor_release_abs_margin = FT(1),
-        cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(0),
+        edmfx_updraft_kh_diffusion_factor = FT(1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -578,6 +612,163 @@ function TurbulenceConvectionParameters(
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VTF3 = typeof(parameters.cloud_fraction_param_vec)
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
+end
+
+"""
+    SGSQuadratureParameters(FT, overrides = NamedTuple())
+    SGSQuadratureParameters(toml_dict, overrides = NamedTuple())
+
+Build the SGS covariance, quadrature and cloud-fraction parameter set.
+
+Most values come from ClimaParams through an explicit name map. The
+provisional parameters (the cloud-species timescale switch, the
+displacement-closure scales, the precipitation placement and the radiative
+condensate inhomogeneity) take the defaults set here and are read from
+`toml_dict` only when a run or calibration TOML defines them; the provisional
+default of `sgs_variance_horizontal_scale_factor` supersedes its ClimaParams
+value the same way.
+
+`overrides` is merged last, so it wins over both the TOML values and the
+defaults above.
+"""
+SGSQuadratureParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    SGSQuadratureParameters(CP.create_toml_dict(FT), overrides)
+
+function SGSQuadratureParameters(
+    toml_dict::CP.ParamDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
+        :Tq_correlation_coefficient => :Tq_correlation_coefficient,
+        :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
+        :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
+        :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
+        :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
+        :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
+        :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
+        # Shared with CloudMicrophysics' 1M relaxation timescales.
+        :condensation_evaporation_timescale =>
+            :condensation_evaporation_timescale,
+        :sublimation_deposition_timescale =>
+            :sublimation_deposition_timescale,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    FT = CP.float_type(toml_dict)
+    # Provisional parameters: defaults set here ahead of ClimaParams. Each is
+    # read from the run/calibration toml when defined there and otherwise
+    # falls back to the default below, which for a parameter that ClimaParams
+    # already defines (`sgs_variance_horizontal_scale_factor`) supersedes the
+    # ClimaParams default. Such a parameter is kept out of `name_map`, so the
+    # parameter log does not record the superseded ClimaParams value.
+    # TODO: promote each default to ClimaParams (and the name_map above) once
+    # it has been calibrated, and remove it from this block.
+    provisional_defaults = (;
+        # A positive value makes the Damköhler factor of the variance fidelity
+        # and the cloud-species flux blend use the constant
+        # `condensation_evaporation_timescale` and
+        # `sublimation_deposition_timescale`; zero uses the per-cell 1M
+        # relaxation times (`cloud_species_relaxation_time`).
+        sgs_cloud_species_constant_timescales = FT(0),
+        # Unresolved vertical motions and horizontal scale factor in the
+        # variance closure (`floor_displacement_length`,
+        # `set_covariance_cache!`): horizontal grid scale multiplier [-],
+        # velocity scale [m/s] at the reference horizontal grid scale [m], the
+        # exponent of its growth with the grid scale, and the persistence time
+        # [s] in quiescent neutral air. Calibrated against the within-cell
+        # moments of 3.75 km global MPAS (DYAMOND) aggregated onto the model's
+        # own cubed-sphere nodes (ne16/30/60), with the closure inputs computed
+        # by the model's operators (`hgrad_invariant!`, Van Leer `∂z`, `N²_disp`)
+        # on the MPAS native levels; `c_Δx` is specific to that horizontal
+        # gradient operator. One set fits ne16–ne60 and both the 130- and
+        # 63-level vertical grids; `τ_0` is bounded only from below (≳ 100 s).
+        # TODO: ClimaParams defines `sgs_variance_horizontal_scale_factor`
+        # with default 1, which this entry supersedes; move this default, and
+        # the other provisional defaults of this block, to ClimaParams in one
+        # go (see https://github.com/CliMA/ClimaAtmos.jl/pull/4913).
+        sgs_variance_horizontal_scale_factor = FT(1.24),
+        sgs_variance_vertical_velocity_floor = FT(1.08),
+        sgs_variance_floor_reference_resolution = FT(1.2e5),
+        sgs_variance_floor_resolution_exponent = FT(2 // 3),
+        sgs_variance_floor_time_scale = FT(300),
+        # Per-variable displacement scale ratios (θ_li relative to q_tot) and
+        # horizontal displacement cross-correlation (`set_covariance_cache!`).
+        sgs_variance_theta_horizontal_scale_ratio = FT(0.88),
+        sgs_variance_theta_vertical_scale_ratio = FT(0.38),
+        sgs_variance_horizontal_cross_correlation = FT(0.74),
+        # Truncation, in standard deviations, of the Gaussian displacement in
+        # the equilibrium condensate (`truncated_displacement_condensate`).
+        sgs_displacement_truncation = FT(3),
+        # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
+        sgs_fidelity_equilibrium_weight = FT(0.5),
+        # Precipitation-fraction placement of rain and snow over the quadrature:
+        # 0 = uniform (off).
+        sgs_precip_incloud_fraction = FT(0),
+        # Overlap precipitation fraction (`set_precip_fraction!`): per-level
+        # decay of the max-random overlap recursion; 1 = maximum overlap.
+        sgs_precip_overlap_decay = FT(1),
+        # Floor on the overlap precipitation fraction seen by the placement:
+        # the shaft is never narrower than half the cell.
+        sgs_precip_fraction_floor = FT(0.5),
+        # Unresolved in-cloud condensate inhomogeneity seen by radiation
+        # (`cloud_condensate_relative_variance`): relative variance 0.25, a
+        # relative standard deviation of 0.5, within the 0.4–0.8 observed for
+        # the liquid water path of overcast marine stratocumulus. Applied to all
+        # cloud types; ice and convective clouds are likely more inhomogeneous.
+        cloud_condensate_relative_variance_floor = FT(0.25),
+    )
+    # A run toml defines a parameter that ClimaParams also defines when it
+    # appears in the override dictionary or, for a `toml_dict` assembled
+    # without one, when its value differs from the ClimaParams default:
+    # `toml_dict.data` holds the merged values and alone cannot tell the two
+    # sources apart.
+    default_toml_dict = CP.create_toml_dict(FT)
+    provisional_present = filter(collect(keys(provisional_defaults))) do name
+        key = string(name)
+        haskey(default_toml_dict.data, key) ?
+        (
+            (!isnothing(toml_dict.override_dict) &&
+                haskey(toml_dict.override_dict, key)) ||
+            toml_dict.data[key]["value"] !=
+            default_toml_dict.data[key]["value"]
+        ) :
+        haskey(toml_dict.data, key)
+    end
+    provisional_params =
+        isempty(provisional_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(provisional_present),
+            "ClimaAtmos",
+        )
+    parameters =
+        merge(parameters, provisional_defaults, provisional_params, overrides)
+    r_h_θq = parameters.sgs_variance_horizontal_cross_correlation
+    -1 <= r_h_θq <= 1 || throw(
+        ArgumentError(
+            "sgs_variance_horizontal_cross_correlation must lie in [-1, 1] " *
+            "for the SGS covariance to be positive semi-definite; got $r_h_θq",
+        ),
+    )
+    c = parameters.sgs_displacement_truncation
+    # The variance-preserving stretch divides by the truncated variance
+    # `1 − 2c φ(c) / Z = O(c²)`, which `normal_cdf` resolves for `c ≥ 1`.
+    c >= 1 || throw(
+        ArgumentError(
+            "sgs_displacement_truncation must be at least 1; got $c",
+        ),
+    )
+    rv_floor = parameters.cloud_condensate_relative_variance_floor
+    rv_floor >= 0 || throw(
+        ArgumentError(
+            "cloud_condensate_relative_variance_floor must be non-negative; " *
+            "got $rv_floor",
+        ),
+    )
+    CAP.SGSQuadratureParameters{FT}(; parameters...)
 end
 
 """

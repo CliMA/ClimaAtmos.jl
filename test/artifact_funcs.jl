@@ -1,6 +1,10 @@
 import Downloads
 
-const _artifact_cache = joinpath(tempdir(), "climaatmos_test_artifacts")
+const _artifact_cache = if haskey(ENV, "BUILDKITE_BUILD_PATH")
+    joinpath(ENV["BUILDKITE_BUILD_PATH"], "climaatmos-ci", "test_artifacts")
+else
+    joinpath(tempdir(), "climaatmos_test_artifacts")
+end
 
 """
     _download_artifact(name, url, filename)
@@ -13,7 +17,9 @@ function _download_artifact(name, url, filename)
     filepath = joinpath(dir, filename)
     if !isfile(filepath)
         mkpath(dir)
-        Downloads.download(url, filepath)
+        tmp = tempname(dir)
+        Downloads.download(url, tmp)
+        mv(tmp, filepath; force = true)
     end
     return filepath
 end

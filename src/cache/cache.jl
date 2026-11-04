@@ -47,6 +47,7 @@ state and may be overwritten by any function.
 """
 struct AtmosCache{
     FT,
+    MAW,
     AM,
     NUM,
     CAP,
@@ -68,6 +69,17 @@ struct AtmosCache{
 }
     # Timestep of the simulation (in seconds); also used by callbacks and tendencies
     dt::FT
+
+    # Implicit stage window `γ · dt`, resolved from the ODE scheme at
+    # construction (`imex_gamma`); zero for schemes without a single-γ DIRK
+    # diagonal (fully explicit, variable-γ ESDIRK). Read by the 1M microphysics
+    # cache when `mp_averaging isa StageAveraging`.
+    dtγ::FT
+
+    # Dispatch tag selecting the 1M bulk-tendency averaging window
+    # (`StepAveraging` ⇒ `dt`, `StageAveraging` ⇒ `dtγ`). Baked in at
+    # construction from `update_cache_every` and the scheme's γ availability.
+    mp_averaging::MAW
 
     # AtmosModel
     atmos::AM
@@ -164,10 +176,17 @@ function build_cache(
     params,
     dt,
     start_date,
-    steady_state_velocity,
+    steady_state_velocity;
+    ode_algo = nothing,
+    update_cache_every = "step",
 )
     FT = eltype(params)
     dt = FT(dt)
+    γ = imex_gamma(ode_algo)
+    dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
+    mp_averaging =
+        (update_cache_every == "stage" && !isnothing(γ)) ?
+        StageAveraging() : StepAveraging()
 
     aerosol_names = atmos.radiation.aerosol_names
     time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
@@ -234,6 +253,9 @@ function build_cache(
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
         ᶜf³,
         ᶠf¹²,
+        # ∂ξ³/∂x³ on faces: a vertical flux is CT3(ᶠ∂ξ³∂x³ * w), the value that
+        # converting WVector(w) computes from the 3x3 inverse of ∂x∂ξ
+        ᶠ∂ξ³∂x³ = (lg -> parent(lg.∂ξ∂x)[3, 3]).(Fields.local_geometry_field(Y.f)),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry),
@@ -252,6 +274,8 @@ function build_cache(
         precomputed,
         scratch,
         dt,
+        dtγ,
+        mp_averaging,
         conservation_check,
         external_forcing,
     )
@@ -278,8 +302,9 @@ function build_cache(
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
-    args = (
-        dt,
+    # `dt` and `dtγ` share `FT`; `mp_averaging`'s type is its own parameter.
+    # The remaining 18 args supply the parametric slots of `AtmosCache`.
+    parametric_args = (
         atmos,
         numerics,
         params,
@@ -300,7 +325,9 @@ function build_cache(
         conservation_check,
     )
 
-    return AtmosCache{map(typeof, args)...}(args...)
+    return AtmosCache{FT, typeof(mp_averaging), map(typeof, parametric_args)...}(
+        dt, dtγ, mp_averaging, parametric_args...,
+    )
 end
 
 

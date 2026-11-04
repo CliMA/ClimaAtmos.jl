@@ -93,6 +93,18 @@ and `q_tot` [1/m], for physical scalars:
     (coeffs.Cq_unsat + cf * coeffs.ΔCq) * ∂qt∂z
 
 """
+    dry_N²(coeffs, ∂θli∂z, ∂qt∂z)
+
+Return the unsaturated (dry) buoyancy gradient `N²_dry = ∂b/∂z|_{cf=0}` [1/s²]
+from precomputed chain-rule coefficients (`buoyancy_gradient_coefficients`) and
+the projected vertical gradients of `θ_li` [K/m] and `q_tot` [1/m]:
+
+    ∂b/∂z|_{cf=0} = Cθ_unsat ∂θli/∂z + Cq_unsat ∂qt/∂z.
+"""
+@inline dry_N²(coeffs, ∂θli∂z, ∂qt∂z) =
+    coeffs.Cθ_unsat * ∂θli∂z + coeffs.Cq_unsat * ∂qt∂z
+
+"""
     buoyancy_gradients(ebgc::AbstractEnvBuoyGradClosure, thermo_params,
                        bg_model::EnvBuoyGradVars)
 
@@ -245,25 +257,26 @@ end
 """
     mixing_length_lopez_gomez_2020(
         turbconv_params, sf_params, vkc, ustar, z, z_sfc, Δ_f, sfc_tke,
-        N²_eff, N²_prod, tke, obukhov_length, strain_rate_norm, Pr,
+        N²_prod, tke, obukhov_length, strain_rate_norm, Pr,
         scale_blending_method,
     ) -> MixingLength
 
-Compute the turbulent mixing length pointwise from the generalized closure of
-[Lopez2020](@cite).
+Compute the turbulent mixing length pointwise from a modified version of the
+[Lopez2020](@cite) closure with an *empirical* TKE-scale form that unifies
+the P = ε balance and the bounded amplitude limits.
 
 Three physical scales are formed and blended by `blend_scales`:
 
   - `l_W`: wall scale `κ (z - z_sfc) ustar / (c_m √e_sfc φ_m(ζ))`, matching
     Monin-Obukhov similarity in the surface layer.
-  - `l_TKE`: TKE production-dissipation balance scale `√(c_d e^{3/2} / a_pd)`
-    with `a_pd = c_m (2 |S|² - N²_prod / Pr) √e`; dropped from the blend where
-    the net production `a_pd` is non-positive.
-  - `l_N`: buoyancy-limited scale `√(c_b e) / N_eff`, capped by the wall
-    distance and used only where `N²_eff > 0`.
+  - `l_TKE`: empirical scale `l_inf · √x · (1 + x) · exp(−x)` with
+    `x = TKE / (l_inf / τ_ε)²` and reference eddy turnover time `τ_ε`. In the
+    small-`x` limit this reduces to the Lopez-Gomez P = ε balance mixing length.
+  - `l_N`: buoyancy-limited scale `√(c_b e) / N`, capped by the wall
+    distance and used only where `N²_prod > 0`.
 
 The blend is then limited by the wall distance and by the resolvability filter
-scale `Δ_f`, and floored at 1 m.
+scale `Δ_f`, and clamped to non-negative values.
 
 The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
 (`set_face_diffusivities!`), with the corresponding inputs.
@@ -280,18 +293,12 @@ The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
     `resolvability_filter_scale`; `Inf` where the grid imposes no scale,
     as in single columns).
   - `sfc_tke`: TKE near the surface (first cell center) [m²/s²].
-  - `N²_eff`: Effective squared buoyancy frequency [1/s²], used for `l_N`; may
-    include the unresolved-jump augmentation of
-    `interface_effective_N²`.
   - `N²_prod`: Squared buoyancy frequency entering the production-dissipation
-    balance for `l_TKE` [1/s²]. Passed separately so the balance uses the same
-    stability as the actual TKE buoyancy production, keeping `l_TKE`
-    stencil-consistent with the budget it parameterizes even when `N²_eff`
-    carries the interface augmentation.
+    balance for `l_TKE` and the buoyancy-limited length `l_N` [1/s²].
   - `tke`: Turbulent kinetic energy at the evaluation point [m²/s²].
   - `obukhov_length`: Surface Monin-Obukhov length [m].
-  - `strain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `strain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
   - `Pr`: Turbulent Prandtl number [-].
   - `scale_blending_method`: Blending method for the physical scales
     (`blend_scales`).
@@ -310,7 +317,6 @@ function mixing_length_lopez_gomez_2020(
     z_sfc,
     Δ_f,
     sfc_tke,
-    N²_eff,
     N²_prod,
     tke,
     obukhov_length,
@@ -325,6 +331,9 @@ function mixing_length_lopez_gomez_2020(
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = tke_dissipation_coefficient(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
+    c_tke = CAP.mixing_length_tke_coeff(turbconv_params)
+    l_inf = CAP.mixing_length_tke_l_inf(turbconv_params)
+    τ_ε_max = CAP.mixing_length_tke_tau_max(turbconv_params)
 
     # l_z: Geometric distance from the surface
     l_z = z - z_sfc
@@ -359,30 +368,33 @@ function mixing_length_lopez_gomez_2020(
 
     l_W = max(l_W, FT(0)) # Ensure non-negative
 
-    # --- l_TKE: TKE production-dissipation balance scale ---
-    tke_pos = max(tke, FT(0)) # Ensure TKE is not negative
-    sqrt_tke_pos = sqrt(tke_pos)
+    # --- l_TKE: empirical mixing length ---
+    tke_pos = max(tke, FT(0))
+    # `a_pd = c_m·(2|S̃|² − N²/Pr)` is the shear+buoyancy production
+    # coefficient; `√(c_d/a_pd)` is the eddy turnover time at P = ε balance.
+    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr)
 
-    # Net production of TKE from shear and buoyancy is approximated by
-    #     (S² − N²/Pr_t) · √TKE · l,
-    # where S² denotes the gradient involved in shear production and
-    # N²/Pr_t denotes the gradient involved in buoyancy production.
-    # The factor below corresponds to that production term normalised by l.
-    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr) * sqrt_tke_pos
-
-    # Dissipation is modelled as c_d · k^{3/2} / l.
-    # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
-    c_neg = c_d * tke_pos * sqrt_tke_pos
-
-    # Solve for l_TKE in
-    #     a_pd · l_TKE − c_neg / l_TKE = 0
-    #  ⇒  a_pd · l_TKE² − c_neg = 0
-    # yielding
-    #     l_TKE = √c_neg / a_pd.
-    l_TKE = ifelse(tke_pos > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
+    # Empirical form:
+    #     l_TKE = l_inf · √x · (1+x)·exp(−x),   x = TKE / (l_inf/τ_ε)²,
+    #     τ_ε = c_tke · √(c_d/a_pd)
+    # `τ_ε` is the reference eddy turnover time: `c_tke` times the eddy
+    # turnover time at P = ε balance.
+    # For small x, (1+x)·exp(−x) → 1 and l_TKE → τ_ε · √TKE =
+    # c_tke · √(c_d/a_pd) · √TKE — the Lopez-Gomez P = ε balance mixing length
+    # scaled by `c_tke`. `x` is *adaptive*: stronger forcing (smaller τ_ε)
+    # raises `(l_inf/τ_ε)²` so higher TKE is allowed before the decay
+    # kicks in. Peak: l_TKE is maximized at x = 1 with max(l_TKE) = (2/e)·l_inf
+    # ≈ 0.74·l_inf.
+    # τ_ε is capped at `τ_ε_max`, the residual eddy turnover from
+    # background processes; the cap is inert wherever local production
+    # is strong (c_tke·√(c_d/a_pd) ≪ τ_ε_max).
+    τ_ε = min(τ_ε_max, c_tke * sqrt(c_d / max(a_pd, eps_FT)))
+    tke_nondim = tke_pos / (l_inf / τ_ε)^2
+    l_TKE = l_inf * sqrt(tke_nondim) *
+            (FT(1) + tke_nondim) * exp(-tke_nondim)
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
-    N_eff_sq = max(N²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
+    N_eff_sq = max(N²_prod, FT(0)) # Use N^2 only if stable (N^2 > 0)
     l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
     if N_eff_sq > eps_FT && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
@@ -396,11 +408,10 @@ function mixing_length_lopez_gomez_2020(
 
     # --- Combine Scales ---
 
-    # Vector of *physical* scales (wall, TKE, stability)
-    # These scales (l_W, l_TKE, l_N) are already ensured to be non-negative.
-    # l_N is already limited by l_z. l_W and l_TKE are not necessarily.
-    l_physical_scales =
-        (tke_pos > eps_FT && a_pd <= 0) ? SA.SVector(l_W, l_N) : SA.SVector(l_W, l_TKE, l_N)
+    # Vector of *physical* scales (wall, TKE, stability). All ≥ 0.
+    # l_N is already limited by l_z; l_W and l_TKE are not, but the master
+    # wall + grid caps below still apply.
+    l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
 
     l_smin =
         blend_scales(scale_blending_method, l_physical_scales, turbconv_params)
@@ -414,13 +425,13 @@ function mixing_length_lopez_gomez_2020(
     l_grid = Δ_f
     l_final = min(l_limited_phys_wall, l_grid)
 
-    # Final check: guarantee that the mixing length is at least a small positive
-    # value.  This prevents division-by-zero in
-    #     ε_d = C_d · TKE^{3/2} / l_mix
-    # when TKE > 0.  When TKE = 0, l_mix is inconsequential, but eps_FT
-    # provides a conservative lower bound.
-    # minimum mixing length
-    l_final = max(l_final, FT(1)) # TODO: make a climaparam
+    # `l_final` is not floored here: leaving it at its physical value
+    # (possibly zero) avoids introducing artificial diffusivities where
+    # eddy activity is genuinely absent. The dissipation-rate consumers
+    # (`tke_dissipation` in `edmfx_tke.jl`, and the implicit Jacobian
+    # inline in `manual_sparse_jacobian.jl`) apply a small local floor
+    # only where division-by-zero would matter.
+    l_final = max(l_final, FT(0))    # ensure non-negative only
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
@@ -437,8 +448,9 @@ share:
   - `p.precomputed.ᶠ∂θli∂z`, `p.precomputed.ᶠ∂qt∂z`: exact two-point face
     gradients of `θ_li` and `q_tot`, projected to physical scalars;
   - `p.precomputed.ᶜgradᵥ_θ_liq_ice`, `p.precomputed.ᶜgradᵥ_q_tot`: the
-    corresponding centered (interpolate-then-difference) gradients, still as
-    `Covariant3Vector`s.
+    corresponding centered gradients, obtained by applying the Van Leer
+    harmonic-mean limiter (`ᶜVanLeer_gradient!`) to the physical face
+    gradients and stored as `Covariant3Vector`s.
 
 The centered and face-native (`set_face_diffusivities!`) buoyancy gradients
 then reduce to
@@ -447,68 +459,169 @@ per cloud-fraction Picard iteration, where only `cf` changes) at negligible
 cost. The coefficients depend on `(T, ρ, q)` but not on `cf`, so they are
 fixed during the Picard iteration.
 
-Mutates `p.precomputed` and uses `p.scratch.ᶜtemp_scalar`; returns `nothing`.
+Mutates `p.precomputed` and uses `p.scratch.ᶜtemp_scalar`;
+returns `nothing`.
 """
 NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) = p.precomputed
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜθ_li_scratch = p.scratch.ᶜtemp_scalar
     ᶠlg = Fields.local_geometry_field(Y.f)
-    @. ᶜbg_coeffs = buoyancy_gradient_coefficients(
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-    )
-    # θ_li materialized once; the lazy form would re-evaluate the (pow-heavy)
-    # Exner function at every gradient stencil point across face and center gradients.
-    ᶜθ_li = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_li = TD.liquid_ice_pottemp(
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-    )
-    # Domain-boundary faces carry zero gradient (ᶠgradᵥ BCs).
-    @. ᶠ∂θli∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜθ_li), ᶠlg)
-    @. ᶠ∂qt∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
-
-    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
+    DataLayouts.foreach_column(
+        ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜθ_li_scratch,
+        Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠlg,
+    ) do ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜθ_li,
+    ᶜρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠlg
+        @. ᶜbg_coeffs = buoyancy_gradient_coefficients(
+            thermo_params, ᶜT, ᶜρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        )
+        # Materialize θ_li in a register field for `ᶠgradᵥ` (so the stencil
+        # synchronizes across warps via shared memory) and store it to
+        # `p.scratch.ᶜtemp_scalar` for horizontal gradient invariants.
+        ᶜθ_li_reg = @. TD.liquid_ice_pottemp(
+            thermo_params, ᶜT, ᶜρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        )
+        @. ᶜθ_li = ᶜθ_li_reg
+        @. ᶠ∂θli∂z = projected_c3_data(ᶠgradᵥ(ᶜθ_li_reg), ᶠlg)
+        @. ᶠ∂qt∂z = projected_c3_data(ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
+        ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z)
+        ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
+        return nothing
+    end
     return nothing
 end
 
 """
-    interface_effective_N²(N², Δz, κ_iso, c_b)
+    ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
 
-Return the interface-aware effective squared buoyancy frequency [1/s²],
+Write the Van Leer-limited vertical gradient of a center scalar field,
+derived from the already-materialized physical face gradient `ᶠ∂ψ∂z`, into
+the `Covariant3Vector` center field `ᶜout`. At each center the two adjacent
+*physical* face gradients are combined using the harmonic-mean limiter
+`2ab/(a+b)` (zero when they differ in sign), and the result is converted
+back into the covariant basis.
 
-    N²_eff = N² + [(Δb)₊]² / (c_b κ_iso),    Δb = N² Δz,
-
-where `N²` is the two-point buoyancy gradient [1/s²], `Δz` the adjacent grid
-spacing [m], `κ_iso` the isotropic TKE [m²/s²], and `c_b` the
-static-stability mixing-length coefficient
-(`mixing_length_static_stab_coeff`) [-].
-
-The face jump `Δb` is compatible with any subgrid profile between a uniform
-gradient over `Δz` (which centered differencing assumes) and a sheet interface
-at the face. An eddy of energy `κ_iso` crossing a sheet performs work `Δb ℓ`
-over a penetration distance `ℓ`, capping excursions at `ℓ_p = c_b κ_iso / Δb`;
-the jump term makes the buoyancy-limited length `l_N = √(c_b κ_iso)/N_eff`
-interpolate between the standard resolved limit and `ℓ_p`. In smooth regions
-the correction is relatively `O((Δz/l_N)²)` — quadratically small wherever the
-stratification is resolved — so `N²_eff` is a consistent, second-order-accurate
-discretization of the same continuum stability and acts as a smooth interface
-indicator without a mode switch. The positive-part clamp restricts the
-correction to stable jumps, leaving convectively unstable layers untouched.
+For the bottom and top cells, the center gradient is taken from the adjacent
+interior face gradient rather than blending the gradients at the two bounding
+faces, since the boundary face gradients are imposed by the zero-gradient BC
+and do not represent the physical slope.
 """
-@inline function interface_effective_N²(N², Δz, κ_iso, c_b)
-    FT = typeof(N²)
-    Δb_pos = max(N² * Δz, FT(0))
-    return N² + Δb_pos^2 / (c_b * max(κ_iso, eps(FT)))
+function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+    ᶜlg = Fields.local_geometry_field(axes(ᶜout))
+    nc = Spaces.nlevels(axes(ᶜout))
+    # At the domain boundaries, `ᶠ∂ψ∂z` carries `ᶠgradᵥ`'s zero-gradient BC
+    # (it is not the physical slope). Override via `SetValue` so the
+    # bottom (top) center's bias returns the first (last) *interior* face
+    # gradient; the limiter at that cell then reduces to that gradient.
+    ᶜbias_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(
+            Fields.level(ᶠ∂ψ∂z, 1 + Fields.half),
+        ),
+    )
+    ᶜbias_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(
+            Fields.level(ᶠ∂ψ∂z, nc - Fields.half),
+        ),
+    )
+    @. ᶜout = Geometry.Covariant3Vector(
+        harmonic_mean(ᶜbias_below(ᶠ∂ψ∂z), ᶜbias_above(ᶠ∂ψ∂z)) * unit_c3_data(ᶜlg),
+    )
+    return nothing
+end
+
+"""
+    harmonic_mean(a, b)
+
+Van Leer's harmonic-mean slope limiter: `2ab/(a+b)` when `a` and `b` share
+a sign, else zero. Written as `2*a*(b/denom)` rather than `2*a*b/denom` so
+that small-but-equal arguments at Float32 (e.g. humidity slopes on coarse
+grids) do not underflow through the intermediate `a*b`.
+"""
+@inline function harmonic_mean(a, b)
+    same_sign = ((a > zero(a)) & (b > zero(b))) |
+                ((a < zero(a)) & (b < zero(b)))
+    denom = ifelse(same_sign, a + b, one(a))
+    return ifelse(same_sign, 2 * a * (b / denom), zero(a))
+end
+
+"""
+    set_displacement_buoyancy_gradient!(ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z)
+
+Write the dry face-maximum buoyancy gradient `N²_disp` [1/s²] for the vertical
+displacement scale `l_d` into the center scalar field `ᶜN²_disp`, from the
+precomputed chain-rule coefficients `ᶜbg_coeffs` and the physical face gradients
+`ᶠ∂θli∂z` and `ᶠ∂qt∂z`:
+
+    N²_disp = max(dry_N²(coeffs, ∂θli∂z⁻, ∂qt∂z⁻), dry_N²(coeffs, ∂θli∂z⁺, ∂qt∂z⁺)).
+
+Evaluating the buoyancy barrier on the bounding faces rather than on the
+Van Leer harmonic-mean center gradients keeps `N²_disp` at the face stratification
+in a cell adjacent to a sharp capping inversion (where one bounding face is
+nearly neutral and the other carries the inversion jump), while using the dry
+coefficients keeps the moist latent-heat reduction (`cf ΔCθ < 0`) at cloud base
+from weakening the stratification barrier. At the domain boundaries, where
+`ᶠgradᵥ` imposes a zero-gradient BC, the adjacent interior face gradient is used
+via `SetValue`, matching `ᶜVanLeer_gradient!`.
+"""
+function set_displacement_buoyancy_gradient!(
+    ᶜN²_disp,
+    ᶜbg_coeffs,
+    ᶠ∂θli∂z,
+    ᶠ∂qt∂z,
+)
+    nc = Spaces.nlevels(axes(ᶜN²_disp))
+    ᶜθ_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+    )
+    ᶜθ_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+    )
+    ᶜq_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+    )
+    ᶜq_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+    )
+    @. ᶜN²_disp = max(
+        dry_N²(ᶜbg_coeffs, ᶜθ_below(ᶠ∂θli∂z), ᶜq_below(ᶠ∂qt∂z)),
+        dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
+    )
+    return ᶜN²_disp
+end
+
+"""
+    set_strain_rate_norm!(Y, p)
+
+Fill `p.precomputed.ᶜstrain_rate_norm` with the squared norm of the vertical
+shear of the horizontal wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`),
+from the vertical-gradient strain rate of the face velocity
+`ᶠinterp(uₕ) + u³`. This is the shear term of the TKE budget, `Ri`, `Pr_t`,
+and the mixing lengths for both the EDMF and the grid-mean closures.
+
+Reads `ᶠu³` from `p.precomputed`; returns `nothing`.
+"""
+function set_strain_rate_norm!(Y, p)
+    (; ᶠu³, ᶜstrain_rate_norm) = p.precomputed
+    DataLayouts.foreach_column(
+        ᶜstrain_rate_norm, Y.c.uₕ, ᶠu³,
+    ) do ᶜstrain_rate_norm, ᶜuₕ, ᶠu³
+        set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
+        return nothing
+    end
+    return nothing
+end
+
+"""
+    set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
+
+Column body of `set_strain_rate_norm!`, shared with the fused EDMF
+closure loop.
+"""
+@inline function set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
+    ᶠu_col = @. C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³)
+    ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
+    @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
+    return nothing
 end
 
 """
@@ -522,218 +635,85 @@ diffusive fluxes live, this sets
     chain-rule coefficients interpolated to the face (see `blended_N²`);
 
   - `p.precomputed.ᶠK_h`, `p.precomputed.ᶠK_u`: eddy diffusivity/viscosity
-    evaluated natively at the face from the face effective stability
-    `N²_eff = ᶠbuoygrad + [(Δb)₊]²/(c_b κ)` (`interface_effective_N²`),
-    the face turbulent Prandtl number, and the face mixing length (the same
-    `mixing_length_lopez_gomez_2020` closure evaluated with face inputs);
-
-  - `p.precomputed.ᶠK_entr`: the interfacial entrainment diffusivity
-
-        K_e = γ w_e Δz,   w_e = A √κ / max(Ri_b, 1),   Ri_b = ℓ_e Δb / κ,
-
-    with `Δb = (ᶠbuoygrad Δz)₊` the stable face buoyancy jump, `ℓ_e` the
-    face-native energy-containing eddy scale (minimum of the wall and
-    TKE-balance components, which — unlike `l_N` — are not suppressed by the
-    interface), `A` the entrainment efficiency
-    (`EDMF_interface_entr_efficiency`), and the gate
-    `γ = jt/(ᶠbuoygrad + jt)` the fraction of the effective stability carried
-    by the unresolved-jump term.
-
-Evaluating the stability closure *at the face* keeps the collapse of `K` at
-an unresolved inversion confined to the jump face: a center-based evaluation
-(where the max over adjacent faces registers the jump at the whole cell)
-necessarily leaks the collapse to the cell's opposite face through
-interpolation, under-mixing the interior of the entrainment-zone cell.
-
-The discrete face flux `K_e Δψ/Δz = γ w_e Δψ` represents interfacial
-entrainment at velocity `w_e` in down-gradient form: collapsing the
-down-gradient diffusivity at a sheet interface (via `N²_eff`) is correct for
-turbulent mixing but leaves finite-velocity entrainment unrepresented; `K_e`
-restores it. `γ → 1` at sheet interfaces and vanishes as `(Δz/l_N)²` where
-the stratification is resolved, so `K_e → 0` doubly — through `γ` and through
-`Δz` — as `Δz → 0`, recovering the standard local closure. At coarse `Δz`
-over a sharp inversion the entrainment flux `w_e Δψ` is
-resolution-independent by construction. (When an inversion is smeared over
-two faces, each face carries its partial jump and the summed entrainment flux
-under-recovers; the full sub-cell reconstruction that would remove this
-residual `Δz`-sensitivity is left to future work.)
-
-`K_e` is added to the face diffusivities for all scalars and momentum in
-`edmfx_sgs_diffusive_flux_tendency!` (and its Jacobian), keeping energy,
-water, and momentum transport conservative and mutually consistent. The TKE
-buoyancy production/destruction is evaluated from the same face diffusivities
-and the same `ᶠbuoygrad` (see `edmfx_tke_tendency!`), so the interfacial
-sink `−γ w_e Δb` per face — bounded by `A κ^{3/2}/ℓ_e`, a fixed multiple of
-the dissipation — is carried automatically and the discrete energy
-conversions mirror the fluxes term by term.
+    evaluated natively at the face from `ᶠbuoygrad`, the face turbulent
+    Prandtl number, and the face mixing length (the same
+    `mixing_length_lopez_gomez_2020` closure evaluated with face inputs).
 
 No-op (fields remain at their previous values) unless
 `p.atmos.turbconv_model isa AbstractEDMF`, which is also the condition under
-which `Y.c.ρtke` is available. `ᶠK_entr` is zeroed whenever
-`EDMF_interface_entr_efficiency` is zero, so downstream reads always see a
-defined value. Mutates
-`p.precomputed.ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, `ᶠK_entr` and uses four `p.scratch`
-face scalars; returns `nothing`.
+which `Y.c.ρtke` is available. Mutates `p.precomputed.ᶠbuoygrad`, `ᶠK_h`,
+`ᶠK_u` and uses three `p.scratch` face scalars; returns `nothing`.
 
 # Extended help
 
 Pointwise face inputs (`κ = ᶠinterp(tke)`, strain, coefficients) use
 arithmetic interpolation: it is the second-order-accurate choice in the
-resolved limit, and the O(1) factor it introduces at sheet interfaces (the
-face `κ` mixes the turbulent and quiescent sides) is absorbed by the
-calibration of `c_b` and `A`.
-
-Validity domain: the closure targets strong, mixed-layer-capping inversions
-(large stable buoyancy jump `Δb`), where the restored diffusive exchange
-represents mixed-layer entrainment — DYCOMS and BOMEX cloud cover and
-inversion height converge under vertical refinement with it active. At
-weak-`Δb`, moisture-dominated (trade-cumulus) inversions on coarse grids,
-the down-gradient form transports moisture up the jump faster than it warms
-and dries, and the thick inversion-base cell can saturate: 24 h RICO at
-`Δz = 160 m` relapses to overcast for *any* `A` (at `A = 0` by moisture
-trapping under the unresolved inversion; at larger `A` faster, by diffusive
-moistening of the inversion layer), while the fine grid holds trade-cumulus
-cover. Cumulus-top entrainment is localized to penetrating plumes and
-belongs to the entrainment/detrainment closures, not to `K_e`. Consequently,
-calibrate `A` against equilibrium (≳ 24 h) targets — spin-up snapshots
-reward values that fail at equilibrium — and treat coarse-grid
-weak-inversion cloud cover as outside this closure's convergence guarantee.
+resolved limit.
 """
 NVTX.@annotate function set_face_diffusivities!(Y, p)
     p.atmos.turbconv_model isa AbstractEDMF || return nothing
-    (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    (; ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     (; ᶜcloud_fraction, ᶜstrain_rate_norm) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; params) = p
     turbconv_params = CAP.turbconv_params(params)
-    c_b = CAP.static_stab_coeff(turbconv_params)
-    A_entr = CAP.interface_entr_efficiency(turbconv_params)
     sf_params = CAP.surface_fluxes_params(params)
     vkc = CAP.von_karman_const(params)
+    scale_blending_method = p.atmos.edmfx_model.scale_blending_method
 
-    ᶠΔz = Fields.Δz_field(axes(Y.f))
+    FT = Spaces.undertype(axes(Y.c))
+    zero_FT = FT(0)
     ᶠΔ_f = resolvability_filter_scale(axes(Y.f))
     ᶠz = Fields.coordinate_field(Y.f).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke, 1)
-
-    # Face-native moist buoyancy gradient: the vertical differences of the
-    # prognostic state are exactly defined at the face by the two-point
-    # gradient stencil; the pointwise chain-rule coefficients vary smoothly
-    # and are interpolated.
-    @. ᶠbuoygrad = blended_N²(
-        ᶠinterp(ᶜbg_coeffs),
-        ᶠinterp(ᶜcloud_fraction),
-        ᶠ∂θli∂z,
-        ᶠ∂qt∂z,
-    )
-    # All face inputs of the mixing-length closure are materialized: nesting
-    # an operator broadcast inside the closure's lazy tree would turn it into
-    # a stencil broadcast, whose interior-window logic cannot handle the
-    # point-space surface fields (sfc_tke, z_sfc, ustar) the closure needs.
-    ᶠκ = p.scratch.ᶠtemp_scalar
-    @. ᶠκ = ᶠinterp(max(ᶜtke, 0))
-    ᶠN²_eff = p.scratch.ᶠtemp_scalar_2
-    @. ᶠN²_eff = interface_effective_N²(ᶠbuoygrad, ᶠΔz, ᶠκ, c_b)
-    ᶠstrain = p.scratch.ᶠtemp_scalar_3
-    @. ᶠstrain = ᶠinterp(ᶜstrain_rate_norm)
-    ᶠPr = p.scratch.ᶠtemp_scalar_4
-    @. ᶠPr = turbulent_prandtl_number(params, ᶠN²_eff, ᶠstrain)
-
-    # Face mixing length: same closure and constants as the center pipeline,
-    # evaluated with face inputs. The augmented N²_eff limits l_N (and the
-    # eddy excursions it represents); the un-augmented face gradient enters
-    # the production-dissipation balance for l_TKE, consistent with the TKE
-    # budget stencils.
-    ᶠml = @. lazy(
-        mixing_length_lopez_gomez_2020(
-            turbconv_params,
-            sf_params,
-            vkc,
-            ustar,
-            ᶠz,
-            z_sfc,
-            ᶠΔ_f,
-            sfc_tke,
-            ᶠN²_eff,
-            ᶠbuoygrad,
-            ᶠκ,
-            obukhov_length,
-            ᶠstrain,
-            ᶠPr,
-            p.atmos.edmfx_model.scale_blending_method,
-        ),
-    )
     val_master = Val{:master}()
-    @. ᶠK_u = eddy_viscosity(
-        turbconv_params,
-        ᶠκ,
-        get_mixing_length_field(ᶠml, val_master),
-    )
-    @. ᶠK_h = eddy_diffusivity(ᶠK_u, ᶠPr)
 
-    # Interfacial entrainment diffusivity; `A` is constant over a run, so the
-    # (comparatively expensive) closure is skipped when interfacial entrainment
-    # is disabled. ᶠK_entr is still zeroed on every update in that case, so
-    # downstream reads (SGS fluxes, TKE budget, diffusion Jacobian) always see
-    # a defined value regardless of how the field was allocated.
-    if !iszero(A_entr)
-        val_energy_containing = Val{:energy_containing}()
-        @. ᶠK_entr = interface_entrainment_diffusivity(
-            ᶠbuoygrad,
-            ᶠΔz,
-            ᶠκ,
-            get_mixing_length_field(ᶠml, val_energy_containing),
-            c_b,
-            A_entr,
+    DataLayouts.foreach_column(
+        ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z,
+        ᶜcloud_fraction, ᶜstrain_rate_norm, ᶜtke, sfc_tke,
+        ustar, obukhov_length, ᶠΔ_f, ᶠz, z_sfc,
+    ) do ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜcloud_fraction, ᶜstrain_rate_norm, ᶜtke, sfc_tke,
+    ustar, obukhov_length, ᶠΔ_f, ᶠz, z_sfc
+        @. ᶠbuoygrad = blended_N²(
+            ᶠinterp(ᶜbg_coeffs),
+            ᶠinterp(ᶜcloud_fraction),
+            ᶠ∂θli∂z,
+            ᶠ∂qt∂z,
         )
-    else
-        @. ᶠK_entr = 0
+        ᶠκ = @. ᶠinterp(max(ᶜtke, zero_FT))
+        ᶠstrain = @. ᶠinterp(ᶜstrain_rate_norm)
+        ᶠPr = @. turbulent_prandtl_number(turbconv_params, ᶠbuoygrad, ᶠstrain)
+        ᶠml = @. lazy(
+            mixing_length_lopez_gomez_2020(
+                turbconv_params,
+                sf_params,
+                vkc,
+                ustar,
+                ᶠz,
+                z_sfc,
+                ᶠΔ_f,
+                sfc_tke,
+                ᶠbuoygrad,
+                ᶠκ,
+                obukhov_length,
+                ᶠstrain,
+                ᶠPr,
+                scale_blending_method,
+            ),
+        )
+        @. ᶠK_u = eddy_viscosity(
+            turbconv_params,
+            ᶠκ,
+            get_mixing_length_field(ᶠml, val_master),
+        )
+        @. ᶠK_h = eddy_diffusivity(ᶠK_u, ᶠPr)
+        return nothing
     end
     return nothing
-end
-"""
-    interface_entrainment_diffusivity(N²_face, Δz, κ_iso, ℓ_e, c_b, A)
-
-Return the pointwise interfacial entrainment diffusivity `K_e = γ w_e Δz`
-[m²/s]; see `set_face_diffusivities!` for the closure.
-
-# Arguments
-
-  - `N²_face`: Face buoyancy gradient [1/s²].
-  - `Δz`: Face-adjacent grid spacing [m].
-  - `κ_iso`: Isotropic TKE at the face [m²/s²].
-  - `ℓ_e`: Energy-containing eddy scale [m].
-  - `c_b`: Static-stability mixing-length coefficient [-].
-  - `A`: Interface entrainment efficiency [-].
-
-# Returns
-
-The entrainment diffusivity [m²/s]; zero where the face jump is not stable
-(`Δb ≤ 0`).
-"""
-@inline function interface_entrainment_diffusivity(
-    N²_face,
-    Δz,
-    κ_iso,
-    ℓ_e,
-    c_b,
-    A,
-)
-    FT = typeof(Δz)
-    κ_safe = max(κ_iso, eps(FT))
-    Δb_pos = max(N²_face * Δz, FT(0))
-    jt = Δb_pos^2 / (c_b * κ_safe)
-    # Gate: fraction of the effective stability carried by the jump term.
-    # Branchless (avoids warp divergence). The division is guarded by the
-    # `jt > 0` branch: `jt > 0` implies `Δb_pos > 0`, hence `N²_face > 0`, so
-    # the denominator `N²_face + jt > 0` and no zero-guard is needed.
-    γ = ifelse(jt > zero(jt), jt / (N²_face + jt), zero(jt))
-    Ri_b = ℓ_e * Δb_pos / κ_safe
-    w_e = A * sqrt(κ_safe) / max(Ri_b, FT(1))
-    return γ * w_e * Δz
 end
 
 """
@@ -742,28 +722,13 @@ end
 Extract one length scale [m] from a `MixingLength`, selected by the `Val`
 property tag `P` (GPU-safe field access without runtime symbol lookup).
 
-Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`, and
-`:energy_containing` (a derived scale, see the comment below).
+Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`.
 """
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:tke}) = ml.tke
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
-# Energy-containing eddy scale ℓ_e for the interfacial entrainment closure:
-# the scales of the eddies that scour an interface (wall and TKE-balance),
-# which — unlike l_N — are not suppressed by the interface itself. Also
-# bounded by the resolvability filter scale l_grid where the grid imposes a
-# finite one (l_grid = max(Δx_h, Δz); Inf for single columns, so the bound
-# is inert there and binds only in the gray zone / LES). Branchless ifelse
-# avoids GPU warp divergence.
-@inline function get_mixing_length_field(
-    ml::MixingLength,
-    ::Val{:energy_containing},
-)
-    ℓ_phys = ifelse(ml.tke > zero(ml.tke), min(ml.wall, ml.tke), ml.wall)
-    return min(ℓ_phys, ml.l_grid)
-end
 
 """
     ᶜmixing_length(Y, p, property::Val{P} = Val{:master}(); grid_scale)
@@ -773,7 +738,6 @@ selected by `property` (`get_mixing_length_field`).
 
 Evaluates `mixing_length_lopez_gomez_2020` with center inputs.
 Only valid for `AbstractEDMF` configurations, which always carry `Y.c.ρtke`.
-Writes `p.scratch.ᶜtemp_scalar_5` (the Prandtl number) as a side effect.
 
 # Keyword Arguments
 
@@ -800,15 +764,14 @@ function ᶜmixing_length(
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke, 1)
 
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
-    @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜbuoygrad, ᶜstrain_rate_norm)
-
     # Extract sub-parameters before the lazy broadcast to avoid capturing
     # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
     turbconv_params = CAP.turbconv_params(params)
     sf_params = CAP.surface_fluxes_params(params)
     vkc = CAP.von_karman_const(params)
+
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm))
 
     ᶜmixing_length_tuple = @. lazy(
         mixing_length_lopez_gomez_2020(
@@ -820,7 +783,6 @@ function ᶜmixing_length(
             z_sfc,
             ᶜΔ_f,
             sfc_tke,
-            ᶜbuoygrad,
             ᶜbuoygrad,
             ᶜtke,
             obukhov_length,
@@ -846,124 +808,931 @@ function set_horizontal_diffusivities!(Y, p)
     Δx_h = horizontal_filter_scale(axes(Y.c))
     ᶜl_h = ᶜmixing_length(Y, p; grid_scale = Δx_h)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_h)
     ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜbuoygrad, ᶜstrain_rate_norm))
-    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+        @. lazy(turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm))
+    DataLayouts.foreach_column(
+        ᶜK_u_h, ᶜK_h_h, ᶜtke, ᶜl_h, ᶜprandtl_nvec,
+    ) do ᶜK_u_h, ᶜK_h_h, ᶜtke, ᶜl_h, ᶜprandtl_nvec
+        @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_h)
+        @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+        return nothing
+    end
     return nothing
 end
 
 """
-    ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
+    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+    ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
 
-Return the lazy vertical divergence of the diffusive scalar flux
-`F = -ᶠcoef ∇χ`, with zero-flux top and bottom boundaries.
-
-`ᶠcoef` must be a face field or a `lazy` broadcast, not a bare `Field * Field`
-product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right order.
-"""
-ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ) = @. lazy(ᶜdiffdivᵥ(-(ᶠcoef * ᶠgradᵥ(ᶜχ))))
-
-"""
-    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-
-Write `h_eff + Φ` into the center field `ᶜout` and return it, where
+Write `h_eff + Φ` or `h_eff - h_d(T)` into the center field `ᶜout` and return
+it, where
 
     h_eff = (h_v q_v + h_l q_l + h_i q_i) / max(q_v + q_l + q_i, ε)
 
-is the mass-weighted specific enthalpy of the suspended water. Every specific
+is the mass-weighted specific enthalpy of the diffusing water
+`ᶜq_water = (q_t, q_l, q_i)` (`ᶜdiffusing_water_phases`, or its value in a
+PROPHET subdomain), with the vapor `q_v = q_t - q_l - q_i`. Every specific
 humidity is clipped at zero, so a limiter undershoot cannot change the sign of
 the weights or of the denominator.
 
-`h_eff + Φ` is the coefficient of the aggregate water gradient in the
-single-gradient enthalpy flux `F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` shared
-by vertical diffusion, horizontal diffusion and hyperdiffusion, and it is the
-same coefficient the implicit Jacobian holds frozen.
+`h_eff + Φ` is the coefficient of the aggregate water Laplacian gradient in the
+fourth-order enthalpy hyperdiffusion flux
+`F_h = ν₄ ρ [c_p ∇(∇²T) + ∇(∇²Φ) + (h_eff + Φ) ∇(∇²q_tot_eff)]`, where only
+`∇²T`, `∇²Φ`, and `∇²q_tot_eff` are DSSed. `h_eff - h_d(T)` is its intensive
+counterpart in the hyperdiffusion of updraft moist static energy `mseʲ`, where
+diffusing water replaces dry air at constant specific mass, so the geopotential
+cancels and a reference-temperature shift shifts the coefficient by
+`C_water - C_d`.
 
 The result is written into a field rather than returned lazily because every
-caller passes it to a divergence operator or a `DiagonalMatrixRow`, where the
-nested expression exceeds GPU kernel parameter limits.
+caller passes it to a divergence operator, where the nested expression exceeds
+GPU kernel parameter limits.
 """
-function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-    FT = eltype(ᶜout)
-    ϵ_FT = eps(FT)
+@inline function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout = h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) + ᶜΦ
+    return ᶜout
+end
+@inline function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     @. ᶜout =
-        (
-            TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
-            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
-        ) / max(
-            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_liq) + max(FT(0), ᶜq_ice),
-            ϵ_FT,
-        ) + ᶜΦ
+        h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) -
+        TD.enthalpy_dry(thermo_params, ᶜT)
     return ᶜout
 end
 
 """
-    ᶜh_eff_plus_Φ!(ᶜout, Y, p)
+    h_eff(thermo_params, T, q_tot, q_liq, q_ice)
 
-Write `h_eff + Φ` into `ᶜout` and return it, taking the temperature and
-geopotential from the cache and the suspended water from `ᶜsuspended_water`.
+Return the mass-weighted specific enthalpy `h_eff` of the diffusing water.
+Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
 """
-function ᶜh_eff_plus_Φ!(ᶜout, Y, p)
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜT) = p.precomputed
+@inline function h_eff(thermo_params, T, q_tot, q_liq, q_ice)
+    FT = typeof(T)
+    q_vap = max(FT(0), q_tot - q_liq - q_ice)
+    q_liq_nonneg = max(FT(0), q_liq)
+    q_ice_nonneg = max(FT(0), q_ice)
+    return (
+        TD.enthalpy_vapor(thermo_params, T) * q_vap +
+        TD.enthalpy_liquid(thermo_params, T) * q_liq_nonneg +
+        TD.enthalpy_ice(thermo_params, T) * q_ice_nonneg
+    ) / max(q_vap + q_liq_nonneg + q_ice_nonneg, eps(FT))
+end
+
+"""
+    ᶜh_vap_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ)
+    ᶜh_liq_minus_vap!(ᶜout, thermo_params, ᶜT)
+    ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT)
+
+Write a water-enthalpy coefficient of the diffusive enthalpy flux into the center
+field `ᶜout` (or allocate a column register field when `ᶜout` is `nothing`) and
+return it: the total specific enthalpy of vapor `h_v(T) + Φ`, or the phase
+differences `h_l(T) - h_v(T) = -L_v(T)` and `h_i(T) - h_v(T) = -L_s(T)`.
+
+These are the coefficients of `∇q_t`, `∇q_l`, and `∇q_i` in the flux
+`F_h = -ρ K [c_p ∇T + ∇Φ + Σ_μ (h_μ + Φ) ∇q_μ]` once the vapor specific humidity is
+eliminated with `q_v = q_t - q_l - q_i`. The phase differences carry the latent
+enthalpy of condensate diffusing one way and vapor the other; they are invariant
+under a Kirchhoff-consistent shift of the reference temperature.
+"""
+@inline ᶜh_vap_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ) =
+    @. ᶜout = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+@inline ᶜh_vap_plus_Φ!(::Nothing, thermo_params, ᶜT, ᶜΦ) =
+    @. TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+@inline ᶜh_liq_minus_vap!(ᶜout, thermo_params, ᶜT) =
+    @. ᶜout =
+        TD.enthalpy_liquid(thermo_params, ᶜT) -
+        TD.enthalpy_vapor(thermo_params, ᶜT)
+@inline ᶜh_liq_minus_vap!(::Nothing, thermo_params, ᶜT) =
+    @. TD.enthalpy_liquid(thermo_params, ᶜT) -
+       TD.enthalpy_vapor(thermo_params, ᶜT)
+@inline ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT) =
+    @. ᶜout =
+        TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
+@inline ᶜh_ice_minus_vap!(::Nothing, thermo_params, ᶜT) =
+    @. TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
+
+"""
+    maybe_materialize!(ᶜscratch, ᶜχ)
+
+Copy `ᶜχ` into `ᶜscratch` and return it, or return `ᶜχ` itself when `ᶜscratch`
+is `nothing`. Subdomain values such as `ᶜspecific_env_value` are lazy expressions
+too large to nest inside a gradient within GPU kernel parameter limits, so their
+callers pass a scratch field.
+"""
+@inline maybe_materialize!(::Nothing, ᶜχ) = ᶜχ
+@inline maybe_materialize!(ᶜscratch, ᶜχ::Fields.Field) = ᶜχ
+@inline maybe_materialize!(::Nothing, ᶜχ::Fields.Field) = ᶜχ
+@inline maybe_materialize!(ᶜscratch, ᶜχ) = @. ᶜscratch = ᶜχ
+
+"""
+    ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
+
+Write the isobaric specific heat capacity of the diffusing mixture,
+
+    c_p = (1 - q_t) c_pd + (q_t - q_l - q_i) c_pv + q_l c_pl + q_i c_pi,
+
+into the center field `ᶜout` (or a column register field when `ᶜout` is
+`nothing`) and return it, with `ᶜq_water = (q_t, q_l, q_i)` the specific
+humidities of the diffusing water (`ᶜdiffusing_water_phases`, or their values in
+a PROPHET subdomain). Mass that does not diffuse, rain and snow outside the LES
+closures, counts at `c_pd`, which makes `c_p` the coefficient of `∇T` in the
+gradient of the moist static energy that the PROPHET updrafts diffuse
+(`ᶜupdraft_diffusing_mse!`). In dry configurations (`ᶜq_water === nothing`),
+`c_p = c_pd`.
+
+`c_p` is the coefficient of `∇T` in the sensible-heat part of the diffusive
+enthalpy flux (`add_sensible_heat_diffusionᵥ!`): turbulent eddies exchange
+parcels of the diffusing mixture at fixed composition, and each parcel has the
+heat capacity of that mixture.
+"""
+@inline function ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout = TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+    return ᶜout
+end
+@inline function ᶜcp_diffusing!(::Nothing, thermo_params, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    return @. TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+end
+@inline function ᶜcp_diffusing!(ᶜout, thermo_params, ::Nothing)
+    cp_d = TD.Parameters.cp_d(thermo_params)
+    @. ᶜout = cp_d
+    return ᶜout
+end
+@inline ᶜcp_diffusing!(::Nothing, thermo_params, ::Nothing) =
+    TD.Parameters.cp_d(thermo_params)
+
+"""
+    add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch)
+    add_sensible_heat_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing,
+    )
+
+Add to `ᶜρe_totₜ` the tendency `-∇·F` of the sensible-heat and geopotential
+part of the vertical diffusive enthalpy flux,
+
+    F = -ᶠw (c_p ∇T + ∇Φ),
+
+with `c_p` the heat capacity of the diffusing mixture (`ᶜcp_diffusing!`,
+evaluated at cell centers and interpolated to faces outside the gradient). `ᶠw`
+is the face weight: `ρ K` for a grid-mean closure, or a subdomain weight.
+
+Together with the water part of `add_water_enthalpy_diffusionᵥ!`, the flux is
+
+    F_h = -ᶠw [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]
+        = -ᶠw [∇(h + Φ) + (h_d + Φ) ∇q_t],
+
+the gradient of the moist static energy of the diffusing mixture plus the
+enthalpy of the moist mass that the water flux adds. The flux vanishes in a
+layer that is well mixed in `(h + Φ, q_t)`, so a moist adiabat, saturated or
+unsaturated, is a fixed point of diffusion; and because `c_p` depends on the
+reference temperature `T_0` only through `T`, the flux keeps the Kirchhoff
+`T_0`-shift invariance of the energy equation. The Yatunin et al. (2026, Eq. 33)
+form with `∇s_d = c_pd ∇T + ∇Φ` omits the heat capacity of the water, a flux
+`(c_p - c_pd) ∇T` of about 1% of the sensible-heat flux, directed down the
+temperature gradient in a moist-adiabatic layer.
+"""
+@inline function add_sensible_heat_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing,
+)
+    if ᶜq_water === nothing
+        cp_d = TD.Parameters.cp_d(thermo_params)
+        @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * cp_d * ᶠgradᵥ(ᶜT)))
+    else
+        ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+        @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT)))
+    end
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠgradᵥ(ᶜΦ)))
+    return nothing
+end
+add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch) =
+    add_sensible_heat_diffusionᵥ!(
+        ᶜρe_totₜ,
+        ᶠw,
+        ᶜT,
+        ᶜq_water,
+        CAP.thermodynamics_params(p.params),
+        p.core.ᶜΦ,
+        ᶜscratch,
+    )
+
+"""
+    add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
+
+Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the weak
+divergence `wdivₕ(ᶜw (c_p ∇ₕT + ∇ₕΦ))` to `ᶜρe_totₜ`, with the center weight
+`ᶜw`.
+"""
+function add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
     (; ᶜΦ) = p.core
-    ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-    return ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_lcl, ᶜq_icl)
-end
-
-"""
-    ᶜdry_static_energy(p)
-
-Return the lazy dry static energy `s_d = h_d + Φ` from the cached temperature
-and geopotential, the scalar whose gradient the diffusive enthalpy flux
-`F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` acts on besides the diffusing water.
-"""
-function ᶜdry_static_energy(p)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜT) = p.precomputed
+    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜcp * gradₕ(ᶜT))
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * gradₕ(ᶜΦ))
+    return nothing
+end
+
+"""
+    add_water_enthalpy_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
+    )
+    add_water_enthalpy_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing;
+        ᶜq_scratch = nothing,
+    )
+
+Add the tendency `-∇·F` of the water part of the vertical diffusive enthalpy flux
+of Yatunin et al. (2026, Eq. 33),
+
+    F = -ᶠw [(h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i],
+
+to `ᶜρe_totₜ`. `ᶜq_water = (q_t, q_l, q_i)` are the specific humidities of the
+diffusing total, liquid, and ice water (`ᶜdiffusing_water_phases`, or their
+values in a PROPHET subdomain), and the coefficients are evaluated at the
+temperature `ᶜT` at cell centers and interpolated to faces outside the gradient,
+so that the flux factors into `Σ_μ (h_μ + Φ) F_qμ`. `ᶠw` is the face weight:
+`ρ K` for a grid-mean closure, or a subdomain weight. `ᶜscratch` holds each
+coefficient in turn, and `ᶜq_scratch` (see `maybe_materialize!`) each specific
+humidity.
+"""
+@inline function add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing;
+    ᶜq_scratch = nothing,
+)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    return nothing
+end
+add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch;
+    ᶜq_scratch = nothing,
+) = add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    CAP.thermodynamics_params(p.params),
+    p.core.ᶜΦ,
+    ᶜscratch;
+    ᶜq_scratch,
+)
+
+"""
+    cloud_species_flux_blend(l_mix, tke, c_d, τ_μ)
+
+Weight `λ_μ = τ_e / (τ_e + τ_μ)` of the equilibrium-implied part of the
+turbulent flux of a suspended cloud species, with the eddy turnover time
+`τ_e = tke / ε = l_mix / (c_d √tke)` of the TKE dissipation
+`ε = c_d tke^{3/2} / l_mix` and the relaxation time `τ_μ` of the species
+(`cloud_species_relaxation_time`). The Damköhler factor of the SGS variance
+fidelity (`sgs_variance_fidelity`) uses the same relaxation times, blended by
+the liquid-fraction ramp, and the same turnover rate with the
+buoyancy-bounded mixing length and a 1 m floor; here, the master mixing
+length enters unfloored.
+
+A parcel that equilibrates fast relative to an eddy (`λ_μ → 1`) carries the
+equilibrium condensate of its conserved variables; one that equilibrates slowly
+(`λ_μ → 0`) carries its composition frozen, which is the down-gradient
+self-diffusion of the species; a disabled process (`τ_μ = Inf`) gives the
+latter for every TKE, the product `τ_μ √tke` being replaced by zero there so
+that `tke = 0` yields no NaN. The limits `tke → 0` and `l_mix → 0` leave the
+flux unaffected, since the eddy diffusivity of the TKE closure vanishes with
+them.
+"""
+@inline function cloud_species_flux_blend(l_mix, tke, c_d, τ_μ)
+    FT = typeof(l_mix)
+    τ = FT(τ_μ)
+    finite_τ = isfinite(τ)
+    τ_c_d_sqrt_tke =
+        ifelse(finite_τ, τ, zero(FT)) * FT(c_d) * sqrt(max(tke, zero(FT)))
+    λ = l_mix / max(l_mix + τ_c_d_sqrt_tke, eps(FT))
+    return ifelse(finite_τ, λ, zero(FT))
+end
+
+"""
+    cloud_species_relaxation_time(
+        cmp, thermo_params, T, ρ, q_tot, q_liq, q_ice, phase,
+    )
+
+Relaxation time `τ_μ` [s] of the suspended cloud species of `phase` at the
+state `(T, ρ, q_tot, q_liq, q_ice)`: the timescale of the 1M
+condensation–evaporation or deposition–sublimation process
+(`CMNe.τ_vap_to_q_lcl`, `CMNe.τ_vap_to_q_icl`) with the process options and
+parameters `cmp` of the microphysics, so that the blend weight of
+`cloud_species_flux_blend` follows the configured ice-formation variant, a
+constant timescale or one set by the ice number and the mean crystal radius,
+and is `Inf` where the process is off. Rain and snow do not enter these
+timescales and are passed as zero; the cloud species are clipped at zero as in
+the microphysics.
+"""
+@inline function cloud_species_relaxation_time(
+    cmp,
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+    phase::TD.Phase,
+)
+    FT = typeof(T)
+    micro = (;
+        q_tot,
+        q_lcl = max(q_liq, zero(FT)),
+        q_icl = max(q_ice, zero(FT)),
+        q_rai = zero(FT),
+        q_sno = zero(FT),
+    )
+    thermo = (; ρ, T)
+    processes = cmp.processes
+    return ifelse(
+        phase isa TD.Liquid,
+        CMNe.τ_vap_to_q_lcl(
+            processes.cloud_liquid_formation,
+            cmp,
+            thermo_params,
+            micro,
+            thermo,
+        ),
+        CMNe.τ_vap_to_q_icl(
+            processes.cloud_ice_formation,
+            cmp,
+            thermo_params,
+            micro,
+            thermo,
+        ),
+    )
+end
+
+"""
+    equilibrium_condensate_sensitivities(
+        thermo_params, T, ρ, q_tot, q_liq, q_ice, sigma_S, λ_eq, phase,
+    )
+
+Return `(c_qt, c_sl)`, the sensitivities of the SGS-mean equilibrium condensate
+of `phase` (`TD.Liquid()` or `TD.Ice()`) to the diffusing conserved variables,
+
+    c_qt = ∂q_μ/∂q_t |ₛₗ = C χ_μ / (1 + C γ),
+    c_sl = ∂q_μ/∂s_l |_qt = -c_qt (∂q_sat/∂T) / c_p.
+
+`C = Φ(λ_eq / σ_S)` is the cloudy fraction of the equilibrium condensate
+`max(0, λ_eq + S′)`, `S′ ~ N(0, σ_S²)`, that the 1M node rule relaxes toward
+(`Microphysics1MEvaluator`), with the multiplier `λ_eq` and width `σ_S` of
+`ᶜsgs_moments` (`_compute_sgs_moments`). With the untruncated Gaussian target
+(`sgs_displacement_truncation = Inf`, no curvature),
+`λ_eq = μ_S = q_t - q_sat(T, ρ)` and `C` is the derivative of `E[max(0, S)]`
+with respect to `μ_S`. Where the target is reshaped, by the truncated
+displacement (`truncated_displacement_condensate`) or the curvature-aware
+condensate (`sgs_variance_curvature`), `λ_eq` follows it and `C` stays the
+cloudy fraction of the distribution the condensate relaxes toward;
+`λ_eq = -Inf`, where the truncated target vanishes, gives `C = 0`. A width of
+`ϵ_numerics` marks a closure without SGS spread (`GridMeanSGS`, or vanishing
+variances), whose multiplier is clipped at zero; `C` is then the saturation
+switch `λ_eq > 0`. `γ = (L / c_p) ∂q_sat/∂T` is the Clausius–Clapeyron coupling,
+with the saturation specific humidity, its temperature derivative at the cell
+density, and the latent heat `L` of the phase mixture of Thermodynamics, as in
+the relaxation target and `σ_S`; at fixed pressure the derivative would be
+larger by `1 / (1 - R_v T / L)`, 3–5%. `c_p` is the heat capacity of the
+diffusing mixture; `χ_μ` is the phase share of the condensate, with the species
+clipped at zero as in the microphysics; and
+`s_l = c_p T + Φ - L_v q_l - L_s q_i` is the liquid–ice static energy. The
+factor `1 / (1 + C γ)` is the latent-heat feedback: condensing `δq_c` warms
+the cell mean by `L δq_c / c_p` and lowers `μ_S` by `γ δq_c`. With an SGS
+width, `C → 0` makes the sensitivities vanish smoothly in clear air.
+"""
+@inline function equilibrium_condensate_sensitivities(
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+    sigma_S,
+    λ_eq,
+    phase::TD.Phase,
+)
+    FT = typeof(T)
+    σ_S = max(FT(sigma_S), ϵ_numerics(FT))
+    C = ifelse(
+        σ_S > ϵ_numerics(FT),
+        normal_cdf(FT(λ_eq) / σ_S),
+        FT(λ_eq > zero(λ_eq)),
+    )
+    cp = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
+    ∂q_sat_∂T = TD.∂q_vap_sat_∂T(thermo_params, T, ρ)
+    L = TD.latent_heat_mixed(
+        thermo_params,
+        T,
+        TD.liquid_fraction_ramp(thermo_params, T),
+    )
+    γ = L / cp * ∂q_sat_∂T
+    χ_liq = TD.liquid_fraction(
+        thermo_params,
+        T,
+        max(q_liq, zero(FT)),
+        max(q_ice, zero(FT)),
+    )
+    χ = ifelse(phase isa TD.Liquid, χ_liq, one(FT) - χ_liq)
+    c_qt = C * χ / (one(FT) + C * γ)
+    return (c_qt, -c_qt * ∂q_sat_∂T / cp)
+end
+
+"""
+    ᶠliquid_ice_static_energy_flux!(
+        ᶠF_sl, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch, ᶜq_scratch,
+    )
+
+Write the face flux of the liquid–ice static energy of the diffusing mixture,
+
+    F_sl = -ᶠw [c_p ∇T + ∇Φ + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i],
+
+into `ᶠF_sl`, with the same terms and face interpolation as
+`add_sensible_heat_diffusionᵥ!` and the condensate terms of
+`add_water_enthalpy_diffusionᵥ!`, so that the diffusive energy flux is
+`F_sl + (h_v + Φ) F_qt` to rounding.
+"""
+function ᶠliquid_ice_static_energy_flux!(
+    ᶠF_sl,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch,
+    ᶜq_scratch,
+)
     (; ᶜΦ) = p.core
-    return @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
+    thermo_params = CAP.thermodynamics_params(p.params)
+    _, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    @. ᶠF_sl = -(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ)))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
+    return ᶠF_sl
 end
 
 """
-    ᶜsuspended_water(Y, p)
+    add_cloud_species_diffusionᵥ!(
+        ᶜρχₜ, Y, p, ᶠw, ᶠF_qt, ᶠF_sl, ᶜT, ᶜq_water, ᶜsgs_moments, ᶜq_μ, phase,
+        ᶜscratch,
+    )
 
-Return the lazy specific humidities `(q_vap, q_lcl, q_icl)` of the suspended
-water: vapor, cloud liquid and cloud ice. With a non-equilibrium scheme the
-cloud species are prognostic and are read from `Y`; otherwise they are the
-diagnostic `ᶜq_liq` and `ᶜq_ice` of the equilibrium partition.
+Add the tendency `-∇·F_qμ` of the blended turbulent flux of the suspended
+cloud species `q_μ` of `phase`,
 
-These are the weights of `ᶜh_eff_plus_Φ!` and, together with
-`ᶜdiffusing_water`, define which water the diffusive and hyperdiffusive
-fluxes act on.
+    F_qμ = (1 - λ_μ) (-ᶠw ∇q_μ) + λ_μ (c_qt F_qt + c_sl F_sl),
+
+to the extensive tendency `ᶜρχₜ`. `λ_μ` is `cloud_species_flux_blend` with
+the mixing length, the TKE, and the relaxation time of the phase: that of the
+1M process at the cell state (`cloud_species_relaxation_time`) or, with
+`sgs_cloud_species_constant_timescales > 0`, the constant
+`condensation_evaporation_timescale` or `sublimation_deposition_timescale`;
+`(c_qt, c_sl)` are
+`equilibrium_condensate_sensitivities` with the width and equilibrium
+multiplier of `ᶜsgs_moments`, and `ᶠF_qt`, `ᶠF_sl` are the face fluxes
+of the diffusing total water and liquid–ice static energy with the same weight
+`ᶠw`. The coefficients are evaluated at cell centers and interpolated to the
+faces outside the gradients. `ᶜscratch` is a tuple of three center scalar
+fields.
+
+The energy flux is not rebuilt from `F_qμ`: a parcel conserves `(s_l, q_t)` in
+transit whether or not its condensate equilibrates, so `F_sl + (h_v + Φ) F_qt`
+is the energy flux for every `λ_μ`, and a layer well mixed in `(s_l, q_t)`
+remains a fixed point of diffusion; with `λ_μ = 1` the species flux vanishes
+there as well. The equilibrium part is not proportional to `∇q_μ`, so it obeys
+no maximum principle in `q_μ`; transient negative values are bounded by
+`Δt ∇·F_qμ` and handled by the existing limiters.
+
+Only the diffusive flux blends. The flux is the condensate that eddies exchange
+between cells over the turnover time `τ_e`, during which a displaced parcel
+relaxes toward the equilibrium of its conserved variables, so the composition
+it delivers is the blend. The prognostic `q_μ` and its other tendencies
+(advection, sedimentation, the microphysics sources) describe condensate at
+rest in the cell, which the microphysics already relaxes toward equilibrium at
+the rate `1/τ_μ`; a blended value of `q_μ` itself would apply that relaxation
+twice.
 """
-function ᶜsuspended_water(Y, p)
-    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    return p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-           (
-        ᶜq_vap,
-        (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-        (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-    ) : (ᶜq_vap, ᶜq_liq, ᶜq_ice)
+function add_cloud_species_diffusionᵥ!(
+    ᶜρχₜ,
+    Y,
+    p,
+    ᶠw,
+    ᶠF_qt,
+    ᶠF_sl,
+    ᶜT,
+    ᶜq_water,
+    ᶜsgs_moments,
+    ᶜq_μ,
+    phase::TD.Phase,
+    ᶜscratch,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    # The Damköhler blend needs the condensation / sublimation timescale
+    # regardless of which stage integrates the process; pick whichever 1M mp
+    # carries the active formation.
+    cmp = CAP.cloud_formation_1m_params(p.params)
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
+    (; ᶜl_mix, ᶜp) = p.precomputed
+    ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜρ_air =
+        @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
+    # The relaxation time of the species is that of the 1M process at the
+    # cell state or, with `sgs_cloud_species_constant_timescales > 0`, the
+    # constant parameter of the phase. One broadcast per branch keeps the
+    # time a concrete type in each.
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    if CAP.sgs_cloud_species_constant_timescales(p.params) > 0
+        τ_const =
+            phase isa TD.Liquid ?
+            CAP.condensation_evaporation_timescale(p.params) :
+            CAP.sublimation_deposition_timescale(p.params)
+        @. ᶜλ = cloud_species_flux_blend(ᶜl_mix, ᶜtke, c_d, τ_const)
+    else
+        @. ᶜλ = cloud_species_flux_blend(
+            ᶜl_mix,
+            ᶜtke,
+            c_d,
+            cloud_species_relaxation_time(
+                cmp,
+                thermo_params,
+                ᶜT,
+                ᶜρ_air,
+                ᶜq_tot,
+                ᶜq_liq,
+                ᶜq_ice,
+                phase,
+            ),
+        )
+    end
+    ᶜsensitivities = @. lazy(
+        equilibrium_condensate_sensitivities(
+            thermo_params,
+            ᶜT,
+            ᶜρ_air,
+            ᶜq_tot,
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶜsgs_moments.sigma_S,
+            ᶜsgs_moments.λ_eq,
+            phase,
+        ),
+    )
+    @. ᶜc_qt = first(ᶜsensitivities)
+    @. ᶜc_sl = last(ᶜsensitivities)
+    @. ᶜρχₜ -= ᶜdiffdivᵥ(
+        -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
+        ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),
+    )
+    return nothing
 end
 
 """
-    ᶜdiffusing_water(Y, p)
+    blended_cloud_species_flux(Y, p)
 
-Return the lazy specific humidity of the water that diffuses,
-`q_tot_eff = q_tot - q_rai - q_sno`. Rain and snow are excluded because they
-sediment rather than follow the turbulent flow; with an equilibrium scheme
-there is no separate precipitation mass and this is `q_tot`.
+Whether cloud liquid and ice take the blended flux of
+`add_cloud_species_diffusionᵥ!`: the 1-moment non-equilibrium microphysics
+(number concentrations, which diffuse down their own gradients, are not
+prognostic), prognostic TKE with the mixing length `ᶜl_mix` for the eddy
+turnover time, and the SGS moments of the saturation excess (`ᶜsgs_moments`)
+for the cloudy fraction. Otherwise the species diffuse down their own
+gradients. The autodiff Jacobian, whose precomputed subset
+(`implicit_precomputed_quantities`) has neither field, also differentiates
+self-diffusion, matching the self-diffusion diagonal the manual Jacobian
+keeps as an upper bound.
 """
-ᶜdiffusing_water(Y, p) =
-    p.atmos.microphysics_model isa
-    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-    (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-    (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+blended_cloud_species_flux(Y, p) =
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+    MatrixFields.has_field(Y, @name(c.ρtke)) &&
+    hasproperty(p.precomputed, :ᶜl_mix) &&
+    hasproperty(p.precomputed, :ᶜsgs_moments)
+
+"""
+    cloud_species_phase(χ_name)
+
+Return `TD.Liquid()` for the cloud liquid name, `TD.Ice()` for the cloud ice
+name, and `nothing` for every other species.
+"""
+cloud_species_phase(::typeof(@name(q_lcl))) = TD.Liquid()
+cloud_species_phase(::typeof(@name(q_icl))) = TD.Ice()
+cloud_species_phase(_) = nothing
+
+"""
+    add_water_enthalpy_diffusionₕ!(
+        ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
+    )
+
+Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the weak
+divergence `wdivₕ(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
+to `ᶜρe_totₜ`, with the center weight `ᶜw`.
+"""
+function add_water_enthalpy_diffusionₕ!(
+    ᶜρe_totₜ,
+    ᶜw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch;
+    ᶜq_scratch = nothing,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    return nothing
+end
+
+"""
+    diffused_water_species(precipitation)
+
+Return the `(χ_name, ρχ_name)` pairs of the microphysics species that diffuse
+down their own gradients: `suspended_cloud_species`, followed by
+`precipitation_species` when `precipitation` is `true`.
+"""
+diffused_water_species(precipitation) =
+    precipitation ? (suspended_cloud_species..., precipitation_species...) :
+    suspended_cloud_species
+
+"""
+    add_moisture_diffusionᵥ!(
+        Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation = false,
+    )
+
+Add the vertical diffusion of water shared by the grid-mean second-order closures,
+with the face coefficient `ᶠρK`, to `Yₜ`; return `nothing`.
+
+The diffusing total water `q_t` of `ᶜdiffusing_water_phases` enters
+`Yₜ.c.ρq_tot` and, as moist-air mass, `Yₜ.c.ρ`; `Yₜ.c.ρe_tot` receives the
+water-enthalpy flux of `add_water_enthalpy_diffusionᵥ!`; and each prognostic
+microphysics species of `diffused_water_species(precipitation)` diffuses down
+its own gradient with the same `ᶠρK`, so that the phase fluxes match the
+enthalpy the energy equation carries. Species without such a flux do not
+diffuse, and with an equilibrium scheme only `ρq_tot` diffuses. `ᶜscratch` and
+`ᶜscratch_2` are center scalar fields. No-op in dry configurations.
+"""
+function add_moisture_diffusionᵥ!(
+    Yₜ,
+    Y,
+    p,
+    ᶠρK,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+    ᶜq_tot = ᶜq_water[1]
+    ᶜρq_totₜ = ᶜscratch_2
+    @. ᶜρq_totₜ = -(ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot))))
+    @. Yₜ.c.ρq_tot += ᶜρq_totₜ
+    @. Yₜ.c.ρ += ᶜρq_totₜ
+    add_water_enthalpy_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρK, ᶜT, ᶜq_water, p, ᶜscratch)
+    # Cloud liquid and ice take the blended flux of
+    # add_cloud_species_diffusionᵥ! where the turbulence closure provides an
+    # eddy turnover time; the face fluxes of total water and liquid–ice static
+    # energy it needs share the weight ᶠρK. Each scratch field is bound once,
+    # outside the branch, so that the closure below captures it unboxed; the
+    # fields exist only with the 1M scheme
+    # (`cloud_species_diffusion_temporary_quantities`).
+    blend = blended_cloud_species_flux(Y, p)
+    ᶠF_qt = blend ? p.scratch.ᶠtemp_C3 : nothing
+    ᶠF_sl = blend ? p.scratch.ᶠtemp_C3_2 : nothing
+    if blend
+        @. ᶠF_qt = -(ᶠρK * ᶠgradᵥ(ᶜq_tot))
+        ᶠliquid_ice_static_energy_flux!(
+            ᶠF_sl,
+            ᶠρK,
+            ᶜT,
+            ᶜq_water,
+            p,
+            ᶜscratch,
+            nothing,
+        )
+    end
+    MatrixFields.unrolled_foreach(
+        diffused_water_species(precipitation),
+    ) do (χ_name, ρχ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) || return
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        phase = cloud_species_phase(χ_name)
+        if isnothing(phase) || !blend
+            @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+        else
+            ᶜq_μ = @. lazy(specific(ᶜρχ, ᶜρ))
+            add_cloud_species_diffusionᵥ!(
+                ᶜρχₜ,
+                Y,
+                p,
+                ᶠρK,
+                ᶠF_qt,
+                ᶠF_sl,
+                ᶜT,
+                ᶜq_water,
+                p.precomputed.ᶜsgs_moments,
+                ᶜq_μ,
+                phase,
+                (
+                    p.scratch.ᶜtemp_scalar_8,
+                    p.scratch.ᶜtemp_scalar_9,
+                    p.scratch.ᶜtemp_scalar_10,
+                ),
+            )
+        end
+    end
+    return nothing
+end
+
+"""
+    add_moisture_diffusionₕ!(
+        Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation = false,
+    )
+
+Horizontal counterpart of `add_moisture_diffusionᵥ!`, with the center coefficient
+`ᶜρD` and the weak divergence `wdivₕ`.
+"""
+function add_moisture_diffusionₕ!(
+    Yₜ,
+    Y,
+    p,
+    ᶜρD,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+    ᶜq_tot = ᶜq_water[1]
+    ᶜρq_totₜ = ᶜscratch_2
+    @. ᶜρq_totₜ = wdivₕ(ᶜρD * gradₕ(ᶜq_tot))
+    @. Yₜ.c.ρq_tot += ᶜρq_totₜ
+    @. Yₜ.c.ρ += ᶜρq_totₜ
+    add_water_enthalpy_diffusionₕ!(Yₜ.c.ρe_tot, ᶜρD, ᶜT, ᶜq_water, p, ᶜscratch)
+    MatrixFields.unrolled_foreach(
+        diffused_water_species(precipitation),
+    ) do (_, ρχ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) || return
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+    end
+    return nothing
+end
+
+"""
+    add_scalar_diffusionᵥ!(Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation = false)
+
+Add the vertical diffusion of every grid-mean scalar with the face coefficient
+`ᶠρK` to `Yₜ`; return `nothing`. This is the scalar part shared by the
+grid-mean second-order closures: the sensible-heat and geopotential flux
+(`add_sensible_heat_diffusionᵥ!`) in every configuration, the water and its
+enthalpy (`add_moisture_diffusionᵥ!`) in moist ones, and each passive
+grid-scale tracer down its own gradient. `precipitation` selects whether rain,
+snow, and rain number diffuse (`ᶜdiffusing_water_phases`).
+"""
+function add_scalar_diffusionᵥ!(
+    Yₜ,
+    Y,
+    p,
+    ᶠρK,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    add_sensible_heat_diffusionᵥ!(
+        Yₜ.c.ρe_tot,
+        ᶠρK,
+        ᶜT,
+        ᶜdiffusing_water_phases(Y, p; precipitation),
+        p,
+        ᶜscratch,
+    )
+    add_moisture_diffusionᵥ!(Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation)
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+    end
+    return nothing
+end
+
+"""
+    add_scalar_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation = false)
+
+Horizontal counterpart of `add_scalar_diffusionᵥ!`, with the center coefficient
+`ᶜρD` and the weak divergence `wdivₕ`.
+"""
+function add_scalar_diffusionₕ!(
+    Yₜ,
+    Y,
+    p,
+    ᶜρD,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    add_sensible_heat_diffusionₕ!(
+        Yₜ.c.ρe_tot,
+        ᶜρD,
+        ᶜT,
+        ᶜdiffusing_water_phases(Y, p; precipitation),
+        p,
+        ᶜscratch,
+    )
+    add_moisture_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation)
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
+        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+    end
+    return nothing
+end
+
+"""
+    ᶜdiffusing_water_phases(Y, p; precipitation = false)
+
+Return the lazy specific humidities `(q_t, q_l, q_i)` of the total, liquid, and
+ice water that second-order turbulent diffusion transports, the vapor being the
+remainder `q_t - q_l - q_i`.
+
+With a non-equilibrium scheme, these are `(q_tot - q_rai - q_sno, q_lcl, q_icl)`,
+since rain and snow sediment rather than follow the turbulent flow at the scales
+of the boundary-layer and PROPHET closures; the same tuple weights the
+fourth-order hyperdiffusive water enthalpy (`ᶜh_eff_plus_Φ!`). With `precipitation = true`, used by
+the LES closures, whose subgrid eddies carry falling precipitation as well, they
+are `(q_tot, q_lcl + q_rai, q_icl + q_sno)`. With an equilibrium scheme, they
+are `q_tot` and the diagnostic `ᶜq_liq` and `ᶜq_ice` in either case. In dry
+configurations, returns `nothing`.
+"""
+function ᶜdiffusing_water_phases(Y, p; precipitation = false)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    (; ᶜq_liq, ᶜq_ice) = p.precomputed
+    return diffusing_water_phases(
+        Y.c, ᶜq_liq, ᶜq_ice, p.atmos.microphysics_model, Val(precipitation),
+    )
+end
+
+# `ᶜdiffusing_water_phases` of the center state `ᶜY`, a whole field or one column
+# of a fused loop, with the cached diagnostic `ᶜq_liq` and `ᶜq_ice`.
+@inline diffusing_water_phases(ᶜY, ᶜq_liq, ᶜq_ice, microphysics_model, _) =
+    ((@. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))), ᶜq_liq, ᶜq_ice)
+@inline diffusing_water_phases(
+    ᶜY, ᶜq_liq, ᶜq_ice, ::NonEquilibriumMicrophysics, ::Val{true},
+) = (
+    (@. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_lcl + ᶜY.ρq_rai, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_icl + ᶜY.ρq_sno, ᶜY.ρ))),
+)
+@inline diffusing_water_phases(
+    ᶜY, ᶜq_liq, ᶜq_ice, ::NonEquilibriumMicrophysics, ::Val{false},
+) = (
+    (@. lazy(specific(ᶜY.ρq_tot - ᶜY.ρq_rai - ᶜY.ρq_sno, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_lcl, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_icl, ᶜY.ρ))),
+)
 
 """
     gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
@@ -971,14 +1740,14 @@ there is no separate precipitation mass and this is `q_tot`.
 Compute the gradient Richardson number, the ratio of the buoyancy to the shear
 term in the TKE budget:
 
-    Ri = ᶜN² / max(2 SᵢⱼSᵢⱼ, eps).
+    Ri = ᶜN² / max(2 ᶜstrain_rate_norm, eps) = ᶜN² / |∂uₕ/∂z|².
 
 # Arguments
 
   - `params`: Parameter set; used only for the floating-point type.
   - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
-  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `ᶜstrain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
 
 # Returns
 
@@ -987,8 +1756,7 @@ The gradient Richardson number [-].
 function gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
     FT = eltype(params)
 
-    # Calculate the denominator term for Ri, ensuring it's not zero
-    # Based on the formulation Ri = N^2 / max(2*|S|, eps)
+    # Shear term `|∂uₕ/∂z|²`, floored at `eps` so that `Ri` stays finite
     ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
     ᶜRi_grad = ᶜN² / ᶜshear_term_safe
 
@@ -1017,8 +1785,8 @@ with `X = Pr_n + ω_pr Ri`, the neutral Prandtl number `Pr_n`
 
   - `params`: Parameter set.
   - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
-  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `ᶜstrain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
 
 # Returns
 
@@ -1028,9 +1796,18 @@ The strong-stability limit of this closure (`Pr(Ri) → ∞`) is what closes the
 TKE dissipation coefficient; see `tke_dissipation_coefficient` for that
 derivation.
 """
-function turbulent_prandtl_number(params, ᶜN², ᶜstrain_rate_norm)
-    FT = eltype(params)
-    turbconv_params = CAP.turbconv_params(params)
+turbulent_prandtl_number(
+    params::CAP.ClimaAtmosParameters,
+    ᶜN²,
+    ᶜstrain_rate_norm,
+) = turbulent_prandtl_number(
+    CAP.turbconv_params(params),
+    ᶜN²,
+    ᶜstrain_rate_norm,
+)
+
+function turbulent_prandtl_number(turbconv_params::CAP.ATCP, ᶜN², ᶜstrain_rate_norm)
+    FT = eltype(turbconv_params)
     eps_FT = eps(FT)
 
     # Parameters from CliMAParams
@@ -1039,7 +1816,7 @@ function turbulent_prandtl_number(params, ᶜN², ᶜstrain_rate_norm)
     Pr_max = CAP.Pr_max(turbconv_params) # Maximum Prandtl number limit
 
     # Calculate the raw gradient Richardson number using the new helper function
-    ᶜRi_grad = gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
+    ᶜRi_grad = gradient_richardson_number(turbconv_params, ᶜN², ᶜstrain_rate_norm)
 
     # --- Apply the Pr_t(Ri) formula valid for stable and unstable conditions ---
 
@@ -1081,7 +1858,8 @@ stratified air, where the mixing length is buoyancy-limited,
     2 K_u S² - K_h N² = c_d e^{3/2} / l,
     K_u = c_m l √e,   K_h = K_u / Pr,
 
-with `S² = SᵢⱼSᵢⱼ` the squared strain-rate norm. Substituting `l = l_N` makes
+with `S² = |∂uₕ/∂z|² / 2` the squared norm of the vertical shear of the
+horizontal wind (`vertical_shear_norm_sqr`). Substituting `l = l_N` makes
 every term linear in `e`,
 
     c_m √c_b (2S² - N²/Pr) e / N = c_d e N / √c_b,

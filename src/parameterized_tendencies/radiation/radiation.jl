@@ -41,8 +41,23 @@ A `NamedTuple` that is merged into the simulation cache as `p.radiation`.
 
 See also `radiation_tendency!` and the radiation docs page, docs/src/radiation.md.
 """
-radiation_model_cache(Y, atmos::AtmosModel, args...) =
-    radiation_model_cache(Y, atmos.radiation_mode, args...)
+function radiation_model_cache(Y, atmos::AtmosModel, args...)
+    radiation_mode = atmos.radiation_mode
+    # The RRTMGP modes also need the cloud model, which decides whether the
+    # shortwave inhomogeneity factor is allocated. `atmos.radiation` is the
+    # `AtmosRadiation` group, so the mode cannot be selected by dispatch on
+    # the type parameters of `AtmosModel`.
+    if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        return radiation_model_cache(
+            Y,
+            radiation_mode,
+            args...;
+            cloud_model = atmos.cloud_model,
+        )
+    else
+        return radiation_model_cache(Y, radiation_mode, args...)
+    end
+end
 
 #####
 ##### No Radiation
@@ -155,11 +170,12 @@ function rrtmgp_solver_kwargs(
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    kwargs = (;
-        lapse_rate = 3.5,
-        optical_thickness_parameter = (@. 7.2 + (1.8 - 7.2) * sind(latitude)^2),
-        latitude,
-    )
+    FT = Spaces.undertype(space)
+    τ_equator = FT(7.2)
+    τ_pole = FT(1.8)
+    optical_thickness_parameter =
+        @. τ_equator + (τ_pole - τ_equator) * sind(latitude)^2
+    kwargs = (; lapse_rate = FT(3.5), optical_thickness_parameter, latitude)
     if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
         zkwargs = (;
             center_z = Fields.field2array(ᶜz),
@@ -286,6 +302,13 @@ function rrtmgp_solver_kwargs(
                 center_cloud_liquid_effective_radius = NaN, # initialized in callback
                 center_cloud_ice_effective_radius = NaN, # initialized in callback
             )
+            if radiation_mode.include_snow
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_snow_water_path = NaN, # initialized in callback
+                    center_cloud_snow_effective_radius = NaN, # initialized in callback
+                )
+            end
         end
     end
 
@@ -346,7 +369,8 @@ end
 """
     radiation_model_cache(Y, radiation_mode::RRTMGPI.AbstractRRTMGPMode, start_date,
                           params, aerosol_names, time_varying_trace_gas_names,
-                          insolation_mode; interpolation, bottom_extrapolation)
+                          insolation_mode; cloud_model, interpolation,
+                          bottom_extrapolation)
 
 Build the cache for an RRTMGP radiation mode.
 
@@ -360,6 +384,8 @@ Errors if `aerosol_radiation` is enabled without any of the supported aerosol sp
 
 # Keyword Arguments
 
+  - `cloud_model = QuadratureCloud()`: The cloud model of the `AtmosModel`; the shortwave
+    inhomogeneity factor is allocated only for `QuadratureCloud`.
   - `interpolation = RRTMGPI.BestFit()`: Scheme for interpolating the center pressures and
     temperatures to cell faces.
   - `bottom_extrapolation = RRTMGPI.SameAsInterpolation()`: Scheme for the bottom face.
@@ -377,6 +403,7 @@ function radiation_model_cache(
     aerosol_names,
     time_varying_trace_gas_names,
     insolation_mode;
+    cloud_model = QuadratureCloud(),
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
 )
@@ -455,7 +482,14 @@ function radiation_model_cache(
     cloud_cache = (;)
     if (radiation_mode isa RRTMGPI.AllSkyRadiation) ||
        (radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics)
-        cloud_cache = get_cloud_cache(radiation_mode.cloud, Y, start_date)
+        cloud_cache = get_cloud_cache(
+            radiation_mode.cloud,
+            Y,
+            start_date,
+            radiation_mode.sw_cloud_inhomogeneity &&
+                !radiation_mode.idealized_clouds &&
+                (cloud_model isa QuadratureCloud),
+        )
     end
     return merge(
         (; rrtmgp_solver, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
@@ -465,18 +499,32 @@ function radiation_model_cache(
 end
 
 """
-    get_cloud_cache(cloud, Y, start_date)
+    get_cloud_cache(cloud, Y, start_date, sw_cloud_inhomogeneity)
 
 Return the cache needed to supply cloud properties to radiation.
 
-For `InteractiveCloudInRadiation` (and any other setting) the cache is empty, since cloud
-properties are diagnosed from the model state. For `PrescribedCloudInRadiation` it holds
+For `InteractiveCloudInRadiation`, and for `nothing` (`prescribe_clouds_in_radiation: ~`),
+which also passes the model clouds to radiation, it holds `ᶜsw_cloud_optical_depth_factor`,
+the shortwave subgrid inhomogeneity factor on the in-cloud water paths
+(`set_sw_cloud_optical_depth_factor!`), when `sw_cloud_inhomogeneity` is true, and is
+otherwise empty, which leaves the shortwave water paths unscaled. The caller passes
+`false` for `idealized_clouds` (whose water paths are written once at construction, so
+an in-place scaling would compound across calls) and for non-`QuadratureCloud` cloud
+models (which have no subgrid condensate distribution). The cloud properties themselves
+are diagnosed from the model state. For `PrescribedCloudInRadiation` it holds
 the `prescribed_clouds_field` (cloud fraction `cc`, and liquid and ice water contents
 `clwc` and `ciwc`) together with the `TimeVaryingInput`s that read them from the ERA5
 monthly climatology, interpolated linearly in time on a one-year periodic calendar.
 """
-get_cloud_cache(_, _, _) = (;)
-function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
+get_cloud_cache(_, _, _, _) = (;)
+get_cloud_cache(
+    ::Union{Nothing, InteractiveCloudInRadiation},
+    Y,
+    start_date,
+    sw_cloud_inhomogeneity,
+) =
+    sw_cloud_inhomogeneity ? (; ᶜsw_cloud_optical_depth_factor = ones(axes(Y.c))) : (;)
+function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date, _)
     target_space = axes(Y.c)
     prescribed_cloud_names = ("cc", "clwc", "ciwc")
     prescribed_cloud_names_as_symbols = Symbol.(prescribed_cloud_names)
@@ -543,17 +591,26 @@ radiation; updrafts are typically absent in the stratosphere, where radiation ma
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
     (; turbconv_model) = p.atmos
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     # Apply radiation tendency to updrafts in prognostic EDMF. We use the
     # grid-mean radiation as an approximation for updraft radiation.
     # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts
     # are typically absent in the stratosphere where radiation is more important.
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs) = p.precomputed
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+    n = turbconv_model isa PrognosticEDMFX ? n_mass_flux_subdomains(turbconv_model) : 0
+    drafts = ntuple(j -> (p.precomputed.ᶜρʲs.:($j), Yₜ.c.sgsʲs.:($j).mse), Val(n))
+    # The grid-mean and updraft tendencies in one column loop, with the flux
+    # divergence evaluated once.
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        ᶠradiation_flux,
+        drafts,
+    ) do Yₜc, ᶠradiation_flux, drafts
+        ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜc.ρe_tot -= ᶜdiv_flux
+        MatrixFields.unrolled_foreach(drafts) do (ᶜρʲ, ᶜmseʲₜ)
+            @inline
+            @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
         end
+        return nothing
     end
     return nothing
 end
@@ -594,8 +651,8 @@ end
 """
     radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
 
-Apply the DYCOMS RF01/RF02 idealized longwave radiation to `Yₜ.c.ρe_tot` in place; return
-`nothing`.
+Apply the DYCOMS RF01/RF02 idealized longwave radiation to `Yₜ.c.ρe_tot` (and, with
+`PrognosticEDMFX`, to each updraft's `mse`) in place; return `nothing`.
 
 The net upward flux of [Stevens2005](@cite) combines cloud-top cooling, cloud-base warming,
 and free-tropospheric warming above the inversion:
@@ -608,9 +665,10 @@ F(z) = F_0 e^{-Q(z, ∞)} + F_1 e^{-Q(0, z)} +
 
 where `Q(z₁, z₂) = ∫ κ ρ q_liq dz` is the liquid-water optical path, `D` is the large-scale
 divergence [1/s], and the last term applies only above the inversion height `z_i`, taken as
-the level whose `q_tot` is closest to 0.008 kg/kg. The tendency is
-`-ᶜdivᵥ(ᶠradiation_flux)`, applied explicitly at every stage. Requires a moist
-microphysics model.
+the highest level with `q_tot ≥ 0.008` kg/kg (or the level closest to `0.008` kg/kg if the
+entire column is drier). The tendency `-ᶜdivᵥ(ᶠradiation_flux)` is applied explicitly at
+every stage to `Yₜ.c.ρe_tot` and, with `PrognosticEDMFX`, to each updraft's `mse` (divided
+by the updraft density). Requires a moist microphysics model.
 
 Two documented departures from the reference remain (see the TODO comments): the extinction
 uses the specific content `q_liq` rather than the mixing ratio, and the third term uses the
@@ -621,6 +679,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.microphysics_model isa DryModel)
 
     (; params) = p
+    (; turbconv_model) = p.atmos
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
         p.radiation
     (; ᶜq_liq) = p.precomputed
@@ -639,13 +698,21 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
 
     Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq, ᶜκρq)
 
-    # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
-    # the level whose value of q_tot is closest to 0.008.
+    # Find (z, ρ, q_tot) at the q_tot = 0.008 kg/kg inversion isoline: the
+    # highest level with q_tot >= 0.008 kg/kg, falling back to the level closest
+    # to 0.008 kg/kg if the entire column is drier.
     q_tot_isoline = FT(0.008)
     Operators.column_reduce!(
-        (nt1, nt2) ->
-            abs(specific.(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
-            abs(specific.(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
+        (acc, nt) -> begin
+            q_acc = specific(acc.ρq_tot, acc.ρ)
+            q = specific(nt.ρq_tot, nt.ρ)
+            is_closer = abs(q - q_tot_isoline) < abs(q_acc - q_tot_isoline)
+            ifelse(
+                (q >= q_tot_isoline) | ((q_acc < q_tot_isoline) & is_closer),
+                nt,
+                acc,
+            )
+        end,
         isoline_z_ρ_ρq,
         Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
     )
@@ -672,6 +739,13 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     )
 
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+        end
+    end
 
     return nothing
 end

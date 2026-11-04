@@ -13,6 +13,7 @@ import Thermodynamics as TD
             "initial_condition" => "Larcform1",
             "microphysics_model" => "0M",
             "config" => "column",
+            "z_stretch" => false,
             "output_default_diagnostics" => false,
         );
         job_id = "larcform1_setup_test",

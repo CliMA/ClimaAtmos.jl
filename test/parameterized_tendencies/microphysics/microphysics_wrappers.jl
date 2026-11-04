@@ -16,7 +16,8 @@ import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 # Import limiters
-import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluator
+import ClimaAtmos:
+    limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluator, sgs_local_condensate
 
 @testset "Microphysics Wrappers" begin
 
@@ -176,20 +177,22 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
     end
 
     @testset "BMT 1M vertical-velocity plumbing" begin
-        # CloudMicrophysics 0.41: the Kessler1M rain autoconversion blends its timescale
+        # CloudMicrophysics 0.44: the Kessler1M rain autoconversion blends its timescale
         # between a stratiform and a convective value with the subdomain vertical velocity
-        # (f(w) = w⁴ / (w⁴ + w₀⁴), w₀ = 1.5 m/s by default). The ClimaParams defaults set the
-        # two values equal (classic Kessler), so `w` must be made active here by giving the
-        # stratiform regime a longer timescale. The tests then check that `w` reaches
-        # CloudMicrophysics through every 1M wrapper: an updraft (w = 10 m/s) must convert
-        # cloud liquid to rain faster than quiescent air (w = 0), and each wrapper must agree
-        # with the direct BMT call made with the same `w`.
+        # (f(w) = w₊² / (w₊² + w₀²), w₊ = max(w, 0), w₀ = 1.5 m/s by default). The
+        # ClimaParams defaults set the two values equal (classic Kessler), so `w` must be
+        # made active here by giving the stratiform regime a longer timescale. The tests
+        # then check that `w` reaches CloudMicrophysics through every 1M wrapper: an
+        # updraft (w = 10 m/s) must convert cloud liquid to rain faster than quiescent air
+        # (w = 0), and each wrapper must agree with the direct BMT call made with the
+        # same `w`.
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
+                # Stratiform timescale = 1000 s · 10.0 = 10000 s (convective 1000 s).
                 toml_dict = CP.create_toml_dict(FT;
                     override_file = Dict(
-                        "rain_autoconversion_timescale_stratiform" =>
-                            Dict("value" => 10000.0, "type" => "float"),
+                        "rain_autoconversion_timescale_stratiform_scale" =>
+                            Dict("value" => 10.0, "type" => "float"),
                         "rain_autoconversion_timescale" =>
                             Dict("value" => 1000.0, "type" => "float"),
                     ),
@@ -250,7 +253,7 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     quad_1m(w) = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, FT(0), FT(0), dt, nsubs,
                     )
                     q_rest = quad_1m(w_rest)
                     q_up = quad_1m(w_up)
@@ -262,17 +265,20 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                 @testset "Microphysics1MEvaluator forwards w" begin
                     evaluator(w) = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w,
-                        q_rai, q_sno, λ, λ_lagrange, mu_S, α, dt, nsubs, (),
-                    )
-                    e_rest = evaluator(w_rest)(T, q_tot)
-                    e_up = evaluator(w_up)(T, q_tot)
+                        q_rai, q_sno, λ, FT(0), FT(0), FT(0), FT(0),
+                        λ_lagrange, mu_S, α,
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                        dt, nsubs, ())
+                    e_rest = evaluator(w_rest)(T, q_tot, FT(0))
+                    e_up = evaluator(w_up)(T, q_tot, FT(0))
                     @test e_up.dq_rai_dt > e_rest.dq_rai_dt
                     @test e_rest.dq_rai_dt ≈ ref_rest.dq_rai_dt rtol = FT(1e-5)
                     @test e_up.dq_rai_dt ≈ ref_up.dq_rai_dt rtol = FT(1e-5)
                 end
 
-                @testset "even in w" begin
-                    @test bmt(-w_up).dq_rai_dt == ref_up.dq_rai_dt
+                pkgversion(CM) < v"0.44" && continue
+                @testset "descending air is stratiform" begin
+                    @test bmt(-w_up).dq_rai_dt == ref_rest.dq_rai_dt
                 end
             end
         end
@@ -353,11 +359,12 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_clear = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),           # q_rai, q_sno
-                        FT(1), FT(-1), mu_S, FT(1),  # λ, λ_lagrange, mu_S, α
-                        dt, nsubs, (),
-                    )
+                        FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        FT(-1), mu_S, FT(1),   # λ_lagrange, mu_S, α
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                        dt, nsubs, ())
                     # At the grid-mean point S′_hat = 0, so shifted_excess = max(0,-1) = 0.
-                    result = eval_clear(T_mean, q_tot_mean)
+                    result = eval_clear(T_mean, q_tot_mean, FT(0))
                     ref = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean, FT(0),
@@ -375,10 +382,11 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_cloud = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),            # q_rai, q_sno
-                        FT(1), q_c, mu_S, FT(1), # λ, λ_lagrange, mu_S, α
-                        dt, nsubs, (),
-                    )
-                    result = eval_cloud(T_mean, q_tot_mean)
+                        FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        q_c, mu_S, FT(1),   # λ_lagrange, mu_S, α
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                        dt, nsubs, ())
+                    result = eval_cloud(T_mean, q_tot_mean, FT(0))
                     ref = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean, FT(0),
@@ -411,10 +419,11 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_precip = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         q_rai, q_sno,               # q_rai, q_sno
-                        λ_mix, q_c, mu_S_mix, FT(1),  # λ, λ_lagrange, mu_S, α
-                        dt, nsubs, (),
-                    )
-                    result = eval_precip(T_mix, q_tot_mix)
+                        λ_mix, FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        q_c, mu_S_mix, FT(1),   # λ_lagrange, mu_S, α
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                        dt, nsubs, ())
+                    result = eval_precip(T_mix, q_tot_mix, FT(0))
                     # Reference: the condensate the closure must reconstruct at
                     # the mean point, plus the true precipitation.
                     ref = BMT.bulk_microphysics_tendencies(
@@ -433,10 +442,11 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),
-                        FT(1), FT(5e-4), mu_S, FT(1),
-                        dt, nsubs, (),
-                    )
-                    result = eval(T_mean, q_tot_mean)
+                        FT(1), FT(0), FT(0), FT(0), FT(0),
+                        FT(5e-4), mu_S, FT(1),
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                        dt, nsubs, ())
+                    result = eval(T_mean, q_tot_mean, FT(0))
                     @test result isa NamedTuple
                     @test isfinite(result.dq_lcl_dt)
                     @test isfinite(result.dq_icl_dt)
@@ -447,4 +457,236 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
         end
     end
 
+    @testset "uniform fractions of the condensate reconstruction" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                mp = CMP.Microphysics1MParams(toml_dict)
+                dt = FT(60)
+                nsubs = 1
+                ρ = FT(0.6)
+                w = FT(0)
+
+                @testset "sgs_local_condensate: limits and blend" begin
+                    for λ in (FT(0), FT(0.3), FT(1)), se in (FT(0), FT(2e-4))
+                        q_l, q_i = FT(4e-5), FT(5e-5)
+                        # ξ = 0: the excess split, bitwise
+                        ql, qi = sgs_local_condensate(λ, se, FT(0), FT(0), q_l, q_i)
+                        @test ql === λ * se && qi === (FT(1) - λ) * se
+                        # ξ = 1: the subdomain mean at the node
+                        ql, qi = sgs_local_condensate(λ, se, FT(1), FT(1), q_l, q_i)
+                        @test ql == q_l && qi == q_i
+                        # mixed: liquid excess, ice uniform (the run-15 configuration)
+                        ql, qi = sgs_local_condensate(λ, se, FT(0), FT(1), q_l, q_i)
+                        @test ql === λ * se && qi == q_i
+                        # interior blend and type stability
+                        ql, qi = sgs_local_condensate(λ, se, FT(0.25), FT(0.5), q_l, q_i)
+                        @test ql ≈ FT(0.75) * λ * se + FT(0.25) * q_l
+                        @test qi ≈ FT(0.5) * (FT(1) - λ) * se + FT(0.5) * q_i
+                        @test ql isa FT && qi isa FT
+                    end
+                end
+
+                # ---- ice-only cell at −25 °C (λ = 0)
+                T = FT(248)
+                q_icl = FT(3e-5)
+                q_c = q_icl
+                λ_i = FT(TD.liquid_fraction(thp, T, FT(0), q_icl))
+                @test λ_i == 0
+                q_sat = TD.q_vap_saturation(thp, T, ρ)
+                q_tot = q_sat + q_c
+                mu_S = q_tot - q_sat
+                make(ξ_l, ξ_i) = Microphysics1MEvaluator(
+                    BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
+                    ξ_l, ξ_i, FT(0), q_icl, q_c, mu_S, FT(1),
+                    FT(0), FT(1),   # β_precip, shaft_frac: no placement
+                    dt, nsubs, ())
+                ev_e = make(FT(0), FT(0))
+                ev_u = make(FT(0), FT(1))
+                ev_h = make(FT(0), FT(0.5))
+
+                @testset "precipitation-fraction placement" begin
+                    q_r, q_s = FT(2e-5), FT(3e-5)
+                    # evaluator with the precipitation `q_r`, `q_s`, the mean `μ` and the
+                    # placement `β_p`, `frac_p`; the dry node lies outside the shaft
+                    # (flag 0), the moist node inside it (flag 1)
+                    ev(q_r, q_s, μ, β_p, frac_p) = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, μ, FT(1),
+                        β_p, frac_p, dt, nsubs, (),
+                    )
+                    ref = ev(q_r, q_s, mu_S, FT(0), FT(1))
+                    q̂_dry = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())   # S′ < 0
+                    q̂_moist = q_tot + FT(2e-4)                                     # S′ > 0
+                    # off == no placement
+                    @test ev(q_r, q_s, mu_S, FT(0), FT(0.5))(T, q̂_moist, FT(1)) ==
+                          ref(T, q̂_moist, FT(1))
+                    # on: no precipitation at the dry node (no rain evaporation / snow
+                    # sublimation there), doubled precipitation at the moist node, with
+                    # the node total water shifted so that the node vapour is unchanged
+                    # (mu_S shifted with q_tot so that the centred excess, hence the
+                    # condensate reconstruction, is identical)
+                    on = ev(q_r, q_s, mu_S, FT(1), FT(0.5))
+                    noprecip = ev(FT(0), FT(0), mu_S - q_r - q_s, FT(0), FT(1))
+                    @test all(
+                        isapprox.(
+                            values(on(T, q̂_dry, FT(0))),
+                            values(noprecip(T, q̂_dry - q_r - q_s, FT(0)));
+                            rtol = FT(1e-5),
+                            atol = FT(1e-14),
+                        ),
+                    )
+                    doubled = ev(2q_r, 2q_s, mu_S + q_r + q_s, FT(0), FT(1))
+                    @test all(
+                        isapprox.(
+                            values(on(T, q̂_moist, FT(1))),
+                            values(doubled(T, q̂_moist + q_r + q_s, FT(1)));
+                            rtol = FT(1e-5),
+                            atol = FT(1e-14),
+                        ),
+                    )
+                    @test on(T, q̂_moist, FT(1)) != ref(T, q̂_moist, FT(1))
+                end
+
+                @testset "overlap precipitation fraction: shaft threshold and fraction" begin
+                    # threshold: a_p = 1 puts it far below the nodes, a_p = 0.5 at the median,
+                    # a_p below the floor is floored, larger a_p ⇒ lower threshold
+                    σ = FT(1e-4)
+                    st = ClimaAtmos.sgs_precip_shaft_threshold
+                    @test st(FT(1), σ) < -4σ
+                    @test st(FT(0.5), σ) ≈ FT(0) atol = FT(1e-6) * σ
+                    @test st(FT(0), σ) > 4σ                      # no node in the shaft
+                    @test st(FT(0.2), σ) > st(FT(0.4), σ) > st(FT(0.8), σ)
+                    @test st(FT(0.16), σ) ≈ σ rtol = FT(0.02)      # Φ⁻¹(0.84) ≈ 1
+                    @test st(FT(0.3), σ) isa FT
+
+                    # the shaft edge is an edge of the node rule: the node weight of the
+                    # shaft is a_p, and the placement conserves the cell mean, ⟨φ⟩ = 1 with
+                    # φ = (1 − β) + β flag / f, f the node weight of the shaft
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    T′T′ = FT(1)
+                    q′q′ = (FT(0.1) * q_tot)^2
+                    for (a_p, σ_S) in
+                        ((FT(0.3), FT(2e-4)), (FT(0.15), FT(5e-5)), (FT(1), FT(1e-4)))
+                        rule = ClimaAtmos.conditional_rule(
+                            thp, ρ, T, mu_S, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S),
+                            FT(150), FT(0.05),
+                        )
+                        frac = ClimaAtmos.conditional_rule_shaft_fraction(rule)
+                        # exact up to the quantile approximation of the threshold:
+                        # |δz| < 4.5e-4 in `normal_cdf_inv`, so |frac − a_p| ≤ φ(0)·4.5e-4 < 2e-4
+                        @test frac ≈ a_p atol = FT(2e-4)
+                        φ_mean = sum(
+                            n.w * ClimaAtmos.sgs_placement_factor(FT(1), n.shaft, frac)
+                            for n in rule.nodes
+                        )
+                        @test φ_mean ≈ FT(1) rtol = FT(1e-4)
+                    end
+                    # driver: off is bitwise the uniform result, a_p = 1 is the uniform
+                    # result to rounding, a thin shaft differs from it, the
+                    # packed-options form equals the positional form, and the
+                    # shaft-width floor acts as a_p (the default floor is inert)
+                    m = ClimaAtmos._compute_sgs_moments(
+                        thp, ρ, T, q_tot, q_c, quad, T′T′, q′q′, FT(0.6), FT(1),
+                    )
+                    args_m = (BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        m.λ_lagrange, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S)
+                    uni_m = microphysics_tendencies_1m(args_m..., FT(0))
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(0), FT(0.3), m.sigma_S,
+                    ) == uni_m
+                    @test all(
+                        isapprox.(
+                            values(
+                                microphysics_tendencies_1m(
+                                    args_m..., FT(1), FT(1), m.sigma_S,
+                                ),
+                            ),
+                            values(uni_m);
+                            rtol = FT(1e-6),
+                            atol = FT(1e-14),
+                        ),
+                    )
+                    rank_thin = microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.3), m.sigma_S,
+                    )
+                    @test all(isfinite, values(rank_thin))
+                    @test rank_thin.dq_rai_dt != uni_m.dq_rai_dt
+                    opts = ClimaAtmos.SGSMicrophysicsOptions(;
+                        ξ_liq = FT(0), ξ_ice = FT(1),
+                        precip_incloud_fraction = FT(1), precip_frac_floor = FT(0.1),
+                    )
+                    # The packed form forwards `sgs_moments.λ_eq`, so it equals
+                    # the positional form with the same `λ_eq` passed explicitly.
+                    @test microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        m, FT(1), dt, nsubs, λ_i, mu_S, FT(0.3), opts,
+                    ) == microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.3), m.sigma_S, FT(0.1), m.λ_eq,
+                    )
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.3), m.sigma_S, FT(0.5),
+                    ) == microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.5), m.sigma_S,
+                    )
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.3), m.sigma_S, FT(0.1),
+                    ) == rank_thin
+                end
+
+                @testset "dry node: ice sublimates when uniform, absent when excess" begin
+                    q̂ = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
+                    @test q_c + q̂ - q_tot < 0   # shifted_excess = 0 at this node
+                    out_e = ev_e(T, q̂, FT(0))
+                    out_u = ev_u(T, q̂, FT(0))
+                    out_h = ev_h(T, q̂, FT(0))
+                    @test out_e.dq_icl_dt == 0
+                    @test out_u.dq_icl_dt < 0
+                    @test out_h.dq_icl_dt < 0 && out_h.dq_icl_dt > out_u.dq_icl_dt
+                end
+
+                @testset "mean node: all fractions hold q_icl" begin
+                    ref = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(), mp, thp, ρ, T, w,
+                        q_tot, FT(0), q_icl, FT(0), FT(0), dt, nsubs,
+                    )
+                    for ev in (ev_e, ev_u, ev_h)
+                        out = ev(T, q_tot, FT(0))
+                        @test out.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
+                    end
+                end
+
+                @testset "quadrature wrapper: explicit λ, mu_S equal their defaults; ξ_ice = 1 differs" begin
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    T′T′ = FT(1)
+                    q′q′ = (FT(0.1) * q_tot)^2
+                    base = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(0), dt, nsubs,
+                    )
+                    same = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(0), dt, nsubs, λ_i, mu_S,
+                    )
+                    @test same === base
+                    uni = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S,
+                    )
+                    @test all(isfinite, values(uni))
+                    @test uni.dq_icl_dt != base.dq_icl_dt
+                    transform = ClimaAtmos.build_physical_transform(
+                        quad, q_tot, T, q′q′, T′T′, FT(0.6),
+                    )
+                end
+            end
+        end
+    end
 end

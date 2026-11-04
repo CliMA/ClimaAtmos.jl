@@ -621,3 +621,29 @@ function monotonic_increasing(A, dim)
     all_diffs = mapslices(x -> diff(x), A, dims = dim)
     return all(all_diffs .>= 0)
 end
+
+"""
+    enthalpy_flux_coefficients(thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+
+Return the coefficients of the second-order diffusive enthalpy flux
+`-w [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`,
+assembled from the thermodynamic state independently of the model helpers, as
+materialized center fields `(; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv)`, for the
+diffusing water `ᶜq_water = (q_t, q_l, q_i)`.
+"""
+function enthalpy_flux_coefficients(thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+    TD = CA.TD
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜcp = similar(ᶜT)
+    ᶜh_vap_plus_Φ = similar(ᶜT)
+    ᶜh_lv = similar(ᶜT)
+    ᶜh_iv = similar(ᶜT)
+    @. ᶜcp = TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+    @. ᶜh_vap_plus_Φ = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+    @. ᶜh_lv =
+        TD.enthalpy_liquid(thermo_params, ᶜT) -
+        TD.enthalpy_vapor(thermo_params, ᶜT)
+    @. ᶜh_iv =
+        TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
+    return (; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv)
+end

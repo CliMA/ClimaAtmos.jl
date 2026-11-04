@@ -1,26 +1,21 @@
 """
     AbstractTerminalVelocityMode
 
-Strategy for setting the sedimentation velocity of the water species.
+Strategy for setting the sedimentation velocity of a water species; `AtmosWater` holds
+one mode per species.
 
 Subtypes:
 
-  - [`DiagnosticTerminalVelocity`](@ref): velocity diagnosed by CloudMicrophysics
-    from the local density and specific humidity.
-  - [`FixedTerminalVelocity`](@ref): prescribed constant velocity per species.
+  - [`FixedTerminalVelocity`](@ref): prescribed constant velocity (every species).
+  - [`StokesTerminalVelocity`](@ref): Stokes-regime fall speed (cloud liquid).
+  - [`Blk1MTerminalVelocity`](@ref): 1-moment power law of CloudMicrophysics (rain, snow).
+  - [`Chen2022TerminalVelocity`](@ref): Chen et al. (2022) fall-speed relations of
+    CloudMicrophysics (cloud ice, rain, snow).
 """
 abstract type AbstractTerminalVelocityMode end
 
 """
-    DiagnosticTerminalVelocity <: AbstractTerminalVelocityMode
-
-Diagnose the mass-weighted terminal velocity of each species from the local state
-using the CloudMicrophysics size distributions.
-"""
-struct DiagnosticTerminalVelocity <: AbstractTerminalVelocityMode end
-
-"""
-    FixedTerminalVelocity{FT} <: AbstractTerminalVelocityMode
+    FixedTerminalVelocity <: AbstractTerminalVelocityMode
 
 Prescribed, state-independent terminal velocity for each 1-moment species, used in
 idealized tests where the sedimentation rate is to be controlled directly.
@@ -29,6 +24,35 @@ Sign convention: the stored values are downward fall speeds and must be
 non-negative.
 """
 struct FixedTerminalVelocity <: AbstractTerminalVelocityMode end
+
+"""
+    StokesTerminalVelocity <: AbstractTerminalVelocityMode
+
+Cloud liquid fall speed in the Stokes regime (CloudMicrophysics `StokesRegimeVelType`),
+diagnosed from the local density and specific humidity.
+"""
+struct StokesTerminalVelocity <: AbstractTerminalVelocityMode end
+
+"""
+    Blk1MTerminalVelocity <: AbstractTerminalVelocityMode
+
+Mass-weighted rain or snow terminal velocity of the 1-moment power law of
+CloudMicrophysics (`Blk1MVelType`), integrated over the Marshall-Palmer size
+distribution and diagnosed from the local density and specific humidity.
+"""
+struct Blk1MTerminalVelocity <: AbstractTerminalVelocityMode end
+
+"""
+    Chen2022TerminalVelocity <: AbstractTerminalVelocityMode
+
+Mass-weighted terminal velocity from the Chen et al. (2022) fall-speed relations of
+CloudMicrophysics, diagnosed from the local density and specific humidity: the
+small-ice relation for cloud ice, the rain relation for rain, and the large-ice
+relation for snow (integrated over the 1-moment snow size distribution). The snow
+particle fall speed depends on the snow apparent density (ClimaParams
+`snow_apparent_density`).
+"""
+struct Chen2022TerminalVelocity <: AbstractTerminalVelocityMode end
 #TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented
 Base.broadcastable(x::AbstractTerminalVelocityMode) = tuple(x)
 
@@ -38,9 +62,8 @@ Base.broadcastable(x::AbstractTerminalVelocityMode) = tuple(x)
 Select the per-species terminal velocity mode from `atmos` based on the tracer
 `name` (a `MatrixFields.FieldName`).
 
-Each hydrometeor species has its own toggle in `AtmosWater`, so e.g. rain can
-use `DiagnosticTerminalVelocity` while the others remain
-`FixedTerminalVelocity`.
+Each hydrometeor species has its own mode in `AtmosWater`, so e.g. snow can use
+`Blk1MTerminalVelocity` while cloud liquid uses `FixedTerminalVelocity`.
 """
 velocity_mode(atmos, ::MatrixFields.FieldName{(:q_lcl,)}) =
     atmos.terminal_velocity_liquid
@@ -60,9 +83,10 @@ Return the terminal velocity of the 1-moment species selected by `var_name`.
 Dispatches on the `MatrixFields.FieldName` `var_name`, one of `@name(q_lcl)`,
 `@name(q_icl)`, `@name(q_rai)`, `@name(q_sno)`, and on `tv_mode`: a
 [`FixedTerminalVelocity`](@ref) returns the corresponding prescribed constant and
-ignores the state, while [`DiagnosticTerminalVelocity`](@ref) calls the matching
-CloudMicrophysics closure (Stokes for cloud liquid, Chen 2022 small-ice for cloud
-ice, the 1M rain and snow distributions for precipitation).
+ignores the state, while the other modes call the matching CloudMicrophysics closure:
+`StokesTerminalVelocity` for cloud liquid, `Chen2022TerminalVelocity` for cloud ice
+(small ice), rain and snow (large ice), `Blk1MTerminalVelocity` for rain and snow
+(power law). Only these combinations have methods.
 
 # Arguments
 
@@ -88,7 +112,7 @@ terminal_velocity(
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    ::DiagnosticTerminalVelocity,
+    ::StokesTerminalVelocity,
     ::MatrixFields.FieldName{(:q_lcl,)},
     params,
     cmc,
@@ -108,7 +132,7 @@ terminal_velocity(
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    ::DiagnosticTerminalVelocity,
+    ::Chen2022TerminalVelocity,
     ::MatrixFields.FieldName{(:q_icl,)},
     params,
     cmc,
@@ -126,13 +150,12 @@ terminal_velocity(
     args...,
 ) = CAP.fixed_rain_terminal_velocity(params)
 
-# The 1M terminal velocity varies as q^(1/8), so ∂w/∂q ∝ q^(-7/8).
-# As q goes to 0, it creates a large error.
-# Evaluating w at max(q, RAIN_Q_FLOOR) makes ∂w/∂q zero, and removes the issue.
-# 1e-8 corresponds to a minimum fall speed of ~0.8 m/s.
+# The rain terminal velocity varies as a fractional power of q, so ∂w/∂q diverges as
+# q goes to 0. Evaluating w at max(q, 1e-8) makes ∂w/∂q zero below the floor
+# (a minimum power-law fall speed of ~0.8 m/s).
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    ::DiagnosticTerminalVelocity,
+    ::Blk1MTerminalVelocity,
     ::MatrixFields.FieldName{(:q_rai,)},
     params,
     cmc,
@@ -146,6 +169,18 @@ terminal_velocity(
     max(q, FT(1e-8)),
 )
 
+terminal_velocity(
+    ::NonEquilibriumMicrophysics1M,
+    ::Chen2022TerminalVelocity,
+    ::MatrixFields.FieldName{(:q_rai,)},
+    params,
+    cmc,
+    cmp,
+    ρ,
+    q::FT,
+) where {FT} =
+    CM1.terminal_velocity(cmp.precip.rain, cmc.Ch2022.rain, ρ, max(q, FT(1e-8)))
+
 # Snow, 1M
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -157,7 +192,7 @@ terminal_velocity(
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    ::DiagnosticTerminalVelocity,
+    ::Blk1MTerminalVelocity,
     ::MatrixFields.FieldName{(:q_sno,)},
     params,
     cmc,
@@ -165,6 +200,17 @@ terminal_velocity(
     ρ,
     q,
 ) = CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q)
+
+terminal_velocity(
+    ::NonEquilibriumMicrophysics1M,
+    ::Chen2022TerminalVelocity,
+    ::MatrixFields.FieldName{(:q_sno,)},
+    params,
+    cmc,
+    cmp,
+    ρ,
+    q,
+) = CM1.terminal_velocity(cmp.precip.snow, cmc.Ch2022.large_ice, ρ, q)
 
 """
     gs_terminal_velocity(
@@ -174,11 +220,11 @@ terminal_velocity(
 Return the grid-scale terminal velocity of a 1-moment species from subdomain fluxes.
 
 With [`FixedTerminalVelocity`](@ref) the prescribed constant is returned and the
-flux arguments are ignored. With [`DiagnosticTerminalVelocity`](@ref) the
-mass-weighted average `ρwχ / ρχ` is formed, so that the grid-scale flux equals the
-sum of the subdomain fluxes. Two guards protect that division: the result is zero
-where `ρχ ≤ ϵ_numerics(FT)`, and negatives from numerical error are clipped to
-zero, keeping the grid-scale value bracketed by the subdomain velocities.
+flux arguments are ignored. With any state-dependent mode the mass-weighted average
+`ρwχ / ρχ` is formed, so that the grid-scale flux equals the sum of the subdomain
+fluxes. Two guards protect that division: the result is zero where
+`ρχ ≤ ϵ_numerics(FT)`, and negatives from numerical error are clipped to zero,
+keeping the grid-scale value bracketed by the subdomain velocities.
 
 # Arguments
 
@@ -204,7 +250,7 @@ gs_terminal_velocity(
 
 gs_terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    ::DiagnosticTerminalVelocity,
+    ::AbstractTerminalVelocityMode,
     var_name,
     params,
     ρwχ,

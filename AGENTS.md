@@ -17,7 +17,7 @@ Always read the ClimaAtmos-specific guide before working in this repository:
 
 ## Local norms
 
-- Prefer Julia 1.11.x for local work. CI also runs 1.10 and 1.11.
+- Prefer Julia 1.11.x for local work. GitHub CI runs every test group on 1.11 and only `infrastructure` on 1.10.
 - For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
 - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.

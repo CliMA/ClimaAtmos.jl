@@ -23,6 +23,8 @@ CA.solve_atmos!(simulation)
 
 Customize it through the [grid](grids.md) (`SphereGrid`), the
 [setup](setups.md), and the `AtmosModel` components.
+[Example: Moist Baroclinic Wave](moist_baroclinic_wave.md) builds a global
+case piece by piece and plots the result.
 
 ## Choosing a horizontal resolution
 
@@ -48,10 +50,14 @@ giving about 550 km at `h_elem: 6`, 206 km at 16, 110 km at 30, and 55 km
 at 60.
 
 Vertical resolution is set by `z_elem` layers between the surface and a model
-top at `z_max`. With `z_stretch: true`, the default, layers are stretched with a
-hyperbolic tangent profile anchored on `dz_bottom`, the thickness of the lowest
-layer, so that the boundary layer has high vertical resolution that becomes
-coarser aloft.
+top at `z_max`. With `z_stretch: true`, the default, the layer thickness grows
+from `dz_bottom` at the surface to `dz_top` (default 3000 m) at the model top,
+with a boundary-layer refinement of scale height `z_pbl` (default 2200 m), so
+that the boundary layer has high vertical resolution that becomes coarser
+aloft. This two-scale profile admits `z_elem` within a range set by the three
+thicknesses and `z_max`, and building the grid raises an error that names the
+range otherwise. The 10-level default grid lies below the range, so the coarse
+test configurations set `z_stretch: false` and run with uniform layers.
 
 Start from one of the numerical configurations in `config/common_configs/`,
 which pair a resolution with a timestep and a matching set of numerics:

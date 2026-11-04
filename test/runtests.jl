@@ -81,6 +81,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
@@ -98,17 +99,28 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
+    @safetestset "Implicit microphysics split tests" begin @time include("parameterized_tendencies/microphysics/implicit_microphysics_split.jl") end
+    @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
+    @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
     @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "Cloud inhomogeneity tests" begin @time include("parameterized_tendencies/microphysics/cloud_inhomogeneity.jl") end
+    @safetestset "Displacement length wiring" begin @time include("parameterized_tendencies/microphysics/displacement_length_wiring.jl") end
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
+    @safetestset "Displacement condensate tests" begin @time include("parameterized_tendencies/microphysics/displacement_condensate.jl") end
+    @safetestset "Conditional node rule tests" begin @time include("parameterized_tendencies/microphysics/conditional_nodes.jl") end
+    @safetestset "Truncated displacement tests" begin @time include("parameterized_tendencies/microphysics/truncated_displacement.jl") end
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
+
+    # Full-physics sphere simulation
+    @safetestset "Checkbounds sphere simulation" begin @time include("checkbounds_sphere_simulation.jl") end
 
     # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
     # build). The simulation-based Beres tests (test_beres_single_column.jl,
@@ -124,11 +136,10 @@ if TEST_GROUP in ("parameterizations", "all")
 end
 
 # ============================================================================
-# Restarts: Restart and reproducibility tests
+# Restarts: Initialization from file. restart.jl and
+# unit_reproducibility_infra.jl run as Buildkite steps.
 # ============================================================================
 if TEST_GROUP in ("restarts", "all")
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
     @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
@@ -137,6 +148,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+    @safetestset "ERA5 model levels" begin @time include("era5_model_levels_tests.jl") end
     @safetestset "Column datasets" begin @time include("column_datasets_tests.jl") end
 end
 #! format: on

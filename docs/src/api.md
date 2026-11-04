@@ -46,6 +46,7 @@ ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
+ClimaAtmos.get_z_mesh
 ```
 
 ## Topography
@@ -106,8 +107,10 @@ Sedimentation and tracer positivity:
 
 ```@docs
 ClimaAtmos.AbstractTerminalVelocityMode
-ClimaAtmos.DiagnosticTerminalVelocity
 ClimaAtmos.FixedTerminalVelocity
+ClimaAtmos.StokesTerminalVelocity
+ClimaAtmos.Blk1MTerminalVelocity
+ClimaAtmos.Chen2022TerminalVelocity
 ClimaAtmos.TracerNonnegativityMethod
 ClimaAtmos.TracerNonnegativityElementConstraint
 ClimaAtmos.TracerNonnegativityVaporConstraint
@@ -128,11 +131,9 @@ ClimaAtmos.SGSQuadrature
 ClimaAtmos.AbstractSGSDistribution
 ClimaAtmos.GridMeanSGS
 ClimaAtmos.GaussianSGS
-ClimaAtmos.LogNormalSGS
 ClimaAtmos.AbstractPhysicalPointTransform
 ClimaAtmos.GridMeanPhysicalPointTransform
 ClimaAtmos.GaussianPhysicalPointTransform
-ClimaAtmos.LogNormalPhysicalPointTransform
 ClimaAtmos.create_physical_transform
 ClimaAtmos.integrate_over_sgs
 ```
@@ -176,12 +177,14 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
-Closure parameters. The fields of this set, and the ClimaParams names they come
+Closure parameters. The fields of these sets, and the ClimaParams names they come
 from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
 
 ```@docs
 ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
 ClimaAtmos.Parameters.TurbulenceConvectionParameters
+ClimaAtmos.Parameters.AbstractSGSQuadratureParameters
+ClimaAtmos.Parameters.SGSQuadratureParameters
 ```
 
 ### Radiation

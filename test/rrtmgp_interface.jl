@@ -134,3 +134,212 @@ end
         @test XP[1] == RRTMGPI.uniform_z_p(XT[1], p₁, Tꜜ, p₂, Tꜛ)
     end
 end
+
+@testset "RadiationDYCOMS inversion isoline and updraft heating" for FT in (
+    Float32,
+    Float64,
+)
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    ᶜcoords = Fields.coordinate_field(cent_space)
+    ᶠcoords = Fields.coordinate_field(face_space)
+    sgs_nt = NamedTuple{(:mse,), Tuple{FT}}
+    Y = Fields.FieldVector(;
+        c = similar(
+            ᶜcoords,
+            NamedTuple{
+                (:ρ, :ρe_tot, :ρq_tot, :sgsʲs),
+                Tuple{FT, FT, FT, Tuple{sgs_nt}},
+            },
+        ),
+        f = similar(ᶠcoords, NamedTuple{(), Tuple{}}),
+    )
+    radiation_mode = CA.RadiationDYCOMS{FT}()
+    rad_cache = CA.radiation_model_cache(Y, radiation_mode)
+    ᶜq_liq = similar(Y.c, FT)
+    ᶜρʲ = similar(Y.c, FT)
+    fill!(Y.c.ρ, FT(1.1))
+    fill!(ᶜq_liq, FT(2e-4))
+    fill!(ᶜρʲ, FT(1.05))
+    p = (;
+        params = CA.ClimaAtmosParameters(FT),
+        atmos = (;
+            microphysics_model = CA.EquilibriumMicrophysics0M(),
+            turbconv_model = CA.PrognosticEDMFX(;
+                n_updrafts = 1,
+                prognostic_tke = false,
+                area_fraction = FT(1e-3),
+            ),
+            radiation_mode,
+        ),
+        radiation = rad_cache,
+        precomputed = (; ᶜq_liq, ᶜρʲs = (ᶜρʲ,)),
+    )
+
+    z_levels = sort(unique(Array(parent(ᶜcoords.z))))
+    n_levels = length(z_levels)
+    k_inv = cld(n_levels, 2)
+    z_inv = z_levels[k_inv]
+    z_above = z_levels[k_inv + 1]
+
+    # Case 1: levels 1..k_inv have q_tot >= 0.008 (with level k_inv at 0.0088),
+    # while level k_inv + 1 above the inversion has q_tot = 0.0079 (closer to
+    # 0.008 in |q_tot - 0.008|, but drier than the 0.008 threshold). The highest
+    # level with q_tot >= 0.008 (k_inv) must be selected.
+    @. Y.c.ρq_tot =
+        Y.c.ρ * ifelse(
+            ᶜcoords.z < z_inv,
+            FT(0.0092),
+            ifelse(
+                ᶜcoords.z == z_inv,
+                FT(0.0088),
+                ifelse(ᶜcoords.z == z_above, FT(0.0079), FT(0.002)),
+            ),
+        )
+
+    Yₜ = similar(Y)
+    fill!(Yₜ, FT(0))
+    CA.radiation_tendency!(Yₜ, Y, p, FT(0), radiation_mode)
+
+    zi_selected = Array(parent(rad_cache.isoline_z_ρ_ρq.z))[1]
+    @test zi_selected == z_inv
+
+    # Verify PrognosticEDMFX updraft mse receives the grid-mean radiative flux
+    # convergence divided by updraft density.
+    ρe_tend = Array(parent(Yₜ.c.ρe_tot))
+    mse_up_tend = Array(parent(Yₜ.c.sgsʲs.:(1).mse))
+    ρ_up = Array(parent(ᶜρʲ))
+    @test maximum(abs, ρe_tend) > 0
+    @test mse_up_tend ≈ ρe_tend ./ ρ_up rtol = 100 * eps(FT)
+
+    # Case 2: entire column drier than 0.008 kg/kg falls back to the level
+    # closest to 0.008 kg/kg (k_dry).
+    k_dry = max(1, k_inv - 1)
+    z_dry = z_levels[k_dry]
+    @. Y.c.ρq_tot = Y.c.ρ * ifelse(ᶜcoords.z == z_dry, FT(0.0075), FT(0.003))
+    fill!(Yₜ, FT(0))
+    CA.radiation_tendency!(Yₜ, Y, p, FT(0), radiation_mode)
+    zi_fallback = Array(parent(rad_cache.isoline_z_ρ_ρq.z))[1]
+    @test zi_fallback == z_dry
+end
+
+@testset "Cloud inhomogeneity switch" begin
+    FT = Float64
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    Y = Fields.FieldVector(; c = ones(cent_space), f = ones(face_space))
+    parsed_args = Dict(
+        "rad" => "allsky",
+        "idealized_h2o" => false,
+        "idealized_clouds" => false,
+        "radiation_include_snow" => false,
+        "prescribe_clouds_in_radiation" => false,
+        "cloud_inhomogeneity_in_sw_radiation" => false,
+        "add_isothermal_boundary_layer" => true,
+        "aerosol_radiation" => false,
+        "radiation_reset_rng_seed" => false,
+        "deep_atmosphere" => true,
+    )
+    setup_components = (; radiation_mode = nothing)
+    mode = CA.get_radiation_mode(parsed_args, FT; setup_components)
+    @test mode isa RRTMGPI.AllSkyRadiation
+    @test !mode.sw_cloud_inhomogeneity
+    @test RRTMGPI.AllSkyRadiation().sw_cloud_inhomogeneity
+    @test RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics().sw_cloud_inhomogeneity
+
+    # With `sw_cloud_inhomogeneity = false`, the cloud cache is empty, leaving
+    # the shortwave water paths unscaled and the factor setter a no-op.
+    for cloud in (CA.InteractiveCloudInRadiation(), nothing)
+        @test CA.get_cloud_cache(cloud, Y, nothing, false) == (;)
+        cache = CA.get_cloud_cache(cloud, Y, nothing, true)
+        @test hasproperty(cache, :ᶜsw_cloud_optical_depth_factor)
+        @test all(==(1), parent(cache.ᶜsw_cloud_optical_depth_factor))
+    end
+    @test isnothing(CA.set_sw_cloud_optical_depth_factor!(Y, (; radiation = (;))))
+end
+
+@testset "Aerosol droplet activation closure" for FT in (Float32, Float64)
+    cmc = CA.cloud_parameters(FT)
+    N₀ = cmc.N_cloud_liquid_droplets
+    z = zero(FT)
+    # Default calibration coefficients are zero, so any state returns N₀.
+    @test @inferred(RRTMGPI.ml_N_cloud_liquid_droplets(cmc, z, z, z, z)) ≈ N₀
+
+    # Positive calibration coefficients stay in [N₀ / 3, 3 N₀], equal N₀ at the
+    # reference state, and floor inputs at 1e-3 of the reference values.
+    aml = cmc.aml
+    α_active = (;
+        α_dust = FT(0.04),
+        α_seasalt = FT(0.12),
+        α_SO4 = FT(0.18),
+        α_q_liq = FT(0.09),
+    )
+    with_α(k) = merge(cmc, (; aml = merge(aml, map(α -> k * α, α_active))))
+    cmc_active = with_α(1)
+    @test @inferred(
+        RRTMGPI.ml_N_cloud_liquid_droplets(
+            cmc_active,
+            aml.c₀_dust,
+            aml.c₀_seasalt,
+            aml.c₀_SO4,
+            aml.q₀_liq,
+        ),
+    ) ≈ N₀
+    N_floor = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        FT(1e-3) * aml.c₀_dust,
+        FT(1e-3) * aml.c₀_seasalt,
+        FT(1e-3) * aml.c₀_SO4,
+        FT(1e-3) * aml.q₀_liq,
+    )
+    N_zero = RRTMGPI.ml_N_cloud_liquid_droplets(cmc_active, z, z, z, z)
+    N_neg = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        -aml.c₀_dust,
+        -aml.c₀_seasalt,
+        -aml.c₀_SO4,
+        -aml.q₀_liq,
+    )
+    N_high = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        one(FT),
+        one(FT),
+        one(FT),
+        one(FT),
+    )
+    @test N_zero == N_floor
+    @test N_neg == N_floor
+    @test N₀ / 3 <= N_zero < N₀
+    @test N₀ < N_high <= 3 * N₀
+
+    # Negative coefficients reverse the response, so the floor sets the largest
+    # value; large coefficients saturate at the bounds N₀ / 3 and 3 N₀.
+    N_zero_neg_α = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(-1), z, z, z, z)
+    @test N₀ < N_zero_neg_α <= 3 * N₀
+    N_sat_low = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(100), z, z, z, z)
+    N_sat_high = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(-100), z, z, z, z)
+    @test N_sat_low ≈ N₀ / 3 rtol = 10 * eps(FT)
+    @test N_sat_high ≈ 3 * N₀ rtol = 10 * eps(FT)
+end
+
+@testset "Aerosol bin sums" for FT in (Float32, Float64)
+    (; cent_space) = get_cartesian_spaces(; FT)
+    names = (:SSLT01, :SSLT02, :SO4)
+    aerosol_field = similar(
+        Fields.coordinate_field(cent_space),
+        NamedTuple{names, NTuple{3, FT}},
+    )
+    fill!(aerosol_field.SSLT01, FT(1e-9))
+    fill!(aerosol_field.SSLT02, FT(2e-9))
+    fill!(aerosol_field.SO4, FT(4e-9))
+    ᶜconc = zeros(cent_space)
+    c₀ = FT(1e-8)
+    seasalt_bins = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
+    dust_bins = (:DST01, :DST02, :DST03, :DST04, :DST05)
+
+    # Present bins are summed; absent species and absent aerosols give c₀.
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, seasalt_bins, c₀)
+    @test all(≈(FT(3e-9)), parent(ᶜconc))
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, dust_bins, c₀)
+    @test all(==(c₀), parent(ᶜconc))
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, nothing, seasalt_bins, c₀)
+    @test all(==(c₀), parent(ᶜconc))
+end
