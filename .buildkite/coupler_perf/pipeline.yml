@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "97e24f95a29bcdcb1d08e7e31feef0b9a1e1e631"
+  COUPLER_COMMIT: "df7923109fd5d45fdf9de603bbb89a90d959bc66"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
   # Packages whose [compat] bounds are dropped from the coupler projects at
