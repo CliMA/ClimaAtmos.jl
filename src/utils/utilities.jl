@@ -191,7 +191,7 @@ where `ᶜI` interpolates from faces to centers.
 A lazy center `Field` with the specific kinetic energy [m²/s²]; materialize it
 with `κ .= compute_kinetic(uₕ, uᵥ)`.
 """
-function compute_kinetic(uₕ, uᵥ)
+@inline function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     FT = Spaces.undertype(axes(uₕ))
@@ -212,6 +212,21 @@ Compute the specific kinetic energy at cell centers from the model state `Y`,
 i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 """
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
+
+"""
+    as_register(ᶜχ)
+
+Return the values of a slice or lazy expression `ᶜχ` of a fused loop as a register
+temporary (`Base.materialize` returns a slice unchanged, and `copy` allocates a new
+array), or a tuple of them as a tuple of register temporaries. Statements whose
+arguments are register temporaries of the same type share their inferred methods,
+which shortens the compilation of loop bodies that apply one expression to
+different inputs (e.g., to the environment and to every updraft). Inputs that a
+loop reads at several levels or in several statements are loaded once as register
+temporaries, rather than once per read.
+"""
+@inline as_register(ᶜχ) = identity.(ᶜχ)
+@inline as_register(ᶜχs::Tuple) = unrolled_map(as_register, ᶜχs)
 
 """
     symmetric_part(G)
@@ -291,6 +306,8 @@ end
     compute_strain_rate_center_horizontal(ᶜu)
 
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+Since horizontal gradients act within each level, the same lazy expression of a face velocity is the
+horizontal strain rate at cell faces.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
     axis_uvw = (Geometry.UVWAxis(),)

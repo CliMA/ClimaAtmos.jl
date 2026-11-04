@@ -292,7 +292,7 @@ end
 Add the Exner-form pressure gradient and buoyancy tendency
 `-(∂ᵥΦ - ∂ᵥΦ_r + cp_d (θ_v - θ_vr) ∂ᵥΠ)` to `Yₜf.u₃` for one column, which is
 equivalent to `grad_v(Φ) + grad_v(p) / ρ`. Called inside the fused column loop
-of `implicit_vertical_advection_tendency!`, so it must stay inlined.
+of `implicit_vertical_advection_tendency!`.
 """
 @inline function add_implicit_u₃_tendency!(
     Yₜf,

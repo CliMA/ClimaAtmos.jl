@@ -369,7 +369,6 @@ function edmfx_boundary_condition_tendency!(
     ) = p.precomputed
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     a_min = CAP.min_area(CAP.turbconv_params(params))
-    sfc_rate_val = p.scratch.temp_data_level
 
     for j in 1:n
         ρ_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -390,11 +389,11 @@ function edmfx_boundary_condition_tendency!(
 
         # `r_sfc · (val_buoyant − val)` with `r_sfc` from
         # `edmfx_sfc_relaxation_rate`.
-        @. sfc_rate_val = edmfx_sfc_relaxation_rate(
-            mass_flux_source_val, ρa_val, ρ_val, a_min,
+        sfc_rate = @. lazy(
+            edmfx_sfc_relaxation_rate(mass_flux_source_val, ρa_val, ρ_val, a_min),
         )
-        @. mseₜ_val += sfc_rate_val * (mse_buoyant_val - mse_val)
-        @. q_totₜ_val += sfc_rate_val * (q_tot_buoyant_val - q_tot_val)
+        @. mseₜ_val += sfc_rate * (mse_buoyant_val - mse_val)
+        @. q_totₜ_val += sfc_rate * (q_tot_buoyant_val - q_tot_val)
     end
     return nothing
 end

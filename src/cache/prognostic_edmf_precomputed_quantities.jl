@@ -201,12 +201,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             NonEquilibriumMicrophysics2M,
         }
             # One fused column loop per draft: velocities and kinetic energies,
-            # then the draft thermodynamic state from the prognostic tracers.
+            # then the draft thermodynamic state from the prognostic tracers. The
+            # inputs are register temporaries.
             DataLayouts.foreach_column(
                 ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
                 ᶜsgsʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
             ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
             ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+                (ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp) =
+                    as_register((ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp))
                 set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
                 @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
                 set_draft_thermo_column!(
@@ -399,7 +402,7 @@ Reads `ᶜp`, `ᶠu³`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, 
 `ᶜq_ice⁰`), the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`), and `ustar` from
 `p.precomputed.sfc_conditions`, so it must run after
 `set_prognostic_edmf_precomputed_quantities_draft!` and
-`..._environment!`. Uses `p.scratch.ᶠtemp_C123`.
+`..._environment!`.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
@@ -441,7 +444,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     entr_model = p.atmos.edmfx_model.entr_model
-    zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
+    zero_FT = FT(0)
     unrolled_foreach(StaticOneTo(n)) do j
         @inline
         # Compute the entrainment velocity scale, non-velocity entrainment rate,

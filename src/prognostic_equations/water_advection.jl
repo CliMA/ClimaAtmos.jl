@@ -33,10 +33,10 @@ terminal velocity.
 
 Reads the precomputed terminal velocities `ᶜwₗ`, `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ` (and their
 updraft counterparts plus subdomain temperatures, densities, and velocities for
-EDMFX), the temperature `ᶜT`, the geopotential `ᶜΦ` from `p.core`, and scratch
-space; `t` is unused. Called from `implicit_tendency!`, so these terms are part of
-the implicitly treated vertical transport. See the "Microphysics" page of the docs
-(`docs/src/microphysics.md`). Returns `nothing`.
+EDMFX), the temperature `ᶜT`, and the geopotential `ᶜΦ` from `p.core`, in one
+column loop; `t` is unused. Called from `implicit_tendency!`, so these terms are
+part of the implicitly treated vertical transport. See the "Microphysics" page of
+the docs (`docs/src/microphysics.md`). Returns `nothing`.
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
@@ -64,38 +64,15 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         microphysics_tracers,
     )
 
-    # One fused column loop for all species: the face density and the per-species
-    # specific humidity and energy density are loop temporaries (registers on
-    # GPUs) rather than scratch fields, and the five broadcasts per species run in
-    # the same kernel.
-    DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws
-        ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
-        ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
-        MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
-            @inline
-            ᶜρq = MatrixFields.get_field(Yc, ρq_name)
-            e_int_func = internal_energy_func(ρq_name)
-            ᶜq = @. specific(ᶜρq, Yc.ρ)
-            vtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq))))
-            @. Yₜc.ρ += vtt
-            @. Yₜc.ρq_tot += vtt
-            ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw)))
-            @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(ᶜρwe))))
-        end
-        return nothing
-    end
-
-    # For prognostic edmf, augment the energy tendencies with the additional energy contributions
-    # so that the total-grid energy flux remains consistent. Specifically, we enforce that the
-    # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes
-    # by accounting for the energy carried by sedimenting tracers.
+    # For prognostic edmf, the grid-mean energy flux is augmented with the
+    # additional energy contributions, so that it equals the sum of the subdomain
+    # (updraft/environment) energy fluxes, by accounting for the energy carried
+    # by sedimenting tracers.
     #
-    # The grid-mean flux applied above carries the specific energy
-    # e_int(T) + Φ + Kin(w, u) per unit sedimenting mass. Each subdomain
-    # correction replaces this grid-mean specific energy with the subdomain
-    # value, weighted by the subdomain sedimentation mass flux:
+    # The grid-mean flux carries the specific energy e_int(T) + Φ + Kin(w, u)
+    # per unit sedimenting mass. Each subdomain correction replaces this
+    # grid-mean specific energy with the subdomain value, weighted by the
+    # subdomain sedimentation mass flux:
     #
     #   F_corr(k) = (mass flux)ᵏ * [(e_intᵏ + Kinᵏ) - (e_int + Kin)],
     #
@@ -104,77 +81,103 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # ρ⁰a⁰q⁰w⁰ = ρqw - ρaʲqʲwʲ, so the subdomain mass fluxes sum to the
     # grid-mean flux by construction, and both corrections enter with the
     # same sign convention as the grid-mean flux.
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
-        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
-
-        # TODO the following code works for only one updraft
-        sgs_microphysics_tracers = unrolled_filter(
-            ((q_name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
+    # TODO the corrections work for only one updraft
+    ᶜsubdomain_inputs =
+        p.atmos.turbconv_model isa PrognosticEDMFX ?
+        let (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed,
+            (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+            # The updraft velocity of each species, or an empty container for a
+            # species that the updraft does not carry
+            ᶜwʲs = unrolled_map(ρq_names) do ρq_name
+                q_name = specific_tracer_name(ρq_name)
+                MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name) ?
+                MatrixFields.get_field(
+                    p.precomputed,
+                    sgs_sedimentation_velocity_name(q_name),
+                ) : ()
+            end
             (
-                (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-                (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-                (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-                (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
-            ),
-        )
-        isempty(sgs_microphysics_tracers) && return nothing
-        q_names = unrolled_map(first, sgs_microphysics_tracers)
-        # The updraft and grid-mean velocities of each species.
-        ᶜw_pairs = unrolled_map(
-            ((_, wʲ_name, w_name),) -> (
-                MatrixFields.get_field(p.precomputed, wʲ_name),
-                MatrixFields.get_field(p.precomputed, w_name),
-            ),
-            sgs_microphysics_tracers,
-        )
-        # One fused column loop for the updraft and environment corrections of
-        # all species; the subdomain face densities, the updraft area, and the
-        # specific energies are loop temporaries.
-        DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
-            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
-        ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
-        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
+                ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1), ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs,
+            )
+        end : ()
+
+    # One fused column loop for all species and subdomains: the face fluxes of
+    # mass and energy are summed over the species (and, for the energy, over
+    # the subdomain corrections) in loop temporaries, so that the density,
+    # total water, and energy tendencies each take one flux divergence.
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs
+        (ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs) =
+            as_register((ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs))
+        ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
+        ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
+        ᶠρwq = @. zero(ᶠρ)
+        ᶠρwe = @. zero(ᶠρ)
+        if ᶜsubdomain_inputs === ()
+            MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
+                @inline
+                ᶜρq = MatrixFields.get_field(Yc, ρq_name)
+                e_int_func = internal_energy_func(ρq_name)
+                ᶜq = @. specific(ᶜρq, Yc.ρ)
+                @. ᶠρwq += ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq)
+                @. ᶠρwe +=
+                    ᶠρ * ᶠtop_bias(
+                        -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw))),
+                    )
+            end
+        else
+            (ᶜρʲ, ᶜTʲ, ᶜuʲ, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs) =
+                ᶜsubdomain_inputs
             ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
             ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
             ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
             # The velocities are converted once for every species.
-            ᶜuvw = @. Geometry.UVWVector(ᶜu)
             ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
             ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
             MatrixFields.unrolled_foreach(
-                map(tuple, q_names, ᶜw_pairs),
-            ) do (q_name, (ᶜwʲ, ᶜw))
+                map(tuple, ρq_names, ᶜws, ᶜwʲs),
+            ) do (ρq_name, ᶜw, ᶜwʲ)
                 @inline
-                ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
-                ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
-                e_int_func = internal_energy_func(get_ρχ_name(q_name))
-                # Grid-mean specific energy carried by the sedimentation flux
-                # applied above (Φ is identical in all subdomains at a given
-                # level, so it cancels in the subdomain differences).
+                ᶜρq = MatrixFields.get_field(Yc, ρq_name)
+                e_int_func = internal_energy_func(ρq_name)
+                ᶜq = @. specific(ᶜρq, Yc.ρ)
+                @. ᶠρwq += ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq)
+                # Grid-mean specific energy carried by the sedimentation flux,
+                # without Φ, which cancels in the subdomain differences
                 ᶜe_gm = @. e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜuvw))
-                # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
-                ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
-                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(ᶠ∂ξ³∂x³ * (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ))),
-                )
-                # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
-                # environment sedimentation velocity is not stored separately
-                # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
-                # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
-                # TODO: Update for when updraft area fraction is not necessarily
-                # small
-                ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
-                ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
-                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(ᶠ∂ξ³∂x³ * (ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰))),
-                )
+                if ᶜwʲ === ()
+                    @. ᶠρwe += ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq * (ᶜe_gm + ᶜΦ))
+                else
+                    ᶜqʲ = MatrixFields.get_field(
+                        Yc.sgsʲs.:(1),
+                        specific_tracer_name(ρq_name),
+                    )
+                    # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
+                    ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
+                    # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
+                    # environment sedimentation velocity is not stored separately
+                    # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ),
+                    # so Kin⁰ is approximated with the grid-mean terminal
+                    # velocity ᶜw.
+                    # TODO: Update for when updraft area fraction is not
+                    # necessarily small
+                    ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
+                    ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
+                    @. ᶠρwe +=
+                        ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq * (ᶜe_gm + ᶜΦ)) +
+                        ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ) +
+                        ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰)
+                end
             end
-            return nothing
         end
+        ᶜvtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * ᶠρwq))
+        @. Yₜc.ρ += ᶜvtt
+        @. Yₜc.ρq_tot += ᶜvtt
+        @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * ᶠρwe))
     end
 
     return nothing
