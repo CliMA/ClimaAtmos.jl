@@ -5,8 +5,10 @@ steps. Takes the arguments of experiments/AMIP/run_simulation.jl, and reads
 - PROFILE_OUT: the output directory,
 - PROFILE_MODE: `trace` (default) writes the host, device, and NVTX tables of CUDA.jl's
   profile of PROFILE_STEPS (default 20) coupling steps to TSV files; `ncu` runs one coupling
-  step between cuProfilerStart and cuProfilerStop, for `ncu --profile-from-start off`.
-Both modes first run two coupling steps, which compile the step.
+  step between cuProfilerStart and cuProfilerStop, for `ncu --profile-from-start off`, and
+  `ncu_rad` runs the PROFILE_STEPS steps of the trace between them, for an `ncu` filtered to
+  the RRTMGP kernels of the one radiation call in those steps.
+All modes first run two coupling steps, which compile the step.
 =#
 import CUDA
 include(joinpath(ENV["COUPLER_DIR"], "experiments", "AMIP", "code_loading.jl"))
@@ -74,6 +76,16 @@ if mode == "ncu"
             coupling_step!(cs)
             CUDA.synchronize()
         end
+    end
+elseif mode == "ncu_rad"
+    # The PROFILE_STEPS coupling steps of the trace, which contain one radiation call, for
+    # `ncu --kernel-name` filtered to the RRTMGP kernels
+    n_steps = parse(Int, get(ENV, "PROFILE_STEPS", "20"))
+    CUDA.@profile external = true begin
+        for _ in 1:n_steps
+            coupling_step!(cs)
+        end
+        CUDA.synchronize()
     end
 else
     n_steps = parse(Int, get(ENV, "PROFILE_STEPS", "20"))
