@@ -1,4 +1,4 @@
-458
+459
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+459
+- When `diff_mode == Implicit()`, `edmfx_tke_tendency!` (shear, buoyancy,
+  pressure-drag, detrainment shear-mixing) runs in the implicit stage next
+  to `edmfx_sgs_diffusive_flux_tendency!`, so production and dissipation
+  share the Newton iterate. The Jacobian is unchanged.
+
 458
 - Prescribed temperature tendencies (large-scale advection and radiative
   cooling, the TRMM-LBA heating rate, file-driven forcings and nudging) and

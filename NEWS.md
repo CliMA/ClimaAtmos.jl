@@ -3,6 +3,19 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
+  production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
+  detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the
+  implicit stage next to `edmfx_sgs_diffusive_flux_tendency!`, so production
+  and dissipation see the same `Y.c.ρtke` within the Newton solve. Previously
+  production ran in `remaining_tendency!` while dissipation ran implicitly,
+  which let `ρtke` inflate across IMEX sub-stages before the one implicit
+  damping fired. The Jacobian is unchanged (`∂Yₜ/∂ρtke` still carries only the
+  dissipation sink); `ᶠK_u`, `ᶠK_h`, `ᶠbuoygrad` are still refreshed only in
+  `set_explicit_precomputed_quantities!` and stay frozen during Newton, so
+  production is effectively `K_u`-frozen within a stage. For `diff_mode ==
+  Explicit()` the sources stay in `remaining_tendency!` alongside the explicit
+  diffusive-flux tendency and behavior is unchanged.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Prescribed temperature
   tendencies are converted to energy tendencies with the isobaric heat capacity
   `cp_m`: large-scale advection and radiative cooling (BOMEX, RICO), the
