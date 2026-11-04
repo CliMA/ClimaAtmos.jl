@@ -6,7 +6,7 @@ This document covers the conventions for writing code that is compatible with Cl
 
 CliMA simulations are evaluated on a discretized space, so code must be compatible with the data structure that represents a value at every point in that space: `ClimaCore.Fields.Field`.
 
-In general, CliMA models will evaluate functions at every point in the domain using broadcasting, which behaves similarly to broadcasting over an Array but with some important differences. For example, users should not directly index into `ClimaCore.Fields.Field`s. Instead, code should be written in a pointwise style that can be broadcasted over the entire domain. For example, if you wanted to compute `par` as a function of shortwave radiation `sw_d`:
+CliMA models evaluate functions at every point in the domain by broadcasting, which behaves like broadcasting over an `Array` with one difference that matters here: code does not index into a `ClimaCore.Fields.Field`. Write functions in a pointwise style and broadcast them over the domain. For example, to compute `par` as a function of shortwave radiation `sw_d`:
 
 ```julia
 # ❌ Not compatible with Fields
@@ -27,11 +27,11 @@ end
 par .= compute_PAR.(sw_d)
 ```
 
-When a function is broadcasted over one or more `ClimaCore.Fields.Field`(s), and the `ClimaComms.device` is a `CUDADevice`, the function will be executed as a CUDA kernel on the GPU. This means that the function must be type-stable and must not perform any operations that are not supported on the GPU. See [performance/gpu_performance.md](../performance/gpu_performance.md) for more details on writing GPU-compatible code, and [performance/branchless_code.md](../performance/branchless_code.md) for why such pointwise functions should avoid data-dependent branches.
+When a function is broadcasted over one or more `ClimaCore.Fields.Field`s and the `ClimaComms.device` is a `CUDADevice`, the function runs as a CUDA kernel on the GPU, so it must be type-stable and use only operations the GPU supports. See [performance/gpu_performance.md](../performance/gpu_performance.md) for writing GPU-compatible code, and [performance/branchless_code.md](../performance/branchless_code.md) for why such pointwise functions should avoid data-dependent branches.
 
 ### Spatial Derivatives
 
-When writing code that computes spatial derivatives, use the operators provided by `ClimaCore` (e.g., `ClimaCore.grad`, `ClimaCore.div`, `ClimaCore.curl`) rather than manually indexing into fields. This ensures that the code is compatible with the discretization and can be efficiently executed on the GPU.
+For spatial derivatives, use the operators provided by `ClimaCore.Operators` (gradient, divergence, curl, interpolation). They match the discretization and run on the GPU.
 
 ## Self-correction
 
