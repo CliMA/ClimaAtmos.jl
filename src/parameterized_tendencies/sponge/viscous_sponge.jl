@@ -40,14 +40,19 @@ function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
     end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
     zmax = Spaces.z_max(axes(ᶠz))
+    ᶜ∇²uₕ = horizontal_vector_laplacian(ᶜuₕ)
+    return @. lazy(β_viscous(s, ᶜz, zmax) * ᶜ∇²uₕ)
+end
+
+# The lazy vector Laplacian ∇²u = ∇·∇u - ∇×(∇×u) of a horizontal velocity Field or
+# slab, projected onto the horizontal (Covariant12) axis.
+@inline function horizontal_vector_laplacian(ᶜuₕ)
     axis_C12 = (Geometry.Covariant12Axis(),)
     axis_C3 = (Geometry.Covariant3Axis(),)
-    # vector Laplacian: ∇²u = ∇·∇u - ∇×(∇×u)
-    ᶜ∇²uₕ = @. lazy(
+    return @. lazy(
         wgradₕ(divₕ(ᶜuₕ)) -
         Geometry.project(axis_C12, wcurlₕ(Geometry.project(axis_C3, curlₕ(ᶜuₕ)))),
     )
-    return @. lazy(β_viscous(s, ᶜz, zmax) * ᶜ∇²uₕ)
 end
 
 """
@@ -80,37 +85,53 @@ operators are undefined. Covers:
     on `c.ρe_tot`, the diffusing water `q_tot_eff = q_tot - q_rai - q_sno` on
     `c.ρq_tot` and `c.ρ`, each `suspended_cloud_species` and each passive
     tracer down its own gradient. Rain and snow do not diffuse.
+
+The faces and the centers are each updated in one fused slab loop, in which
+`β`, `β ρ`, the specific humidities, and the coefficients of the enthalpy flux
+are register temporaries, and every tendency is computed before any is stored
+(see the slab form of `add_scalar_diffusionₕ!`).
 """
 NVTX.@annotate function viscous_sponge_tendency!(Yₜ, Y, p)
-    (; viscous_sponge, turbconv_model) = p.atmos
+    (; viscous_sponge, turbconv_model, microphysics_model) = p.atmos
     isnothing(viscous_sponge) && return nothing
     iscolumn(axes(Y.c)) && return nothing
-
-    # Velocities (grid mean and, under EDMFX, per-updraft u₃).
-    vst_uₕ = viscous_sponge_tendency_uₕ(Y.c.uₕ, viscous_sponge)
-    vst_u₃ = viscous_sponge_tendency_u₃(Y.f.u₃, viscous_sponge)
-    @. Yₜ.c.uₕ += vst_uₕ
-    @. Yₜ.f.u₃.components.data.:1 += vst_u₃
-    if turbconv_model isa PrognosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-            vst_u₃ʲ = viscous_sponge_tendency_u₃(ᶠu₃ʲ, viscous_sponge)
-            @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 += vst_u₃ʲ
-        end
-    end
-
-    # Scalars: horizontal diffusion with coefficient β(z) ρ.
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(Y.c))
     zmax = Spaces.z_max(axes(ᶠz))
-    ᶜβρ = @. lazy(β_viscous(viscous_sponge, ᶜz, zmax) * Y.c.ρ)
-    add_scalar_diffusionₕ!(
-        Yₜ,
-        Y,
-        p,
-        ᶜβρ,
-        p.scratch.ᶜtemp_scalar,
-        p.scratch.ᶜtemp_scalar_2,
-    )
+    draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ρχ_names = self_diffused_tracer_names(Y, false)
+
+    # The coordinates are loop arguments: a sliced lazy coefficient that
+    # contains them would leave dynamic dispatch in the GPU kernels.
+    DataLayouts.foreach_slab(Yₜ.f, Y.f, ᶠz) do Yₜf, Yf, ᶠz
+        ᶠβ = @. β_viscous(viscous_sponge, ᶠz, zmax)
+        ᶠ∇²ws = unrolled_map(vertical_velocities(Yf, draft_indices)) do ᶠu₃
+            @inline
+            ᶠw = ᶠu₃.components.data.:1
+            @. ᶠβ * wdivₕ(gradₕ(ᶠw))
+        end
+        unrolled_foreach(vertical_velocities(Yₜf, draft_indices), ᶠ∇²ws) do ᶠu₃ₜ, ᶠ∇²w
+            @inline
+            ᶠwₜ = ᶠu₃ₜ.components.data.:1
+            @. ᶠwₜ += ᶠ∇²w
+        end
+    end
+    DataLayouts.foreach_slab(
+        Yₜ.c, Y.c, ᶜz, ᶜT, p.core.ᶜΦ, ᶜq_liq, ᶜq_ice,
+    ) do Yₜc, Yc, ᶜz, ᶜT, ᶜΦ, ᶜq_liq, ᶜq_ice
+        ᶜβ = @. β_viscous(viscous_sponge, ᶜz, zmax)
+        ᶜ∇²uₕ = horizontal_vector_laplacian(Yc.uₕ)
+        ᶜuₕₜ = @. ᶜβ * ᶜ∇²uₕ
+        ᶜβρ = @. ᶜβ * Yc.ρ
+        ᶜq_water =
+            diffusing_water_phases(Yc, ᶜq_liq, ᶜq_ice, microphysics_model, Val(false))
+        add_scalar_diffusionₕ!(Yₜc, Yc, ᶜβρ, ᶜT, ᶜΦ, ᶜq_water, thermo_params, ρχ_names)
+        @. Yₜc.uₕ += ᶜuₕₜ
+    end
     return nothing
 end
+
+# The u₃ of the grid mean and of every updraft in a face Field or slab.
+@inline vertical_velocities(ᶠY, draft_indices) =
+    (ᶠY.u₃, unrolled_map(j -> ᶠY.sgsʲs.:($j).u₃, draft_indices)...)

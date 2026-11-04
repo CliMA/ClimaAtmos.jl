@@ -716,8 +716,9 @@ Dispatch on `microphysics_model` and `turbconv_model`:
     per-subdomain specific tendencies `ᶜmp_tendency⁰` and `ᶜmp_tendencyʲs` with the
     current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
   - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): refreshes the sedimentation
-    velocities with `set_precipitation_velocities!` (for 1M, when any mode is
-    state-dependent) and calls `set_precipitation_surface_fluxes!`. Density
+    velocities with `set_precipitation_velocities!` (when they depend on the state;
+    see `state_dependent_precipitation_velocities`) and calls
+    `set_precipitation_surface_fluxes!`. Density
     weighting of the specific tendencies is applied at tendency-evaluation time
     in `tendency.jl`.
   - Default: no-op (microphysics not active).
@@ -764,23 +765,36 @@ function update_implicit_microphysics_cache!(
     # Leaving updraft velocities at their explicit-stage values treats the
     # nonlinear part of the sedimentation flux explicitly.
     # No number of Newton iterations can correct a field that nothing updates.
-    # Every mode other than `FixedTerminalVelocity` depends on the state.
-    if mm isa NonEquilibriumMicrophysics1M
-        modes = (
-            p.atmos.terminal_velocity_liquid,
-            p.atmos.terminal_velocity_ice,
-            p.atmos.terminal_velocity_rain,
-            p.atmos.terminal_velocity_snow,
-        )
-        if !all(mode -> mode isa FixedTerminalVelocity, modes)
-            set_precipitation_velocities!(Y, p, mm, tm)
-        end
-    else
+    state_dependent_precipitation_velocities(p.atmos) &&
         set_precipitation_velocities!(Y, p, mm, tm)
-    end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end
+
+"""
+    state_dependent_precipitation_velocities(atmos)
+
+Whether the sedimentation velocities of the microphysics model depend on the state,
+so that `update_implicit_microphysics_cache!` refreshes them at every Newton iterate
+and `set_explicit_precomputed_quantities!`, which follows it at the same state, does
+not set them again. This holds for the non-equilibrium schemes, except for the 1M
+scheme with a `FixedTerminalVelocity` for every species.
+"""
+state_dependent_precipitation_velocities(atmos) =
+    state_dependent_precipitation_velocities(atmos.microphysics_model, atmos)
+
+state_dependent_precipitation_velocities(_, atmos) = false
+state_dependent_precipitation_velocities(::NonEquilibriumMicrophysics, atmos) = true
+state_dependent_precipitation_velocities(::NonEquilibriumMicrophysics1M, atmos) =
+    !all(
+        mode -> mode isa FixedTerminalVelocity,
+        (
+            atmos.terminal_velocity_liquid,
+            atmos.terminal_velocity_ice,
+            atmos.terminal_velocity_rain,
+            atmos.terminal_velocity_snow,
+        ),
+    )
 
 """
     has_implicit_1m_microphysics(p)
@@ -861,7 +875,6 @@ function update_implicit_1m_tendency!(
     # not match that linearization.
     dt = p.dtγ
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -884,36 +897,79 @@ function update_implicit_1m_tendency!(
         )
     end
 
+    set_environment_1m_tendency!(
+        ᶜmp_tendency_implicit⁰, Y, p, tm, cmp_i, thp, dt, nsubs, nsubs_quad, (mode,),
+    )
+    return nothing
+end
+
+"""
+    set_environment_1m_tendency!(
+        ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+    )
+
+Write the 1M microphysics tendency of the `PrognosticEDMFX` environment, with the
+microphysics parameters `cmp`, the thermodynamics parameters `thp`, and the SGS
+quadrature `p.atmos.sgs_quadrature`, into `ᶜmp_tendency⁰`. The environment
+density and specific humidities, the liquid fraction `λ`, and the linearized SGS
+saturation-excess mean `mu_S` are first materialized in scratch fields by one
+column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
+arguments of `microphysics_tendencies_1m`.
+"""
+function set_environment_1m_tendency!(
+    ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+)
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    # The column loop calls Thermodynamics with `thp`; the microphysics
+    # broadcasts take the parameters folded for the device (see `_fold`).
+    dev = ClimaComms.device(Y.c)
+    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
+    # Materialize the environment inputs, the liquid fraction `λ`, and the
+    # linearized SGS saturation-excess mean `mu_S` in one column loop so the
+    # SGS-quadrature microphysics kernel reads them without recomputing them at
+    # every quadrature node.
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar
     ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
     ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
+    ᶜmu_S⁰ = Fields.Field(p.scratch.temp_data, axes(Y.c))
     sgs_quad = p.atmos.sgs_quadrature
+
+    DataLayouts.foreach_column(
+        ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+        Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ) do ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+    Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
+        # The weight of `specific`, shared by the four species.
+        ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, tm.a_half)
+        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        if !not_quadrature(sgs_quad)
+            @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+            @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
+        end
+    end
+
     ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, vcmp_i, vthp, dt, nsubs, mode,
+            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs, mode_args...,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
-            p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp_i, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode,
+            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
         )
     end
     return nothing
@@ -1228,7 +1284,6 @@ function set_microphysics_tendency_cache!(
     # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -1252,56 +1307,9 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Environment contribution
-    # Materialize the environment inputs, the liquid fraction `λ`, and the
-    # linearized SGS saturation-excess mean `mu_S` in one column loop so the
-    # SGS-quadrature microphysics kernel reads them without recomputing them at
-    # every quadrature node.
-    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-    ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
-    ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
-    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
-    ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-    ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-    sgs_quad = p.atmos.sgs_quadrature
-
-    DataLayouts.foreach_column(
-        ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
-        Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-    ) do ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
-    Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
-        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
-        # The weight of `specific`, shared by the four species.
-        ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, tm.a_half)
-        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        if !not_quadrature(sgs_quad)
-            @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-            @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        end
-        return nothing
-    end
-
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
-    if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs,
-        )
-    else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
-        opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
-        )
-    end
-
+    set_environment_1m_tendency!(
+        ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, (),
+    )
     return nothing
 end
 

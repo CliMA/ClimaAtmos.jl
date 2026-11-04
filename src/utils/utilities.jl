@@ -189,9 +189,10 @@ where `ᶜI` interpolates from faces to centers.
 # Returns
 
 A lazy center `Field` with the specific kinetic energy [m²/s²]; materialize it
-with `κ .= compute_kinetic(uₕ, uᵥ)`.
+with `κ .= compute_kinetic(uₕ, uᵥ)`. Fused column loops pass register temporaries
+to it, which escape to the heap on CPU unless it is inlined.
 """
-function compute_kinetic(uₕ, uᵥ)
+@inline function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     FT = Spaces.undertype(axes(uₕ))
@@ -291,6 +292,8 @@ end
     compute_strain_rate_center_horizontal(ᶜu)
 
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+Since horizontal gradients act within each level, the same lazy expression of a face velocity is the
+horizontal strain rate at cell faces.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
     axis_uvw = (Geometry.UVWAxis(),)
