@@ -20,7 +20,7 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
   CLIMAATMOS_MAIN_COMMIT: "6c57ba6d98f74ae6f3d02eb3ac5ff052b3c52f06"
-  CLIMAATMOS_PR_COMMIT: "ae45ad4c6e285c58cdfd9da7dc425c028133298a"
+  CLIMAATMOS_PR_COMMIT: "6a770de1fbcb672835c832db829a8a0708d22ed5"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
