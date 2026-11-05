@@ -54,11 +54,10 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_mass_flux
-        # Fluxes of enthalpy, total water, and the SGS tracers, as one fused
-        # column loop per draft and one for the environment: the flux
-        # velocity `ᶠu³_diff` and the flux variable `ᶜa_scalar` of each
-        # quantity are loop temporaries (registers on GPUs) rather than scratch
-        # fields, and all quantities of a subdomain share one kernel.
+        # Fluxes of enthalpy, total water, and the SGS tracers of the drafts and
+        # the environment, in one fused column loop: the flux velocity
+        # `ᶠu³_diff` and the flux variable `ᶜa_scalar` of each quantity are loop
+        # temporaries (registers on GPUs) rather than scratch fields.
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
@@ -66,29 +65,24 @@ function edmfx_sgs_mass_flux_tendency!(
         χ_names = sgs_tracer_names(Y)
         ρχ_names = unrolled_map(get_ρχ_name, χ_names)
 
-        # Drafts
-        for j in 1:n
-            DataLayouts.foreach_column(
-                Yₜ.c, Y.c, ᶜρʲs.:($j), ᶠu³, ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶜh_tot,
-                Y.c.sgsʲs.:($j),
-            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ
+        drafts = unrolled_map(StaticOneTo(n)) do j
+            (ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), Y.c.sgsʲs.:($j))
+        end
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+        ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, drafts, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s,
+        ) do Yₜc, Yc, drafts, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s
+            MatrixFields.unrolled_foreach(drafts) do (ᶜρʲ, ᶠu³ʲ, ᶜKʲ, ᶜsgsʲ)
+                @inline
                 ᶜχʲs = unrolled_map(name -> MatrixFields.get_field(ᶜsgsʲ, name), χ_names)
                 ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
                 add_sgs_mass_flux_tendencies!(
                     Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ.mse, ᶜsgsʲ.q_tot,
                     ᶜaʲ, ᶜχʲs, ρχ_names, dt, edmfx_sgsflux_upwinding,
                 )
-                return nothing
             end
-        end
-
-        # Environment
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-        ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
-        DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s,
-        ) do Yₜc, Yc, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s
             ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
             add_sgs_mass_flux_tendencies!(
                 Yₜc, Yc, ᶜρ⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰,
