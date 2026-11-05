@@ -55,11 +55,25 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     # Cast `dtγ` to the parameter float type so broadcasts stay type-stable
     # (ClimaTimeSteppers passes `dtγ` as `Float64` even when the state is
     # `Float32`).
-    dtγ = eltype(p.params)(dtγ)
+    FT = eltype(p.params)
+    dtγ = FT(dtγ)
 
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
         @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+    end
+    # Enforce physical constraints and refresh thermodynamic cache before the
+    # first Picard/Newton round so the implicit solve starts from a clean state.
+    # Without this, stale cache values from a possibly-negative-ρq predictor
+    # corrupt the first Newton residual.
+    if nonequilibrium_mp
+        enforce_grid_mean_microphysics_constraints!(Y, p, zero(FT))
+    end
+    set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
+    a_max = CAP.max_area(CAP.turbconv_params(p.params))
+    for j in 1:n
+        @. Y.c.sgsʲs.:($$j).ρa =
+            clamp(Y.c.sgsʲs.:($$j).ρa, zero(FT), a_max * ᶜρʲs.:($$j))
     end
 
     if n_picard > 0
