@@ -1,5 +1,4 @@
-# Temporary comparison pipeline (not for merging; this build profiles only the PR, whose main
-# reference is build 396), on one A100 per job: perf/profile_amip_steps.jl
+# Temporary comparison pipeline (not for merging), on one A100 per job: perf/profile_amip_steps.jl
 # traces 20 coupling steps of the flagship AMIP benchmark in two environments that differ only in
 # ClimaAtmos, main (CLIMAATMOS_MAIN_COMMIT) and CliMA/ClimaAtmos.jl#4953 (CLIMAATMOS_PR_COMMIT),
 # with the ClimaCore that the coupler environment resolves and the cache, tendency, and Jacobian
@@ -19,9 +18,9 @@ env:
   CLIMACOMMS_DEVICE: "CUDA"
   CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
-  COUPLER_COMMIT: "df7923109fd5d45fdf9de603bbb89a90d959bc66"
-  CLIMAATMOS_MAIN_COMMIT: "0417aa0fd45be9417653108c220898190a0ed45f"
-  CLIMAATMOS_PR_COMMIT: "20956ec8d2d864153af507fbd381d90c283684d2"
+  COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
+  CLIMAATMOS_MAIN_COMMIT: "c24ee26166ad925bf3f19dd7eefa13a674b6d457"
+  CLIMAATMOS_PR_COMMIT: "e24ce6d11b6a44ea4799be37111fb917ee39bfd7"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -82,6 +81,43 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
+  - label: "flagship AMIP components (A100), ClimaAtmos main: CUDA trace of 20 coupling steps"
+    key: "trace_main"
+    depends_on: "init_amip"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/trace_main COUPLER_DIR=$$PROFILE_DIR/coupler_main julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id trace_main
+      - tar czf trace_main.tgz -C $$PROFILE_DIR trace_main
+    artifact_paths: "trace_main.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP components (A100), ClimaAtmos main: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
+    key: "ncu_main"
+    depends_on: "init_amip"
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        echo "metrics: $$metrics"
+        echo "--- one coupling step"
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_main COUPLER_DIR=$$PROFILE_DIR/coupler_main ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_main.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id ncu_main || exit 1
+        echo "--- the RRTMGP kernels of the 20 traced coupling steps"
+        PROFILE_MODE=ncu_rad PROFILE_OUT=$$PROFILE_DIR/ncu_rad_main COUPLER_DIR=$$PROFILE_DIR/coupler_main ncu --profile-from-start off --kernel-name regex:rte_ --print-units base --csv --page raw --metrics $$metrics --log-file ncu_rad_main.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id ncu_rad_main || exit 1
+        grep -c rte_ ncu_rad_main.csv || true
+        cp ncu_main.csv ncu_rad_main.csv $$PROFILE_DIR/
+    artifact_paths: "ncu_main.csv;ncu_rad_main.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
   - label: "flagship AMIP components (A100), CliMA/ClimaAtmos.jl#4953: CUDA trace of 20 coupling steps"
     key: "trace_pr"
     depends_on: "init_amip"
@@ -121,9 +157,9 @@ steps:
 
   - label: "flagship AMIP components: device time and counters per component"
     key: "amip_summary"
-    depends_on: ["trace_pr", "ncu_pr"]
+    depends_on: ["trace_main", "trace_pr", "ncu_main", "ncu_pr"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && python3 attribute_trace.py pr=trace_pr,ncu_pr.csv
+      - cd $$PROFILE_DIR && python3 attribute_trace.py pr=trace_pr,ncu_pr.csv main=trace_main,ncu_main.csv
     agents:
       slurm_cpus_per_task: 1
