@@ -91,8 +91,7 @@ fall on each side of it.
 
 Two related keys matter at these resolutions:
 
-  - `ode_algo` selects the implicit–explicit scheme, `ARS343` by default. The
-    PROPHET production runs use `ARS222`.
+  - `ode_algo` selects the implicit–explicit scheme, `ARS222` by default.
   - `dt_rad` sets how often radiation is called, 6 hours by default and 1 hour
     in the production configurations. Radiation takes more run time than any
     other parameterization in a global run, so this interval needs to be set
