@@ -33,6 +33,17 @@ main
   converted with `cp_d`, so potential temperature relaxes at the published
   rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
   changes the `held_suarez_equil` reference.
+- ![][badge-🔥behavioralΔ] Implicitize vertical grid-mean `ᶠu³` advection of
+  sedimenting microphysics tracers and `ρtke` with first-order upwinding
+  (`ᶠupwind1`) and bidiagonal Jacobian blocks that are exact in the tracer `χ`
+  (with velocity coupling omitted outside the central EDMFX mass-flux block).
+  Apply Courant-limited (`min(1, 1 / C_γ)`) post-Newton upwind dissipation to
+  the central vertical advection of `ρe_tot` and `ρq_tot`, and post-Newton
+  `tracer_upwinding` (`:vanleer_limiter` or `:third_order`) antidiffusion to the
+  sedimenting microphysics tracers, while `ρtke` stays on unconditionally
+  monotone `ᶠupwind1`. With `tracer_upwinding = none`, the sedimenting tracers
+  are advected with `ᶠupwind1`, and dry configurations with prognostic `ρtke`
+  use the approximate linear solve.
 - ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
   MUSCL slope has no Courant-number factor at any Courant number; this applies
   to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass

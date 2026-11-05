@@ -435,7 +435,7 @@ implicit_diffusion:
   help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
   value: false
 approximate_linear_solve_iters:
-  help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
+  help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true, the configuration is moist, or `ρtke` is prognostic)"
   value: 1
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
