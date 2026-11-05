@@ -1,6 +1,7 @@
 import ClimaTimeSteppers as CTS
 import ClimaUtilities.TimeManager: ITime
 import LinearAlgebra
+import StaticArrays: SVector
 
 #####
 ##### ODE integrator construction. Takes typed inputs only, the YAML-shaped
@@ -64,6 +65,43 @@ function imex_gamma(alg::CTS.IMEXAlgorithm)
     isempty(nonzero_diags) && return nothing
     γ = first(nonzero_diags)
     all(x -> x ≈ γ, nonzero_diags) ? γ : nothing
+end
+
+"""
+    imex_b_imp_stages(ode_algo, ::Type{FT}) where {FT}
+
+Return `(b_imp_stages, n_imp_stages)`: a fixed-size `SVector{8, FT}` containing
+the implicit Butcher tableau stage weights `FT(b_imp[i])` for every implicit stage
+`i` (`a_imp[i, i] ≠ 0`) of `ode_algo` padded with zeros, and the count `n_imp_stages::Int`
+of implicit stages. Returns `(zero(SVector{8, FT}), 0)` when `ode_algo` is not
+an `IMEXAlgorithm`. Used by `build_cache` to accumulate stage-weighted surface
+precipitation fluxes across implicit stages with a solver-invariant scratch layout.
+
+A stage with `a_imp[i, i] == 0` and `b_imp[i] ≠ 0` (the first stage of the
+`SSP` tableaus) evaluates its implicit tendency explicitly, outside the
+`T_post_imp!` hook that samples the sedimentation flux. Its weight is
+redistributed over the sampled stages in proportion to their own weights, so the
+diagnosed flux keeps the step's total weight, and a warning names the
+approximation.
+"""
+imex_b_imp_stages(_, ::Type{FT}) where {FT} = (zero(SVector{8, FT}), 0)
+function imex_b_imp_stages(alg::CTS.IMEXAlgorithm, ::Type{FT}) where {FT}
+    a = alg.tableau.a_imp.coeffs
+    b = alg.tableau.b_imp.coeffs
+    s = size(a, 1)
+    sampled = [i for i in 1:s if !iszero(a[i, i])]
+    unsampled_weight = sum(FT(b[i]) for i in 1:s if iszero(a[i, i]); init = zero(FT))
+    sampled_weight = sum(FT(b[i]) for i in sampled; init = zero(FT))
+    if !iszero(unsampled_weight) && !iszero(sampled_weight)
+        @warn "$(nameof(typeof(alg.name))) weights an explicit-diagonal stage \
+               with b_imp = $unsampled_weight; the surface precipitation \
+               diagnostic redistributes this weight over the implicit stages."
+    end
+    scale =
+        iszero(sampled_weight) ? one(FT) :
+        (sampled_weight + unsampled_weight) / sampled_weight
+    b_imp = [scale * FT(b[i]) for i in sampled]
+    return (pad_b_imp_stages(b_imp, FT), length(b_imp))
 end
 
 """
@@ -266,17 +304,21 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # Only wire `T_post_imp!` when the upwind correction is nontrivial and
-        # the tableau has a single-γ implicit stage (`p.dtγ > 0`); otherwise
-        # `nothing` so CTS skips the post-Newton path (including its
+        # `T_post_imp!` is set whenever the post-Newton advection correction
+        # or the moist stage-weighted surface precipitation accumulator is
+        # active and the tableau has a single-γ implicit stage (`p.dtγ > 0`);
+        # otherwise `nothing`, so CTS skips the post-Newton path (and its
         # `cache_imp!` refresh) at every stage. Fully explicit tableaus such as
         # `SSP33ShuOsher` have no implicit stage to correct.
         T_post_imp! =
             (
                 isnothing(T_imp!) ||
                 iszero(p.dtγ) ||
-                atmos.numerics.energy_q_tot_upwinding == Val(:none)
-            ) ? nothing : correct_implicit_advection_tendency!
+                (
+                    atmos.microphysics_model isa DryModel &&
+                    atmos.numerics.energy_q_tot_upwinding == Val(:none)
+                )
+            ) ? nothing : post_newton_stage_update!
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,

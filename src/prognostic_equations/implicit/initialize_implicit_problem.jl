@@ -6,11 +6,33 @@ import ClimaCore
 import ClimaCore: Fields, Spaces
 
 """
+    advance_precip_stage_accumulator!(p)
+
+Reset the implicit-stage index `p.scratch.precip_stage_idx` to `0` at the start
+of the first implicit stage of a new timestep once the previous timestep's
+implicit stages have all been accumulated. A no-op when the stage-weighted
+precipitation accumulator is not present in `p.scratch`.
+"""
+@inline function advance_precip_stage_accumulator!(p)
+    if hasproperty(p, :scratch) &&
+       hasproperty(p.scratch, :precip_stage_idx) &&
+       hasproperty(p.scratch, :n_imp_stages) &&
+       p.scratch.n_imp_stages > 0
+        if p.scratch.precip_stage_idx[] >= p.scratch.n_imp_stages
+            p.scratch.precip_stage_idx[] = 0
+        end
+    end
+    return nothing
+end
+
+"""
     initialize_implicit_stage_problem!(Y, p, dtγ)
 
 Prepare the state `Y` for an IMEX implicit stage with step fraction `dtγ`,
-registered as the `initialize_imp!` hook of `ClimaODEFunction`. A no-op
-unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
+registered as the `initialize_imp!` hook of `ClimaODEFunction`. Advances the
+implicit-stage index for the stage-weighted precipitation surface-flux
+accumulator, and is otherwise a no-op unless
+`p.atmos.turbconv_model isa PrognosticEDMFX`.
 
 For `PrognosticEDMFX`:
 
@@ -41,7 +63,7 @@ For `PrognosticEDMFX`:
     stage-initial value (`warm_start_grid_mean_tracers!`).
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
-
+    advance_precip_stage_accumulator!(p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
     (; microphysics_model, turbconv_model, edmfx_model) = p.atmos

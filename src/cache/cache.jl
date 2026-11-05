@@ -183,6 +183,12 @@ function build_cache(
     FT = eltype(params)
     dt = FT(dt)
     γ = imex_gamma(ode_algo)
+    if ode_algo isa CTS.IMEXAlgorithm &&
+       any(!iszero, LinearAlgebra.diag(ode_algo.tableau.a_imp))
+        !isnothing(γ) || error(
+            "IMEX tableau must have a single non-zero diagonal γ for p.dtγ",
+        )
+    end
     dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
     mp_averaging =
         (update_cache_every == "stage" && !isnothing(γ)) ?
@@ -263,7 +269,8 @@ function build_cache(
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = atmos.surface.boundary_overrides
-    scratch = temporary_quantities(Y, atmos)
+    b_imp_stages, n_imp_stages = imex_b_imp_stages(ode_algo, FT)
+    scratch = temporary_quantities(Y, atmos; b_imp_stages, n_imp_stages)
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments = (;
