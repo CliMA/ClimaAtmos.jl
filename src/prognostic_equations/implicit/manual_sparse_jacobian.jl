@@ -1802,9 +1802,11 @@ function update_sgs_diffusion_and_entr_detr_jacobian_loop(matrix, Y, p, dtγ, di
     ϵ_FT = eps(Spaces.undertype(axes(Y.c)))
     updraft_kh_factor =
         CAP.edmfx_updraft_kh_diffusion_factor(CAP.turbconv_params(p.params))
+    diffuses =
+        p.atmos.edmfx_model.sgs_diffusive_flux &&
+        p.atmos.edmfx_model.vertical_diffusion
     diffusion_args =
-        use_derivative(diffusion_flag) && p.atmos.edmfx_model.sgs_diffusive_flux &&
-        p.atmos.edmfx_model.vertical_diffusion ?
+        use_derivative(diffusion_flag) ?
         (
             p.precomputed.ᶠK_h,
             unrolled_map(
@@ -1862,7 +1864,7 @@ function update_sgs_diffusion_and_entr_detr_jacobian_loop(matrix, Y, p, dtγ, di
             ᶜuʲ,
             ∂ᶜχʲ_diags,
             diffusion_args)
-            if !isempty(diffusion_args)
+            if !isempty(diffusion_args) && diffuses
                 (ᶠK_h, ∂ᶜχʲ_diff_diags) = diffusion_args
                 ᶜρaʲ = Yc.sgsʲs.:(1).ρa
                 ᶠwʲ_col =
@@ -2144,16 +2146,14 @@ No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX` with
 `matrix`, and returns `nothing`.
 """
 function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+    p.atmos.edmfx_model.sgs_mass_flux || return nothing
     loop = update_sgs_massflux_jacobian_loop(matrix, Y, p, dtγ, diffusion_flag)
     isnothing(loop) || DataLayouts.foreach_column(loop[2], loop[1]...)
     return nothing
 end
 
 function update_sgs_massflux_jacobian_loop(matrix, Y, p, dtγ, diffusion_flag)
-    (
-        p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux
-    ) || return nothing
+    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; params) = p
     (; ᶜΦ) = p.core
     (; ᶜρʲs, ᶠu³ʲs, ᶜKʲs) = p.precomputed
@@ -2387,21 +2387,35 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     eddy_diffusivities =
         use_derivative(diffusion_flag) ? eddy_diffusivity_coefficients!(Y, p) :
         nothing
-    fused_column_loop!((
-        update_advection_jacobian_loop(matrix, Y, p, dtγ, topography_flag),
-        update_sedimentation_jacobian_loop(matrix, Y, p, dtγ),
-        update_diffusion_jacobian_loop(
-            matrix, Y, p, dtγ, diffusion_flag, eddy_diffusivities,
-        ),
-    ))
-    fused_column_loop!((
-        update_sgs_advection_jacobian_loop(matrix, Y, p, dtγ),
+    fused_column_loop!(
+        (
+            update_advection_jacobian_loop(matrix, Y, p, dtγ, topography_flag),
+            update_sedimentation_jacobian_loop(matrix, Y, p, dtγ),
+            update_diffusion_jacobian_loop(
+                matrix, Y, p, dtγ, diffusion_flag, eddy_diffusivities,
+            ),
+        ), Val(64))
+    sgs_advection = update_sgs_advection_jacobian_loop(matrix, Y, p, dtγ)
+    sgs_diffusion_and_entr_detr =
         update_sgs_diffusion_and_entr_detr_jacobian_loop(
             matrix, Y, p, dtγ, diffusion_flag,
-        ),
-        update_sgs_massflux_jacobian_loop(matrix, Y, p, dtγ, diffusion_flag),
-        update_implicit_microphysics_jacobian_loop(matrix, Y, p, dtγ),
-    ))
+        )
+    implicit_microphysics =
+        update_implicit_microphysics_jacobian_loop(matrix, Y, p, dtγ)
+    if p.atmos.edmfx_model.sgs_mass_flux
+        fused_column_loop!(
+            (
+                sgs_advection,
+                sgs_diffusion_and_entr_detr,
+                update_sgs_massflux_jacobian_loop(matrix, Y, p, dtγ, diffusion_flag),
+                implicit_microphysics,
+            ), Val(96))
+    else
+        fused_column_loop!(
+            (
+                sgs_advection, sgs_diffusion_and_entr_detr, implicit_microphysics,
+            ), Val(96))
+    end
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
@@ -2418,15 +2432,18 @@ Solve `(∂R/∂Y) ΔY = R` for `ΔY` with the nested block solver from
 invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
 
-function fused_column_loop!(loops)
+function fused_column_loop!(loops, maxregs)
     active = unrolled_filter(!isnothing, loops)
     isempty(active) && return nothing
     bodies = unrolled_map(last, active)
-    DataLayouts.foreach_column(unrolled_map(first, active)...) do slices...
-        unrolled_foreach(bodies, slices) do body, slice_args
-            @inline
-            body(slice_args...)
-        end
+    DataLayouts.foreach_column(unrolled_map(first, active); maxregs) do slices
+        run_bodies(bodies, slices)
     end
     return nothing
+end
+
+@inline run_bodies(::Tuple{}, ::Tuple{}) = nothing
+@inline function run_bodies(bodies, slices)
+    first(bodies)(first(slices)...)
+    run_bodies(Base.tail(bodies), Base.tail(slices))
 end
