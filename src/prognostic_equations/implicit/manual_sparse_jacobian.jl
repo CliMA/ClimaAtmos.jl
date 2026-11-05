@@ -712,46 +712,6 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
         use_derivative(topography_flag) ?
         unrolled_map(n -> matrix[n, @name(c.uₕ)], (@name(c.ρ), χ_names...)) :
         ()
-    DataLayouts.foreach_column(
-        matrix[@name(c.ρ), @name(f.u₃)],
-        Y.c,
-        ᶜh_tot,
-        ᶜJ,
-        ᶠJ,
-        ᶜgⁱʲ,
-        ᶠgⁱʲ,
-        ∂ᶜχ_err_∂ᶠu₃s,
-        ∂ᶜuₕ_blocks,
-    ) do ∂ᶜρ_err_∂ᶠu₃, Yc, ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ, u₃_blocks, uₕ_blocks
-        (ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ) = as_register((ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ))
-        ᶜχs =
-            MatrixFields.has_field(Yc, @name(ρq_tot)) ?
-            (ᶜh_tot, (@. lazy(specific(Yc.ρq_tot, Yc.ρ)))) : (ᶜh_tot,)
-        ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) *
-                      DiagonalMatrixRow(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
-        @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadv_mat * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-        MatrixFields.unrolled_foreach(u₃_blocks, ᶜχs) do ∂ᶜρχ_err_∂ᶠu₃, ᶜχ
-            @inline
-            @. ∂ᶜρχ_err_∂ᶠu₃ =
-                dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
-            return nothing
-        end
-        if !isempty(uₕ_blocks)
-            ᶠwinterp_g³ʰ = @. ᶠwinterp_matrix(ᶜJ * Yc.ρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
-            ∂ᶜρ_err_∂ᶜuₕ = first(uₕ_blocks)
-            @. ∂ᶜρ_err_∂ᶜuₕ = dtγ * ᶜadv_mat * ᶠwinterp_g³ʰ
-            MatrixFields.unrolled_foreach(
-                Base.tail(uₕ_blocks),
-                ᶜχs,
-            ) do ∂ᶜρχ_err_∂ᶜuₕ, ᶜχ
-                @inline
-                @. ∂ᶜρχ_err_∂ᶜuₕ =
-                    dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ)) * ᶠwinterp_g³ʰ
-                return nothing
-            end
-        end
-        return nothing
-    end
 
     # Loop 2: the u₃ row. Exner-form PGF tendency: grad(Φ) - grad(Φ_r) + cp_d
     # int(θ_v - θ_vr) grad(Π). The reference terms satisfy grad(Φ_r(p)) + cp_d
@@ -792,11 +752,19 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
         has_q_tot ? (matrix[@name(f.u₃), @name(c.ρq_tot)],) : ()
 
     DataLayouts.foreach_column(
+        matrix[@name(c.ρ), @name(f.u₃)],
+        Y.c,
+        ᶜh_tot,
+        ᶜJ,
+        ᶠJ,
+        ᶜgⁱʲ,
+        ᶠgⁱʲ,
+        ∂ᶜχ_err_∂ᶠu₃s,
+        ∂ᶜuₕ_blocks,
         matrix[@name(f.u₃), @name(c.ρ)],
         matrix[@name(f.u₃), @name(c.ρe_tot)],
         matrix[@name(f.u₃), @name(c.uₕ)],
         matrix[@name(f.u₃), @name(f.u₃)],
-        Y.c,
         Y.f.u₃,
         ᶜK,
         ᶜp,
@@ -806,14 +774,21 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
         ᶜq_liq,
         ᶜq_ice,
         ᶠz,
-        ᶜgⁱʲ,
         ∂ᶠu₃_err_∂ᶜρq_tots,
         (∂ᶠu₃_err_∂ᶜρq(TD.Liquid()), ∂ᶠu₃_err_∂ᶜρq(TD.Ice())),
-    ) do ∂ᶠu₃_err_∂ᶜρ,
+    ) do ∂ᶜρ_err_∂ᶠu₃,
+    Yc,
+    ᶜh_tot,
+    ᶜJ,
+    ᶠJ,
+    ᶜgⁱʲ,
+    ᶠgⁱʲ,
+    u₃_blocks,
+    uₕ_blocks,
+    ∂ᶠu₃_err_∂ᶜρ,
     ∂ᶠu₃_err_∂ᶜρe_tot,
     ∂ᶠu₃_err_∂ᶜuₕ,
     ∂ᶠu₃_err_∂ᶠu₃,
-    Yc,
     ᶠu₃,
     ᶜK,
     ᶜp,
@@ -823,9 +798,35 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     ᶜq_liq,
     ᶜq_ice,
     ᶠz,
-    ᶜgⁱʲ,
     q_tot_cols,
     phase_cols
+        (ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ) = as_register((ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ))
+        ᶜχs =
+            MatrixFields.has_field(Yc, @name(ρq_tot)) ?
+            (ᶜh_tot, (@. lazy(specific(Yc.ρq_tot, Yc.ρ)))) : (ᶜh_tot,)
+        ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) *
+                      DiagonalMatrixRow(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
+        @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadv_mat * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+        MatrixFields.unrolled_foreach(u₃_blocks, ᶜχs) do ∂ᶜρχ_err_∂ᶠu₃, ᶜχ
+            @inline
+            @. ∂ᶜρχ_err_∂ᶠu₃ =
+                dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+            return nothing
+        end
+        if !isempty(uₕ_blocks)
+            ᶠwinterp_g³ʰ = @. ᶠwinterp_matrix(ᶜJ * Yc.ρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+            ∂ᶜρ_err_∂ᶜuₕ = first(uₕ_blocks)
+            @. ∂ᶜρ_err_∂ᶜuₕ = dtγ * ᶜadv_mat * ᶠwinterp_g³ʰ
+            MatrixFields.unrolled_foreach(
+                Base.tail(uₕ_blocks),
+                ᶜχs,
+            ) do ∂ᶜρχ_err_∂ᶜuₕ, ᶜχ
+                @inline
+                @. ∂ᶜρχ_err_∂ᶜuₕ =
+                    dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ)) * ᶠwinterp_g³ʰ
+                return nothing
+            end
+        end
         (ᶠu₃, ᶜK, ᶜp, ᶜT, ᶜΦ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠz, ᶜgⁱʲ) = as_register((
             ᶠu₃, ᶜK, ᶜp, ᶜT, ᶜΦ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠz, ᶜgⁱʲ,
         ))
@@ -1814,8 +1815,29 @@ No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Accumulates into
 the diagonals set by `update_sgs_advection_jacobian!`, mutates `matrix`, and
 returns `nothing`.
 """
-function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
+    ϵ_FT = eps(Spaces.undertype(axes(Y.c)))
+    updraft_kh_factor =
+        CAP.edmfx_updraft_kh_diffusion_factor(CAP.turbconv_params(p.params))
+    diffusion_names = (
+        @name(mse),
+        unrolled_filter(
+            χ_name -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
+            (@name(q_tot), unrolled_map(first, suspended_cloud_species)...),
+        )...,
+        passive_sgs_tracer_names(Y)...,
+    )
+    diffusion_args =
+        use_derivative(diffusion_flag) && p.atmos.edmfx_model.sgs_diffusive_flux &&
+        p.atmos.edmfx_model.vertical_diffusion ?
+        (
+            p.precomputed.ᶠK_h,
+            unrolled_map(
+                χ_name -> matrix[sgs_state_name(χ_name), sgs_state_name(χ_name)],
+                diffusion_names,
+            ),
+        ) : ()
     (;
         ᶜturb_entrʲs,
         ᶜentr_vel_scaleʲs,
@@ -1849,6 +1871,7 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ᶜarea_bounding_entr_detrʲs.:(1),
         ᶜuʲs.:(1),
         ∂ᶜχʲ_diags,
+        diffusion_args,
     ) do Yc,
     ᶜlg_col,
     ᶜturb_entrʲ,
@@ -1856,7 +1879,22 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     ᶜentr_nonvel_rateʲ,
     ᶜarea_bounding_entr_detrʲ,
     ᶜuʲ,
-    ∂ᶜχʲ_diags
+    ∂ᶜχʲ_diags,
+    diffusion_args
+        if !isempty(diffusion_args)
+            (ᶠK_h, ∂ᶜχʲ_diff_diags) = diffusion_args
+            ᶜρaʲ = Yc.sgsʲs.:(1).ρa
+            ᶠwʲ_col = ᶠupdraft_diffusion_weight!(nothing, ᶜρaʲ, ᶠK_h, updraft_kh_factor)
+            ᶠp_grad = @. lazy(DiagonalMatrixRow(ᶠwʲ_col) * ᶠgradᵥ_matrix())
+            ᶜsgs_diff_contrib = @. dtγ * (
+                DiagonalMatrixRow(1 / max(ᶜρaʲ, ϵ_FT)) *
+                (ᶜadvdivᵥ_matrix() * ᶠp_grad)
+            )
+            MatrixFields.unrolled_foreach(∂ᶜχʲ_diff_diags) do ∂ᶜχʲ_diag
+                @inline
+                @. ∂ᶜχʲ_diag += ᶜsgs_diff_contrib
+            end
+        end
         ᶜentrʲ = @. lazy(
             compute_entrainment(
                 ᶜentr_vel_scaleʲ,
@@ -2189,32 +2227,18 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     # Loop 1: the blocks of the updraft transport operator ᶜtridiag, which is
     # the same for every scalar that the updraft flux carries: the ρe_tot and
     # ρq_tot rows and the grid-mean tracer columns.
-    DataLayouts.foreach_column(
-        ∂ᶜρe_tot_err_∂ᶜρ,
-        ∂ᶜρe_tot_err_∂ᶜρq_tot,
-        ∂ᶜρe_tot_err_∂ᶜρe_tot,
-        ∂ᶜρe_tot_err_∂ᶜmseʲ,
-        ∂ᶜρq_tot_err_∂ᶜρ,
-        ∂ᶜρq_tot_err_∂ᶜρq_tot,
-        ∂ᶜρq_tot_err_∂ᶜq_totʲ,
-        Y.c,
-        ᶜρʲs.:(1),
-        ᶠu³ʲs.:(1),
-        ᶠu³,
-        ᶜK,
-        ᶜT,
-        ᶜΦ,
-        ᶜh_tot,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-        ᶜJ,
-        ᶠJ,
+
+    # Loop 2: the ∂/∂u₃ blocks.
+    DataLayouts.foreach_column(∂ᶜρe_tot_err_∂ᶜρ, ∂ᶜρe_tot_err_∂ᶜρq_tot,
+        ∂ᶜρe_tot_err_∂ᶜρe_tot, ∂ᶜρe_tot_err_∂ᶜmseʲ, ∂ᶜρq_tot_err_∂ᶜρ, ∂ᶜρq_tot_err_∂ᶜρq_tot,
+        ∂ᶜρq_tot_err_∂ᶜq_totʲ, Y.c, ᶜρʲs.:(1), ᶠu³ʲs.:(1), ᶠu³, ᶜK, ᶜT, ᶜΦ, ᶜh_tot,
+        ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜJ, ᶠJ,
         (∂ᶜρe_tot_err_∂ᶜρq(TD.Liquid()), ∂ᶜρe_tot_err_∂ᶜρq(TD.Ice())),
         unrolled_map(
             s -> (matrix[s, s], matrix[s, get_χʲ_name_from_ρχ_name(s)]),
             tracer_state_names,
-        ),
+        ), matrix[@name(c.ρe_tot), @name(f.u₃)], matrix[@name(c.ρq_tot), @name(f.u₃)],
+        ᶜKʲs.:(1), ᶠgⁱʲ, unrolled_map(s -> matrix[s, @name(f.u₃)], tracer_state_names),
     ) do ∂ᶜρe_tot_err_∂ᶜρ,
     ∂ᶜρe_tot_err_∂ᶜρq_tot,
     ∂ᶜρe_tot_err_∂ᶜρe_tot,
@@ -2236,7 +2260,12 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     ᶜJ,
     ᶠJ,
     phase_cols,
-    tracer_groups
+    tracer_groups,
+    ∂ᶜρe_tot_err_∂ᶠu₃,
+    ∂ᶜρq_tot_err_∂ᶠu₃,
+    ᶜKʲ,
+    ᶠgⁱʲ,
+    tracer_u₃_cols
         if !use_derivative(diffusion_flag)
             @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
             @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
@@ -2299,30 +2328,6 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             @. ∂ᶜρχ_sgs_col = -(ᶜtridiag)
             @. ∂ᶜρχ_diag += ᶜtridiag * ᶜinv_ρ
         end
-    end
-
-    # Loop 2: the ∂/∂u₃ blocks.
-    DataLayouts.foreach_column(
-        matrix[@name(c.ρe_tot), @name(f.u₃)],
-        matrix[@name(c.ρq_tot), @name(f.u₃)],
-        Y.c,
-        ᶜρʲs.:(1),
-        ᶜKʲs.:(1),
-        ᶜh_tot,
-        ᶜJ,
-        ᶠJ,
-        ᶠgⁱʲ,
-        unrolled_map(s -> matrix[s, @name(f.u₃)], tracer_state_names),
-    ) do ∂ᶜρe_tot_err_∂ᶠu₃,
-    ∂ᶜρq_tot_err_∂ᶠu₃,
-    Yc,
-    ᶜρʲ,
-    ᶜKʲ,
-    ᶜh_tot,
-    ᶜJ,
-    ᶠJ,
-    ᶠgⁱʲ,
-    tracer_u₃_cols
         ᶜsgsʲ = Yc.sgsʲs.:(1)
         # ρʲ aʲ J, the weight of every updraft flux
         ᶜρʲaʲJ = @. ᶜρʲ * ᶜJ * draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
@@ -2398,8 +2403,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         eddy_diffusivities,
     )
     update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)

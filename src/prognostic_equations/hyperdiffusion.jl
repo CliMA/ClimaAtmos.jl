@@ -164,21 +164,28 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # and the updrafts. (A single loop needs
     # too many registers to keep its blocks resident.)
     ᶜu_sgs = turbconv_model isa PrognosticEDMFX ? (sgs_fields[1], sgs_fields[4]) : ()
-    DataLayouts.foreach_slab(ᶜ∇²u, ᶜu, ᶜu_sgs) do ᶜ∇²u, ᶜu, ᶜu_sgs
+    DataLayouts.foreach_slab(
+        ᶜ∇²u,
+        ᶜu,
+        ᶜu_sgs,
+        (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke),
+        Y.c,
+        ᶜT,
+        ᶜp,
+        ᶜΦ,
+        sgs_fields,
+    ) do ᶜ∇²u, ᶜu, ᶜu_sgs, (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Yc, ᶜT, ᶜp, ᶜΦ, sgs_fields
         # Full vector Laplacian identity. Under non-orthogonal metrics
         # (topography), the C12 components of the updraft Laplacians matter
         # because they couple into the C3 of the outer
         # `wcurlₕ(C123(curlₕ(⋅)))` via g_{13}, g_{23}.
         vector_laplacian!(ᶜ∇²u, ᶜu)
-        turbconv_model isa PrognosticEDMFX || return nothing
-        (ᶜ∇²uʲs, ᶜuʲs) = ᶜu_sgs
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            vector_laplacian!(ᶜ∇²uʲs.:($j), ᶜuʲs.:($j))
+        if turbconv_model isa PrognosticEDMFX
+            (ᶜ∇²uʲs, ᶜuʲs) = ᶜu_sgs
+            for j in 1:n_mass_flux_subdomains(turbconv_model)
+                vector_laplacian!(ᶜ∇²uʲs.:($j), ᶜuʲs.:($j))
+            end
         end
-    end
-    DataLayouts.foreach_slab(
-        (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Y.c, ᶜT, ᶜp, ᶜΦ, sgs_fields,
-    ) do (ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff, ᶜ∇²tke), Yc, ᶜT, ᶜp, ᶜΦ, sgs_fields
         (ᶜT, ᶜp, ᶜΦ) = as_register((ᶜT, ᶜp, ᶜΦ))
         ᶜT_r = @. air_temperature_reference(thermo_params, ᶜp)
         scalar_laplacian!(ᶜ∇²T, (@. ᶜT - ᶜT_r))

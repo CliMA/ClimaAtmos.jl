@@ -227,9 +227,41 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     # One fused column loop for the center tendencies: the face density
     # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws
+        Yₜ.c,
+        Y.c,
+        ᶜJ,
+        ᶠJ,
+        ᶠu³,
+        ᶜh_tot,
+        ᶠ∂ξ³∂x³,
+        ᶜws,
+        Yₜ.f,
+        ᶠgradᵥ_ᶜΦ,
+        ᶜp,
+        ᶜT,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+        rst_u₃ isa NullBroadcasted ? () : rst_u₃,
+    ) do Yₜc,
+    Yc,
+    ᶜJ,
+    ᶠJ,
+    ᶠu³,
+    ᶜh_tot,
+    ᶠ∂ξ³∂x³,
+    ᶜws,
+    Yₜf,
+    ᶠgradᵥ_ᶜΦ,
+    ᶜp,
+    ᶜT,
+    ᶜq_tot_nonneg,
+    ᶜq_liq,
+    ᶜq_ice,
+    rst_u₃
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
 
         # Mass advection with zero flux through the top and bottom
@@ -261,6 +293,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific(ᶜρχ, Yc.ρ)))),
             )
         end
+        add_implicit_u₃_tendency!(
+            Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+            thermo_params, cp_d,
+        )
+        rst_u₃ isa Tuple || @. Yₜf.u₃ += rst_u₃
         return nothing
     end
 
@@ -270,18 +307,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # fused column loop; the virtual potential temperature is a loop temporary.
     # The sponge is a lazy broadcast when active and a `NullBroadcasted`
     # otherwise, which cannot be sliced, so it is passed only when active.
-    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
-    DataLayouts.foreach_column(
-        Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-        rst_u₃ isa NullBroadcasted ? () : rst_u₃,
-    ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃
-        add_implicit_u₃_tendency!(
-            Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-            thermo_params, cp_d,
-        )
-        rst_u₃ isa Tuple || @. Yₜf.u₃ += rst_u₃
-        return nothing
-    end
     return nothing
 end
 

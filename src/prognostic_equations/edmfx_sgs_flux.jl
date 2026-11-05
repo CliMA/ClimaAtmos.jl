@@ -66,6 +66,7 @@ function edmfx_sgs_mass_flux_tendency!(
         ρχ_names = unrolled_map(get_ρχ_name, χ_names)
 
         drafts = unrolled_map(StaticOneTo(n)) do j
+            @inline
             (ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), Y.c.sgsʲs.:($j))
         end
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
