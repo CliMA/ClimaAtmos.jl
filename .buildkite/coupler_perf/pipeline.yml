@@ -1,4 +1,4 @@
-# Temporary probe of kernel fusion (not for merging; traces only the probe, whose reference is the PR trace of build 409), on one A100 per job: perf/profile_amip_steps.jl
+# Temporary probe of kernel fusion (not for merging; traces only the probe, whose reference is the probe trace of build 410), on one A100 per job: perf/profile_amip_steps.jl
 # traces 20 coupling steps of the flagship AMIP benchmark in two environments that differ only in
 # ClimaAtmos, main (CLIMAATMOS_MAIN_COMMIT) and CliMA/ClimaAtmos.jl#4953 (CLIMAATMOS_PR_COMMIT),
 # with the ClimaCore that the coupler environment resolves and the cache, tendency, and Jacobian
@@ -20,7 +20,7 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
   CLIMAATMOS_MAIN_COMMIT: "6c57ba6d98f74ae6f3d02eb3ac5ff052b3c52f06"
-  CLIMAATMOS_PR_COMMIT: "6012dd0dc4be6086dddd5ffb3eae998b00f52c20"
+  CLIMAATMOS_PR_COMMIT: "3351b3f73866669a7dc74c96a2d184d98ad4175e"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
