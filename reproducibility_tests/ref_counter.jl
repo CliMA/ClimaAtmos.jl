@@ -1,4 +1,4 @@
-457
+458
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+458
+- Prescribed temperature tendencies (large-scale advection and radiative
+  cooling, the TRMM-LBA heating rate, file-driven forcings and nudging) and
+  the Held–Suarez thermal relaxation are converted to energy with the isobaric
+  heat capacity (`cp_m`, `cp_d`), which changes `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_trmm_column`, and `held_suarez_equil`.
+
 457
 - The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
   so rain now falls at the state-dependent Chen et al. (2022) speed by
