@@ -15,7 +15,6 @@ tools:
   cache-memory: true
   github:
     toolsets: [default, pull_requests]
-  web-fetch:
 runtimes:
   julia:
     version: "1.11"
