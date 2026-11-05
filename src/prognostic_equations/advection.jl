@@ -176,16 +176,15 @@ end
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
 Add the explicitly treated vertical advection tendencies: vector-invariant momentum
-advection (with Coriolis and vorticity terms) and full vertical transport of
-tracers and, optionally, TKE.
+advection (with Coriolis and vorticity terms) and vertical transport of passive
+non-water tracers.
 
 Increments:
 
-  - Every grid-mean tracer `Yₜ.c.ρχ` except `ρe_tot` and `ρq_tot` (those are advected
-    implicitly): flux-form `vertical_transport` with the grid-mean flow `ᶠu³` and the
-    `p.atmos.numerics.tracer_upwinding` scheme. When EDMFX SGS mass flux is active,
-    difference-form SGS corrections are added on top of this in
-    `edmfx_sgs_mass_flux_tendency!`.
+  - Every passive grid-mean tracer `Yₜ.c.ρχ` in `passive_gs_tracer_names(Y)` (`ρe_tot`,
+    `ρq_tot`, sedimenting microphysics tracers, and `ρtke` are advected implicitly):
+    flux-form `vertical_transport` with the grid-mean flow `ᶠu³` and the
+    `p.atmos.numerics.tracer_upwinding` scheme.
   - `Yₜ.c.ρq_tot`: the prescribed-flow surface flux from
     `ᶜρq_tot_vertical_transport_bc`, when moisture is present.
   - `Yₜ.c.uₕ` and `Yₜ.f.u₃`: vector-invariant vertical advection built from the
@@ -194,9 +193,6 @@ Increments:
     omits the horizontal Coriolis components.
   - `Yₜ.f.sgsʲs.:(j).u₃` for each prognostic updraft: the analogous vector-invariant
     terms with updraft vorticities and kinetic energies.
-  - `Yₜ.c.ρtke`: `vertical_transport` with the
-    `p.atmos.numerics.edmfx_mse_q_tot_upwinding` scheme, when the
-    turbulence-convection model carries prognostic TKE.
 
 Reads `Y`, the core fields `ᶜf³` and `ᶠf¹²`, the precomputed `ᶜu`, `ᶠu³`, `ᶜK` (and
 `ᶜuʲs`, `ᶜKʲs`, `ᶠKᵥʲs` for prognostic updrafts), and scratch space. Called from
@@ -212,8 +208,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶜf³, ᶠf¹²) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
-    (; edmfx_mse_q_tot_upwinding) =
-        n > 0 || use_prognostic_tke(turbconv_model) ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -255,22 +249,18 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
-    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
-    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
-    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
-    # edmfx_sgs_mass_flux_tendency!.
-    tracer_names = unrolled_filter(
-        ρχ_name -> !(ρχ_name in (@name(ρe_tot), @name(ρq_tot))),
-        gs_tracer_names(Y),
-    )
+    # Vertical advection of passive non-water tracers with the grid-mean flow.
+    # Water tracers (ρq_tot and sedimenting condensate/precipitation species)
+    # and ρtke are advected in `implicit_vertical_advection_tendency!`.
+    tracer_names = passive_gs_tracer_names(Y)
     drafts = ntuple(
         j -> (ᶠω¹²ʲs.:($j), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), Yₜ.f.sgsʲs.:($j).u₃),
         n_val,
     )
 
-    # The tracer transports, the vector-invariant momentum advection and the TKE
-    # transport in one fused column loop: the face density is a loop temporary
-    # shared by every transport, and the vorticity is read from scratch once.
+    # The passive-tracer transports and vector-invariant momentum advection in
+    # one fused column loop: the face density is a loop temporary shared by
+    # every transport, and the vorticity is read from scratch once.
     DataLayouts.foreach_column(
         Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², drafts,
         something(ᶠf¹², ()),
@@ -300,11 +290,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             @. ᶠu₃ʲₜ -=
                 ᶠω¹²ʲ_tot × ᶠinterp(CT12(ᶜuʲ)) + ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
             return nothing
-        end
-
-        if MatrixFields.has_field(Yc, @name(ρtke)) # advect_tke triggers allocations
-            ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
-            add_vertical_transport!(Yₜc.ρtke, ᶠρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
         end
         return nothing
     end

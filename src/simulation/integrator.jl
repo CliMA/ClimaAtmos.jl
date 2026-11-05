@@ -50,9 +50,10 @@ Return the dt the 1M bulk-tendency averager should use at `cache!` time. The
 """
     imex_gamma(ode_algo)
 
-Return the single-γ DIRK diagonal of `ode_algo`'s implicit Butcher tableau, or
-`nothing` when the scheme isn't a single-γ IMEX ARK (fully explicit, or
-variable-γ ESDIRK). The explicit first-stage zero on the `a_imp` diagonal is
+Return the single-`γ` DIRK diagonal of `ode_algo`'s implicit Butcher tableau, or
+`nothing` when `ode_algo` is not a single-`γ` `IMEXAlgorithm` with at least one
+implicit stage (`build_cache` rejects an `IMEXAlgorithm` that has a non-zero
+implicit diagonal with non-uniform `γ`). Explicit zero-diagonal stages are
 skipped. Used by `build_cache` to resolve `dtγ` and the microphysics averaging
 window.
 """
@@ -265,12 +266,17 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # Only wire `T_post_imp!` when the upwind correction is nontrivial;
-        # otherwise `nothing` so CTS skips the post-Newton path (including
-        # its `cache_imp!` refresh) at every implicit stage.
+        # Only wire `T_post_imp!` when the upwind correction is nontrivial and
+        # the tableau has a single-γ implicit stage (`p.dtγ > 0`); otherwise
+        # `nothing` so CTS skips the post-Newton path (including its
+        # `cache_imp!` refresh) at every stage. Fully explicit tableaus such as
+        # `SSP33ShuOsher` have no implicit stage to correct.
         T_post_imp! =
-            (isnothing(T_imp!) || atmos.numerics.energy_q_tot_upwinding == Val(:none)) ?
-            nothing : correct_implicit_advection_tendency!
+            (
+                isnothing(T_imp!) ||
+                iszero(p.dtγ) ||
+                atmos.numerics.energy_q_tot_upwinding == Val(:none)
+            ) ? nothing : correct_implicit_advection_tendency!
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
