@@ -71,4 +71,43 @@ end
           [test_nsteps; test_dt; 3]
 end
 
+@testset "check_nans callback" begin
+    ctx = ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
+    domain = CA.Domains.IntervalDomain(
+        CA.Geometry.ZPoint(0.0),
+        CA.Geometry.ZPoint(1000.0);
+        boundary_names = (:bottom, :top),
+    )
+    mesh = CA.ClimaCore.Meshes.IntervalMesh(domain; nelems = 10)
+    topo = CA.Topologies.IntervalTopology(ctx, mesh)
+    cs = CA.Spaces.CenterFiniteDifferenceSpace(topo)
+    fs = CA.Spaces.FaceFiniteDifferenceSpace(cs)
+    c_field = CA.Fields.Field(
+        NamedTuple{
+            (:ρ, :sgsʲs),
+            Tuple{
+                Float64,
+                Tuple{NamedTuple{(:ρa, :mse), Tuple{Float64, Float64}}},
+            },
+        },
+        cs,
+    )
+    f_field = CA.Fields.Field(
+        NamedTuple{
+            (:u₃, :sgsʲs),
+            Tuple{Float64, Tuple{NamedTuple{(:u₃,), Tuple{Float64}}}},
+        },
+        fs,
+    )
+    Y = CA.Fields.FieldVector(; c = c_field, f = f_field)
+    fill!(parent(Y), 1.0)
+    integrator = (; u = Y, t = 120.0)
+    @test isnothing(CA.check_nans(integrator))
+    @test (@allocated CA.check_nans(integrator)) == 0
+    parent(Y.c.sgsʲs.:(1).mse)[3] = NaN
+    @test_logs (:error, r"Y\.c\.sgsʲs:") (:error, r"Y\.c\.sgsʲs\.:\(1\)\.mse:") @test_throws ErrorException(
+        "Found NaN",
+    ) CA.check_nans(integrator)
+end
+
 # query functions
