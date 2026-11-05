@@ -1,4 +1,4 @@
-455
+456
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+456
+- Added smooth maximum on rain and snow sedimentation velocity. This changes
+  SCM TRMM results
+
 455
 - `numerics_sphere_he6ze10.yml` stretches its 10 levels with `dz_top: 6500.0`,
   `prognostic_edmfx_aquaplanet` takes the 31-level grid of
