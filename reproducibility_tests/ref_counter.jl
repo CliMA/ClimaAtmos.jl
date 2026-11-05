@@ -1,4 +1,4 @@
-461
+462
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+462
+- `ARS222` with two approximate linear-solve iterations and stage-wise state
+  constraints by default; implicit first-order upwind vertical advection of the
+  sedimenting microphysics tracers and `ρtke` with Courant-limited post-Newton
+  corrections; Courant-independent van Leer slopes; stage-weighted surface
+  precipitation fluxes; backward-Euler damping of orographic gravity-wave drag;
+  and the refreshed implicit-stage predictor. All change results.
+
 461
 - Update dependencies for v0.42.18
 

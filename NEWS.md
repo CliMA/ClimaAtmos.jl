@@ -33,6 +33,10 @@ main
   converted with `cp_d`, so potential temperature relaxes at the published
   rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
   changes the `held_suarez_equil` reference.
+- ![][badge-🔥behavioralΔ] Change the default `ode_algo` from `ARS343` to
+  `ARS222`, the default `approximate_linear_solve_iters` from `1` to `2`, and
+  the default `update_constrain_state_every` from `step` to `stage` in
+  `config/default_configs/default_config.yml`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
   `set_implicit_precomputed_quantities_core!` at the explicit predictor state
   entering `initialize_implicit_stage_problem!`, clamp the stage-entry
