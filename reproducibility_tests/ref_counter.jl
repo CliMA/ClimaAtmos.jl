@@ -1,4 +1,4 @@
-456
+457
 
 # **README**
 #
@@ -32,6 +32,17 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+457
+- The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
+  so rain now falls at the state-dependent Chen et al. (2022) speed by
+  default, matching snow.
+- The implicit sedimentation Jacobian for rain and snow (`ρq_rai`, `ρq_sno`,
+  and the first-updraft `q_rai`, `q_sno` under `PrognosticEDMFX`) uses the
+  running column max of the species' terminal velocity in the derivative
+  instead of the pointwise `w(q^n)`, so one Newton iteration carries
+  rain/snow across multiple cells at CFL > 1. Tendency unchanged. Cloud
+  liquid and cloud ice keep the pointwise `w`.
+
 456
 - Added smooth maximum on rain and snow sedimentation velocity. This changes
   SCM TRMM results

@@ -2216,8 +2216,8 @@ Group of moisture, cloud, and microphysics choices inside an
     the truncated-Gaussian expectation.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
-    `FixedTerminalVelocity()` for cloud liquid, cloud ice and rain, and
-    `Chen2022TerminalVelocity()` for snow by default.
+    `FixedTerminalVelocity()` for cloud liquid and cloud ice, and
+    `Chen2022TerminalVelocity()` for rain and snow by default.
 
 # Examples
 
@@ -2238,7 +2238,7 @@ water = ClimaAtmos.AtmosWater(;
     sgs_variance_curvature::Bool = false
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
-    terminal_velocity_rain::TVR = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = Chen2022TerminalVelocity()
     terminal_velocity_snow::TVS = Chen2022TerminalVelocity()
 end
 

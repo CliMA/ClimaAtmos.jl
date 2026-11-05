@@ -949,11 +949,37 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 
     # Condensate masses carry their diagonal and their ρq_tot, ρ, and ρe_tot
     # columns into the loop; the other sedimenting tracers only their diagonal.
+    # `ᶜwₚ_jac` is the running column max of `ᶜwₚ` for rain and snow mass and
+    # for rain number (so the super-diagonal does not collapse where the
+    # species is empty), and the pointwise `ᶜwₚ` for cloud liquid, cloud ice,
+    # cloud-liquid number, ice number, and the P3 rime quantities, which fall
+    # slowly enough that the pointwise stencil is stable. The pointwise `ᶜwₚ`
+    # is still passed for the sedimentation kinetic energy carried into
+    # `ρe_tot`.
     ρχ_names = sedimenting_tracer_names(Y)
     mass_names = unrolled_filter(n -> !isnothing(condensate_phase(n)), ρχ_names)
     other_names = unrolled_filter(n -> isnothing(condensate_phase(n)), ρχ_names)
     ᶜw(ρχ_name) =
         MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name))
+    # Borrow `ᶜtemp_scalar_3`, `ᶜtemp_scalar_4`, and `ᶜtemp_scalar_5` (all
+    # free until later diffusion-Jacobian work) for the rain mass, snow mass,
+    # and rain number column maxes.
+    ᶜwᵣ_max = p.scratch.ᶜtemp_scalar_3
+    ᶜwₛ_max = p.scratch.ᶜtemp_scalar_4
+    ᶜwₙᵣ_max = p.scratch.ᶜtemp_scalar_5
+    if MatrixFields.has_field(Y.c, @name(ρq_rai))
+        fill_column_max!(ᶜwᵣ_max, p.precomputed.ᶜwᵣ)
+    end
+    if MatrixFields.has_field(Y.c, @name(ρq_sno))
+        fill_column_max!(ᶜwₛ_max, p.precomputed.ᶜwₛ)
+    end
+    if MatrixFields.has_field(Y.c, @name(ρn_rai))
+        fill_column_max!(ᶜwₙᵣ_max, p.precomputed.ᶜwₙᵣ)
+    end
+    ᶜw_jac(ρχ_name) =
+        ρχ_name == @name(ρq_rai) ? ᶜwᵣ_max :
+        ρχ_name == @name(ρq_sno) ? ᶜwₛ_max :
+        ρχ_name == @name(ρn_rai) ? ᶜwₙᵣ_max : ᶜw(ρχ_name)
     mass_args = unrolled_map(mass_names) do ρχ_name
         s = center_state_name(ρχ_name)
         (
@@ -962,11 +988,12 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             matrix[@name(c.ρ), s],
             matrix[@name(c.ρe_tot), s],
             ᶜw(ρχ_name),
+            ᶜw_jac(ρχ_name),
         )
     end
     other_args = unrolled_map(other_names) do ρχ_name
         s = center_state_name(ρχ_name)
-        (matrix[s, s], ᶜw(ρχ_name))
+        (matrix[s, s], ᶜw_jac(ρχ_name))
     end
 
     DataLayouts.foreach_column(
@@ -1001,22 +1028,23 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜbidiag = @. dtγ *
            (-(ᶜprecipdivᵥ_matrix())) *
            DiagonalMatrixRow(ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col)
-        @inline ᶠband(ᶜwₚ) = @. lazy(
+        @inline ᶠband(ᶜwₚ_jac) = @. lazy(
             DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
-            (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ_col)),
+            (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ_jac) / ᶜρ_col)),
         )
-        MatrixFields.unrolled_foreach(other_groups) do (∂ᶜρχ_diag, ᶜwₚ)
+        MatrixFields.unrolled_foreach(other_groups) do (∂ᶜρχ_diag, ᶜwₚ_jac)
             @inline
-            @. ∂ᶜρχ_diag = ᶜbidiag * $(ᶠband(ᶜwₚ)) - (I,)
+            @. ∂ᶜρχ_diag = ᶜbidiag * $(ᶠband(ᶜwₚ_jac)) - (I,)
             return nothing
         end
         ᶜuvw = @. Geometry.UVWVector(ᶜu_col) # converted once for every species
         MatrixFields.unrolled_foreach(
             map(tuple, mass_names, mass_groups),
-        ) do (ρχ_name, (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ))
+        ) do (ρχ_name,
+            (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ, ᶜwₚ_jac))
             @inline
             e_int_func = internal_energy_function(condensate_phase(ρχ_name))
-            ᶜsed_op = @. ᶜbidiag * $(ᶠband(ᶜwₚ))
+            ᶜsed_op = @. ᶜbidiag * $(ᶠband(ᶜwₚ_jac))
             @. ∂ᶜρχ_diag = ᶜsed_op - (I,)
             # Sedimentation moves (moist air) mass: the same vtt is added to
             # Yₜ.c.ρ and Yₜ.c.ρq_tot in `vertical_advection_of_water_tendency!`.
@@ -1027,7 +1055,9 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             # `vertical_advection_of_water_tendency!`, which replace the
             # grid-mean thermodynamic state with updraft/environment states, are
             # treated explicitly — a convergence-rate approximation in EDMF
-            # columns with heavy sedimentation.
+            # columns with heavy sedimentation. `ᶜwₚ` (pointwise) multiplies
+            # the specific kinetic energy of the falling condensate; the column-
+            # max substitution is Jacobian-only and never enters the tendency.
             @. ∂ᶜρe_tot_col =
                 ᶜsed_op * DiagonalMatrixRow(
                     e_int_func(thermo_params, ᶜT_col) + ᶜΦ_col + $(Kin(ᶜwₚ, ᶜuvw)),
@@ -1725,6 +1755,23 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             p.precomputed,
             sgs_sedimentation_velocity_name(χ_name),
         )
+        # For rain mass, snow mass, and rain number, route `ᶠsed` through the
+        # running column max of `ᶜwʲ` (into `ᶜtemp_scalar_3`, reused across the
+        # species because their per-species foreach_columns do not overlap) so
+        # the super-diagonal does not collapse where the species is empty.
+        # Cloud liquid, cloud ice, and cloud-liquid number keep the pointwise
+        # `ᶜwʲ` — they fall slowly enough that the pointwise stencil is stable.
+        # The pointwise `ᶜwʲ` above is also kept for the lateral-mixing
+        # diagonal below.
+        ᶜwʲ_jac =
+            if χ_name == @name(q_rai) ||
+               χ_name == @name(q_sno) ||
+               χ_name == @name(n_rai)
+                fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwʲ)
+                p.scratch.ᶜtemp_scalar_3
+            else
+                ᶜwʲ
+            end
         ρχ_name = get_ρχ_name(χ_name)
         ᶜw_gs = MatrixFields.get_field(
             p.precomputed,
@@ -1752,12 +1799,14 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ᶜρʲs.:(1),
             ᶠu³ʲs.:(1),
             ᶜwʲ,
+            ᶜwʲ_jac,
             ᶜw_gs,
             ᶜtridiagonal_matrix_scalar,
             ᶠsed_tracer_advection,
             ᶠ∂ξ³∂x³,
             mass_args,
-        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜw_gs, ᶜM, ᶠsed, ᶠ∂ξ³∂x³,
+        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜM,
+        ᶠsed, ᶠ∂ξ³∂x³,
         mass_blocks
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
@@ -1778,7 +1827,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @. ᶠsed =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ) *
                 ᶠtop_bias_matrix() *
-                DiagonalMatrixRow(-(ᶜwʲ))
+                DiagonalMatrixRow(-(ᶜwʲ_jac))
             ᶠsed_ct3 = @. lazy(DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³)) * ᶠsed)
             @. ᶜM =
                 dtγ * ifelse(ᶜ∂a∂z < 0,

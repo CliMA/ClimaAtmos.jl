@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
+  `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
+  falls at a state-dependent speed by default; set
+  `rain_terminal_velocity: "Fixed"` to recover the previous behavior.
+- ![][badge-🔥behavioralΔ] The implicit sedimentation Jacobian for rain and
+  snow mass (`ρq_rai`, `ρq_sno`, and the first-updraft `q_rai`, `q_sno`
+  under `PrognosticEDMFX`) now uses the running column max of the species'
+  terminal velocity in the derivative instead of the pointwise `w(q^n)`.
+  The tendency itself still uses pointwise `w`. The super-diagonal stays
+  nonzero wherever rain or snow exists anywhere above the current cell, so
+  a single Newton iteration can carry rain/snow across multiple cells at
+  CFL > 1 and the leading-edge pile-up spikes disappear. Cloud liquid and
+  cloud ice keep the pointwise-`w` Jacobian — they fall slowly enough that
+  the pointwise stencil is stable.
 - ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
   the implicit path with cloud-liquid condensation / evaporation. A single
   `implicit_microphysics` toggle controls both: when `true` (default), the
