@@ -107,9 +107,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
-# TODO: All of these should use dtγ instead of dt, but dtγ is not available in
-# the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-
 """
     vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, upwinding)
 
@@ -122,7 +119,8 @@ tendency `-∂ᵥ(ρ u³ χ)`, with zero-flux boundary conditions imposed by
   - `ᶜρ`: Center-space density [kg/m³].
   - `ᶠu³`: Face-space contravariant vertical velocity [1/s].
   - `ᶜχ`: Center-space specific (per-mass) transported quantity.
-  - `dt`: Timestep, used only by the van Leer limiter [s].
+  - `dt`: Timestep [s]; `ᶠlin_vanleer` receives `zero(dt)` to evaluate the
+    Courant-independent MUSCL reconstruction.
   - `upwinding`: Reconstruction of `χ` on faces; one of `Val(:none)` (central
     interpolation), `Val(:first_order)`, `Val(:third_order)`, or
     `Val(:vanleer_limiter)`.
@@ -140,8 +138,11 @@ end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    # `ᶠlin_vanleer` receives `zero(dt)`, so it evaluates the
+    # Courant-independent MUSCL reconstruction with the `MonotoneLocalExtrema`
+    # (Lin et al. 1994, eq. 5) slope limiter.
     return @. lazy(
-        -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
+        -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, zero(dt)))),
     )
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
@@ -163,7 +164,7 @@ broadcast returned from a function is not inferred there).
 @inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}) =
     (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))); nothing)
 @inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter}) =
-    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))); nothing)
+    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠlin_vanleer(ᶠu³, ᶜχ, zero(dt)))); nothing)
 @inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}) =
     (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠupwind3(ᶠu³, ᶜχ))); nothing)
 

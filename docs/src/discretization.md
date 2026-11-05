@@ -252,10 +252,11 @@ Each operator below has a short name in the ClimaAtmos source, documented under
   - The center-to-face upwind product ``U^f``: first order
     [`ClimaCore.Operators.UpwindBiasedProductC2F`](@extref), third order
     [`ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F`](@extref), or the van
-    Leer limiter [`ClimaCore.Operators.LinVanLeerC2F`](@extref). The van Leer
-    limiter is the default for grid-mean energy and tracer vertical transport,
-    set by the `energy_q_tot_upwinding` and `tracer_upwinding` configuration
-    keys.
+    Leer limiter [`ClimaCore.Operators.LinVanLeerC2F`](@extref) (evaluated with
+    zero Courant step so the MUSCL slope reconstruction is purely spatial). The
+    van Leer limiter is the default for grid-mean energy and tracer vertical
+    transport, set by the `energy_q_tot_upwinding` and `tracer_upwinding`
+    configuration keys.
 
 ### Horizontal differential operators
 
