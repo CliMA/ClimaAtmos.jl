@@ -313,7 +313,7 @@ else
         YAML.load_file(
             joinpath(
                 @__DIR__,
-                "../config/common_configs/numerics_sphere_he16ze63.yml",
+                "../config/common_configs/numerics_sphere_he16ze79.yml",
             ),
         ),
         YAML.load_file(

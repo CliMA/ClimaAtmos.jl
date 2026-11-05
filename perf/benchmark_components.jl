@@ -1,7 +1,7 @@
 #=
 Component-level GPU timing and equivalence harness for the 3D cubed-sphere AMIP
-target configuration (`numerics_sphere_he16ze63.yml` + `amip_target.yml`:
-`HELEM = 16`, `Nq = 4`, `Nv = 63`, `NonEquilibriumMicrophysics1M`,
+target configuration (`numerics_sphere_he16ze79.yml` + `amip_target.yml`:
+`HELEM = 16`, `Nq = 4`, `Nv = 79`, `NonEquilibriumMicrophysics1M`,
 `PrognosticEDMFX`, `ManualSparseJacobian`).
 
 Usage:
@@ -37,7 +37,7 @@ include(joinpath(@__DIR__, "run-and-time", "models", "implicit_tendency.jl"))
 function atmos_config_for(::Type{FT}) where {FT}
     config_path = joinpath(pkgdir(CA), "config")
     config_files = [
-        joinpath(config_path, "common_configs", "numerics_sphere_he16ze63.yml"),
+        joinpath(config_path, "common_configs", "numerics_sphere_he16ze79.yml"),
         joinpath(config_path, "longrun_configs", "amip_target.yml"),
     ]
     configs = map(config_files) do f
@@ -514,7 +514,7 @@ end
 function main()
     device = ClimaComms.device()
     println(
-        "=== Setting up ClimaAtmos (HELEM=16, Nv=63, FT=$BENCH_FT, device=$(typeof(device))) ===",
+        "=== Setting up ClimaAtmos (HELEM=16, Nv=79, FT=$BENCH_FT, device=$(typeof(device))) ===",
     )
     flush(stdout)
     Random.seed!(1234)

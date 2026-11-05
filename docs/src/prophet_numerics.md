@@ -385,8 +385,20 @@ r = \frac{1}{\gamma \Delta t} \sum_\mu \Delta q_\mu ,
 the change of each draft condensate by sedimentation in one linearized
 backward-Euler step from the Picard-converged tracers, at the stage-start
 area. The flux through each face comes from the cell above, so the operator is
-upper bidiagonal and each column is solved in one top-to-bottom sweep. The
-stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
+upper bidiagonal and each column is solved in one top-to-bottom sweep. For
+``q_{\mathrm{rai}}`` and ``q_{\mathrm{sno}}`` (mass) and ``n_{\mathrm{rai}}``
+(2M number), the super-diagonal uses the running column max of the terminal
+velocity at and above each cell (`fill_column_max!`) instead of the pointwise
+``w^n``. This keeps the super-diagonal nonzero at the leading edge of a
+precipitation shaft, where the pointwise ``w(q^n \approx 0)`` would collapse
+and pile the whole Newton step into the first empty cell below the shaft; one
+Newton iteration therefore carries the mass (or number) across multiple empty
+cells at Courant numbers above one. The grid-mean sedimentation Jacobian
+(`update_sedimentation_jacobian!`) uses the same substitution, so both solves
+agree on where the species goes. Cloud liquid, cloud ice, and
+``n_{\mathrm{lcl}}`` fall slowly enough that the pointwise stencil is stable
+and keep it. The lateral-mixing diagonal keeps the pointwise ``w^n``.
+The stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
 the condensate, so the mass the draft gains matches the dilution
 ``\chi^j S / \hat{\rho}^j`` that it applies, also at Courant numbers above
 one, where the condensate that arrives over the stage differs from the

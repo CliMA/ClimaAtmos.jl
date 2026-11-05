@@ -76,6 +76,25 @@ long as it is small but safely above underflow.
 ϵ_numerics(FT) = cbrt(floatmin(FT))
 
 """
+    fill_column_max!(ᶜw_max, ᶜw)
+
+Fill `ᶜw_max[i]` with the running maximum of `ᶜw` over the levels at and above
+cell `i` (`max_{j ≥ i} ᶜw[j]`), using one top-down sweep of
+`Operators.column_accumulate!`. At the top this is just `ᶜw[top]`; at the
+bottom it is the full column max. Used by the implicit sedimentation
+Jacobian (`update_sedimentation_jacobian!`, `update_sgs_advection_jacobian!`)
+as a cheap overestimate of the upwind-donor rain velocity that stays nonzero
+wherever rain exists anywhere above the current cell — enough to keep the
+receiver-cell super-diagonal from collapsing without the cost of a second
+sweep to flatten the result to a true scalar column max. Device-portable
+(CPU/GPU).
+"""
+function fill_column_max!(ᶜw_max, ᶜw)
+    Operators.column_accumulate!(max, ᶜw_max, ᶜw; reverse = true)
+    return nothing
+end
+
+"""
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Update the grid-mean precipitation terminal velocities and cloud sedimentation
