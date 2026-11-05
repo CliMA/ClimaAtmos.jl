@@ -935,8 +935,8 @@ Return the backward-Euler TOFD damping rate `r / (1 + r·dt)` [s⁻¹], with `r 
 
 The tendency `−tofd_implicit_rate(Cd, |U|, dt)·u` is the increment of the linearized
 implicit update `u⁺ = u / (1 + r·dt)` divided by `dt`. It equals the explicit drag
-`−Cd·|U|·u` when `r·dt ≪ 1` and saturates at `−u/dt` when `r·dt ≫ 1`, so one step can
-bring the wind to rest but never reverse it, however large `Cd` is.
+`−Cd·|U|·u` when `r·dt ≪ 1` and saturates at `−u/dt` when `r·dt ≫ 1`, so one forward-Euler
+step can bring the wind to rest but never reverse it, however large `Cd` is.
 
 # Arguments
 

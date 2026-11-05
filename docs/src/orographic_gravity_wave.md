@@ -192,7 +192,7 @@ Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are empirical shape paramete
 
 ### Saturation profiles for the propagating component
 
-Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer $[z_{\text{pbl}}, z_{\mathrm{ref}})$ (see [Non-propagating component](#Non-propagating-component) below).
+Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer, from the first cell above the PBL-top cell up to $z_{\mathrm{ref}}$ (see [Non-propagating component](#Non-propagating-component) below).
 
 The vertical profile of saturated momentum flux $\tau_{\mathrm{sat}}$ is computed such that the momentum forcing follows from $d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{\mathrm{sat}}/dz$.
 
@@ -276,20 +276,39 @@ Here, $(\tau_x, \tau_y, \tau_l)$ is computed in the base flux calculation, and $
 
 #### Non-propagating component
 
-The non-propagating drag is confined to a finite layer above the PBL top, bounded above by a reference level $z_{\mathrm{ref}}$. To locate $z_{\mathrm{ref}}$, we iterate over face levels above $z_{\text{pbl}}$ and accumulate a wave phase
+The non-propagating drag is confined to a finite layer above the PBL, bounded above by a reference level $z_{\mathrm{ref}}$. Its lowest cell is the cell just above the PBL-top cell (the cell whose center is $z_{\text{pbl}}$), so no PBL cell gets blocked drag. This follows GFDL `topo_drag`, whose `get_pbl` sets `kpbl` to the first level above the PBL and whose blocked drag goes into the levels from `kref` down to `kpbl`. If no level above the lowest one passes the PBL test, $z_{\text{pbl}}$ is the lowest cell center and the blocked layer starts in the second cell, as with the GFDL fallback `kpbl = kdim - 1`.
+
+To locate $z_{\mathrm{ref}}$, we start at $z_{\mathrm{start}}$, the top face of the lowest blocked cell (GFDL `zhalf(kpbl)`), iterate over the face levels above it, and accumulate a wave phase
 
 ```math
 \mathrm{phase} \mathrel{+}= ({}^fz[k] - {}^fz[k-1]) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
 ```
 
-with ${}^fz[k-1]$ replaced by $z_{\text{pbl}}$ for the first face above the PBL top, and
-setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. The pressure weighting below still concentrates most of the drag near the surface.
+with ${}^fz[k-1] = z_{\mathrm{start}}$ for the first face above $z_{\mathrm{start}}$, and
+setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Each layer uses ${}^fN$ and ${}^fV_{\tau}$ at its upper face. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, or $z_{\mathrm{start}}$ is the model top face, $z_{\mathrm{ref}}$ is the model top face. If the PBL-top cell is the top cell, there is no cell above it and the column gets no blocked drag; this cannot happen in practice, because the PBL search only accepts levels with at least half the surface pressure. The pressure weighting below still concentrates most of the drag near the surface.
 
-In this section $z_{\text{pbl}}$ is the bottom face of the PBL-top cell, the highest face at or below the PBL-top cell center found above. The first layer in the phase sum is therefore the PBL-top cell itself, which is also the lowest cell of the blocked layer, as in GFDL `topo_drag`, which sums the phase layer by layer from the PBL-top level. Each layer uses ${}^fN$ and ${}^fV_{\tau}$ at its upper face.
+The phase sum here differs slightly from GFDL `topo_drag`, so the top of the blocked layer can differ from GFDL's by up to one cell.
+
+!!! details "Comparison with GFDL"
+
+    Both codes add up the phase going upward from the same height, the top face of the first cell above the PBL-top cell (GFDL `zhalf(kpbl)`). They differ in where each step lands and in how the top of the blocked layer is picked. For example, with 250 m cells, a PBL-top cell at 750–1000 m, and the first blocked cell at 1000–1250 m:
+
+    |                          | ClimaAtmos                                   | GFDL                                                                                           |
+    |:------------------------ |:-------------------------------------------- |:---------------------------------------------------------------------------------------------- |
+    | start                    | 1250 m (a face)                              | 1250 m (the same face)                                                                         |
+    | steps land on            | faces: 1500, 1750, 2000 m, …                 | cell centers: 1625, 1875, 2125 m, …                                                            |
+    | first step               | 1250 → 1500 m (one cell)                     | 1250 → 1625 m (one and a half cells, past the center at 1375 m)                                |
+    | $N$ and $V_\tau$         | at the top face of each step                 | from the two cell centers of each step                                                         |
+    | top of the blocked layer | the face where the phase first exceeds $\pi$ | the top face of the cell holding the lower center of the step that crosses $\pi$ (GFDL `kref`) |
+
+    Two cases show how the tops compare:
+
+     1. The phase exceeds $\pi$ at 4392 m. ClimaAtmos picks 4500 m, the next face up. GFDL's crossing step runs from 4375 to 4625 m, its lower center lies in the 4250–4500 m cell, so GFDL also picks 4500 m.
+     2. The phase exceeds $\pi$ at 4550 m. ClimaAtmos picks 4750 m. GFDL's crossing step is still 4375 → 4625 m, so GFDL still picks 4500 m, one cell lower.
 
 Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes a single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ keep the wavenumber physical so the layer depth stays sensible.
 
-The drag forcing due to the non-propagating component is confined between the PBL top and $z_{\mathrm{ref}}$ and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
+The drag forcing due to the non-propagating component is confined to the blocked layer and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
 
 ```math
 \mathrm{weight}[k] = \overline{{}^f p - {}^f p_{\mathrm{ref}}}^c,
@@ -313,7 +332,7 @@ which is the GFDL `topo_drag` normalization (`wtsum += dp*weight`). Dividing the
 forcing by this sum conserves the column-integrated blocked stress:
 $\sum_k (\partial u/\partial t)_k \,\mathrm{diff}[k]/g = \tau_x\,\tau_{np}/\tau_l$.
 
-The mask selects cells that overlap with the interval $[z_{\text{pbl}}, z_{\mathrm{ref}})$ and have nonzero weights.
+The mask selects the cells from the lowest blocked cell (top face at $z_{\mathrm{start}}$) up to the cell whose top face is $z_{\mathrm{ref}}$, and drops cells with zero weight. The lowest blocked cell is always selected, so the mask is empty only when there is no cell above the PBL-top cell.
 
 For masked levels, the forcing due to the non-propagating component is
 
@@ -325,7 +344,7 @@ For masked levels, the forcing due to the non-propagating component is
 {}^c \left( \frac{dv}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{\mathrm{weight}[k]}{wtsum} \tau_y,
 ```
 
-where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calculation. When the mask is empty ($wtsum = 0$, i.e. no cells overlap $[z_{\text{pbl}}, z_{\mathrm{ref}})$), the non-propagating forcing is set to zero in that column to avoid division by zero.
+where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calculation. When the mask is empty ($wtsum = 0$, i.e. no cell above the PBL-top cell), the non-propagating forcing is set to zero in that column to avoid division by zero.
 
 ### Turbulent orographic form drag (TOFD)
 
@@ -390,7 +409,7 @@ r = C_d(z)\, |\mathbf{u}|,
 
 evaluated with the current wind. The factor is a scalar, so the drag stays
 antiparallel to the flow, and its magnitude saturates at $|\mathbf{u}|/\Delta t$,
-so one step can at most bring the wind to rest. TOFD is not subject to the
+so one forward-Euler step can at most bring the wind to rest. TOFD is not subject to the
 magnitude constraint below.
 
 ### Constrain the forcings
@@ -462,7 +481,9 @@ TOFD input, at initialization when a_tofd > 0 (Earth orography only):
 Every dt_ogw seconds:
   ogw_model_callback!
     └─ orographic_gravity_wave_compute_tendency!
-        ├─ Compute N(z) and face pressure, find z_pbl
+        ├─ Compute N(z) and face pressure
+        ├─ get_pbl_z!                   → z_pbl, center of the PBL-top cell
+        ├─ blocked_layer_start_height!  → z_start, top face of the cell above it
         ├─ calc_base_flux!              → τ_x, τ_y, τ_l, τ_p, τ_np
         ├─ calc_saturation_profile!     → τ_sat(z)
         ├─ calc_propagate_forcing!      → propagating tendency

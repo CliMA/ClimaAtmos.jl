@@ -1163,6 +1163,11 @@ spacing `R·Δλ·cos φ` of each latitude row (periodic), then along latitude w
 `R·Δφ` (edge values repeated at the poles). The longitude half-width is capped at a quarter of
 the row (`nlon ÷ 8` points each side) near the poles, where a fixed physical width spans a
 large part of the latitude circle; those rows cover a negligible area.
+
+The two separable passes give a square footprint, whereas the IFS operator and Beljaars et
+al. (2004, Eq. A.1) are radially symmetric in `r`. The constants `I_H` and `k_flt` in
+`tofd_drag_coefficient!` were computed for the radially symmetric filter, so the effective
+band of this one can differ slightly.
 """
 function smooth_ifs_latlon(elev, lon, lat, earth_radius, Δ, δ)
     FT = eltype(elev)
@@ -1216,6 +1221,11 @@ the difference is squared. The band pass keeps horizontal scales of roughly 3 to
 (half wavelengths). Its integral `I_H` and representative wavenumber `k_flt` are the
 constants used in `tofd_drag_coefficient!`. Averaging the result over a model grid box
 gives `σ_flt²` there.
+
+The IFS and Beljaars et al. (2004) filter 30 arc-second (about 1 km) data, on which the 2 km
+pass removes the grid-scale aliasing tail. On 60 arc-second (about 1.85 km) input such as
+ETOPO 2022 the 2 km pass removes little, and the input grid itself sets the small-scale
+cutoff of the band.
 
 `elev` is indexed `[lon, lat]` and is not modified.
 """
