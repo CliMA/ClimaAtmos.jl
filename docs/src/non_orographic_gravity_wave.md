@@ -242,21 +242,22 @@ Every dt_nogw seconds:
         │       │     u_heat, v_heat, N_source
         │       ├─ Activate if grid-mean amplitude > threshold AND h > h_min
         │       └─ Set per-column Beres launch level = z_top
-        └─ 3. For each horizontal wavenumber k:
-                ├─ AD99 background (always on): Gaussian B₀(c)
-                │     → propagate¹ from AD99 source level → ×intermittency ε
-                │     → accumulate into uforcing, vforcing
-                └─ [Beres configured]: convective B₀(c) from Q₀, h, N
-                      (zero unless column is active)
-                      → propagate¹ from z_top → ×coverage ā at deposition
-                      → ADD into uforcing, vforcing
+        ├─ 3. For each horizontal wavenumber k:
+        │       ├─ AD99 background (always on): Gaussian B₀(c)
+        │       │     → propagate¹ from AD99 source level → ×intermittency ε
+        │       │     → accumulate into uforcing, vforcing
+        │       └─ [Beres configured]: convective B₀(c) from Q₀, h, N
+        │             (zero unless column is active)
+        │             → propagate¹ from z_top → ×coverage ā at deposition
+        │             → ADD into uforcing, vforcing
+        └─ 4. Zero NaN/Inf in uforcing, vforcing and clamp them to ±3e-3 m/s²
            ¹"propagate" = the shared upward-marching kernel (reflection → instability /
             critical-level breaking → model-top + sponge redistribution); identical
             for both sources.
 
 Every dt (integrator step):
   non_orographic_gravity_wave_apply_tendency!
-    └─ Clamp forcing, zero NaN/Inf, apply to wind tendencies
+    └─ Add uforcing, vforcing to the wind tendencies
 ```
 
 ## Where this is implemented

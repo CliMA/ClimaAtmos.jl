@@ -587,45 +587,44 @@ The generic method is a no-op; the `PrognosticEDMFX` method mutates
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
-
-    n = n_mass_flux_subdomains(turbconv_model)
-    (;
-        ᶜturb_entrʲs,
-        ᶜentr_vel_scaleʲs,
-        ᶜentr_nonvel_rateʲs,
+    (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
+        p.precomputed
+    χ_names = sgs_tracer_names(Y)
+    # One fused column loop for every draft and scalar: the environment values
+    # and the entrainment rate of each draft are register temporaries.
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, Fields.local_geometry_field(Y.c), ᶜK, ᶜh_tot,
+        (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
         ᶜarea_bounding_entr_detrʲs,
-        ᶜuʲs,
-    ) = p.precomputed
-
-    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    ᶜlg = Fields.local_geometry_field(Y.c)
-
-    for j in 1:n
-        ᶜentrʲ = @. lazy(
-            compute_entrainment(
+    ) do Yₜc, Yc, ᶜlg, ᶜK, ᶜh_tot,
+    (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
+    ᶜarea_bounding_entr_detrʲs
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        ᶜmse⁰ = @. specific_env_mse(
+            Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model,
+        )
+        ᶜχ⁰s = unrolled_map((@name(q_tot), χ_names...)) do χ_name
+            @inline
+            Base.materialize(ᶜspecific_env_value(χ_name, Yc, ᶜρa⁰, turbconv_model))
+        end
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            ᶜsgsʲ = Yc.sgsʲs.:($j)
+            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶜentr_totʲ = @. compute_entrainment(
                 ᶜentr_vel_scaleʲs.:($$j),
                 ᶜentr_nonvel_rateʲs.:($$j),
                 ᶜarea_bounding_entr_detrʲs.:($$j),
-                get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            ),
-        )
-        ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
-        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-
-        @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
-
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
-
-        # Auto-discovered SGS tracers (microphysics species and any
-        # user-defined passive tracers)
-        for χ_name in sgs_tracer_names(Y)
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-            @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
+                get_physical_w(ᶜuʲ, ᶜlg),
+            ) + ᶜturb_entrʲs.:($$j)
+            @. ᶜsgsʲₜ.mse += ᶜentr_totʲ * (ᶜmse⁰ - ᶜsgsʲ.mse)
+            unrolled_foreach((@name(q_tot), χ_names...), ᶜχ⁰s) do χ_name, ᶜχ⁰
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                @. ᶜχʲₜ += ᶜentr_totʲ * (ᶜχ⁰ - ᶜχʲ)
+            end
         end
     end
     return nothing

@@ -12,7 +12,7 @@
 #   - compute_beres_convective_heating! extracting Q0/h/u_heat/a_cover from
 #     EDMF state across MANY columns (not a single column),
 #   - the gw_ztop Beres source-level column_reduce!,
-#   - the apply-tendency clamp + deposition into Yₜ.c.uₕ.
+#   - the compute-tendency clamp and the apply-tendency deposition into Yₜ.c.uₕ.
 #
 # Heterogeneity is the load-bearing check: the convective heating and the
 # isolated Beres drag must appear ONLY in the active columns, proving the
@@ -214,9 +214,8 @@ import ClimaCore.Geometry as Geometry
         @test all(isfinite, uf_beres)
         @test all(isfinite, vf_beres)
         @test maximum(abs, uf_beres) > 0
-        # Blow-up guard (pre-clamp). 1e-1 m/s² ≈ 8640 m/s/day — absurdly high,
-        # so this only catches order-of-magnitude failures.
-        @test maximum(abs, uf_beres) < 1e-1
+        # The compute step clamps the forcing to ±3e-3 m/s².
+        @test maximum(abs, uf_beres) <= 3e-3 + sqrt(eps(FT))
     end
 
     @testset "Convective heating extracted only in active columns" begin
@@ -253,9 +252,9 @@ import ClimaCore.Geometry as Geometry
         @test max_inactive <= 1e-6 * max_active
     end
 
-    @testset "Tendency application clamps and deposits into Yₜ" begin
-        # uforcing currently holds the full-Beres result. apply_tendency clamps
-        # it to ±3e-3 m/s² in place and adds it to Yₜ.c.uₕ.
+    @testset "Tendency application deposits the clamped forcing into Yₜ" begin
+        # uforcing currently holds the full-Beres result, which the compute step
+        # clamped to ±3e-3 m/s². apply_tendency adds it to Yₜ.c.uₕ.
         Yₜ = zero(Y)
         CA.non_orographic_gravity_wave_apply_tendency!(
             Yₜ,
