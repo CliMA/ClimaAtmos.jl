@@ -942,3 +942,56 @@ end
     )
     @test bsp.heating_latent == false
 end
+
+@testset "Semi-implicit orographic gravity-wave drag damping" begin
+    for FT in (Float32, Float64)
+        u_vec = CA.Geometry.UVWVector(FT(10.0), FT(-5.0), FT(0.0))
+
+        # Small dt d / s limit reproduces the explicit drag.
+        du_small = FT(-1e-4)
+        dv_small = FT(5e-5)
+        d_si_small = CA._semi_implicit_gw_drag(du_small, dv_small, u_vec, FT(1.0))
+        @test d_si_small.u ≈ du_small rtol = FT(1e-4)
+        @test d_si_small.v ≈ dv_small rtol = FT(1e-4)
+
+        # Stiff opposing drag (|D_∥| dt ≫ |u|) cannot reverse the parallel
+        # wind in one step, while the perpendicular component D_⊥ is unchanged.
+        dt_large = FT(360.0)
+        # Purely parallel opposing drag (-2, 1) + perpendicular drag (1, 2).
+        du_stiff = FT(-1.0)
+        dv_stiff = FT(3.0)
+        d_si_stiff =
+            CA._semi_implicit_gw_drag(du_stiff, dv_stiff, u_vec, dt_large)
+        u_next = FT(10.0) + dt_large * d_si_stiff.u
+        v_next = FT(-5.0) + dt_large * d_si_stiff.v
+        @test u_next * FT(10.0) + v_next * FT(-5.0) > 0
+        @test d_si_stiff.u * FT(-5.0) - d_si_stiff.v * FT(10.0) ≈
+              du_stiff * FT(-5.0) - dv_stiff * FT(10.0) rtol = FT(1e-5)
+
+        # The same holds for a weak wind: the damped parallel deceleration is
+        # below s / dt for every s > 0.
+        u_weak = CA.Geometry.UVWVector(FT(1e-3), FT(-5e-4), FT(0.0))
+        d_si_weak =
+            CA._semi_implicit_gw_drag(du_stiff, dv_stiff, u_weak, dt_large)
+        u_next = FT(1e-3) + dt_large * d_si_weak.u
+        v_next = FT(-5e-4) + dt_large * d_si_weak.v
+        @test u_next * FT(1e-3) + v_next * FT(-5e-4) > 0
+        @test d_si_weak.u * FT(-5e-4) - d_si_weak.v * FT(1e-3) ≈
+              du_stiff * FT(-5e-4) - dv_stiff * FT(1e-3) rtol = FT(1e-4)
+
+        # Accelerating component (D ⋅ uₕ ≥ 0) is left unchanged.
+        d_acc = CA._semi_implicit_gw_drag(FT(2.0), FT(-1.0), u_vec, dt_large)
+        @test d_acc.u == FT(2.0)
+        @test d_acc.v == FT(-1.0)
+
+        # Zero and subnormal winds return the explicit drag, finite.
+        for w in (FT(0), floatmin(FT) / 4)
+            u_zero = CA.Geometry.UVWVector(w, w, FT(0.0))
+            d_si_zero =
+                CA._semi_implicit_gw_drag(du_stiff, dv_stiff, u_zero, dt_large)
+            @test isfinite(d_si_zero.u) && isfinite(d_si_zero.v)
+            @test d_si_zero.u == du_stiff
+            @test d_si_zero.v == dv_stiff
+        end
+    end
+end

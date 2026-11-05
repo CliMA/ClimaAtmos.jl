@@ -260,6 +260,28 @@ The redistribution is skipped when $\tau_{\mathrm{sat}}[\mathrm{end}] \le 0$.
 
 ### Velocity tendencies due to the orographic drag
 
+When `orographic_gravity_wave_apply_tendency!` applies the cached drag vector
+$\boldsymbol{D} = ({}^c\mathrm{uforcing}, {}^c\mathrm{vforcing})$ to the
+horizontal momentum tendency at each step, its decelerating component parallel
+to the horizontal wind $\boldsymbol{u}_h = (u, v)$ is damped by a
+backward-Euler factor. With $s = |\boldsymbol{u}_h|$,
+$\hat{\boldsymbol{u}} = \boldsymbol{u}_h / s$, and the deceleration along the
+wind $d = \max(0, -\boldsymbol{D} \cdot \hat{\boldsymbol{u}})$,
+
+```math
+\boldsymbol{D}_{\mathrm{eff}} = \boldsymbol{D}_{\perp} + \frac{\boldsymbol{D}_{\parallel}}{1 + \Delta t \, d / s}
+= \boldsymbol{D}_{\perp} - \hat{\boldsymbol{u}} \, \frac{d \, s}{s + \Delta t \, d},
+\qquad
+\boldsymbol{D}_{\parallel} = -d \, \hat{\boldsymbol{u}}.
+```
+
+The damped parallel deceleration is below $s / \Delta t$ for every $s > 0$, so
+a single timestep cannot reverse the horizontal wind at any wind speed; the
+perpendicular turning component $\boldsymbol{D}_{\perp}$ and any accelerating
+component are unchanged, and the form has no tunable parameter. As $s \to 0^+$
+with opposing drag, $\boldsymbol{D}_{\mathrm{eff}} \to \boldsymbol{D}_{\perp}$;
+at $s = 0$ the drag is applied as is.
+
 #### Propagating component
 
 The forcing from the propagating part on the zonal and meridional wind are
