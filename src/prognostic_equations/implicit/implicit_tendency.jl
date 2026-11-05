@@ -269,8 +269,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, Yc.ρ))
             @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))
+            # The donor-cell sedimentation flux leaves a negative cell at
+            # zero, so a negative excursion stays in the cell that produced it
+            # and is filled by the inflow from above, whose donor value does
+            # not depend on the receiving cell. The column-max Jacobian
+            # velocity keeps the linearization a bounded over-estimate of this
+            # sink where the clamp is active.
             @. ᶜρχₜ -= ᶜprecipdivᵥ(
-                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜχ))),
+                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific_nonneg(ᶜρχ, Yc.ρ)))),
             )
         end
 
@@ -454,27 +460,48 @@ for `Val(:first_order)` and `Val(:none)`.
 ) = nothing
 
 """
+    post_newton_stage_update!(Yₜ, Y, p, t)
+
+The `T_post_imp!` hook of `ClimaODEFunction`, which
+`ClimaTimeSteppers.solve_stage_implicit!` invokes once per implicit stage at the
+Newton-solved state `Y = U*` and applies as `U ← U* + dtγ · Yₜ`. Accumulates
+the stage-weighted bottom-face sedimentation fluxes
+(`accumulate_stage_precipitation_surface_fluxes!`, which advances
+`p.scratch.precip_stage_idx[]`) and then overwrites `Yₜ` with
+`correct_implicit_advection_tendency!`. The accumulation lives here, outside
+`correct_implicit_advection_tendency!`, so that sampling the tendency
+diagnostics leaves the stage counter in phase. Returns `nothing`.
+"""
+function post_newton_stage_update!(Yₜ, Y, p, t)
+    accumulate_stage_precipitation_surface_fluxes!(
+        Y,
+        p,
+        p.atmos.microphysics_model,
+    )
+    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
-Accumulate the stage-weighted bottom-face sedimentation fluxes at the
-Newton-solved stage state `Y = U*` and apply the Courant-limited post-Newton
-upwind dissipation to the central implicit vertical advection of `ρe_tot` and
-`ρq_tot` in `implicit_vertical_advection_tendency!`. Called by
-ClimaTimeSteppers as the `T_post_imp!` hook on `ClimaODEFunction`, which
-`solve_stage_implicit!` invokes once per implicit stage at `U*` and applies as
-`U ← U* + dtγ · Yₜ`.
+Apply the Courant-limited post-Newton upwind dissipation to the central
+implicit vertical advection of `ρe_tot` and `ρq_tot` in
+`implicit_vertical_advection_tendency!`, evaluated at the Newton-solved stage
+state `Y = U*`. Called by `post_newton_stage_update!` and by the tendency
+diagnostics; it leaves `p` unchanged.
 
 Overwrites `Yₜ` with the face-wise Courant-damped upwind correction
 `-∂ᵥ(ρ min(1, 1 / C_γ) (F_upwind - u³ ᶠinterp(χ)))` for `ρe_tot` and `ρq_tot`
-(using `energy_q_tot_upwinding`). Because `ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)`
-vanishes identically on smooth linear profiles, smooth acoustic and baroclinic
-modes remain untouched while inversions receive Courant-bounded upwind
-dissipation. When `tracer_upwinding` is `Val(:vanleer_limiter)` or
-`Val(:third_order)`, the sedimenting microphysics tracers
-(`sedimenting_tracer_names(Y)`) receive the Courant-limited antidiffusive
-correction (`ᶠF_upwind - ᶠupwind1`), while `ρtke` stays on unconditionally
-monotone `ᶠupwind1` inside `implicit_vertical_advection_tendency!` and requires
-no post-Newton correction. All other fields of `Yₜ` are zero. Returns `nothing`.
+(using `energy_q_tot_upwinding`). For `Val(:vanleer_limiter)`,
+`ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)` vanishes on linear profiles, so smooth
+acoustic and baroclinic modes receive no dissipation, and inversions receive
+Courant-bounded upwind dissipation. When `tracer_upwinding` is
+`Val(:vanleer_limiter)` or `Val(:third_order)`, the sedimenting microphysics
+tracers (`sedimenting_tracer_names(Y)`) receive the Courant-limited
+antidiffusive correction (`ᶠF_upwind - ᶠupwind1`); `ρtke` keeps the monotone
+`ᶠupwind1` transport of `implicit_vertical_advection_tendency!` and receives no
+correction. All other fields of `Yₜ` are zero. Returns `nothing`.
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
