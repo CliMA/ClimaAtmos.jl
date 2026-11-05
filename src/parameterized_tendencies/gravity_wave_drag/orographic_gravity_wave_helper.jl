@@ -1144,10 +1144,15 @@ Used by `smooth_ifs_latlon`.
 function ifs_smoothing_weights(Δx, Δ, δ, J_max)
     FT = typeof(Δx)
     J = min(ceil(Int, (Δ / 2 + δ) / Δx), J_max)
-    w = map((-J):J) do j
+    # A plain loop rather than a closure over FT: a closure capturing FT is not
+    # inferred, which makes the returned weights, and every multiply-add over them in
+    # smooth_ifs_latlon, dynamically typed.
+    w = Vector{FT}(undef, 2J + 1)
+    for (n, j) in enumerate((-J):J)
         r = abs(j * Δx)
-        r < Δ / 2 - δ ? FT(1) :
-        r < Δ / 2 + δ ? (1 + cos(FT(π) * (r - Δ / 2 + δ) / (2 * δ))) / 2 : FT(0)
+        w[n] =
+            r < Δ / 2 - δ ? FT(1) :
+            r < Δ / 2 + δ ? (1 + cos(FT(π) * (r - Δ / 2 + δ) / (2 * δ))) / 2 : FT(0)
     end
     return w ./ sum(w)
 end
