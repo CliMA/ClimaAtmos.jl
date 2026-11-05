@@ -48,6 +48,12 @@ Called from `compute_beres_convective_heating!` when `heating_latent` is enabled
     q_rai,
     q_sno,
 )
+    FT = typeof(ρ)
+    q_lcl = max(zero(FT), q_lcl)
+    q_icl = max(zero(FT), q_icl)
+    q_rai = max(zero(FT), q_rai)
+    q_sno = max(zero(FT), q_sno)
+    q_tot = max(zero(FT), q_tot, q_lcl + q_icl + q_rai + q_sno)
     src_bulk = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
         BMT.Microphysics1Moment(),

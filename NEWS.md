@@ -33,6 +33,16 @@ main
   converted with `cp_d`, so potential temperature relaxes at the published
   rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
   changes the `held_suarez_equil` reference.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
+  `set_implicit_precomputed_quantities_core!` at the explicit predictor state
+  entering `initialize_implicit_stage_problem!`, clamp the stage-entry
+  grid-mean condensates to `[0, ρq_tot]` and updraft `ρa` to `[0, a_max ρʲ]`,
+  diagnose the entrained environment in the Picard tracer sweep from the
+  stage-start draft snapshot, evaluate the analytic updraft area predictor with
+  a two-pass `solve_sgs_ρa_two_pass!` sweep inside and after the Picard loop,
+  and update `ρq_tot` incrementally in `warm_start_grid_mean_tracers!` (matching
+  `ρe_tot`) so centered implicit vertical advection `-∂ᵥ(ρ u³ q_tot)` sees the
+  stage-entering profile when the updraft increment vanishes.
 - ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
   explicit `OrographicGravityWave` drag with backward-Euler damping
   (`D_∥ / (1 + dt d / |uₕ|)`, `d = max(0, -D ⋅ û)`), which keeps one step from
