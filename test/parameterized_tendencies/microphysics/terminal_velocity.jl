@@ -29,7 +29,7 @@ import ClimaCore.MatrixFields: @name
                 (; water) = make_water(Dict())
                 @test water.terminal_velocity_liquid isa CA.FixedTerminalVelocity
                 @test water.terminal_velocity_ice isa CA.FixedTerminalVelocity
-                @test water.terminal_velocity_rain isa CA.FixedTerminalVelocity
+                @test water.terminal_velocity_rain isa CA.Chen2022TerminalVelocity
                 @test water.terminal_velocity_snow isa CA.Chen2022TerminalVelocity
 
                 (; water) = make_water(

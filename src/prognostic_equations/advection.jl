@@ -681,8 +681,15 @@ Where `∂a/∂z ≥ 0`, `vtt = a ∂_z(ρwχ)`; where `∂a/∂z < 0`,
 positive, `∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a)`, so the lateral term contributes
 `dtγ ∂a/∂z a ρʲ wʲ / (1 - a)` to the diagonal; where the clamp is active, its
 derivative is zero. The flux through each face comes from the cell above, so
-`ᶜM` is upper bidiagonal. `ᶜ∂a∂z` is the area gradient of
-`updraft_sedimentation!`. Writes `ᶠsed_tracer_advection` in `p.scratch`. Called from
+`ᶜM` is upper bidiagonal. For `q_rai`, `q_sno`, and `n_rai` the face stencil
+uses the running column max of `ᶜwʲ` (into `p.scratch.ᶜtemp_scalar_3`)
+instead of the pointwise value, so the super-diagonal does not collapse at
+the leading edge where the species is empty and one Newton step carries the
+sedimenting mass or number across multiple cells at CFL > 1; cloud liquid,
+cloud ice, and cloud-liquid number keep pointwise `ᶜwʲ`. The lateral-mixing
+diagonal keeps pointwise `ᶜwʲ`. `ᶜ∂a∂z` is the area gradient of
+`updraft_sedimentation!`. Writes `ᶠsed_tracer_advection` (and, for the
+column-maxed species, `ᶜtemp_scalar_3`) in `p.scratch`. Called from
 `updraft_sedimentation_rate!`; the column loop of `update_sgs_advection_jacobian!`
 builds the same operator.
 """
@@ -702,6 +709,22 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
         p.precomputed,
         sgs_sedimentation_velocity_name(χ_name),
     )
+    # For rain mass, snow mass, and rain number, route the face stencil
+    # through the running column max of `ᶜwʲ` so the super-diagonal does not
+    # collapse at the leading edge where the species is empty; cloud liquid,
+    # cloud ice, and cloud-liquid number keep pointwise `ᶜwʲ`. Must match
+    # `update_sgs_advection_jacobian!`. `ᶜtemp_scalar_3` is free in this call
+    # path (the caller `solve_sgs_ρa_implicit_stage_analytic!` only writes it
+    # later as `ᶜmass_flux_factor_bot`).
+    ᶜwʲ_jac =
+        if χ_name == @name(q_rai) ||
+           χ_name == @name(q_sno) ||
+           χ_name == @name(n_rai)
+            fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwʲ)
+            p.scratch.ᶜtemp_scalar_3
+        else
+            ᶜwʲ
+        end
     ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
     ρχ_name = get_ρχ_name(χ_name)
     ᶜρχ_gs = MatrixFields.get_field(Y.c, ρχ_name)
@@ -720,7 +743,7 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     @. ᶠsed_tracer_advection =
         DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
         ᶠtop_bias_matrix() *
-        DiagonalMatrixRow(-(ᶜwʲ))
+        DiagonalMatrixRow(-(ᶜwʲ_jac))
     ᶠsed = @. lazy(DiagonalMatrixRow(CT3(p.core.ᶠ∂ξ³∂x³)) * ᶠsed_tracer_advection)
     @. ᶜM =
         dtγ * ifelse(ᶜ∂a∂z < 0,

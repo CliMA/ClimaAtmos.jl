@@ -15,8 +15,9 @@ microphysics_model: "1M"
 config: "column"
 hyperdiff: ~
 z_max: 3750
-z_elem: 75
-z_stretch: false
+z_elem: 45
+dz_bottom: 28.0
+dz_top: 450.0
 perturb_initstate: false
 dt: "5secs"
 t_end: "8hours"

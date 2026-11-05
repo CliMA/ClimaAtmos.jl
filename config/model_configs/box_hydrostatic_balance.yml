@@ -7,4 +7,3 @@ disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [wa, ua]
     period: 1days
-z_stretch: false

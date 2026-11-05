@@ -135,7 +135,7 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
 #### Column configurations
 
-  - **[`numerics_column_ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze63.yml)**: Single column configuration with 63 vertical levels
+  - **[`numerics_column_ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze79.yml)**: Single column configuration with 79 vertical levels
 
 #### Sphere configurations
 
@@ -143,11 +143,11 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
   - **[`numerics_sphere_he6ze31.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he6ze31.yml)**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-  - **[`numerics_sphere_he16ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he16ze63.yml)**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he16ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he16ze79.yml)**: Spherical configuration with 16 horizontal elements (206km), 79 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
   - **[`numerics_sphere_he30ze43.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze43.yml)**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-  - **[`numerics_sphere_he30ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze63.yml)**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he30ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze79.yml)**: Spherical configuration with 30 horizontal elements (110km), 79 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
 #### Diagnostics configurations for PROPHET columns
 
@@ -165,7 +165,7 @@ Common configurations are designed to be combined with model-specific configurat
 import ClimaAtmos as CA
 
 config = CA.AtmosConfig([
-    "config/common_configs/numerics_sphere_he16ze63.yml",
+    "config/common_configs/numerics_sphere_he16ze79.yml",
     "config/model_configs/your_model_config.yml",
 ])
 simulation = CA.AtmosSimulation(config)

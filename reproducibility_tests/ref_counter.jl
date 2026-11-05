@@ -1,4 +1,4 @@
-455
+458
 
 # **README**
 #
@@ -32,7 +32,7 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
-455
+458
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
   `topo_drag`) with each cell's own pressure thickness (hydrostatic pressures on
@@ -43,6 +43,29 @@
   and the turbulent
   orographic form drag (IFS form) is on by default. Changes the output of
   `aquaplanet_equil_allsky_gw_raw`.
+
+457
+- The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
+  so rain now falls at the state-dependent Chen et al. (2022) speed by
+  default, matching snow.
+- The implicit sedimentation Jacobian for rain and snow (`ρq_rai`, `ρq_sno`,
+  and the first-updraft `q_rai`, `q_sno` under `PrognosticEDMFX`) uses the
+  running column max of the species' terminal velocity in the derivative
+  instead of the pointwise `w(q^n)`, so one Newton iteration carries
+  rain/snow across multiple cells at CFL > 1. Tendency unchanged. Cloud
+  liquid and cloud ice keep the pointwise `w`.
+
+456
+- Added smooth maximum on rain and snow sedimentation velocity. This changes
+  SCM TRMM results
+
+455
+- `numerics_sphere_he6ze10.yml` stretches its 10 levels with `dz_top: 6500.0`,
+  `prognostic_edmfx_aquaplanet` takes the 31-level grid of
+  `numerics_sphere_he6ze31.yml`, and the single-column CI jobs on
+  `numerics_column_ze63.yml` use `numerics_column_ze79.yml`.
+- The prognostic EDMF column cases use stretched grids whose spacing follows
+  `numerics_column_ze79.yml` up to their own `z_max`.
 
 454
 - `implicit_microphysics: true` (default) now additionally routes 1M
