@@ -1563,25 +1563,77 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     mass_names = sediments ? sedimenting_sgs_mass_names(Y) : ()
     mse_cols = unrolled_map(∂ᶜmseʲ_∂ᶜχʲ, mass_names)
 
-    # Advection of every updraft scalar in one column loop. These diagonals are
-    # assigned; the sedimentation loops below accumulate into them, and into the
-    # (mse, q_μ) blocks, which are zeroed here. With sedimenting condensate, the
-    # mse diagonal starts from zero, so that it holds the sedimentation part when
-    # the last loop below adds the advection part (the q_tot diagonal) to it.
+    # The running column max of the terminal velocity of rain mass, snow mass,
+    # and rain number, the face flux velocity of their sedimentation operators
+    # (`updraft_sedimentation_matrix`), so that the super-diagonal does not
+    # collapse where the species is empty; the other species, and the lateral
+    # diagonals, use the pointwise velocity. The scratch fields are free after
+    # `update_diffusion_jacobian!`.
+    ᶜw_max(χ_name) =
+        χ_name == @name(q_rai) ? p.scratch.ᶜtemp_scalar_3 :
+        χ_name == @name(q_sno) ? p.scratch.ᶜtemp_scalar_4 :
+        χ_name == @name(n_rai) ? p.scratch.ᶜtemp_scalar_5 : nothing
+    # (diagonal, ᶜχʲ, ᶜρχ, ᶜwʲ, face flux velocity, ᶜw_gs, mass blocks) of each
+    # sedimenting species, where the mass blocks of a condensate are its (q_tot,
+    # χ) and (mse, χ) blocks
+    species = unrolled_map(sed_names) do χ_name
+        ᶜwʲ = MatrixFields.get_field(
+            p.precomputed,
+            sgs_sedimentation_velocity_name(χ_name),
+        )
+        ᶜwʲ_max = ᶜw_max(χ_name)
+        isnothing(ᶜwʲ_max) || fill_column_max!(ᶜwʲ_max, ᶜwʲ)
+        ρχ_name = get_ρχ_name(χ_name)
+        (
+            sgs_diag(χ_name),
+            MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name),
+            MatrixFields.get_field(Y.c, ρχ_name),
+            ᶜwʲ,
+            something(ᶜwʲ_max, ᶜwʲ),
+            MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name)),
+            isnothing(condensate_phase(χ_name)) ? () :
+            (
+                matrix[@name(c.sgsʲs.:(1).q_tot), sgs_state_name(χ_name)],
+                ∂ᶜmseʲ_∂ᶜχʲ(χ_name),
+            ),
+        )
+    end
+    thermo_inputs =
+        isempty(mass_names) ? () :
+        (
+            ᶜTʲs.:(1), ᶜT⁰, ᶜΦ, ᶜq_tot_nonnegʲs.:(1), ᶜq_liqʲs.:(1),
+            ᶜq_iceʲs.:(1),
+        )
+
+    # One column loop: the advection of every updraft scalar, then the
+    # sedimentation of each microphysics tracer (in the order of
+    # `sedimenting_sgs_tracer_names`), with the updraft area, its gradient, and
+    # the regularized inverse density shared by the species, and then the
+    # dependence of the sedimentation fluxes on the condensates through the
+    # enthalpy. The advection part assigns the diagonals, which the
+    # sedimentation part accumulates into, and zeroes the (mse, q_μ) blocks;
+    # with sedimenting condensate, the mse diagonal starts from zero, so that it
+    # holds the sedimentation part when the advection part is added at the end.
     DataLayouts.foreach_column(
         sgs_diag(@name(mse)),
         sgs_diag(@name(q_tot)),
+        Y.c,
+        ᶜρʲs.:(1),
         ᶠu³ʲs.:(1),
+        ᶠ∂ξ³∂x³,
         unrolled_map(sgs_diag, (passive_sgs_tracer_names(Y)..., sed_names...)),
         mse_cols,
-    ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, ᶠu³ʲ, tracer_diags, zeroed_cols
-        @. ∂ᶜq_totʲ_diag =
-            dtγ * (
-                DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲ)) -
-                ᶜadvdivᵥ_matrix() * ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲ))
-            ) - (I,)
-        if isempty(zeroed_cols)
-            @. ∂ᶜmseʲ_diag = ∂ᶜq_totʲ_diag
+        species,
+        thermo_inputs,
+    ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, Yc, ᶜρʲ, ᶠu³ʲ, ᶠ∂ξ³∂x³, tracer_diags,
+    mse_col_blocks, species, thermo_inputs
+        ᶜadv_q_tot = @. dtγ * (
+            DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲ)) -
+            ᶜadvdivᵥ_matrix() * ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲ))
+        ) - (I,)
+        @. ∂ᶜq_totʲ_diag = ᶜadv_q_tot
+        if isempty(mse_col_blocks)
+            @. ∂ᶜmseʲ_diag = ᶜadv_q_tot
         else
             @. ∂ᶜmseʲ_diag = zero(∂ᶜmseʲ_diag)
         end
@@ -1593,85 +1645,31 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         MatrixFields.unrolled_foreach(tracer_diags) do ∂ᶜχʲ_diag
             @inline
             @. ∂ᶜχʲ_diag = ᶜadv_tr
-            return nothing
         end
-        MatrixFields.unrolled_foreach(zeroed_cols) do ∂ᶜmseʲ_∂ᶜqʲ
+        MatrixFields.unrolled_foreach(mse_col_blocks) do ∂ᶜmseʲ_∂ᶜqʲ
             @inline
             @. ∂ᶜmseʲ_∂ᶜqʲ = zero(∂ᶜmseʲ_∂ᶜqʲ)
-            return nothing
         end
-        return nothing
-    end
+        isempty(species) && return nothing
 
-    # Sedimentation of microphysics tracers, one column loop per species (in
-    # the order of `sedimenting_sgs_tracer_names`). The species' fields are
-    # loop arguments, so species of the same phase share a kernel, which
-    # compiles faster and needs fewer registers on GPUs than one loop over all
-    # species. The sedimentation operator of `updraft_sedimentation_matrix` is a
-    # loop temporary, and its face flux matrix stays lazy.
-    MatrixFields.unrolled_foreach(sed_names) do χ_name
-        phase = condensate_phase(χ_name)
-        ᶜwʲ = MatrixFields.get_field(
-            p.precomputed,
-            sgs_sedimentation_velocity_name(χ_name),
-        )
-        # For rain mass, snow mass, and rain number, route `ᶠsed` through the
-        # running column max of `ᶜwʲ` (into `ᶜtemp_scalar_3`, reused across the
-        # species because their per-species foreach_columns do not overlap) so
-        # the super-diagonal does not collapse where the species is empty.
-        # Cloud liquid, cloud ice, and cloud-liquid number keep the pointwise
-        # `ᶜwʲ` — they fall slowly enough that the pointwise stencil is stable.
-        # The pointwise `ᶜwʲ` above is also kept for the lateral-mixing
-        # diagonal below.
-        ᶜwʲ_jac =
-            if χ_name == @name(q_rai) ||
-               χ_name == @name(q_sno) ||
-               χ_name == @name(n_rai)
-                fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwʲ)
-                p.scratch.ᶜtemp_scalar_3
-            else
-                ᶜwʲ
-            end
-        ρχ_name = get_ρχ_name(χ_name)
-        ᶜw_gs = MatrixFields.get_field(
-            p.precomputed,
-            sedimentation_velocity_name(ρχ_name),
-        )
-        mass_args =
-            !isnothing(phase) ?
-            (
-                matrix[@name(c.sgsʲs.:(1).q_tot), sgs_state_name(χ_name)],
-                sgs_diag(@name(mse)),
-                ᶜTʲs.:(1),
-                ᶜT⁰,
-                ᶜΦ,
-                ᶜq_tot_nonnegʲs.:(1),
-                ᶜq_liqʲs.:(1),
-                ᶜq_iceʲs.:(1),
-                ∂ᶜmseʲ_∂ᶜχʲ(χ_name),
-            ) : ()
-        DataLayouts.foreach_column(
-            sgs_diag(χ_name),
-            Y.c,
-            MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name),
-            MatrixFields.get_field(Y.c, ρχ_name),
-            ᶜρʲs.:(1),
-            ᶠu³ʲs.:(1),
-            ᶜwʲ,
-            ᶜwʲ_jac,
-            ᶜw_gs,
-            ᶠ∂ξ³∂x³,
-            mass_args,
-        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶠ∂ξ³∂x³,
-        mass_blocks
-            ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
-            ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
-            ᶜsgsʲ = Yc.sgsʲs.:(1)
-            ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
-            ᶜ∂a∂z =
-                @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
-            ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
+        ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
+        ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
+        ᶜsgsʲ = Yc.sgsʲs.:(1)
+        ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+        ᶜ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
+        ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
+        # (new names: assigning the enclosing function's `ᶜT⁰` or `ᶜΦ` here
+        # would box them, shared across threads)
+        (ᶜTʲ, ᶜT⁰_col, ᶜΦ_col, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ) =
+            isempty(thermo_inputs) ? ntuple(Returns(nothing), 6) : thermo_inputs
+        ᶜinv_cp_mʲ =
+            isempty(thermo_inputs) ? nothing :
+            (@. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ))
 
+        MatrixFields.unrolled_foreach(
+            map(tuple, sed_names, species),
+        ) do (χ_name, (∂ᶜχʲ_diag, ᶜχʲ, ᶜρχ_gs, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, mass_blocks))
+            @inline
             # The operator of `updraft_sedimentation_matrix`, with its lateral
             # diagonal, which vanishes where the residual environment flux is
             # clamped at zero.
@@ -1695,20 +1693,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 @. ∂ᶜχʲ_diag += DiagonalMatrixRow(ᶜinv_ρ̂) * ᶜM
                 return nothing
             end
-
-            # (new names: assigning the enclosing function's `ᶜT⁰` or `ᶜΦ` here
-            # would box them, shared across threads)
-            (
-                ∂ᶜq_totʲ_∂ᶜχʲ,
-                ∂ᶜmseʲ_diag,
-                ᶜTʲ,
-                ᶜT⁰_col,
-                ᶜΦ_col,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
-                ∂ᶜmseʲ_∂ᶜχʲ_col,
-            ) = mass_blocks
+            (∂ᶜq_totʲ_∂ᶜχʲ, ∂ᶜmseʲ_∂ᶜχʲ_col) = mass_blocks
             @. ∂ᶜχʲ_diag += DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - ᶜχʲ)) * ᶜM
             @. ∂ᶜq_totʲ_∂ᶜχʲ =
                 DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - ᶜsgsʲ.q_tot)) * ᶜM
@@ -1716,6 +1701,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # The within-updraft flux carries h_μ(Tʲ) + Φ from the donor cell
             # and the lateral influx carries h_μ(T⁰) + Φ; the dilution by the
             # sedimented mass enters with -mseʲ.
+            phase = condensate_phase(χ_name)
             h_cond_func = enthalpy_function(phase)
             ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ) + ᶜΦ_col
             ᶜh_cond⁰ = @. h_cond_func(thermo_params, ᶜT⁰_col) + ᶜΦ_col
@@ -1729,29 +1715,19 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # lateral diagonal) also depends on mse, with ∂Tʲ/∂mse = 1/cp_m, and
             # on each condensate q_ν at fixed mse and q_tot, with
             # ∂Tʲ/∂q_ν = L_ν(Tʲ)/cp_m. The latter is the former times L_ν(Tʲ),
-            # summed over the species in the last loop below.
+            # summed over the species below.
             c_μ = condensate_heat_capacity(phase, thermo_params)
-            ᶜinv_cp_mʲ =
-                @. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
             @. ∂ᶜmseʲ_diag +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) *
                 (ᶜM - DiagonalMatrixRow(ᶜlateral_coeff)) *
                 DiagonalMatrixRow(ᶜχʲ * c_μ * ᶜinv_cp_mʲ)
         end
-    end
-    isempty(mass_names) && return nothing
+        isempty(mse_col_blocks) && return nothing
 
-    # The dependence of the sedimentation fluxes of all species on each condensate
-    # q_ν through h_μ(Tʲ) is their dependence on mse, which the loops above
-    # accumulate into the mse diagonal, times L_ν(Tʲ). One column loop adds it to
-    # every (mse, q_ν) block and then adds the advection part to the mse diagonal.
-    DataLayouts.foreach_column(
-        sgs_diag(@name(mse)),
-        sgs_diag(@name(q_tot)),
-        ᶜTʲs.:(1),
-        mse_cols,
-    ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, ᶜTʲ, mse_col_blocks
-        (ᶜTʲ, ∂ᶜq_totʲ_diag) = as_register((ᶜTʲ, ∂ᶜq_totʲ_diag))
+        # The dependence of the sedimentation fluxes of all species on each
+        # condensate q_ν through h_μ(Tʲ) is their dependence on mse, accumulated
+        # above into the mse diagonal, times L_ν(Tʲ); then the advection part is
+        # added to the mse diagonal.
         MatrixFields.unrolled_foreach(
             map(tuple, mass_names, mse_col_blocks),
         ) do (ν_name, ∂ᶜmseʲ_∂ᶜq_νʲ)
@@ -1760,7 +1736,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @. ∂ᶜmseʲ_∂ᶜq_νʲ +=
                 ∂ᶜmseʲ_diag * DiagonalMatrixRow(L_ν(thermo_params, ᶜTʲ))
         end
-        @. ∂ᶜmseʲ_diag += ∂ᶜq_totʲ_diag
+        @. ∂ᶜmseʲ_diag += ᶜadv_q_tot
     end
     return nothing
 end
