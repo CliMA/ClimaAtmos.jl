@@ -375,8 +375,9 @@ cooling, the second cloud-base warming.
 [`RadiationTRMM_LBA`](@ref ClimaAtmos.RadiationTRMM_LBA) (`rad: TRMM_LBA`) is
 the odd one out: it prescribes a heating rate directly, with no flux at all. The
 observational profile varies with both height and time of day, and is converted
-to an energy tendency with the moist isochoric heat capacity,
-``\rho \, c_{vm} \, \partial T / \partial t``. It is used for the TRMM-LBA
+to an energy tendency with the moist isobaric heat capacity,
+``\rho \, c_{pm} \, \partial T / \partial t``, because it is a heating rate at
+constant pressure. It is used for the TRMM-LBA
 deep-convection case [Grabowski2006](@cite).
 
 ## Held–Suarez forcing

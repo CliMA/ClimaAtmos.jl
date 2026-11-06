@@ -781,8 +781,9 @@ Apply the TRMM_LBA prescribed radiative heating to `Yₜ.c.ρe_tot` in place; re
 
 Unlike the other modes, no flux is computed: the heating rate `ᶜdTdt_rad(t, z)` [K/s] is
 read from the `AtmosphericProfilesLibrary` observational profile, which varies with both
-height and time of day, and converted to an energy tendency with the moist isochoric heat
-capacity, `Yₜ.c.ρe_tot += ρ cv_m dT/dt`. Applied explicitly at every stage.
+height and time of day, and converted to an energy tendency with the moist isobaric heat
+capacity, `Yₜ.c.ρe_tot += ρ cp_m dT/dt`, because the profile is a heating rate at constant
+pressure. Applied explicitly at every stage.
 """
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
@@ -796,7 +797,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
     @. Yₜ.c.ρe_tot +=
-        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
+        ᶜρ * TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing
 end
 

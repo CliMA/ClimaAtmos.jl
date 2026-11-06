@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Prescribed temperature
+  tendencies are converted to energy tendencies with the isobaric heat capacity
+  `cp_m`: large-scale advection and radiative cooling (BOMEX, RICO), the
+  TRMM-LBA prescribed heating rate, and the file-driven forcings and
+  temperature nudging (`apply_Tq_forcing!`, including ISDAC). The tendencies
+  are rates at constant pressure; with the isochoric `cv_m`, a single-column
+  run realized about `cv_m / cp_m ≈ 0.72` of the prescribed
+  potential-temperature tendency. The realized forcing increases by about 40%,
+  which changes the `prognostic_edmfx_rico_column` and
+  `prognostic_edmfx_trmm_column` references, and single-column calibrations
+  against these cases need refitting. The Held–Suarez thermal relaxation is
+  converted with `cp_d`, so potential temperature relaxes at the published
+  rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
+  changes the `held_suarez_equil` reference.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
