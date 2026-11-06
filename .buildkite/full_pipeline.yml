@@ -1233,7 +1233,7 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":alarm_clock: Timestep cost: Aquaplenet, prognostic EDMF, GPU"
+      - label: ":alarm_clock: Timestep cost: Aquaplanet, prognostic EDMF, GPU"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
@@ -1397,10 +1397,6 @@ steps:
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/print_new_ref_counter.jl"
 
-  - label: ":bar_chart: Tabulate performance summary"
-    retry: *retry_policy
-    command: "julia --color=yes --project=.buildkite perf/tabulate_perf_summary.jl"
-
   # - label: ":chart_with_downwards_trend: build history"
   #   command:
   #     - build_history main
@@ -1415,3 +1411,21 @@ steps:
     if: 'build.env("UPSTREAM_PACKAGES") == null'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/stage_output.jl"
+
+  # After the last `wait` and started by `depends_on`, so no step waits for it.
+  # Its kernels exceed the 4 KiB kernel parameter limit of the P100s.
+  - label: ":alarm_clock: Timestep cost: Aquaplanet, prognostic EDMF, 1M, GPU"
+    depends_on: "init_cpu_env"
+    soft_fail: true
+    retry: *retry_policy
+    command: >
+      julia --color=yes --project=.buildkite perf/benchmark.jl
+      --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+      --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_1m.yml
+      --job_id bm_prog_edmf_1m_gpu
+    env:
+      CLIMACOMMS_DEVICE: "CUDA"
+      CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+    agents:
+      slurm_mem: 32GB
+      slurm_gres: "gpu:nvidia_h200:1"

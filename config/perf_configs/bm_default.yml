@@ -8,4 +8,3 @@ surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
 vert_diff: "VerticalDiffusion"
 microphysics_model: "0M"
-perf_summary: true

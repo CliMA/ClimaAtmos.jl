@@ -21,7 +21,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
   - `.buildkite/ci_driver.jl`: canonical run entry for CI-style simulations. It parses config, builds the simulation, runs `solve_atmos!`, and performs validation/output checks.
   - `.buildkite/pipeline.yml`: authoritative list of Buildkite jobs and their config combinations. Use it to see which config families are combined in automation. Branch dispatch is inline: each job step is gated `if: build.branch != "main"`, and a single `main`-only step moves reproducibility results into the reference store (so a merge does not re-run simulations). New top-level jobs must carry the `if: build.branch != "main"` gate.
   - `docs/make.jl` and `docs/src/`: Documenter entry point plus user/contributor docs. Good references for API usage and config recipes.
-  - `perf/`: allocation and performance benchmarks, run as Buildkite jobs in `.buildkite/full_pipeline.yml`, separately from unit tests.
+  - `perf/`: allocation and performance benchmarks, run as Buildkite jobs in `.buildkite/full_pipeline.yml`, separately from unit tests. Each `perf/benchmark.jl` job posts its step timings against `main` as a build annotation (`perf/perf_tracking.jl`), and `perf/publish_perf.jl` publishes a merged PR's timings as the new `main` baseline.
   - `reproducibility_tests/`: reproducibility test infrastructure. `ref_counter.jl` holds a single integer counter that partitions commit history into reference bins — increment it when simulation output intentionally changes.
   - `post_processing/`, `calibration/`, `runscripts/`, `examples/`: analysis scripts, calibration workflows, launch scripts, and smaller usage examples.
 

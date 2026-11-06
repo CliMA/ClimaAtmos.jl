@@ -1,7 +1,7 @@
 # Bootstrap pipeline. This is the file the Buildkite UI uploads:
 #     buildkite-agent pipeline upload .buildkite/pipeline.yml
 #
-#   - On `main`: publish the merged PR's staged reproducibility reference.
+#   - On `main`: publish the merged PR's staged reproducibility reference and timings.
 #   - Otherwise (PR or merge-queue build): a decider step runs
 #     .buildkite/decide_pipeline.sh, which either
 #       * reuses an already-tested PR's results and skips the build
@@ -46,7 +46,7 @@ env:
   MPI_CONFIG_PATH: "config/mpi_configs"
 
 steps:
-  - label: ":robot_face: Move reproducibility results to reference store"
+  - label: ":robot_face: Move reproducibility results and timings to reference stores"
     if: 'build.branch == "main" && build.env("UPSTREAM_PACKAGES") == null'
     retry: &retry_policy
       automatic:
@@ -57,6 +57,7 @@ steps:
     command:
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate()'"
       - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
+      - "julia --color=yes --project=.buildkite perf/publish_perf.jl"
 
   - label: ":arrows_counterclockwise: Decide pipeline"
     if: 'build.branch != "main" || build.env("UPSTREAM_PACKAGES") != null'

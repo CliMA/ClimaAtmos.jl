@@ -6,6 +6,8 @@ Random.seed!(1234)
 import ClimaAtmos as CA
 
 include("common.jl")
+include(joinpath(@__DIR__, "..", "reproducibility_tests", "reproducibility_utils.jl"))
+include("perf_tracking.jl")
 
 using CUDA, BenchmarkTools, OrderedCollections, StatsBase, PrettyTables # needed for CTS.benchmark_step
 using Test
@@ -21,6 +23,7 @@ simulation = CA.get_simulation(config);
 device = ClimaComms.device(config.comms_ctx)
 (; summaries, trials) =
     CTS.benchmark_step(integrator, device; crop = false, hcrop = 168)
+track_perf(job_id, summaries)
 
 CTS.step!(integrator) # compile first
 
@@ -54,14 +57,5 @@ CTS.step!(integrator) # compile first
         # It's difficult to guarantee zero allocations,
         # so let's just leave this as broken for now.
         @test_broken compare_mem(trials, "step!", 0)
-    end
-end
-
-if get(ENV, "BUILDKITE", "") == "true"
-    # Export summaries
-    import JSON
-    path = pkgdir(CA)
-    open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
-        JSON.print(io, summaries)
     end
 end
