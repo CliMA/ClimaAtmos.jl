@@ -605,8 +605,7 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     ) do Yₜc, ᶠradiation_flux, drafts
         ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
         @. Yₜc.ρe_tot -= ᶜdiv_flux
-        MatrixFields.unrolled_foreach(drafts) do (ᶜρʲ, ᶜmseʲₜ)
-            @inline
+        for (ᶜρʲ, ᶜmseʲₜ) in drafts
             @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
         end
         return nothing

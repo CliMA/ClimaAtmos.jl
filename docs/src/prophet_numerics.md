@@ -443,13 +443,12 @@ The implicit residual is linearized by the Jacobian algorithms of
 blocks are assembled by five update functions that mirror the tendency
 structure, in a fixed order because they accumulate into shared blocks:
 
-| Update                                    | Covers                                                                                                                                                                                                         |
-|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux |
-| `update_sgs_diffusion_jacobian!`          | vertical diffusion of the draft scalars down their own gradients                                                                                                                                               |
-| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                                                                            |
-| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                                                                           |
-| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                                                                           |
+| Update                                         | Covers                                                                                                                                                                                                         |
+|:---------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_sgs_advection_jacobian!`               | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux |
+| `update_sgs_diffusion_and_entr_detr_jacobian!` | vertical diffusion of the draft scalars down their own gradients, and the entrainment relaxation, including the feedback through the environment residual                                                      |
+| `update_sgs_boundary_condition_jacobian!`      | the surface mass-source relaxation in the first cell                                                                                                                                                           |
+| `update_sgs_massflux_jacobian!`                | the mass-flux contributions to the grid-mean scalars                                                                                                                                                           |
 
 The ``\hat{\rho}^j`` and ``u_3^j`` rows receive fallback identity blocks,
 since their stage values come from the analytic solves. The block solver

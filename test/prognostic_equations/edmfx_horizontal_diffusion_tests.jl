@@ -11,7 +11,7 @@ updraft scalars (`mse`, `q_tot`, suspended cloud species, and passive tracers)
 diffuse down their own horizontal gradients under `edmfx_horizontal_diffusion`
 with the element-wise power-mean area weight, add the same flux divergence to the
 grid mean (no environment residual), and stay bounded where the draft area
-collapses, the TKE and horizontal-wind tendencies match
+collapses, the TKE and wind tendencies match
 directly assembled references, the mixing-length grid-scale limit is controlled
 by the `grid_scale` keyword and attained, the flux is wired into
 `additional_tendency!`, and incompatible option combinations are rejected at
@@ -156,15 +156,24 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
         CA.wdivₕ(ᶜρa⁰ * p.precomputed.ᶜK_h_h * CA.gradₕ(ᶜq_lcl⁰_buf))
     @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜρq_lcl_ref) rtol = FT(1e-10)
 
-    # The horizontal-wind tendency matches an independently assembled stress
-    # divergence.
-    ᶜτ = similar(p.scratch.ᶜtemp_UVWxUVW)
+    # The wind tendencies match independently assembled stress divergences.
+    uvw = CA.UVW(FT(0), FT(0), FT(0))
+    ᶜτ = similar(Y.c.ρ, typeof(uvw * uvw'))
     CA.compute_strain_rate_center_full!(ᶜτ, p.precomputed.ᶜu, p.precomputed.ᶠu)
     @. ᶜτ = -2 * p.precomputed.ᶜK_u_h * ᶜτ
     ᶜuₕ_ref = similar(Yₜ.c.uₕ)
     @. ᶜuₕ_ref = -CA.C12(CA.wdivₕ(Y.c.ρ * ᶜτ) / Y.c.ρ)
     Spaces.weighted_dss!(ᶜuₕ_ref)
     @test parent(Yₜ.c.uₕ) ≈ parent(ᶜuₕ_ref) rtol = FT(1e-10)
+    ᶠτ = similar(Y.f.u₃, typeof(uvw * uvw'))
+    CA.compute_strain_rate_face_full!(ᶠτ, p.precomputed.ᶜu, p.precomputed.ᶠu)
+    @. ᶠτ = -2 * CA.ᶠinterp(p.precomputed.ᶜK_u_h) * ᶠτ
+    ᶠρ = similar(Y.f.u₃, FT)
+    @. ᶠρ = CA.ᶠinterp(Y.c.ρ)
+    ᶠu₃_ref = similar(Yₜ.f.u₃)
+    @. ᶠu₃_ref = -CA.C3(CA.wdivₕ(ᶠρ * ᶠτ) / ᶠρ)
+    Spaces.weighted_dss!(ᶠu₃_ref)
+    @test parent(Yₜ.f.u₃) ≈ parent(ᶠu₃_ref) rtol = FT(1e-10)
 
     # Horizontally uniform fields produce no tendency (up to spectral
     # roundoff, measured against the perturbed flux scale).
@@ -197,7 +206,7 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     )
     ᶜtke = similar(Y.c.ρ)
     @. ᶜtke = Y.c.ρtke / Y.c.ρ
-    ᶜS_h = CA.compute_strain_rate_center_horizontal(p.precomputed.ᶜu)
+    ᶜS_h = CA.compute_strain_rate_horizontal(p.precomputed.ᶜu)
     ᶜρtke_ref = similar(Y.c.ρ)
     @. ᶜρtke_ref = CA.wdivₕ(Y.c.ρ * p.precomputed.ᶜK_u_h * CA.gradₕ(ᶜtke))
     # The shear production uses the lumped restriction of the strain-rate invariant,
