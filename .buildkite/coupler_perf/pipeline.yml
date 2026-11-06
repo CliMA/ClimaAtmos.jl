@@ -2,7 +2,7 @@
 agents:
   queue: clima
   slurm_time: 14:00:00
-  modules: climacommon/2025_05_15
+  modules: climacommon/2026_10_30-1.13.3
 
 env:
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"

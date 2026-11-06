@@ -2,7 +2,6 @@ module COSPCloudSatOptics
 
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Parameters as CMP
-import ClimaCore.Fields: @fused_direct
 
 export CloudSatRadarConfig,
     cloudsat_gas_attenuation!,
@@ -129,28 +128,26 @@ function cloudsat_grid_mean_sizes!(
     ice = _clima_1m_psd_parameters(microphysics_params, Val(:icl))
     rain = _clima_1m_psd_parameters(microphysics_params, Val(:rai))
     snow = _clima_1m_psd_parameters(microphysics_params, Val(:sno))
-    @fused_direct begin
-        @. grid_mean_sizes.r_lcl = _clima_liquid_cloud_radius(
-            grid_mean_hydrometeors.q_lcl,
-            rho_air,
-            liquid,
-        )
-        @. grid_mean_sizes.lambda_inv_icl = _clima_grid_lambda_inverse(
-            grid_mean_hydrometeors.q_icl,
-            rho_air,
-            ice,
-        )
-        @. grid_mean_sizes.lambda_inv_rai = _clima_grid_lambda_inverse(
-            grid_mean_hydrometeors.q_rai,
-            rho_air,
-            rain,
-        )
-        @. grid_mean_sizes.lambda_inv_sno = _clima_grid_lambda_inverse(
-            grid_mean_hydrometeors.q_sno,
-            rho_air,
-            snow,
-        )
-    end
+    @. grid_mean_sizes.r_lcl = _clima_liquid_cloud_radius(
+        grid_mean_hydrometeors.q_lcl,
+        rho_air,
+        liquid,
+    )
+    @. grid_mean_sizes.lambda_inv_icl = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_icl,
+        rho_air,
+        ice,
+    )
+    @. grid_mean_sizes.lambda_inv_rai = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_rai,
+        rho_air,
+        rain,
+    )
+    @. grid_mean_sizes.lambda_inv_sno = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_sno,
+        rho_air,
+        snow,
+    )
     return nothing
 end
 

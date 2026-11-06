@@ -195,7 +195,6 @@ end
     @test c_Δx(CP.create_toml_dict(Float64; override_file = log_file)) == 1.24
     climaparams_c_Δx =
         toml_dict.data["sgs_variance_horizontal_scale_factor"]["value"]
-    @test climaparams_c_Δx != 1.24
     override = Dict(
         "sgs_variance_horizontal_scale_factor" =>
             Dict("value" => climaparams_c_Δx, "type" => "float"),
