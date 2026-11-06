@@ -78,8 +78,8 @@ max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
   value: 1
 ode_algo:
-  help: "ODE algorithm [`ARS222` (default), `ARS343`, `SSP333`, `IMKG343a`, etc.]"
-  value: "ARS222"
+  help: "ODE algorithm [`ARS343` (default), `ARS222`, `SSP333`, `IMKG343a`, etc.]. The explicit tableau of `ARS222` amplifies undamped oscillatory modes (`|R(iy)| > 1`), so it suits configurations whose horizontal damping per step is strong, such as the EDMFX column and aquaplanet setups that select it."
+  value: "ARS343"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
