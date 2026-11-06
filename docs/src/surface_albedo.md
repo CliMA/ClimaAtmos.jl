@@ -13,10 +13,10 @@ value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
 
 ## 2) `RegressionFunctionAlbedo`
 
-This is an empirical parameterization of the direct and diffuse surface albedo of Jin et al. (2011) [Jin2011](@cite) (reflectivity of the inner ocean is ignored). The direct reflection is calculated using the Fresnel reflection at the air-sea interface due to the difference in refractive index between air and water. The current implementation uses the broadband representation (the relative refractive index $n$ is independent of wavelength). Its formulation is:
+This is an empirical parameterization of the direct and diffuse surface albedo of Jin et al. (2011) [Jin2011](@cite), augmented by subsurface volume reflectance $R_{\text{sub}}$ from water molecules and hydrosols (whitecap foam reflectance is omitted). The direct reflection is calculated using the Fresnel reflection at the air-sea interface due to the difference in refractive index between air and water. The current implementation uses the broadband representation (the relative refractive index $n$ is independent of wavelength). Its formulation is:
 
 ```math
-α_{dir}(λ, μ, u) = r_{f}(n, μ) - \frac{r_{f}(n, μ)}{r_{f}(n_{0}, μ)} f(μ, σ(u))
+α_{dir}(λ, μ, u) = r_{f}(n, μ) - \frac{r_{f}(n, μ)}{r_{f}(n_{0}, μ)} f(μ, σ(u)) + R_{\text{sub}}
 ```
 
 where:
@@ -39,6 +39,7 @@ where we assume an equal contribution from the p and s polarizations, so that $r
 
   - the refractive index of water for visible light, $n_0=1.34$.
   - the relative refractive index of water and air $n$ ($n = n_w/n_a$), assumed equal to $n_0$ for the broadband representation.
+  - the subsurface volume reflectance $R_{\text{sub}}$.
   - the regression function $f(μ, σ)$, defined as:
 
 ```math
@@ -64,13 +65,13 @@ where the coefficients are given in the table below:
 Diffuse reflection depends on atmospheric conditions: for clear sky it follows from nearly isotropic Rayleigh scattering, and for cloudy sky the albedo is adjusted for the presence of clouds. The formulations are:
 
 ```math
-α_{diff}(λ, μ, u) = -0.1482 - 0.012σ(u) + 0.1608n - 0.0244nσ(u)
+α_{diff}(λ, μ, u) = -0.1482 - 0.012σ(u) + 0.1608n - 0.0244nσ(u) + R_{\text{sub}}
 ```
 
 for clear sky, and
 
 ```math
-α_{diff}(λ, μ, u) = -0.1479 + 0.1502n - 0.016nσ(u)
+α_{diff}(λ, μ, u) = -0.1479 + 0.1502n - 0.016nσ(u) + R_{\text{sub}}
 ```
 
 for cloudy sky. In the current implementation, we assume clear skies everywhere.

@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
+  (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
+  albedos in `RegressionFunctionAlbedo`.
 
 0.42.18
 -------
