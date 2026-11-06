@@ -34,6 +34,8 @@ steps:
     command:
       - mkdir -p $$PROFILE_DIR
       - git fetch origin $$CLIMAATMOS_MAIN_COMMIT $$CLIMAATMOS_PR_COMMIT
+      # Start from empty trees, so that a retried job does not annotate them twice
+      - rm -rf $$PROFILE_DIR/ClimaAtmos_main $$PROFILE_DIR/ClimaAtmos_pr
       - mkdir -p $$PROFILE_DIR/ClimaAtmos_main $$PROFILE_DIR/ClimaAtmos_pr
       - git archive $$CLIMAATMOS_MAIN_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_main
       - git archive $$CLIMAATMOS_PR_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_pr
@@ -47,6 +49,8 @@ steps:
     key: "init_amip"
     depends_on: "init_trees"
     command:
+      # Start from empty environments, so that a retried job can clone the coupler again
+      - rm -rf $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $$PROFILE_DIR/coupler_main
       - bash -c "cd $$PROFILE_DIR/coupler_main && git checkout $$COUPLER_COMMIT"
       # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
