@@ -22,9 +22,10 @@ main
   Beljaars et al. (2004) in its IFS form, a near-surface drag from orography
   with scales below about 5 km. Its input, the standard deviation of the
   filtered orography, is computed at initialization from the 60 arc-second
-  ETOPO 2022 elevation as in the IFS. It is on by default at the IFS amplitude
-  (new ClimaParams parameter `ogw_tofd_coefficient = 1`, which requires
-  ClimaParams 1.3.8; `0` disables it) whenever the gravity-wave drag uses Earth
+  ETOPO 2022 elevation as in the IFS. It is on by default at 2.7 times the IFS
+  amplitude (new ClimaParams parameter `ogw_tofd_coefficient = 2.7`, which
+  requires ClimaParams 1.3.9; `1` gives the IFS drag and `0` disables it)
+  whenever `topography` is `Earth` and the gravity-wave drag uses Earth
   orography, and it is applied every step with the current wind in a
   backward-Euler form, so one forward-Euler step cannot reverse the wind. See the
   Orographic Gravity Waves docs page.

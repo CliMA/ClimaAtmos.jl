@@ -159,12 +159,13 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
 
     # The TOFD drag coefficient depends only on the grid and the orography, so it is
     # built once here and combined with the current wind every step. Its input, the
-    # filtered-orography variance, is computed from the Earth elevation data in the same
-    # cases in which the gravity-wave drag uses Earth orography.
+    # filtered-orography variance, is computed from the Earth elevation data, so TOFD is
+    # on only when the model surface is Earth's (topography = Earth); with NoWarp the
+    # surface is flat and has no orography for TOFD to act on.
     ᶜtofd_Cd = zero(Y.c.ρ)
     if !iszero(a_tofd)
         uses_earth_orography =
-            ogw.topography in (Val(:Earth), Val(:NoWarp)) &&
+            ogw.topography == Val(:Earth) &&
             ogw.topo_info in (Val(:gfdl_restart), Val(:raw_topo), Val(:raw_topo_online))
         if uses_earth_orography
             earth_radius =
@@ -182,7 +183,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
                 a_tofd,
             )
         else
-            @warn "Turbulent orographic form drag needs Earth orography; it is off for \
+            @warn "Turbulent orographic form drag needs Earth orography with \
+                   topography = Earth; it is off for \
                    topography = $(ogw.topography) and orographic_gravity_wave = \
                    $(ogw.topo_info)."
         end
@@ -215,7 +217,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
         topo_FrU_min = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
         topo_ᶜz_pbl = similar(Fields.level(Y.c.ρ, 1)),
-        topo_ᶠz_blocked_start = similar(Fields.level(Y.f.u₃, half)),
+        topo_ᶠz_blocked_start = similar(Fields.level(Y.f.u₃, half), FT),
         values_at_z_pbl = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜbuoyancy_frequency = Fields.Field(FT, center_space),
@@ -462,7 +464,6 @@ function orographic_gravity_wave_forcing!(
     # kpbl, zhalf(kpbl)), which calc_nonpropagating_forcing! needs as a face-level
     # field.
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
-    topo_ᶠz_blocked_start = topo_ᶠz_blocked_start.components.data.:1
     blocked_layer_start_height!(topo_ᶠz_blocked_start, topo_ᶜz_pbl, ᶠz)
 
     # compute base flux at the planetary boundary layer height

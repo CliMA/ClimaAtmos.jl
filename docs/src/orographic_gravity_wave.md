@@ -387,12 +387,14 @@ elevation as in the IFS (IFS Documentation CY47R1, Part IV, Section 11.3.3):
 $I_H = 1.02\times10^{-3}\,\mathrm{m^{-1}}$ and
 $k_{\mathrm{flt}} = 3.5\times10^{-4}\,\mathrm{m^{-1}}$ are the integral and the
 representative wavenumber of this band-pass filter, so they are tied to this
-definition of $\sigma_{\mathrm{flt}}$. TOFD is computed only when the gravity-wave
-drag uses Earth orography (`topography` is `Earth` or `NoWarp` and
-`orographic_gravity_wave` is `gfdl_restart`, `raw_topo`, or `raw_topo_online`).
+definition of $\sigma_{\mathrm{flt}}$. TOFD is computed only when the model surface
+is Earth's orography (`topography` is `Earth` and `orographic_gravity_wave` is
+`gfdl_restart`, `raw_topo`, or `raw_topo_online`). With `NoWarp` the surface is
+flat, so TOFD is off even though the gravity-wave drag can still use Earth orography.
 
 The amplitude $a_{\mathrm{tofd}}$ is the parameter `ogw_tofd_coefficient`:
-$a_{\mathrm{tofd}} = 1$ (the default) reproduces the IFS, and
+$a_{\mathrm{tofd}} = 1$ reproduces the IFS, the default $a_{\mathrm{tofd}} = 2.7$
+is tuned to 0M WeatherBench forecasts, and
 $a_{\mathrm{tofd}} = 0$ disables TOFD.
 
 Near steep orography the damping time $(C_d |\mathbf{u}|)^{-1}$ in the lowest
