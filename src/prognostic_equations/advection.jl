@@ -314,7 +314,11 @@ The fallback method is a no-op for turbulence-convection models other than
   - `Yₜ.c.sgsʲs.:(j).q_tot`: advective-form vertical advection (same scheme), plus
     the total-water contribution of condensate and precipitation sedimentation.
   - Every auto-discovered SGS tracer (from `sgs_tracer_names`): advective-form
-    vertical advection with the `p.atmos.numerics.edmfx_tracer_upwinding` scheme.
+    vertical advection, with the same `edmfx_mse_q_tot_upwinding` scheme as
+    `mse` and `q_tot` for the sedimenting microphysics species (so the updraft
+    condensates, total water, and energy cross each face with one
+    reconstruction) and `p.atmos.numerics.edmfx_tracer_upwinding` for the
+    passive tracers.
   - For `NonEquilibriumMicrophysics1M`/`NonEquilibriumMicrophysics2M`, the updraft
     microphysics species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and for 2M also `n_lcl`
     and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
@@ -348,6 +352,8 @@ function edmfx_sgs_vertical_advection_tendency!(
     (one_FT, zero_FT, ε_area) = (one(FT), zero(FT), eps(FT)) # isbits captures for the loop body
     thp = CAP.thermodynamics_params(p.params)
     χ_names = sgs_tracer_names(Y)
+    water_names = sedimenting_sgs_tracer_names(Y)
+    passive_names = unrolled_filter(name -> !(name in water_names), χ_names)
 
     # Sedimenting updraft species with their updraft and grid-mean terminal
     # velocities: (species name, updraft velocity name, grid-mean velocity name).
@@ -413,11 +419,18 @@ function edmfx_sgs_vertical_advection_tendency!(
             va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.q_tot, edmfx_mse_q_tot_upwinding)
             @. ᶜsgsʲₜ.q_tot += va
 
-            MatrixFields.unrolled_foreach(χ_names) do χ_name
+            MatrixFields.unrolled_foreach(water_names) do χ_name
                 @inline
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
                 # (not `va`: assigning the enclosing body's name here would box it)
+                va_χ = vertical_advection(ᶠu³ʲ, ᶜχʲ, edmfx_mse_q_tot_upwinding)
+                @. ᶜχʲₜ += va_χ
+            end
+            MatrixFields.unrolled_foreach(passive_names) do χ_name
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
                 va_χ = vertical_advection(ᶠu³ʲ, ᶜχʲ, edmfx_tracer_upwinding)
                 @. ᶜχʲₜ += va_χ
             end

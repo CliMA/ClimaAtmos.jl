@@ -284,6 +284,24 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     verbose = false,
 )
     (; atmos) = p
+    if grid_mean_base_upwinding(Y) == Val(:first_order)
+        (; energy_q_tot_upwinding, tracer_upwinding) = atmos.numerics
+        energy_q_tot_upwinding == tracer_upwinding || @info(
+            "Sedimenting microphysics species follow `energy_q_tot_upwinding` \
+             ($(energy_q_tot_upwinding)); `tracer_upwinding` \
+             ($(tracer_upwinding)) applies to the passive tracers."
+        )
+        (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = atmos.numerics
+        if atmos.turbconv_model isa PrognosticEDMFX &&
+           edmfx_mse_q_tot_upwinding != edmfx_tracer_upwinding
+            @info(
+                "Updraft microphysics species follow \
+                 `edmfx_mse_q_tot_upwinding` ($(edmfx_mse_q_tot_upwinding)); \
+                 `edmfx_tracer_upwinding` ($(edmfx_tracer_upwinding)) applies \
+                 to the passive updraft tracers."
+            )
+        end
+    end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 

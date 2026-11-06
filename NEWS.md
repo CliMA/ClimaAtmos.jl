@@ -65,14 +65,23 @@ main
   sedimenting microphysics tracers and `ρtke` with first-order upwinding
   (`ᶠupwind1`) and bidiagonal Jacobian blocks that are exact in the tracer `χ`
   (with velocity coupling omitted outside the central EDMFX mass-flux block).
-  Apply Courant-limited (`min(1, 1 / C_γ)`) post-Newton upwind dissipation to
-  the central vertical advection of `ρe_tot` and `ρq_tot`, and post-Newton
-  `tracer_upwinding` (`:vanleer_limiter` or `:third_order`) antidiffusion to the
-  sedimenting microphysics tracers, while `ρtke` stays on unconditionally
-  monotone `ᶠupwind1`. With `tracer_upwinding = none`, the sedimenting tracers
-  are advected with `ᶠupwind1`, and dry configurations with prognostic `ρtke`
-  use the approximate linear solve. With `prescribed_flow`, the fully explicit
-  tendency applies the same corrections with a unit Courant limiter.
+  With non-equilibrium microphysics, `ρe_tot` and `ρq_tot` are advected
+  implicitly with the same `ᶠupwind1` reconstruction as the condensates, and
+  all three receive one Courant-limited (`min(1, 1 / C_γ)`) post-Newton
+  `energy_q_tot_upwinding` antidiffusion, so a scalar that is affine in the
+  others stays affine under transport and the vapor and temperature diagnosed
+  from the transported mixture are those of the mixed air at any stage Courant
+  number; the Jacobian gains
+  the matching `(ρe_tot, ρq_tot)`, `(ρe_tot, ρq_χ)`, `(ρe_tot, ρ)`, and
+  `(ρq_tot, ρ)` advection blocks. Dry and 0M configurations keep the central
+  implicit advection of `ρe_tot` and `ρq_tot` with Courant-limited post-Newton
+  upwind dissipation. `tracer_upwinding` applies to the explicitly advected
+  passive tracers, and `ρtke` stays on unconditionally monotone `ᶠupwind1`. Under `PrognosticEDMFX`, the updraft
+  water species follow `edmfx_mse_q_tot_upwinding` and `edmfx_tracer_upwinding`
+  covers the passive updraft tracers; a one-time log message reports when the
+  two keys differ. Dry configurations with prognostic `ρtke` use the
+  approximate linear solve. With `prescribed_flow`, the fully explicit tendency
+  applies the same corrections with a unit Courant limiter.
 - ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
   MUSCL slope has no Courant-number factor at any Courant number; this applies
   to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass
