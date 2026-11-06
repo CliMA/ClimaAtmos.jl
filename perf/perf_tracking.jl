@@ -21,6 +21,9 @@ const PERF_STAGING_ROOT = "/resnick/scratch/esm/slurm-buildkite/climaatmos-perf-
 # Slowdown above which a change is shown in bold and the annotation is a warning
 const SLOWDOWN_FLAG = 0.05
 
+# Fraction of the `step!` time below which a function is left out of the report
+const MIN_STEP_FRACTION = 0.05
+
 # Keys that `CTS.benchmark_step` puts in its `summaries`
 const BENCHMARKED_FUNCS = (
     "step!",
@@ -42,10 +45,11 @@ read_perf_file(file) = JSON.parsefile(file; dicttype = OrderedCollections.Ordere
 """
     perf_baseline(job_id; store = PERF_STORE)
 
-Return the `main` timings of `job_id` to compare with as `(; commit, timings, in_history)`: those of the newest commit in the history of `HEAD` with timings for
-`job_id`, or, if no such commit is found (e.g. in a shallow clone), the most recently
-written ones, with `in_history = false`. Return `nothing` if no commit has timings
-for `job_id`.
+Return the `main` timings of `job_id` to compare with as
+`(; commit, timings, in_history)`: those of the newest commit in the history of `HEAD`
+with timings for `job_id`, or, if no such commit is found (e.g. in a shallow clone),
+the most recently written ones, with `in_history = false`. Return `nothing` if no
+commit has timings for `job_id`.
 """
 function perf_baseline(job_id; store = PERF_STORE)
     isdir(store) || return nothing
@@ -91,10 +95,12 @@ end
 Return `(; markdown, any_slower)`: a one-line summary of the `step!` time that expands
 to a Markdown table of the minimum time and memory of each function in `timings` and in
 `baseline`, and whether any function is more than `SLOWDOWN_FLAG` slower than in
-`baseline`.
+`baseline`. Functions that take less than `MIN_STEP_FRACTION` of the `step!` time are
+left out.
 """
 function perf_report(job_id, timings, baseline)
     main_timings = isnothing(baseline) ? nothing : baseline.timings
+    step_time = timing(timings, "step!", "time_min")
     slower = String[]
     table = IOBuffer()
     println(
@@ -105,6 +111,7 @@ function perf_report(job_id, timings, baseline)
     println(table, "|---|---:|---:|---:|---:|---:|")
     for func in BENCHMARKED_FUNCS
         haskey(timings, func) || continue
+        timing(timings, func, "time_min") < MIN_STEP_FRACTION * step_time && continue
         ratio = time_change(timings, main_timings, func)
         change = isnothing(ratio) ? "" : format_change(ratio)
         if !isnothing(ratio) && ratio > SLOWDOWN_FLAG
@@ -123,7 +130,7 @@ function perf_report(job_id, timings, baseline)
     # `<summary>` is HTML, so it uses `<code>` rather than backticks
     summary = string(
         "Timestep cost of <code>$job_id</code>: <code>step!</code> takes ",
-        format_time(timing(timings, "step!", "time_min")),
+        format_time(step_time),
     )
     step_change = time_change(timings, main_timings, "step!")
     if isnothing(baseline)
@@ -143,12 +150,13 @@ function perf_report(job_id, timings, baseline)
     if !isnothing(baseline)
         history_note =
             baseline.in_history ? "" : ", which is not in the history of this build"
-        println(
-            io,
-            "Compared with `main` at `$(baseline.commit)`$history_note. Times are the ",
-            "minimum over the benchmark samples.\n",
-        )
+        print(io, "Compared with `main` at `$(baseline.commit)`$history_note. ")
     end
+    println(
+        io,
+        "Times are the minimum over the benchmark samples. Functions that take less ",
+        "than $(round(Int, 100 * MIN_STEP_FRACTION))% of the `step!` time are left out.\n",
+    )
     print(io, String(take!(table)))
     println(io, "\n</details>")
     return (; markdown = String(take!(io)), any_slower = !isempty(slower))
