@@ -1,4 +1,4 @@
-460
+461
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+461
+- Update dependencies for v0.42.18
+
 460
 - CI moves from Julia 1.11 to 1.13.3, which changes results.
 

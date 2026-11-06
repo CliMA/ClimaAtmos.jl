@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.18
+-------
 - ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
   production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
   detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the
