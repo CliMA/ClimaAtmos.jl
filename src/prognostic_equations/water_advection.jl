@@ -88,6 +88,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         return nothing
     end
 
+    # Recorded before the EDMF correction, whose early return skips the rest of
+    # this function when the updrafts carry no condensate.
+    record_stage_precipitation_linearization!(Y, p)
+
     # For prognostic EDMF, the grid-mean energy flux applied above is corrected
     # so that it equals the sum of the updraft and environment energy fluxes;
     # see `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
@@ -164,7 +168,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    record_stage_precipitation_linearization!(Y, p)
     return nothing
 end
 

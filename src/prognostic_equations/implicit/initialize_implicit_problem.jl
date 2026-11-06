@@ -46,8 +46,8 @@ For `PrognosticEDMFX`:
 
  1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the stage-entering state
     (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), refresh the
-    implicit precomputed cache (`set_implicit_precomputed_quantities_core!`),
-    and clamp `Y.c.sgsʲs.:(j).ρa` to `[0, a_max ρʲ]` so the Picard and Newton
+    implicit precomputed cache (`set_implicit_precomputed_quantities_core!`)
+    when at least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to `[0, a_max ρʲ]` so the Picard and Newton
     predictors start from a feasible draft area. The grid-mean condensates are
     left at their stage-entering values: the cache clamps them where it reads
     them, and a guess raised above the stage-entering state would enter the
@@ -103,13 +103,20 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     # `-u₃_old / dtγ` and `-ρa_old / dtγ` are recorded before the area clamp so
     # the Newton residual reproduces `u₃_stage` and `ρa_stage`. The clamp bounds
     # the predictor that `ᶜsnapshot` and the Picard solves start from, `ρa` to
-    # `[0, a_max ρʲ]`, after `ᶜρʲs` is refreshed. `initialize_imp!` does not
-    # receive `t`, and `t` is unused in the call below, so `zero(FT)` is passed.
+    # `[0, a_max ρʲ]`. The implicit cache, including the draft densities
+    # `ᶜρʲs`, is refreshed at the stage-entering state only for the Picard
+    # rounds, which recompute the buoyancy from it. Without Picard rounds, the
+    # `u₃` and `ρa` solves use the buoyancy `ᶜρ_diffʲs` and densities `ᶜρʲs` of
+    # the last cache update, which the Newton iterations do not revise, so an
+    # extrapolation error in a refreshed buoyancy would persist through the
+    # stage; `ClimaTimeSteppers` refreshes the cache before the Newton solve.
+    # `initialize_imp!` does not receive `t`, and `t` is unused in the call
+    # below, so `zero(FT)` is passed.
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
         @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
     end
-    set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
+    n_picard > 0 && set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
     a_max = CAP.max_area(CAP.turbconv_params(p.params))
     for j in 1:n
         @. Y.c.sgsʲs.:($$j).ρa =

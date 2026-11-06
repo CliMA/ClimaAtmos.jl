@@ -259,8 +259,9 @@ advanced by the Newton solve. At the start of every implicit stage, before the
 solve, `initialize_implicit_stage_problem!` records
 ``-u_3^{j,\mathrm{old}} / (\gamma \Delta t)`` and
 ``-\hat{\rho}^{j,\mathrm{old}} / (\gamma \Delta t)``,
-refreshes `set_implicit_precomputed_quantities_core!`, and clamps
-``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``; the grid-mean state is left as it
+refreshes `set_implicit_precomputed_quantities_core!` when Picard rounds
+follow (without them, the solves use the buoyancy of the last cache update),
+and clamps ``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``; the grid-mean state is left as it
 enters the stage. It then overwrites ``u_3^j`` and ``\hat{\rho}^j`` in
 the state with values obtained from closed-form column solves, and caches the
 implied tendencies
