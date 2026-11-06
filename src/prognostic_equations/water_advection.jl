@@ -36,10 +36,10 @@ terminal velocity.
 
 Reads the precomputed terminal velocities `ᶜwₗ`, `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ` (and their
 updraft counterparts plus subdomain temperatures, densities, and velocities for
-EDMFX), the temperature `ᶜT`, the geopotential `ᶜΦ` from `p.core`, and scratch
-space; `t` is unused. Called from `implicit_tendency!`, so these terms are part of
-the implicitly treated vertical transport. See the "Microphysics" page of the docs
-(`docs/src/microphysics.md`). Returns `nothing`.
+EDMFX), the temperature `ᶜT`, and the geopotential `ᶜΦ` from `p.core`; `t` is
+unused. Called from `implicit_tendency!`, so these terms are part of the
+implicitly treated vertical transport. See the "Microphysics" page of
+the docs (`docs/src/microphysics.md`). Returns `nothing`.
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
@@ -87,7 +87,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw)))
             @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(ᶜρwe))))
         end
-        return nothing
     end
 
     # Recorded before the EDMF correction, whose early return skips the rest of
@@ -170,7 +169,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                     ),
                 )
             end
-            return nothing
         end
     end
 
@@ -346,7 +344,7 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
     int_ρ⁰ =
         hasproperty(p.scratch, :sfc_precip_env_density) ?
         p.scratch.sfc_precip_env_density :
-        Fields.Field(p.scratch.temp_data_level_2, axes(dest))
+        Fields.Field(Fields.field_values(p.scratch.temp_field_level), axes(dest))
     eps_FT = eps(FT)
     @. int_ρ⁰ = max(
         eps_FT,

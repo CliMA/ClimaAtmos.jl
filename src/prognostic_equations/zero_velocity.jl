@@ -20,10 +20,12 @@ assigns rather than accumulates, so it must be called last in
 function zero_velocity_tendency!(Yₜ, Y, p, t)
     p.atmos.advection_test || return nothing
     @. Yₜ.c.uₕ = C12(0, 0)
-    @. Yₜ.f.u₃ = C3(0)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-            @. Yₜ.f.sgsʲs.:($$j).u₃ = C3(0)
+    (; turbconv_model) = p.atmos
+    DataLayouts.foreach_point(Yₜ.f) do Yₜf
+        @. Yₜf.u₃ = C3(0)
+        turbconv_model isa PrognosticEDMFX || return
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. Yₜf.sgsʲs.:($$j).u₃ = C3(0)
         end
     end
     return nothing

@@ -31,7 +31,7 @@ transfers momentum from the atmosphere to the surface (drag).
 
 A lazy broadcast with the surface-cell contribution to `∂uₕ/∂t` [m/s²].
 """
-function boundary_tendency_momentum(ᶜρ, ᶜuₕ, ρ_flux_uₕ_surface)
+@inline function boundary_tendency_momentum(ᶜρ, ᶜuₕ, ρ_flux_uₕ_surface)
     FT = eltype(ᶜρ)
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
@@ -63,7 +63,7 @@ the result is nonzero only in the cell adjacent to the surface. The caller
 
 A lazy broadcast with the surface-cell contribution to `∂(ρχ)/∂t`.
 """
-function boundary_tendency_scalar(ᶜχ, ρ_flux_χ_surface)
+@inline function boundary_tendency_scalar(ᶜχ, ρ_flux_χ_surface)
     FT = eltype(ᶜχ)
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜdivᵥ_χ = Operators.DivergenceF2C(

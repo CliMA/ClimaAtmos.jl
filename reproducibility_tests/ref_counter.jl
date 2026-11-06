@@ -1,4 +1,4 @@
-466
+467
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+467
+- Fused slab and column loops (advection, the turbulent and hyperdiffusive
+  fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the
+  gravity wave drag, AMD) change the order of floating-point operations.
+
 466
 - Two approximate linear-solve iterations and stage-wise state constraints
   by default; unified implicit vertical transport across dry and moist models

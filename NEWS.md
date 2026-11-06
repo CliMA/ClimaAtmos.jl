@@ -171,6 +171,11 @@ main
   in by the updrafts' cloud cover and lower area-limiter factor
   (`updraft_variance_fidelity`). New provisional parameters:
   `sgs_fidelity_updraft_coeff` and `sgs_fidelity_updraft_min`.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity wave forcing is clamped
+  to ±3e-3 m/s² (with `NaN`/`Inf` set to zero) once per `dt_nogw` callback,
+  when it is computed, instead of in every tendency evaluation that applies it,
+  so the `utendnogw` and `vtendnogw` diagnostics report the clamped forcing.
+  The wind tendencies are unchanged.
 
 0.42.18
 -------

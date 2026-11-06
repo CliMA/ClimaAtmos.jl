@@ -1246,7 +1246,7 @@ end
     @test all(isfinite, parent(sim_d.integrator.u.c.ρtke))
 
     # 2. Implicit-diffusion accumulation (`+=`, single `-I`) in dry and moist
-    # EDMF (`update_diffusion_jacobian!` and `update_edmf_diffusion_jacobian!`).
+    # EDMF (`update_diffusion_jacobian!`, which handles every closure).
     for (tc, mp) in (("edonly_edmfx", "dry"), ("prognostic_edmfx", "1M"))
         nt_imp = generate_test_simulation(
             column_config(;

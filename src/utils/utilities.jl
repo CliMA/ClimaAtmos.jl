@@ -172,6 +172,20 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
+    register_copy(arg)
+
+Copy the values of a slice or lazy expression `arg` of a fused loop into registers
+(`Base.materialize` returns a slice unchanged, and `copy` allocates a new array), or
+the values of every element of a tuple into registers. Statements whose arguments are
+register copies of the same type share their inferred methods, which shortens the
+compilation of loop bodies that apply one expression to different inputs (e.g., to
+the environment and to every updraft). Inputs that a loop reads at several levels or
+in several statements are loaded once into registers, rather than once per read.
+"""
+@inline register_copy(arg) = identity.(arg)
+@inline register_copy(args::Tuple) = unrolled_map(register_copy, args)
+
+"""
     compute_kinetic(uₕ, uᵥ)
 
 Compute the specific kinetic energy at cell centers from the horizontal and
@@ -191,12 +205,12 @@ where `ᶜI` interpolates from faces to centers.
 A lazy center `Field` with the specific kinetic energy [m²/s²]; materialize it
 with `κ .= compute_kinetic(uₕ, uᵥ)`.
 """
-function compute_kinetic(uₕ, uᵥ)
+@inline function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     FT = Spaces.undertype(axes(uₕ))
     onehalf = FT(1 / 2)
-    return @. lazy(
+    return @inline @. lazy(
         onehalf * (
             dot(C123(uₕ), CT123(uₕ)) +
             ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
@@ -279,22 +293,22 @@ faces.
 A lazy face `Field` with the symmetric `UVW × UVW` strain-rate tensor
 `(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
-function compute_strain_rate_face_vertical(ᶜu)
+@inline function compute_strain_rate_face_vertical(ᶜu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     axis_uvw = (Geometry.UVWAxis(),)
-    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))))
+    return @inline @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))))
 end
 
 """
-    compute_strain_rate_center_horizontal(ᶜu)
+    compute_strain_rate_horizontal(u)
 
-Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
+Compute the strain rate from the velocity `u`, with horizontal gradients only.
 """
-function compute_strain_rate_center_horizontal(ᶜu)
+@inline function compute_strain_rate_horizontal(u)
     axis_uvw = (Geometry.UVWAxis(),)
-    return @. lazy(symmetric_part(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))))
+    return @inline @. lazy(symmetric_part(Geometry.project(axis_uvw, gradₕ(UVW(u)))))
 end
 
 """
