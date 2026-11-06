@@ -109,27 +109,24 @@ function edmfx_tke_sources!(Yₜ, Y, p)
             # Pressure-drag return-to-isotropy for every updraft, then the
             # entrainment/detrainment shear-mixing source for every updraft
             ᶜa⁰_col = @. a⁰(Yc.sgsʲs, ᶜρʲs, turbconv_model)
-            edmfx_model.nh_pressure && unrolled_foreach(draft_indices) do j
-                @inline
+            edmfx_model.nh_pressure && for j in draft_indices
                 ᶜρa_dragʲ = Yc.sgsʲs.:($j).ρa
                 ᶜa_dragʲ = @. draft_area(ᶜρa_dragʲ, ᶜρʲs.:($$j))
                 ᶜΔw_dragʲ = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
-                ᶜdrag_coeff = @. lazy(
+                ᶜdrag_coeff = @inline @. lazy(
                     pressure_drag_coefficient(
                         α_d, scale_height, ᶜa_dragʲ, ᶜa⁰_col, a_min, a_max,
                     ),
                 )
                 @. Yₜc.ρtke +=
                     ᶜρa_dragʲ * ᶜa⁰_col * ᶜdrag_coeff * abs(ᶜΔw_dragʲ)^3
-                return nothing
             end
-            unrolled_foreach(draft_indices) do j
-                @inline
+            for j in draft_indices
                 ᶜρaʲ = Yc.sgsʲs.:($j).ρa
                 ᶜρʲ = ᶜρʲs.:($j)
                 ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
                 ᶜΔw = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
-                ᶜbuoy_inv_time_scale = @. lazy(
+                ᶜbuoy_inv_time_scale = @inline @. lazy(
                     ᶜinterp(
                         detr_buoy_inv_time_scale(
                             get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
@@ -156,7 +153,6 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                     ),
                 )
                 @. Yₜc.ρtke += half_FT * ᶜdetr * ᶜρaʲ * ᶜΔw^2
-                return nothing
             end
             return nothing
         end

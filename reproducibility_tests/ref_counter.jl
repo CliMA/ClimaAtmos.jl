@@ -1,4 +1,4 @@
-461
+462
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+462
+- Fused slab and column loops (advection, the turbulent and hyperdiffusive
+  fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the
+  gravity wave drag, AMD) change the order of floating-point operations.
+
 461
 - Update dependencies for v0.42.18
 

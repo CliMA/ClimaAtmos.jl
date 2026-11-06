@@ -127,24 +127,24 @@ tendency `-∂ᵥ(ρ u³ χ)`, with zero-flux boundary conditions imposed by
     interpolation), `Val(:first_order)`, `Val(:third_order)`, or
     `Val(:vanleer_limiter)`.
 """
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(
         -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
     )
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
@@ -293,7 +293,7 @@ end
 Add the Exner-form pressure gradient and buoyancy tendency
 `-(∂ᵥΦ - ∂ᵥΦ_r + cp_d (θ_v - θ_vr) ∂ᵥΠ)` to `Yₜf.u₃` for one column, which is
 equivalent to `grad_v(Φ) + grad_v(p) / ρ`. Called inside the fused column loop
-of `implicit_vertical_advection_tendency!`, so it must stay inlined.
+of `implicit_vertical_advection_tendency!`.
 """
 @inline function add_implicit_u₃_tendency!(
     Yₜf,

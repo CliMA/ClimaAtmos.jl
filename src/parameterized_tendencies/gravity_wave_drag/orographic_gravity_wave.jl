@@ -222,7 +222,7 @@ Prepares the inputs the forcing routine needs and then calls
   - The physical horizontal wind components from `Y.c.uₕ`.
 
 Reads `p.precomputed.ᶜp`, `ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and clobbers
-`p.scratch.ᶠtemp_scalar`, `ᶠtemp_field_level`, and `temp_data_face_level`. Described in
+`p.scratch.ᶠtemp_scalar` and `ᶠtemp_field_level`. Described in
 [garner2005](@cite); see the *Orographic Gravity Waves* page for the derivations.
 """
 orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
@@ -273,7 +273,6 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶠp = p.scratch.ᶠtemp_scalar
     @. ᶠp = ᶠinterp(ᶜp)
     scale_height_values = p.scratch.ᶠtemp_field_level
-    z_extrapolated_values = p.scratch.temp_data_face_level
 
     # explicit scale height approach for pressure extrapolation
     # Fields.level returns by reference
@@ -288,9 +287,10 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         log.(Fields.field_values(ᶠp_bottom) ./ Fields.field_values(ᶠp_second))
 
     # Calculate the extrapolated height (one level below bottom)
-    z_extrapolated_values .=
+    z_extrapolated_values = lazy.(
         Fields.field_values(ᶠz_bottom) .-
-        (Fields.field_values(ᶠz_second) .- Fields.field_values(ᶠz_bottom))
+        (Fields.field_values(ᶠz_second) .- Fields.field_values(ᶠz_bottom)),
+    )
 
     # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
     Boundary_value = Fields.Field(

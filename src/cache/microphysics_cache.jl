@@ -245,8 +245,7 @@ function set_precipitation_velocities!(
             @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
-            unrolled_foreach(draft_indices) do j
-                @inline
+            for j in draft_indices
                 ᶜsgsʲ = Yc.sgsʲs.:($j)
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
                 ᶜwʲ = ᶜwʲs.:($j)
@@ -262,7 +261,6 @@ function set_precipitation_velocities!(
                 @. ᶜρwₕhₜ +=
                     ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ *
                     (e_int_func(thp, ᶜTʲ) + ᶜΦ + $(Kin(ᶜwʲ, ᶜuʲ)))
-                return nothing
             end
 
             @. ᶜw = gs_terminal_velocity(
@@ -382,244 +380,333 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
+    zero_FT = FT(0)
 
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    n = n_mass_flux_subdomains(turbconv_model)
 
-    # scratch to compute env velocities
-    ᶜw⁰ = p.scratch.ᶜtemp_scalar
-    # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
-    # over subdomains once negative subdomain mass issues are resolved
-    ᶜρχ = p.scratch.ᶜtemp_scalar_2
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
 
     # Compute grid-scale sedimentation velocity based on subdomain velocities
-    # assuming grid-scale flux is equal to the  sum of sub-grid-scale fluxes.
+    # assuming grid-scale flux is equal to the  sum of sub-grid-scale fluxes,
+    # with the positive masses of the subdomains summed in `ᶜρχ`.
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
+    # over subdomains once negative subdomain mass issues are resolved
 
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
     ᶜn_lcl⁰ = ᶜspecific_env_value(@name(n_lcl), Y, p)
     ###
     ### Cloud liquid (number)
     ###
-    @. ᶜw⁰ = getindex(
-        CM2.cloud_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng.pdf_c,
-            cmc.stokes,
-            max(zero(Y.c.ρ), ᶜq_lcl⁰),
-            ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
-        ),
-        1,
-    )
-    @. ᶜwₙₗ = ᶜρa⁰ * ᶜn_lcl⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_lcl⁰)
-    for j in 1:n
-        @. ᶜwₙₗʲs.:($$j) = getindex(
+    DataLayouts.foreach_column(
+        Y.c,
+        ᶜq_lcl⁰,
+        ᶜρ⁰,
+        ᶜn_lcl⁰,
+        ᶜwₙₗ,
+        ᶜρa⁰,
+        ᶜwₙₗʲs,
+        ᶜρʲs,
+    ) do Yc, ᶜq_lcl⁰, ᶜρ⁰, ᶜn_lcl⁰, ᶜwₙₗ, ᶜρa⁰, ᶜwₙₗʲs, ᶜρʲs
+        ᶜw⁰ = @. getindex(
             CM2.cloud_terminal_velocity(
                 cm2p.warm_rain.seifert_beheng.pdf_c,
                 cmc.stokes,
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_lcl),
-                ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_lcl),
+                max(zero(Yc.ρ), ᶜq_lcl⁰),
+                ᶜρ⁰,
+                max(zero(Yc.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
             ),
             1,
         )
-        @. ᶜwₙₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_lcl * ᶜwₙₗʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_lcl)
+        @. ᶜwₙₗ = ᶜρa⁰ * ᶜn_lcl⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜn_lcl⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwₙₗʲs.:($$j) = getindex(
+                CM2.cloud_terminal_velocity(
+                    cm2p.warm_rain.seifert_beheng.pdf_c,
+                    cmc.stokes,
+                    max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_lcl),
+                    ᶜρʲs.:($$j),
+                    max(zero(Yc.ρ), ᶜρʲs.:($$j) * Yc.sgsʲs.:($$j).n_lcl),
+                ),
+                1,
+            )
+            @. ᶜwₙₗ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).n_lcl * ᶜwₙₗʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).n_lcl)
+        end
+        @. ᶜwₙₗ = ifelse(ᶜρχ > zero_FT, ᶜwₙₗ / ᶜρχ, zero_FT)
     end
-    @. ᶜwₙₗ = ifelse(ᶜρχ > FT(0), ᶜwₙₗ / ᶜρχ, FT(0))
 
     ###
     ### Cloud liquid (mass)
     ###
-    @. ᶜw⁰ = getindex(
-        CM2.cloud_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng.pdf_c,
-            cmc.stokes,
-            max(zero(Y.c.ρ), ᶜq_lcl⁰),
-            ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
-        ),
-        2,
-    )
-    @. ᶜwₗ = ᶜρa⁰ * ᶜq_lcl⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_lcl⁰)
-    for j in 1:n
-        @. ᶜwₗʲs.:($$j) = getindex(
+    DataLayouts.foreach_column(
+        Y.c,
+        ᶜq_lcl⁰,
+        ᶜρ⁰,
+        ᶜn_lcl⁰,
+        ᶜwₗ,
+        ᶜρa⁰,
+        ᶜwₗʲs,
+        ᶜρʲs,
+        ᶜρwₕhₜ,
+        ᶜT⁰,
+        ᶜΦ,
+        ᶜu⁰,
+    ) do Yc, ᶜq_lcl⁰, ᶜρ⁰, ᶜn_lcl⁰, ᶜwₗ, ᶜρa⁰, ᶜwₗʲs, ᶜρʲs, ᶜρwₕhₜ, ᶜT⁰, ᶜΦ, ᶜu⁰
+        ᶜw⁰ = @. getindex(
             CM2.cloud_terminal_velocity(
                 cm2p.warm_rain.seifert_beheng.pdf_c,
                 cmc.stokes,
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_lcl),
-                ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_lcl),
+                max(zero(Yc.ρ), ᶜq_lcl⁰),
+                ᶜρ⁰,
+                max(zero(Yc.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
             ),
             2,
         )
-        @. ᶜwₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_lcl * ᶜwₗʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_lcl)
+        @. ᶜwₗ = ᶜρa⁰ * ᶜq_lcl⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜq_lcl⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwₗʲs.:($$j) = getindex(
+                CM2.cloud_terminal_velocity(
+                    cm2p.warm_rain.seifert_beheng.pdf_c,
+                    cmc.stokes,
+                    max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_lcl),
+                    ᶜρʲs.:($$j),
+                    max(zero(Yc.ρ), ᶜρʲs.:($$j) * Yc.sgsʲs.:($$j).n_lcl),
+                ),
+                2,
+            )
+            @. ᶜwₗ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_lcl * ᶜwₗʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_lcl)
+        end
+        @. ᶜwₗ = ifelse(ᶜρχ > zero_FT, ᶜwₗ / ᶜρχ, zero_FT)
+        # contribution of env cloud liquid advection to htot advection
+        @. ᶜρwₕhₜ =
+            (
+                Yc.ρq_lcl * ᶜwₗ -
+                Yc.sgsʲs.:(1).ρa * Yc.sgsʲs.:(1).q_lcl * ᶜwₗʲs.:(1)
+            ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu⁰)))
     end
-    @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
-    # contribution of env cloud liquid advection to htot advection
-    @. ᶜρwₕhₜ =
-        (
-            Y.c.ρq_lcl * ᶜwₗ -
-            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_lcl * ᶜwₗʲs.:(1)
-        ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu⁰)))
 
     ###
     ### Cloud ice
     ###
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
     # TODO sedimentation of ice is based on the 1M scheme
-    @. ᶜw⁰ = CMNe.terminal_velocity(
-        cmc.ice,
-        cmc.Ch2022.small_ice,
+    DataLayouts.foreach_column(
+        Y.c,
         ᶜρ⁰,
-        max(zero(Y.c.ρ), ᶜq_icl⁰),
-    )
-    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_icl⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_icl⁰)
-    for j in 1:n
-        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
+        ᶜq_icl⁰,
+        ᶜwᵢ,
+        ᶜρa⁰,
+        ᶜwᵢʲs,
+        ᶜρʲs,
+        ᶜρwₕhₜ,
+        ᶜT⁰,
+        ᶜΦ,
+        ᶜu⁰,
+    ) do Yc, ᶜρ⁰, ᶜq_icl⁰, ᶜwᵢ, ᶜρa⁰, ᶜwᵢʲs, ᶜρʲs, ᶜρwₕhₜ, ᶜT⁰, ᶜΦ, ᶜu⁰
+        ᶜw⁰ = @. CMNe.terminal_velocity(
             cmc.ice,
             cmc.Ch2022.small_ice,
-            ᶜρʲs.:($$j),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_icl),
+            ᶜρ⁰,
+            max(zero(Yc.ρ), ᶜq_icl⁰),
         )
-        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_icl * ᶜwᵢʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_icl)
+        @. ᶜwᵢ = ᶜρa⁰ * ᶜq_icl⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜq_icl⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
+                cmc.ice,
+                cmc.Ch2022.small_ice,
+                ᶜρʲs.:($$j),
+                max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_icl),
+            )
+            @. ᶜwᵢ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_icl * ᶜwᵢʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_icl)
+        end
+        @. ᶜwᵢ = ifelse(ᶜρχ > zero_FT, ᶜwᵢ / ᶜρχ, zero_FT)
+        # contribution of env cloud ice advection to htot advection
+        @. ᶜρwₕhₜ +=
+            (
+                Yc.ρq_icl * ᶜwᵢ -
+                Yc.sgsʲs.:(1).ρa * Yc.sgsʲs.:(1).q_icl * ᶜwᵢʲs.:(1)
+            ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu⁰)))
     end
-    @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
-    # contribution of env cloud ice advection to htot advection
-    @. ᶜρwₕhₜ +=
-        (
-            Y.c.ρq_icl * ᶜwᵢ -
-            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_icl * ᶜwᵢʲs.:(1)
-        ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu⁰)))
 
     ###
     ### Rain (number)
     ###
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
-    @. ᶜw⁰ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng,
-            cmc.Ch2022.rain,
-            max(zero(Y.c.ρ), ᶜq_rai⁰),
-            ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
-        ),
-        1,
-    )
-    @. ᶜwₙᵣ = ᶜρa⁰ * ᶜn_rai⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_rai⁰)
-    for j in 1:n
-        @. ᶜwₙᵣʲs.:($$j) = getindex(
+    DataLayouts.foreach_column(
+        Y.c,
+        ᶜq_rai⁰,
+        ᶜρ⁰,
+        ᶜn_rai⁰,
+        ᶜwₙᵣ,
+        ᶜρa⁰,
+        ᶜwₙᵣʲs,
+        ᶜρʲs,
+    ) do Yc, ᶜq_rai⁰, ᶜρ⁰, ᶜn_rai⁰, ᶜwₙᵣ, ᶜρa⁰, ᶜwₙᵣʲs, ᶜρʲs
+        ᶜw⁰ = @. getindex(
             CM2.rain_terminal_velocity(
                 cm2p.warm_rain.seifert_beheng,
                 cmc.Ch2022.rain,
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
-                ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
+                max(zero(Yc.ρ), ᶜq_rai⁰),
+                ᶜρ⁰,
+                max(zero(Yc.ρ), ᶜρ⁰ * ᶜn_rai⁰),
             ),
             1,
         )
-        @. ᶜwₙᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai * ᶜwₙᵣʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai)
+        @. ᶜwₙᵣ = ᶜρa⁰ * ᶜn_rai⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜn_rai⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwₙᵣʲs.:($$j) = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.warm_rain.seifert_beheng,
+                    cmc.Ch2022.rain,
+                    max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_rai),
+                    ᶜρʲs.:($$j),
+                    max(zero(Yc.ρ), ᶜρʲs.:($$j) * Yc.sgsʲs.:($$j).n_rai),
+                ),
+                1,
+            )
+            @. ᶜwₙᵣ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).n_rai * ᶜwₙᵣʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).n_rai)
+        end
+        @. ᶜwₙᵣ = ifelse(ᶜρχ > zero_FT, ᶜwₙᵣ / ᶜρχ, zero_FT)
     end
-    @. ᶜwₙᵣ = ifelse(ᶜρχ > FT(0), ᶜwₙᵣ / ᶜρχ, FT(0))
 
     ###
     ### Rain (mass)
     ###
-    @. ᶜw⁰ = getindex(
-        CM2.rain_terminal_velocity(
-            cm2p.warm_rain.seifert_beheng,
-            cmc.Ch2022.rain,
-            max(zero(Y.c.ρ), ᶜq_rai⁰),
-            ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
-        ),
-        2,
-    )
-    @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_rai⁰)
-    for j in 1:n
-        @. ᶜwᵣʲs.:($$j) = getindex(
+    DataLayouts.foreach_column(
+        Y.c,
+        ᶜq_rai⁰,
+        ᶜρ⁰,
+        ᶜn_rai⁰,
+        ᶜwᵣ,
+        ᶜρa⁰,
+        ᶜwᵣʲs,
+        ᶜρʲs,
+        ᶜρwₕhₜ,
+        ᶜT⁰,
+        ᶜΦ,
+        ᶜu⁰,
+    ) do Yc, ᶜq_rai⁰, ᶜρ⁰, ᶜn_rai⁰, ᶜwᵣ, ᶜρa⁰, ᶜwᵣʲs, ᶜρʲs, ᶜρwₕhₜ, ᶜT⁰, ᶜΦ, ᶜu⁰
+        ᶜw⁰ = @. getindex(
             CM2.rain_terminal_velocity(
                 cm2p.warm_rain.seifert_beheng,
                 cmc.Ch2022.rain,
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
-                ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
+                max(zero(Yc.ρ), ᶜq_rai⁰),
+                ᶜρ⁰,
+                max(zero(Yc.ρ), ᶜρ⁰ * ᶜn_rai⁰),
             ),
             2,
         )
-        @. ᶜwᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai)
+        @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜq_rai⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwᵣʲs.:($$j) = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.warm_rain.seifert_beheng,
+                    cmc.Ch2022.rain,
+                    max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_rai),
+                    ᶜρʲs.:($$j),
+                    max(zero(Yc.ρ), ᶜρʲs.:($$j) * Yc.sgsʲs.:($$j).n_rai),
+                ),
+                2,
+            )
+            @. ᶜwᵣ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_rai)
+        end
+        @. ᶜwᵣ = ifelse(ᶜρχ > zero_FT, ᶜwᵣ / ᶜρχ, zero_FT)
+        # contribution of env rain advection to qtot advection
+        @. ᶜρwₕhₜ +=
+            (
+                Yc.ρq_rai * ᶜwᵣ -
+                Yc.sgsʲs.:(1).ρa * Yc.sgsʲs.:(1).q_rai * ᶜwᵣʲs.:(1)
+            ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu⁰)))
     end
-    @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
-    # contribution of env rain advection to qtot advection
-    @. ᶜρwₕhₜ +=
-        (
-            Y.c.ρq_rai * ᶜwᵣ -
-            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_rai * ᶜwᵣʲs.:(1)
-        ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu⁰)))
 
     ###
     ### Snow
     ####
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜw⁰ = CM1.terminal_velocity(
-        cm1p.precip.snow,
-        cm1p.terminal_velocity.snow,
+    DataLayouts.foreach_column(
+        Y.c,
         ᶜρ⁰,
-        max(zero(Y.c.ρ), ᶜq_sno⁰),
-    )
-    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
-    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
-    for j in 1:n
-        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
+        ᶜq_sno⁰,
+        ᶜwₛ,
+        ᶜρa⁰,
+        ᶜwₛʲs,
+        ᶜρʲs,
+        ᶜρwₕhₜ,
+        ᶜT⁰,
+        ᶜΦ,
+        ᶜu⁰,
+    ) do Yc, ᶜρ⁰, ᶜq_sno⁰, ᶜwₛ, ᶜρa⁰, ᶜwₛʲs, ᶜρʲs, ᶜρwₕhₜ, ᶜT⁰, ᶜΦ, ᶜu⁰
+        ᶜw⁰ = @. CM1.terminal_velocity(
             cm1p.precip.snow,
             cm1p.terminal_velocity.snow,
-            ᶜρʲs.:($$j),
-            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
+            ᶜρ⁰,
+            max(zero(Yc.ρ), ᶜq_sno⁰),
         )
-        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
-        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
+        @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
+        ᶜρχ = @. max(zero(Yc.ρ), ᶜρa⁰ * ᶜq_sno⁰)
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
+                cm1p.precip.snow,
+                cm1p.terminal_velocity.snow,
+                ᶜρʲs.:($$j),
+                max(zero(Yc.ρ), Yc.sgsʲs.:($$j).q_sno),
+            )
+            @. ᶜwₛ += Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
+            @. ᶜρχ += max(zero(Yc.ρ), Yc.sgsʲs.:($$j).ρa * Yc.sgsʲs.:($$j).q_sno)
+        end
+        @. ᶜwₛ = ifelse(ᶜρχ > zero_FT, ᶜwₛ / ᶜρχ, zero_FT)
+        # contribution of env snow advection to htot advection
+        @. ᶜρwₕhₜ +=
+            (
+                Yc.ρq_sno * ᶜwₛ -
+                Yc.sgsʲs.:(1).ρa * Yc.sgsʲs.:(1).q_sno * ᶜwₛʲs.:(1)
+            ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu⁰)))
     end
-    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
-    # contribution of env snow advection to htot advection
-    @. ᶜρwₕhₜ +=
-        (
-            Y.c.ρq_sno * ᶜwₛ -
-            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_sno * ᶜwₛʲs.:(1)
-        ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu⁰)))
 
     # Add contributions to energy and total water advection
-    for j in 1:n
-        @. ᶜρwₕhₜ +=
-            Y.c.sgsʲs.:($$j).ρa * (
-                ᶜwₗʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_lcl *
-                (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₗʲs.:($j), ᶜuʲs.:($j)))) +
-                ᶜwᵢʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_icl *
-                (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵢʲs.:($j), ᶜuʲs.:($j)))) +
-                ᶜwᵣʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_rai *
-                (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵣʲs.:($j), ᶜuʲs.:($j)))) +
-                ᶜwₛʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_sno *
-                (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
-            )
+    DataLayouts.foreach_point(
+        Y.c,
+        ᶜρwₕhₜ,
+        ᶜwₗʲs,
+        ᶜTʲs,
+        ᶜΦ,
+        ᶜuʲs,
+        ᶜwᵢʲs,
+        ᶜwᵣʲs,
+        ᶜwₛʲs,
+    ) do Yc, ᶜρwₕhₜ, ᶜwₗʲs, ᶜTʲs, ᶜΦ, ᶜuʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. ᶜρwₕhₜ +=
+                Yc.sgsʲs.:($$j).ρa * (
+                    ᶜwₗʲs.:($$j) *
+                    Yc.sgsʲs.:($$j).q_lcl *
+                    (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₗʲs.:($j), ᶜuʲs.:($j)))) +
+                    ᶜwᵢʲs.:($$j) *
+                    Yc.sgsʲs.:($$j).q_icl *
+                    (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵢʲs.:($j), ᶜuʲs.:($j)))) +
+                    ᶜwᵣʲs.:($$j) *
+                    Yc.sgsʲs.:($$j).q_rai *
+                    (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵣʲs.:($j), ᶜuʲs.:($j)))) +
+                    ᶜwₛʲs.:($$j) *
+                    Yc.sgsʲs.:($$j).q_sno *
+                    (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
+                )
+        end
     end
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
 
@@ -716,8 +803,9 @@ Dispatch on `microphysics_model` and `turbconv_model`:
     per-subdomain specific tendencies `ᶜmp_tendency⁰` and `ᶜmp_tendencyʲs` with the
     current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
   - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): refreshes the sedimentation
-    velocities with `set_precipitation_velocities!` (for 1M, when any mode is
-    state-dependent) and calls `set_precipitation_surface_fluxes!`. Density
+    velocities with `set_precipitation_velocities!` (when they depend on the state;
+    see `state_dependent_precipitation_velocities`) and calls
+    `set_precipitation_surface_fluxes!`. Density
     weighting of the specific tendencies is applied at tendency-evaluation time
     in `tendency.jl`.
   - Default: no-op (microphysics not active).
@@ -740,14 +828,18 @@ function update_implicit_microphysics_cache!(
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
-    n = n_mass_flux_subdomains(tm)
 
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
-    for j in 1:n
-        ρdq_tot_dtʲ = @. lazy(Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt)
-        @. ᶜρ_dq_tot_dt += ρdq_tot_dtʲ
-        @. ᶜρ_de_tot_dt += ρdq_tot_dtʲ * ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+    DataLayouts.foreach_point(
+        Y.c, ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt,
+    ) do Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt
+        @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
+        @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
+        for j in 1:n_mass_flux_subdomains(tm)
+            ρdq_tot_dtʲ =
+                @inline @. lazy(Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt)
+            @. ᶜρ_dq_tot_dt += ρdq_tot_dtʲ
+            @. ᶜρ_de_tot_dt += ρdq_tot_dtʲ * ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+        end
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
@@ -764,23 +856,36 @@ function update_implicit_microphysics_cache!(
     # Leaving updraft velocities at their explicit-stage values treats the
     # nonlinear part of the sedimentation flux explicitly.
     # No number of Newton iterations can correct a field that nothing updates.
-    # Every mode other than `FixedTerminalVelocity` depends on the state.
-    if mm isa NonEquilibriumMicrophysics1M
-        modes = (
-            p.atmos.terminal_velocity_liquid,
-            p.atmos.terminal_velocity_ice,
-            p.atmos.terminal_velocity_rain,
-            p.atmos.terminal_velocity_snow,
-        )
-        if !all(mode -> mode isa FixedTerminalVelocity, modes)
-            set_precipitation_velocities!(Y, p, mm, tm)
-        end
-    else
+    state_dependent_precipitation_velocities(p.atmos) &&
         set_precipitation_velocities!(Y, p, mm, tm)
-    end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end
+
+"""
+    state_dependent_precipitation_velocities(atmos)
+
+Whether the sedimentation velocities of the microphysics model depend on the state,
+so that `update_implicit_microphysics_cache!` refreshes them at every Newton iterate
+and `set_explicit_precomputed_quantities!`, which follows it at the same state, does
+not set them again. This holds for the non-equilibrium schemes, except for the 1M
+scheme with a `FixedTerminalVelocity` for every species.
+"""
+state_dependent_precipitation_velocities(atmos) =
+    state_dependent_precipitation_velocities(atmos.microphysics_model, atmos)
+
+state_dependent_precipitation_velocities(_, atmos) = false
+state_dependent_precipitation_velocities(::NonEquilibriumMicrophysics, atmos) = true
+state_dependent_precipitation_velocities(::NonEquilibriumMicrophysics1M, atmos) =
+    !all(
+        mode -> mode isa FixedTerminalVelocity,
+        (
+            atmos.terminal_velocity_liquid,
+            atmos.terminal_velocity_ice,
+            atmos.terminal_velocity_rain,
+            atmos.terminal_velocity_snow,
+        ),
+    )
 
 """
     has_implicit_1m_microphysics(p)
@@ -861,59 +966,108 @@ function update_implicit_1m_tendency!(
     # not match that linearization.
     dt = p.dtγ
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
     dev = ClimaComms.device(Y.c)
     vcmp_i, vthp = _fold(dev, cmp_i), _fold(dev, thp)
-
-    n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
     mode = BMT.Instantaneous()
 
-    for j in 1:n
-        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
-        @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dt, nsubs, mode,
-        )
+    DataLayouts.foreach_point(
+        Y.c,
+        ᶜuʲs,
+        ᶜmp_tendency_implicitʲs,
+        ᶜρʲs,
+        ᶜq_tot_nonnegʲs,
+        ᶜTʲs,
+    ) do Yc, ᶜuʲs, ᶜmp_tendency_implicitʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
+        for j in 1:n_mass_flux_subdomains(tm)
+            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+            @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
+                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dt, nsubs, mode,
+            )
+        end
     end
 
+    set_environment_1m_tendency!(
+        ᶜmp_tendency_implicit⁰, Y, p, tm, cmp_i, thp, dt, nsubs, nsubs_quad, (mode,),
+    )
+    return nothing
+end
+
+"""
+    set_environment_1m_tendency!(
+        ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+    )
+
+Write the 1M microphysics tendency of the `PrognosticEDMFX` environment, with the
+microphysics parameters `cmp`, the thermodynamics parameters `thp`, and the SGS
+quadrature `p.atmos.sgs_quadrature`, into `ᶜmp_tendency⁰`. The environment
+density and specific humidities, the liquid fraction `λ`, and the linearized SGS
+saturation-excess mean `mu_S` are first materialized in scratch fields by one
+column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
+arguments of `microphysics_tendencies_1m`.
+"""
+function set_environment_1m_tendency!(
+    ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+)
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    # The column loop calls Thermodynamics with `thp`; the microphysics
+    # broadcasts take the parameters folded for the device (see `_fold`).
+    dev = ClimaComms.device(Y.c)
+    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
+    # Materialize the environment inputs, the liquid fraction `λ`, and the
+    # linearized SGS saturation-excess mean `mu_S` in one column loop so the
+    # SGS-quadrature microphysics kernel reads them without recomputing them at
+    # every quadrature node.
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar
     ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
     ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
+    ᶜmu_S⁰ = Fields.Field(p.scratch.temp_data, axes(Y.c))
     sgs_quad = p.atmos.sgs_quadrature
+
+    DataLayouts.foreach_column(
+        ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+        Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ) do ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+    Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
+        # The weight of `specific`, shared by the four species.
+        ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, tm.a_half)
+        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        if !not_quadrature(sgs_quad)
+            @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+            @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
+        end
+    end
+
     ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, vcmp_i, vthp, dt, nsubs, mode,
+            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs, mode_args...,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) =
-            p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency_implicit⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp_i, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode,
+            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
         )
     end
     return nothing
@@ -1010,11 +1164,21 @@ function update_updraft_microphysics_tendency_cache!(
         ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
-    for j in 1:n_mass_flux_subdomains(tm)
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
-            cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dtγ,
-        )
+    DataLayouts.foreach_point(
+        ᶜmp_tendencyʲs,
+        ᶜρʲs,
+        ᶜTʲs,
+        ᶜq_tot_nonnegʲs,
+        ᶜq_liqʲs,
+        ᶜq_iceʲs,
+        ᶜΦ,
+    ) do ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜΦ
+        for j in 1:n_mass_flux_subdomains(tm)
+            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
+                cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dtγ,
+            )
+        end
     end
     return nothing
 end
@@ -1054,19 +1218,28 @@ function update_updraft_microphysics_tendency_cache!(
     vcmp_i = _fold(dev, cmp_i)
     nsubs = mp1m.n_substeps
     refresh_implicit = has_implicit_1m_microphysics(p)
-    for j in 1:n_mass_flux_subdomains(tm)
-        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
-        )
-        if refresh_implicit
+    DataLayouts.foreach_point(
+        ᶜmp_tendencyʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
+    ) do ᶜmp_tendencyʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
+        for j in 1:n_mass_flux_subdomains(tm)
+            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
+                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
+            )
+        end
+    end
+    refresh_implicit && DataLayouts.foreach_point(
+        ᶜmp_tendency_implicitʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
+    ) do ᶜmp_tendency_implicitʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
+        for j in 1:n_mass_flux_subdomains(tm)
+            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
             @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
                 ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-                Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-                Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
+                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
                 ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
             )
         end
@@ -1127,14 +1300,22 @@ function set_microphysics_tendency_cache!(
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
 
-    n = n_mass_flux_subdomains(tm)
-
-    for j in 1:n
-        # Point-wise evaluation of microphysics tendencies in the updraft
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
-            cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dt,
-        )
+    DataLayouts.foreach_point(
+        ᶜmp_tendencyʲs,
+        ᶜρʲs,
+        ᶜTʲs,
+        ᶜq_tot_nonnegʲs,
+        ᶜq_liqʲs,
+        ᶜq_iceʲs,
+        ᶜΦ,
+    ) do ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜΦ
+        for j in 1:n_mass_flux_subdomains(tm)
+            # Point-wise evaluation of microphysics tendencies in the updraft
+            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
+                cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dt,
+            )
+        end
     end
 
     ### Environment contribution with/without quadrature sampling.
@@ -1159,13 +1340,17 @@ function set_microphysics_tendency_cache!(
     # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
 
-    @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
-    for j in 1:n
-        @. ᶜρ_dq_tot_dt += ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa
-        @. ᶜρ_de_tot_dt +=
-            ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa *
-            ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+    DataLayouts.foreach_point(
+        Y.c, ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt,
+    ) do Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt
+        @. ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
+        @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency⁰.e_tot_hlpr
+        for j in 1:n_mass_flux_subdomains(tm)
+            @. ᶜρ_dq_tot_dt += ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Yc.sgsʲs.:($$j).ρa
+            @. ᶜρ_de_tot_dt +=
+                ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Yc.sgsʲs.:($$j).ρa *
+                ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+        end
     end
 
     return nothing
@@ -1228,80 +1413,39 @@ function set_microphysics_tendency_cache!(
     # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     dev = ClimaComms.device(Y.c)
     vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
-
-    n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
 
     ### Updraft contribution
-    for j in 1:n
-        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dt, nsubs,
-        )
+    DataLayouts.foreach_point(
+        Y.c,
+        ᶜuʲs,
+        ᶜmp_tendencyʲs,
+        ᶜρʲs,
+        ᶜq_tot_nonnegʲs,
+        ᶜTʲs,
+    ) do Yc, ᶜuʲs, ᶜmp_tendencyʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
+        for j in 1:n_mass_flux_subdomains(tm)
+            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
+                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dt, nsubs,
+            )
+        end
     end
 
     ### Environment contribution
-    # Materialize the environment inputs, the liquid fraction `λ`, and the
-    # linearized SGS saturation-excess mean `mu_S` in one column loop so the
-    # SGS-quadrature microphysics kernel reads them without recomputing them at
-    # every quadrature node.
-    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-    ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
-    ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
-    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
-    ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-    ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-    sgs_quad = p.atmos.sgs_quadrature
-
-    DataLayouts.foreach_column(
-        ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
-        Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-    ) do ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
-    Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
-        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
-        # The weight of `specific`, shared by the four species.
-        ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, tm.a_half)
-        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
-        if !not_quadrature(sgs_quad)
-            @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-            @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        end
-        return nothing
-    end
-
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
-    if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs,
-        )
-    else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
-        opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
-        )
-    end
-
+    set_environment_1m_tendency!(
+        ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, (),
+    )
     return nothing
 end
 
@@ -1385,7 +1529,6 @@ function set_microphysics_tendency_cache!(
     acp = CAP.microphysics_cloud_params(p.params).activation
     pap = p.params.prescribed_aerosol_params
 
-    n = n_mass_flux_subdomains(tm)
 
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
@@ -1408,28 +1551,40 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Updraft contribution
-    for j in 1:n
-        # Microphysics
-        compute_2m_precipitation_tendencies!(
-            ᶜmp_tendencyʲs.:($j), ᶜρʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
-            Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).n_lcl,
-            Y.c.sgsʲs.:($j).q_rai, Y.c.sgsʲs.:($j).n_rai,
-            ᶜTʲs.:($j), dt, cm2p, thp,
-            p.atmos.microphysics_tendency_timestepping,
-        )
-        #ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
-        #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
-        #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
-        # Aerosol activation
-        ᶜwʲ = @. lazy(max(0, w_component(WVec(ᶜuʲs.:($$j)))))
-        @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
-            acp, seasalt_num, seasalt_mean_radius, sulfate_num,
-            ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).n_lcl + Y.c.sgsʲs.:($$j).n_rai,
-            ᶜρʲs.:($$j), ᶜwʲ, cm2p, thp, ᶜTʲs.:($$j), ᶜp, dt, (pap,),
-        )
+    (; microphysics_tendency_timestepping) = p.atmos
+    DataLayouts.foreach_point(
+        ᶜmp_tendencyʲs, Y.c, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
+    ) do ᶜmp_tendencyʲs, Yc, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
+        for j in 1:n_mass_flux_subdomains(tm)
+            # Microphysics
+            compute_2m_precipitation_tendencies!(
+                ᶜmp_tendencyʲs.:($j), ᶜρʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
+                Yc.sgsʲs.:($j).q_lcl, Yc.sgsʲs.:($j).n_lcl,
+                Yc.sgsʲs.:($j).q_rai, Yc.sgsʲs.:($j).n_rai,
+                ᶜTʲs.:($j), dt, cm2p, thp, microphysics_tendency_timestepping,
+            )
+            #ᶜmp_tendencyʲs.:($j).dq_ice_dt = 0
+            #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
+            #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
+        end
+    end
+    # Aerosol activation
+    DataLayouts.foreach_point(
+        ᶜmp_tendencyʲs, Y.c, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs, ᶜuʲs, ᶜp, seasalt_num,
+        seasalt_mean_radius, sulfate_num,
+    ) do ᶜmp_tendencyʲs, Yc, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs, ᶜuʲs, ᶜp, seasalt_num,
+    seasalt_mean_radius, sulfate_num
+        for j in 1:n_mass_flux_subdomains(tm)
+            ᶜwʲ = @inline @. lazy(max(0, w_component(WVec(ᶜuʲs.:($$j)))))
+            @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
+                acp, seasalt_num, seasalt_mean_radius, sulfate_num,
+                ᶜq_tot_nonnegʲs.:($$j),
+                Yc.sgsʲs.:($$j).q_lcl + Yc.sgsʲs.:($$j).q_rai,
+                Yc.sgsʲs.:($$j).q_icl,
+                Yc.sgsʲs.:($$j).n_lcl + Yc.sgsʲs.:($$j).n_rai,
+                ᶜρʲs.:($$j), ᶜwʲ, cm2p, thp, ᶜTʲs.:($$j), ᶜp, dt, (pap,),
+            )
+        end
     end
 
     ### Environment contribution

@@ -185,7 +185,6 @@ include("../test_helpers.jl")
         ) do vtt, _, ᶜqʲ, ᶜwʲ, ᶜa, ᶠJ, ᶜρ⁰w⁰χ⁰
             CA.updraft_sedimentation!(
                 vtt,
-                p,
                 p.precomputed.ᶜρʲs.:(1),
                 ᶜwʲ,
                 ᶜa,
@@ -362,9 +361,16 @@ include("../test_helpers.jl")
     q_sno_state = CA.@name(c.sgsʲs.:(1).q_sno)
     CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
     ∂q_tot_open = copy(matrix[CA.@name(c.sgsʲs.:(1).q_tot), q_sno_state])
-    ᶜ∂a∂z = copy(p.scratch.ᶜtemp_scalar_7)
     ᶜρʲ = p.precomputed.ᶜρʲs.:(1)
     ᶜa = @. sgsʲ.ρa / ᶜρʲ
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜ∂a∂z = @. CA.ᶜprecipdivᵥ(
+        CA.CT3(
+            p.core.ᶠ∂ξ³∂x³ *
+            (CA.ᶠinterp(ᶜJ) / ᶠJ * CA.ᶠtop_bias(CA.draft_area(sgsʲ.ρa, ᶜρʲ))),
+        ),
+    )
     ᶜwʲ = p.precomputed.ᶜwₛʲs.:(1)
     ᶜlateral_open = @. ᶜinv_ρ̂ * (1 - sgsʲ.q_tot) *
        ifelse(
