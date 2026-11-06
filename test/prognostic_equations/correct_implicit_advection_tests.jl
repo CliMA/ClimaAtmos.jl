@@ -2,10 +2,10 @@
 Regression tests for `correct_implicit_advection_tendency!`, the first-order
 upwind implicit vertical advection of sedimenting tracers, and the
 stage-weighted precipitation surface-flux accumulator. At stage Courant number
-`|u³| * dtγ ≤ 1`, `vertical_transport(:none) + upwinding_correction ==
-vertical_transport(upwinding)` for `ρe_tot` and `ρq_tot`, and `vtt_upwind1 +
-upwinding_correction == vtt_vanleer` for sedimenting tracers; at `|u³| * dtγ >
-1`, the face correction scales by `1 / (|u³| * dtγ)`.
+`|u³| * dtγ ≤ 1`, `vertical_transport(base) + upwinding_correction ==
+vertical_transport(upwinding)` for `ρe_tot`, `ρq_tot`, and the sedimenting
+tracers, with `base = grid_mean_base_upwinding(Y)`; at `|u³| * dtγ > 1`, the
+face correction scales by `1 / (|u³| * dtγ)`.
 =#
 using Test
 using LinearAlgebra
@@ -47,6 +47,15 @@ end
     (; dt, dtγ) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
     upwinding = p.atmos.numerics.energy_q_tot_upwinding
+    # With condensate masses in the state, energy, total water, and the
+    # condensates share the first-order upwind base and the
+    # `energy_q_tot_upwinding` correction.
+    base = CA.grid_mean_base_upwinding(Y)
+    @test base == Val(:first_order)
+    # A state without condensate masses keeps the central base.
+    @test CA.grid_mean_base_upwinding((;
+        c = (; ρ = Y.c.ρ, ρe_tot = Y.c.ρe_tot, ρq_tot = Y.c.ρq_tot),
+    )) == Val(:none)
 
     # Populate nontrivial condensate profiles and sub-unity stage Courant
     # velocity (`|u³| * dtγ ≤ 0.25 < 1`) so the exact recovery identity holds.
@@ -67,27 +76,26 @@ end
     CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
     @test p.scratch.precip_stage_idx[] == stage_idx
 
-    # Centered and full-upwind vertical fluxes, materialized from
+    # Base and full-upwind vertical fluxes, materialized from
     # `vertical_transport`.
-    centered_ρe = similar(Y.c.ρe_tot)
+    base_ρe = similar(Y.c.ρe_tot)
     upwind_ρe = similar(Y.c.ρe_tot)
-    vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, base)
     vtt_up = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, upwinding)
-    @. centered_ρe = vtt_0
+    @. base_ρe = vtt_0
     @. upwind_ρe = vtt_up
 
-    @test parent(Yₜ_corr.c.ρe_tot) .+ parent(centered_ρe) ≈ parent(upwind_ρe)
+    @test parent(Yₜ_corr.c.ρe_tot) .+ parent(base_ρe) ≈ parent(upwind_ρe)
 
     if !(p.atmos.microphysics_model isa CA.DryModel)
         ᶜq_tot = @. CA.specific(Y.c.ρq_tot, Y.c.ρ)
-        centered_ρq = similar(Y.c.ρq_tot)
+        base_ρq = similar(Y.c.ρq_tot)
         upwind_ρq = similar(Y.c.ρq_tot)
-        vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, base)
         vtt_up = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, upwinding)
-        @. centered_ρq = vtt_0
+        @. base_ρq = vtt_0
         @. upwind_ρq = vtt_up
-        @test parent(Yₜ_corr.c.ρq_tot) .+ parent(centered_ρq) ≈
-              parent(upwind_ρq)
+        @test parent(Yₜ_corr.c.ρq_tot) .+ parent(base_ρq) ≈ parent(upwind_ρq)
 
         col_int = Fields.zeros(Spaces.horizontal_space(axes(Y.c)))
         col_mass = Fields.zeros(Spaces.horizontal_space(axes(Y.c)))

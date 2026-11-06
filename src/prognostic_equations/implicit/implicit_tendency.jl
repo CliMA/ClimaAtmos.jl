@@ -25,11 +25,12 @@ configurations dispatch the SGS tendencies to no-ops.
 
 The linearization of this tendency is the Jacobian ``∂Yₜ/∂Y`` computed by the
 [`JacobianAlgorithm`](@ref) subtypes; the residual it enters contains the
-central (`Val(:none)`) vertical transport of `ρe_tot` and `ρq_tot`, and the
-first-order upwind (`Val(:first_order)`) vertical transport of the
-non-equilibrium microphysics tracers and `ρtke` — the Courant-limited
-upwind correction on `ρe_tot` and `ρq_tot` is applied after the Newton solve by
-`correct_implicit_advection_tendency!`.
+vertical transport of `ρe_tot` and `ρq_tot` with the reconstruction of
+`grid_mean_base_upwinding(Y)` (first-order upwind alongside sedimenting
+condensates, central otherwise) and the first-order upwind vertical transport
+of the non-equilibrium microphysics tracers and `ρtke`. The Courant-limited
+high-order correction of `ρe_tot`, `ρq_tot`, and the sedimenting tracers is
+applied after the Newton solve by `correct_implicit_advection_tendency!`.
 
 Reads the precomputed quantities set by `set_implicit_precomputed_quantities!`
 (`ᶠu³`, `ᶜh_tot`, sedimentation and precipitation terminal velocities, and the
@@ -187,6 +188,25 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 """
+    grid_mean_base_upwinding(Y)
+
+Return the reconstruction of the implicit grid-mean vertical advection of
+`h_tot` and `q_tot` inside the Newton residual: `Val(:first_order)` when `Y`
+carries sedimenting condensate masses (the non-equilibrium microphysics), and
+`Val(:none)` (central) otherwise. With condensates present, energy, total
+water, and the condensates cross each face with the same first-order upwind
+reconstruction and receive the same Courant-limited high-order correction
+after the Newton solve, so the vapor and temperature implied by the transported
+mixture stay consistent at any Courant number. Without condensates there is
+nothing to stay consistent with, and the central form keeps the `-I` scalar
+diagonals that the exact `BlockArrowheadSolve` of dry configurations relies on.
+Read by `implicit_vertical_advection_tendency!`,
+`update_sedimentation_jacobian!`, and `add_vertical_advection_corrections!`.
+"""
+grid_mean_base_upwinding(Y) =
+    isempty(sedimenting_mass_names(Y)) ? Val(:none) : Val(:first_order)
+
+"""
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
 Add the implicit vertical-advection and vertical-momentum tendencies to `Yₜ`.
@@ -196,9 +216,11 @@ Adds, in order:
   - The mass flux divergence `-∂ᵥ(ρ u³)` to `Yₜ.c.ρ`, with zero flux through the
     top and bottom boundaries (consistent with the state filter that zeroes `ᶠu³`
     there and with the `ᶜadvdivᵥ_matrix()` used in the manual Jacobian).
-  - Central (`Val(:none)`) vertical transport of `h_tot` and `q_tot` to
-    `Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`; the Courant-limited upwind dissipation is
-    applied post-Newton by `correct_implicit_advection_tendency!`.
+  - Vertical transport of `h_tot` and `q_tot` to `Yₜ.c.ρe_tot` and
+    `Yₜ.c.ρq_tot` with the reconstruction of `grid_mean_base_upwinding(Y)`:
+    first-order upwind alongside sedimenting condensates, central otherwise.
+    The Courant-limited high-order correction is applied post-Newton by
+    `correct_implicit_advection_tendency!`.
   - First-order upwind vertical transport of the non-equilibrium microphysics
     tracers and `ρtke` with the grid-mean velocity `ᶠu³`, plus vertical
     transport of the microphysics tracers with their terminal velocities using
@@ -233,6 +255,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜws = unrolled_map(sedimenting_names) do ρχ_name
         MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name))
     end
+    base_upwinding = grid_mean_base_upwinding(Y)
 
     # One fused column loop for the center tendencies: the face density
     # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.
@@ -249,16 +272,23 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # boundary conditions, and the Jacobian consistent.
         @. Yₜc.ρ -= ᶜadvdivᵥ(ᶠρ * ᶠu³)
 
-        # Central vertical advection of active scalars (ρe_tot and ρq_tot),
-        # keeping the (ρe_tot, ρe_tot) and (ρq_tot, ρq_tot) advection diagonals
-        # zero so dry acoustic/baroclinic solves invert via exact
-        # BlockArrowheadSolve. The Courant-limited upwind dissipation is
-        # applied post-Newton via T_post_imp! (see
-        # `correct_implicit_advection_tendency!`).
-        @. Yₜc.ρe_tot -= ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜh_tot))
+        # Vertical advection of the active scalars (ρe_tot and ρq_tot) with
+        # the same mass flux ᶠρ u³ as ρ and the condensates, so that a scalar
+        # that is an affine function of the others stays affine under
+        # transport. Central in dry and 0M configurations, which keeps the
+        # (ρe_tot, ρe_tot) and (ρq_tot, ρq_tot) advection diagonals zero for
+        # the exact BlockArrowheadSolve; first-order upwind alongside
+        # sedimenting condensates, matching their reconstruction. The
+        # Courant-limited high-order correction is applied post-Newton via
+        # T_post_imp! (see `correct_implicit_advection_tendency!`).
+        add_vertical_transport!(
+            Yₜc.ρe_tot, ᶠρ, ᶠu³, ᶜh_tot, nothing, base_upwinding,
+        )
         if MatrixFields.has_field(Yc, @name(ρq_tot))
             ᶜq_tot = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
-            @. Yₜc.ρq_tot -= ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜq_tot))
+            add_vertical_transport!(
+                Yₜc.ρq_tot, ᶠρ, ᶠu³, ᶜq_tot, nothing, base_upwinding,
+            )
         end
 
         MatrixFields.unrolled_foreach(
@@ -272,9 +302,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             # The donor-cell sedimentation flux leaves a negative cell at
             # zero, so a negative excursion stays in the cell that produced it
             # and is filled by the inflow from above, whose donor value does
-            # not depend on the receiving cell. The column-max Jacobian
-            # velocity keeps the linearization a bounded over-estimate of this
-            # sink where the clamp is active.
+            # not depend on the receiving cell. The Jacobian velocity is zero
+            # in such a cell as well (`update_sedimentation_jacobian!`).
             @. ᶜρχₜ -= ᶜprecipdivᵥ(
                 CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific_nonneg(ᶜρχ, Yc.ρ)))),
             )
@@ -485,22 +514,21 @@ end
 """
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
-Apply the Courant-limited post-Newton upwind dissipation to the central
-implicit vertical advection of `ρe_tot` and `ρq_tot` in
-`implicit_vertical_advection_tendency!`, evaluated at the Newton-solved stage
-state `Y = U*`. Called by `post_newton_stage_update!` and by the tendency
-diagnostics; it leaves `p` unchanged.
+Apply the Courant-limited post-Newton high-order correction to the implicit
+vertical advection of `implicit_vertical_advection_tendency!`, evaluated at
+the Newton-solved stage state `Y = U*`. Called by `post_newton_stage_update!`
+and by the tendency diagnostics; it leaves `p` unchanged.
 
-Overwrites `Yₜ` with the face-wise Courant-damped upwind correction
-`-∂ᵥ(ρ min(1, 1 / C_γ) (F_upwind - u³ ᶠinterp(χ)))` for `ρe_tot` and `ρq_tot`
-(using `energy_q_tot_upwinding`). For `Val(:vanleer_limiter)`,
-`ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)` vanishes on linear profiles, so smooth
-acoustic and baroclinic modes receive no dissipation, and inversions receive
-Courant-bounded upwind dissipation. When `tracer_upwinding` is
-`Val(:vanleer_limiter)` or `Val(:third_order)`, the sedimenting microphysics
-tracers (`sedimenting_tracer_names(Y)`) receive the Courant-limited
-antidiffusive correction (`ᶠF_upwind - ᶠupwind1`); `ρtke` keeps the monotone
-`ᶠupwind1` transport of `implicit_vertical_advection_tendency!` and receives no
+Overwrites `Yₜ` with `add_vertical_advection_corrections!` at the stage step
+`p.dtγ`: in dry and 0M configurations the face-wise Courant-damped upwind
+correction `-∂ᵥ(ρ min(1, 1 / C_γ) (F_upwind - u³ ᶠinterp(χ)))` of the central
+transport of `ρe_tot` and `ρq_tot` (`energy_q_tot_upwinding`); alongside
+sedimenting condensates the antidiffusive correction
+`-∂ᵥ(ρ min(1, 1 / C_γ) (F_upwind - ᶠupwind1))` of the first-order transport of
+`ρe_tot`, `ρq_tot`, and the condensates, all with `energy_q_tot_upwinding`.
+For `Val(:vanleer_limiter)`, `ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)` vanishes
+on linear profiles, so smooth acoustic and baroclinic modes receive no
+dissipation. `ρtke` keeps the monotone `ᶠupwind1` transport and receives no
 correction. All other fields of `Yₜ` are zero. Returns `nothing`.
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
@@ -512,48 +540,62 @@ end
 """
     add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
 
-Add to `Yₜ` the Courant-limited upwind correction of the central vertical
-advection of `ρe_tot` and `ρq_tot` (`energy_q_tot_upwinding`) and the
-antidiffusive correction of the first-order upwind vertical advection of the
-sedimenting microphysics tracers (`tracer_upwinding`), with the Courant limiter
-`min(1, 1 / (|u³| dtγ))`. `correct_implicit_advection_tendency!` passes the
-implicit stage step `p.dtγ`; `fully_explicit_tendency!` passes `zero(dtγ)`, for
-which the limiter is 1 and the corrected fluxes are the full `upwinding`
-fluxes. Returns `nothing`.
+Add to `Yₜ` the Courant-limited high-order corrections of the implicit vertical
+advection, with the limiter `min(1, 1 / (|u³| dtγ))`. With
+`grid_mean_base_upwinding(Y) == Val(:first_order)` (sedimenting condensates
+present), `ρe_tot`, `ρq_tot`, and every sedimenting microphysics species
+receive the antidiffusive correction `F_hi - ᶠupwind1` with the
+`energy_q_tot_upwinding` reconstruction, so energy and all water cross each
+face with one scheme; `tracer_upwinding` applies to the passive tracers, which
+are advected explicitly. With `Val(:none)` (no sedimenting species), `ρe_tot`
+and `ρq_tot` receive `F_hi - u³ ᶠinterp(χ)` with `energy_q_tot_upwinding`.
+`correct_implicit_advection_tendency!` passes the implicit stage step `p.dtγ`;
+`fully_explicit_tendency!` passes `zero(dtγ)`, for which the limiter is 1 and
+the corrected fluxes are the full `upwinding` fluxes. Returns `nothing`.
 """
 function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
-    (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
-    energy_q_tot_upwinding == Val(:none) &&
-        tracer_upwinding == Val(:none) &&
-        return nothing
+    (; energy_q_tot_upwinding) = p.atmos.numerics
+    base_upwinding = grid_mean_base_upwinding(Y)
+    energy_active = !(
+        energy_q_tot_upwinding == Val(:none) || (
+            base_upwinding == Val(:first_order) &&
+            energy_q_tot_upwinding == Val(:first_order)
+        )
+    )
+    water_active =
+        base_upwinding == Val(:first_order) &&
+        !(energy_q_tot_upwinding in (Val(:none), Val(:first_order)))
+    energy_active || water_active || return nothing
     (; ᶠu³, ᶜh_tot) = p.precomputed
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     ᶠρ = @. lazy(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ)
 
-    if energy_q_tot_upwinding != Val(:none)
-        add_upwind_vertical_transport_correction!(
+    if energy_active
+        add_vertical_transport_correction!(
             Yₜ.c.ρe_tot,
             ᶠρ,
             ᶠu³,
             ᶜh_tot,
             dtγ,
             energy_q_tot_upwinding,
+            base_upwinding,
         )
         if MatrixFields.has_field(Y.c, @name(ρq_tot))
             ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-            add_upwind_vertical_transport_correction!(
+            add_vertical_transport_correction!(
                 Yₜ.c.ρq_tot,
                 ᶠρ,
                 ᶠu³,
                 ᶜq_tot,
                 dtγ,
                 energy_q_tot_upwinding,
+                base_upwinding,
             )
         end
     end
 
-    if !(tracer_upwinding in (Val(:none), Val(:first_order)))
+    if water_active
         MatrixFields.unrolled_foreach(
             sedimenting_tracer_names(Y),
         ) do ρχ_name
@@ -566,9 +608,37 @@ function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
                 ᶠu³,
                 ᶜχ,
                 dtγ,
-                tracer_upwinding,
+                energy_q_tot_upwinding,
             )
         end
     end
     return nothing
 end
+
+"""
+    add_vertical_transport_correction!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dtγ, upwinding, base_upwinding)
+
+Add the Courant-limited post-Newton correction that takes the implicit
+transport of `base_upwinding` to the `upwinding` reconstruction:
+`add_upwind_vertical_transport_correction!` from central (`Val(:none)`) and
+`add_antidiffusive_upwind1_transport!` from first-order upwind
+(`Val(:first_order)`).
+"""
+@inline add_vertical_transport_correction!(
+    ᶜρχₜ,
+    ᶠρ,
+    ᶠu³,
+    ᶜχ,
+    dtγ,
+    upwinding,
+    ::Val{:none},
+) = add_upwind_vertical_transport_correction!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dtγ, upwinding)
+@inline add_vertical_transport_correction!(
+    ᶜρχₜ,
+    ᶠρ,
+    ᶠu³,
+    ᶜχ,
+    dtγ,
+    upwinding,
+    ::Val{:first_order},
+) = add_antidiffusive_upwind1_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dtγ, upwinding)
