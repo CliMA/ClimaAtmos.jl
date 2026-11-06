@@ -248,7 +248,10 @@ end
     fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
 Compute the full tendency explicitly, by evaluating `implicit_tendency!` into
-scratch space and adding it to `remaining_tendency!`.
+scratch space and adding it to `remaining_tendency!`, together with the
+vertical advection corrections that the implicit path applies after the Newton
+solve (`add_vertical_advection_corrections!` with a unit Courant limiter), so
+that `energy_q_tot_upwinding` and `tracer_upwinding` take full effect.
 
 Experimental timestepping mode used by `args_integrator` when `prescribed_flow` is
 set, where the flow is imposed and implicit treatment of sound waves is
@@ -259,4 +262,6 @@ function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     implicit_tendency!(temp_Yₜ_imp, Y, p, t)
     remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ .+= temp_Yₜ_imp
+    add_vertical_advection_corrections!(Yₜ, Y, p, zero(p.dtγ))
+    return nothing
 end

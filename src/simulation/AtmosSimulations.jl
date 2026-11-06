@@ -268,13 +268,13 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 
 ### Numerics
 
-  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
-  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm
+  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS222(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
+  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 2)`: Jacobian algorithm
     for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
   - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
   - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
-  - `update_constrain_state_every = "step"`: When state constraints are applied,
+  - `update_constrain_state_every = "stage"`: When state constraints are applied,
     `"stage"`, `"step"`, or `"dss"`.
 
 ### Diagnostics helpers
@@ -312,7 +312,7 @@ function AtmosSimulation(
     t_start = 0,
     t_end = 86400 * 10,  # 10 days
     ode_config = CTS.IMEXAlgorithm(
-        CTS.ARS343(),
+        CTS.ARS222(),
         CTS.NewtonsMethod(;
             max_iters = 1,
             update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
@@ -331,10 +331,10 @@ function AtmosSimulation(
     # Diagnostics
     diagnostics = CAD.DiagnosticsConfig(),
     # Numerics
-    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
+    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 2),
     debug_jacobian = false,
     update_cache_every = "stage",
-    update_constrain_state_every = "step",
+    update_constrain_state_every = "stage",
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,

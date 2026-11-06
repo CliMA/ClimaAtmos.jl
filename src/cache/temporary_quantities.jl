@@ -127,6 +127,7 @@ function precipitation_surface_flux_accumulator_quantities(
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
         col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
+        sfc_precip_env_density = zeros(sfc_space),
     )
 end
 function precipitation_surface_flux_accumulator_quantities(
