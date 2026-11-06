@@ -1,3 +1,6 @@
+# Mutable (with const fields) so that closures and containers hold a pointer to the cache
+# instead of an inline copy, which is much cheaper to compile.
+
 """
     AtmosCache
 
@@ -45,7 +48,7 @@ state and may be overwritten by any function.
   - `conservation_check`: Column-integrated precipitation energy tendency, used for
     the conservation check with a prognostic surface temperature.
 """
-struct AtmosCache{
+mutable struct AtmosCache{
     FT,
     MAW,
     AM,
@@ -68,63 +71,63 @@ struct AtmosCache{
     CONSCHECK,
 }
     # Timestep of the simulation (in seconds); also used by callbacks and tendencies
-    dt::FT
+    const dt::FT
 
     # Implicit stage window `γ · dt`, resolved from the ODE scheme at
     # construction (`imex_gamma`); zero for schemes without a single-γ DIRK
     # diagonal (fully explicit, variable-γ ESDIRK). Read by the 1M microphysics
     # cache when `mp_averaging isa StageAveraging`.
-    dtγ::FT
+    const dtγ::FT
 
     # Dispatch tag selecting the 1M bulk-tendency averaging window
     # (`StepAveraging` ⇒ `dt`, `StageAveraging` ⇒ `dtγ`). Baked in at
     # construction from `update_cache_every` and the scheme's γ availability.
-    mp_averaging::MAW
+    const mp_averaging::MAW
 
     # AtmosModel
-    atmos::AM
+    const atmos::AM
 
     # Limiter
-    numerics::NUM
+    const numerics::NUM
 
     # ClimaAtmosParameters that have to be used
-    params::CAP
+    const params::CAP
 
     # Variables that are used generally, such as ᶜΦ
-    core::COR
+    const core::COR
 
     # Used by update_surface_conditions! in set_precomputed_quantities! and coupler
-    sfc_setup::SFC
+    const sfc_setup::SFC
 
     # Center and face ghost buffers used by DSS
-    ghost_buffer::GHOST
+    const ghost_buffer::GHOST
 
     # Quantities that are updated with set_precomputed_quantities!
-    precomputed::PREC
+    const precomputed::PREC
 
     # Pre-allocated areas of memory to store temporary values
-    scratch::SCRA
+    const scratch::SCRA
 
     # Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
     # ghost buffers for DSS
-    hyperdiff::HYPE
+    const hyperdiff::HYPE
 
     # Additional parameters used by the various tendencies
-    external_forcing::EXTFORCING
-    non_orographic_gravity_wave::NONGW
-    orographic_gravity_wave::ORGW
-    radiation::RAD
-    tracers::TRAC
+    const external_forcing::EXTFORCING
+    const non_orographic_gravity_wave::NONGW
+    const orographic_gravity_wave::ORGW
+    const radiation::RAD
+    const tracers::TRAC
 
     # Net energy flux coming through top of atmosphere and surface
-    net_energy_flux_toa::NETFLUXTOA
-    net_energy_flux_sfc::NETFLUXSFC
+    const net_energy_flux_toa::NETFLUXTOA
+    const net_energy_flux_sfc::NETFLUXSFC
 
     # Predicted steady-state velocity, if `check_steady_state` is `true`
-    steady_state_velocity::SSV
+    const steady_state_velocity::SSV
 
     # Conservation check for prognostic surface temperature
-    conservation_check::CONSCHECK
+    const conservation_check::CONSCHECK
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
