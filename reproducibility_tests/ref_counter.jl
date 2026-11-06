@@ -1,4 +1,4 @@
-458
+460
 
 # **README**
 #
@@ -32,7 +32,7 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
-458
+460
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
   `topo_drag`) with each cell's own pressure thickness (hydrostatic pressures on
@@ -41,8 +41,23 @@
   vertical grid, and the forcing limiter
   caps the vector magnitude at `3e-3·√2 m/s²` instead of clamping each component,
   and the turbulent
-  orographic form drag (IFS form) is on by default. Changes the output of
+  orographic form drag (IFS form, `ogw_tofd_coefficient = 2.7` from ClimaParams
+  1.3.9) is on by default when `topography` is `Earth`. Changes the output of
   `aquaplanet_equil_allsky_gw_raw`.
+
+459
+- When `diff_mode == Implicit()`, `edmfx_tke_tendency!` (shear, buoyancy,
+  pressure-drag, detrainment shear-mixing) runs in the implicit stage next
+  to `edmfx_sgs_diffusive_flux_tendency!`, so production and dissipation
+  share the Newton iterate. The Jacobian is unchanged.
+- Remove clipping of zenith angle
+
+458
+- Prescribed temperature tendencies (large-scale advection and radiative
+  cooling, the TRMM-LBA heating rate, file-driven forcings and nudging) and
+  the Held–Suarez thermal relaxation are converted to energy with the isobaric
+  heat capacity (`cp_m`, `cp_d`), which changes `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_trmm_column`, and `held_suarez_equil`.
 
 457
 - The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,

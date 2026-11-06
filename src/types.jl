@@ -447,7 +447,7 @@ struct ExternalTVInsolation <: AbstractInsolation end
     Larcform1Insolation
 
 Polar-night insolation for the LARCFORM-1 setup: zero TOA flux, with the cosine
-of the zenith angle set to `eps(FT)` because RRTMGP requires a positive value.
+of the zenith angle set to 0.
 """
 struct Larcform1Insolation <: AbstractInsolation end
 

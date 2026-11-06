@@ -184,12 +184,12 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.vertical_diffusion,
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     surface_flux_tendency!(Yₜ, Y, p, t)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
-    edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # Chemistry tendencies
     chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)

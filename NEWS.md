@@ -29,6 +29,33 @@ main
   orography, and it is applied every step with the current wind in a
   backward-Euler form, so one forward-Euler step cannot reverse the wind. See the
   Orographic Gravity Waves docs page.
+- ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
+  production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
+  detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the
+  implicit stage next to `edmfx_sgs_diffusive_flux_tendency!`, so production
+  and dissipation see the same `Y.c.ρtke` within the Newton solve. Previously
+  production ran in `remaining_tendency!` while dissipation ran implicitly,
+  which let `ρtke` inflate across IMEX sub-stages before the one implicit
+  damping fired. The Jacobian is unchanged (`∂Yₜ/∂ρtke` still carries only the
+  dissipation sink); `ᶠK_u`, `ᶠK_h`, `ᶠbuoygrad` are still refreshed only in
+  `set_explicit_precomputed_quantities!` and stay frozen during Newton, so
+  production is effectively `K_u`-frozen within a stage. For `diff_mode ==
+  Explicit()` the sources stay in `remaining_tendency!` alongside the explicit
+  diffusive-flux tendency and behavior is unchanged.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Prescribed temperature
+  tendencies are converted to energy tendencies with the isobaric heat capacity
+  `cp_m`: large-scale advection and radiative cooling (BOMEX, RICO), the
+  TRMM-LBA prescribed heating rate, and the file-driven forcings and
+  temperature nudging (`apply_Tq_forcing!`, including ISDAC). The tendencies
+  are rates at constant pressure; with the isochoric `cv_m`, a single-column
+  run realized about `cv_m / cp_m ≈ 0.72` of the prescribed
+  potential-temperature tendency. The realized forcing increases by about 40%,
+  which changes the `prognostic_edmfx_rico_column` and
+  `prognostic_edmfx_trmm_column` references, and single-column calibrations
+  against these cases need refitting. The Held–Suarez thermal relaxation is
+  converted with `cp_d`, so potential temperature relaxes at the published
+  rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
+  changes the `held_suarez_equil` reference.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
