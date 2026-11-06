@@ -48,7 +48,7 @@ outdir = args["outdir"]
 only_cases = isempty(args["cases"]) ? String[] : split(args["cases"], ",")
 
 # ── Case registry ─────────────────────────────────────────────────────────────
-# Order matches the Buildkite pipeline: Soares, GABLS, BOMEX, DYCOMS RF01/RF02, Rico, TRMM.
+# Order matches the Buildkite pipeline: Soares, GABLS, BOMEX, DYCOMS RF01/RF02, Rico, TRMM, ISDAC, MPACE.
 const CASES = [
     (case = "Soares", job_id = "prognostic_edmfx_soares_column", ref_file = "Soares.nc"),
     (case = "GABLS", job_id = "prognostic_edmfx_gabls_column", ref_file = "GABLS.nc"),
@@ -65,6 +65,8 @@ const CASES = [
     ),
     (case = "Rico", job_id = "prognostic_edmfx_rico_column", ref_file = "Rico.nc"),
     (case = "TRMM_LBA", job_id = "prognostic_edmfx_trmm_column", ref_file = "TRMM_LBA.nc"),
+    (case = "ISDAC", job_id = "prognostic_edmfx_isdac_column", ref_file = "ISDAC.nc"),
+    (case = "MPACE", job_id = "prognostic_edmfx_mpace_column", ref_file = "MPACE.nc"),
 ]
 
 # ── Setup ─────────────────────────────────────────────────────────────────────

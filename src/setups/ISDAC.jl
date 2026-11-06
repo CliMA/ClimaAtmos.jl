@@ -62,7 +62,11 @@ end
 function surface_condition(::ISDAC, params)
     FT = eltype(params)
     return (;
-        flux_scheme = MoninObukhov(; z0 = FT(4e-4)),
+        flux_scheme = MoninObukhov(;
+            z0 = FT(4e-4),
+            shf = FT(0),
+            lhf = FT(0),
+        ),
         temperature = AnalyticTemperature(Returns(FT(267))),
         overrides = SurfaceBoundaryOverrides(),
     )
