@@ -33,12 +33,14 @@
 
 #=
 462
-- `ARS222` with two approximate linear-solve iterations and stage-wise state
-  constraints by default; implicit first-order upwind vertical advection of the
-  sedimenting microphysics tracers and `ρtke` with Courant-limited post-Newton
-  corrections; Courant-independent van Leer slopes; stage-weighted surface
-  precipitation fluxes; backward-Euler damping of orographic gravity-wave drag;
-  and the refreshed implicit-stage predictor. All change results.
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; implicit first-order upwind vertical advection of the
+  sedimenting microphysics tracers and `ρtke` and, alongside them, of `ρe_tot`
+  and `ρq_tot`, with one Courant-limited post-Newton correction; Courant-
+  independent van Leer slopes; stage-weighted surface precipitation fluxes;
+  parameter-free semi-implicit damping of orographic gravity-wave drag; the
+  incremental implicit-stage condensate predictor; and a Jacobian
+  sedimentation velocity of zero in negative cells. All change results.
 
 461
 - Update dependencies for v0.42.18

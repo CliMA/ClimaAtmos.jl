@@ -268,7 +268,7 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 
 ### Numerics
 
-  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS222(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
+  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
   - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 2)`: Jacobian algorithm
     for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
@@ -312,7 +312,7 @@ function AtmosSimulation(
     t_start = 0,
     t_end = 86400 * 10,  # 10 days
     ode_config = CTS.IMEXAlgorithm(
-        CTS.ARS222(),
+        CTS.ARS343(),
         CTS.NewtonsMethod(;
             max_iters = 1,
             update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
