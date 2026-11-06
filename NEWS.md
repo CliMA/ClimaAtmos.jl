@@ -127,6 +127,21 @@ main
   temperature and humidity in previously generated `ReanalysisTimeVarying` and
   `ReanalysisMonthlyAveragedDiurnal` forcing files had the wrong sign; regenerate
   them.
+- ![][badge-✨feature/enhancement] A column configuration can run several
+  independent columns in one simulation: set `n_columns` with `config:
+  "column"`, or use `MultiColumnGrid(FT; n_columns)`. NetCDF output gains a
+  `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and
+  `ExternalDrivenTVForcing` take a vector of column data sources, one per column
+  of a multi-column grid: each column is initialized and forced from its own
+  source. In the configuration, one value per column can be given for
+  `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude`
+  (ERA5).
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file
+  formats returns a ClimaUtilities boundary method (`TimeVaryingInputs.Flat()`,
+  `Linear()`, or `Throw()`) for above and below the file's levels, instead of a
+  tuple of Interpolations.jl boundary conditions.
 
 0.42.17
 -------

@@ -429,9 +429,9 @@ version = "0.3.21"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections"]
-git-tree-sha1 = "e880cd6e85382bea2247bec89dd288a5b04c8ab3"
+git-tree-sha1 = "720d7392e943ee51617e99392020daeea2fd9acc"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.4.0"
+version = "0.4.1"
 
 [[deps.ClimaInitialConditions]]
 deps = ["CDSAPI", "Dates", "FileWatching", "NCDatasets", "Scratch"]
@@ -468,9 +468,9 @@ weakdeps = ["BenchmarkTools", "CUDA", "ClimaCore", "OrderedCollections", "Pretty
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "ClimaComms", "Dates"]
-git-tree-sha1 = "52678b6d037c41cf4346785c0efc17bbcc76227e"
+git-tree-sha1 = "ac9c8817be06a991cd7adf9b3f0977bfc9073953"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.33"
+version = "0.1.34"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]

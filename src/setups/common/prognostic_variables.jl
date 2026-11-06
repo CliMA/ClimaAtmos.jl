@@ -308,7 +308,7 @@ end
 # ============================================================================
 
 """
-    surface_prognostic_variables(local_geometry, temperature)
+    surface_prognostic_variables(local_geometry, temperature, ::Val{sphere})
 
 Return the surface prognostic variables at one surface point.
 
@@ -316,13 +316,14 @@ Defined only for a `SurfaceConditions.SlabOceanTemperature`, the only surface
 temperature that carries prognostic state: the slab temperature `T` [K],
 initialized to the zonally symmetric aquaplanet SST on the sphere and to 300 K
 otherwise, and the surface water content `water` [kg/m²], initialized to zero.
+`sphere` is `issphere` of the surface space.
 """
 function surface_prognostic_variables(
-    local_geometry, ::SurfaceConditions.SlabOceanTemperature,
-)
+    local_geometry, ::SurfaceConditions.SlabOceanTemperature, ::Val{sphere},
+) where {sphere}
     FT = Geometry.float_type(local_geometry.coordinates)
     coord = local_geometry.coordinates
-    T = if :lat in propertynames(coord)
+    T = if sphere
         FT(271 + 29 * exp(-coord.lat^2 / (2 * 26^2)))
     else
         FT(300)
@@ -342,7 +343,8 @@ surface_kwargs(surface_space, ::SurfaceConditions.SurfaceTemperature) = (;)
 function surface_kwargs(
     surface_space, t::SurfaceConditions.SlabOceanTemperature,
 )
-    sfc_ic(lg) = surface_prognostic_variables(lg, t)
+    sphere = Val(issphere(surface_space))
+    sfc_ic(lg) = surface_prognostic_variables(lg, t, sphere)
     return (; sfc = sfc_ic.(Fields.local_geometry_field(surface_space)))
 end
 
