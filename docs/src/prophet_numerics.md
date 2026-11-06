@@ -261,8 +261,11 @@ solve, `initialize_implicit_stage_problem!` records
 ``-\hat{\rho}^{j,\mathrm{old}} / (\gamma \Delta t)``,
 refreshes `set_implicit_precomputed_quantities_core!` when Picard rounds
 follow (without them, the solves use the buoyancy of the last cache update),
-and clamps ``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``; the grid-mean state is left as it
-enters the stage. It then overwrites ``u_3^j`` and ``\hat{\rho}^j`` in
+and clamps ``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``. The grid-mean state
+enters the Newton guess as it enters the stage, moved only by the updraft
+increment of the Picard predictor (`warm_start_grid_mean_tracers!`, which
+shifts the grid-mean condensates, ``\rho q_t``, and ``\rho e_t`` so that the
+environment keeps its stage-entering values). It then overwrites ``u_3^j`` and ``\hat{\rho}^j`` in
 the state with values obtained from closed-form column solves, and caches the
 implied tendencies
 

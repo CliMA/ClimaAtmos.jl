@@ -351,10 +351,12 @@ end
         E_actual = Array(parent(col_de))[1]
 
         # The surface flux is downward on every step, including step 4, where
-        # the bottom cell enters the stage negative: the Newton guess stays at
-        # the stage-entering state and the Jacobian velocity is zero in the
-        # negative cell, so the closure flux through the surface is downward.
+        # the bottom rain cell enters the stage negative: the Newton guess stays
+        # at the stage-entering state and the Jacobian velocity is zero in the
+        # negative cell, so it passes no rain through the surface. The rain flux
+        # is checked on its own so that the snow flux cannot mask its sign.
         @test P_diag < FT(0)
+        @test Array(parent(p.precomputed.surface_rain_flux))[1] <= FT(0)
         @test abs(P_diag - P_actual_q) * FT(86400) < FT(1e-9)
         @test abs(P_diag - P_actual_ρ) * FT(86400) < FT(1e-7)
         @test abs(E_diag - E_actual) < FT(1e-8)

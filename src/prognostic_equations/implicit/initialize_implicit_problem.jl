@@ -47,10 +47,12 @@ For `PrognosticEDMFX`:
  1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the stage-entering state
     (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), refresh the
     implicit precomputed cache (`set_implicit_precomputed_quantities_core!`)
-    when at least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to `[0, a_max ρʲ]` so the Picard and Newton
-    predictors start from a feasible draft area. The grid-mean condensates are
-    left at their stage-entering values: the cache clamps them where it reads
-    them, and a guess raised above the stage-entering state would enter the
+    when at least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to
+    `[0, a_max ρʲ]` so the Picard and Newton predictors start from a feasible
+    draft area. The grid-mean condensates are left at their stage-entering
+    values: the grid-mean and environment thermodynamics floor them where they
+    read them (the microphysics tendencies and their Jacobian see the signed
+    values), and a guess raised above the stage-entering state would enter the
     Newton residual `U − temp − dtγ T(U)` as a source that the sedimentation
     Jacobian then drains through the surface.
 

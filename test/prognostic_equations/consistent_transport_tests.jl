@@ -1,10 +1,8 @@
 #=
 Consistency of the implicit vertical transport of energy, total water, and
-condensates in non-equilibrium microphysics configurations. With one
+condensates in non-equilibrium microphysics configurations. With one linear
 reconstruction for all three, a scalar that is an affine function of the
-others stays affine under transport, which keeps the temperature
-diagnosed from `(ρe_tot, ρq_tot, ρq_cond)` that of the mixed air at any stage
-Courant number. Also checks the Jacobian blocks of that transport against
+others stays affine under transport at any stage Courant number. Also checks the Jacobian blocks of that transport against
 finite differences and the temperature of a column with a water step
 transported at a stage Courant number above one.
 =#
@@ -206,6 +204,48 @@ end
         Jv = arr(@. block * ᶜv)
         row_sym == col_sym && (Jv .+= arr(ᶜv))
         fd = fd_derivative(row_sym, col_sym)
+        @test norm(Jv .- fd) / norm(fd) < FT(5e-4)
+    end
+
+    # Velocity blocks: the derivative of each upwind face flux is the donor
+    # value of its scalar, for total water and the condensates alike, so the
+    # Newton step moves them by the same reconstruction as the residual.
+    CA.update_advection_jacobian!(matrix, Y, p, dtγ, CA.IgnoreDerivative())
+    @test _measure_allocs(
+        CA.update_advection_jacobian!,
+        matrix,
+        Y,
+        p,
+        dtγ,
+        CA.IgnoreDerivative(),
+    ) == 0
+    ᶠv = @. Geometry.Covariant3Vector(
+        Geometry.WVector(sin(z_f / FT(900)) + FT(0.5)),
+    )
+    u₃_orig = copy(Y.f.u₃)
+    δ_u₃ = FT(1e-3)
+    function fd_u₃_derivative(row_sym)
+        tendencies = map((+1, -1)) do sign
+            @. Y.f.u₃ = u₃_orig + sign * δ_u₃ * ᶠv
+            CA.set_implicit_precomputed_quantities!(Y, p, t)
+            for w_name in (:ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ)
+                fill!(parent(getproperty(p.precomputed, w_name)), FT(0))
+            end
+            fill!(Yₜ, 0)
+            CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+            copy(arr(getproperty(Yₜ.c, row_sym)))
+        end
+        @. Y.f.u₃ = u₃_orig
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        return dtγ .* (tendencies[1] .- tendencies[2]) ./ (2 * δ_u₃)
+    end
+    for row_sym in (:ρq_tot, :ρq_lcl, :ρq_rai)
+        block = matrix[
+            MatrixFields.FieldName(:c, row_sym),
+            MatrixFields.FieldName(:f, :u₃),
+        ]
+        Jv = arr(@. block * ᶠv)
+        fd = fd_u₃_derivative(row_sym)
         @test norm(Jv .- fd) / norm(fd) < FT(5e-4)
     end
 end

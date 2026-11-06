@@ -196,10 +196,14 @@ carries sedimenting condensate masses (the non-equilibrium microphysics), and
 `Val(:none)` (central) otherwise. With condensates present, energy, total
 water, and the condensates cross each face with the same first-order upwind
 reconstruction and receive the same Courant-limited high-order correction
-after the Newton solve, so the vapor and temperature implied by the transported
-mixture stay consistent at any Courant number. Without condensates there is
-nothing to stay consistent with, and the central form keeps the `-I` scalar
-diagonals that the exact `BlockArrowheadSolve` of dry configurations relies on.
+after the Newton solve. With a linear high-order reconstruction
+(`first_order` or `third_order`), a scalar that is an affine function of the
+others then stays affine under transport at any Courant number. The van Leer
+limiter acts on each scalar separately and is not additive, and the `p / ρ`
+part of `h_tot` is not transported as a specific quantity where the density
+jumps; both leave first-order departures at sharp gradients. Without
+condensates, the central form keeps the `-I` scalar diagonals that the exact
+`BlockArrowheadSolve` of dry configurations relies on.
 Read by `implicit_vertical_advection_tendency!`,
 `update_sedimentation_jacobian!`, and `add_vertical_advection_corrections!`.
 """
@@ -276,8 +280,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # the same mass flux ᶠρ u³ as ρ and the condensates, so that a scalar
         # that is an affine function of the others stays affine under
         # transport. Central in dry and 0M configurations, which keeps the
-        # (ρe_tot, ρe_tot) and (ρq_tot, ρq_tot) advection diagonals zero for
-        # the exact BlockArrowheadSolve; first-order upwind alongside
+        # (ρe_tot, ρe_tot) and (ρq_tot, ρq_tot) advection diagonals zero, as
+        # the exact BlockArrowheadSolve of dry configurations requires;
+        # first-order upwind alongside
         # sedimenting condensates, matching their reconstruction. The
         # Courant-limited high-order correction is applied post-Newton via
         # T_post_imp! (see `correct_implicit_advection_tendency!`).
@@ -526,9 +531,13 @@ transport of `ρe_tot` and `ρq_tot` (`energy_q_tot_upwinding`); alongside
 sedimenting condensates the antidiffusive correction
 `-∂ᵥ(ρ min(1, 1 / C_γ) (F_upwind - ᶠupwind1))` of the first-order transport of
 `ρe_tot`, `ρq_tot`, and the condensates, all with `energy_q_tot_upwinding`.
-For `Val(:vanleer_limiter)`, `ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)` vanishes
-on linear profiles, so smooth acoustic and baroclinic modes receive no
-dissipation. `ρtke` keeps the monotone `ᶠupwind1` transport and receives no
+In dry and 0M configurations with `Val(:vanleer_limiter)`,
+`ᶠlin_vanleer(u³, χ, 0) - u³ ᶠinterp(χ)` vanishes on linear profiles, so smooth
+acoustic and baroclinic modes receive no dissipation. Alongside sedimenting
+condensates, smooth profiles keep the fraction `1 - min(1, 1 / C_γ)` of the
+first-order upwind dissipation where `C_γ > 1`, and with
+`energy_q_tot_upwinding = none` the transport stays first-order upwind with no
+correction. `ρtke` keeps the monotone `ᶠupwind1` transport and receives no
 correction. All other fields of `Yₜ` are zero. Returns `nothing`.
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)

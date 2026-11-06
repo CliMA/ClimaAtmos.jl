@@ -304,7 +304,9 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
             gm.int_ρq_sno, gm.sfc_wₛ, TD.internal_energy_ice,
         ),
     )
-    MatrixFields.unrolled_foreach(species) do (int_qʲ, sfc_wʲ, int_ρq, sfc_w, e_int_func)
+    MatrixFields.unrolled_foreach(species) do (int_qʲ, sfc_wʲ, int_ρq, sfc_w, e_int)
+        # The 1-tuple broadcasts the function as a scalar without a heap `Ref`.
+        e_int_func = (e_int,)
         @. dest +=
             J_ratio * (
                 int_ρʲ * updraft_precip_energy_flux(
@@ -376,8 +378,12 @@ snow, and zero where `ρq^g < 0`, as in `update_sedimentation_jacobian!`. This
 linearization matches the discrete column sink applied by one direct Newton
 iteration (`max_newton_iters_ode == 1`, no line search, non-Krylov linear
 solve) with the Jacobian updated at every solve
-(`update_jacobian_every = "solve"`), so the flux is downward or zero on every
-stage, including stages a cell enters negative. The SGS correction comes from
+(`update_jacobian_every = "solve"`). The flux is zero where the bottom cell is
+negative at the guess. Elsewhere, the Newton step can give an upward flux when
+the bottom-cell imbalance of the residual from processes without a Jacobian
+entry (such as rain evaporation) exceeds the inflow and the drained mass; the
+accumulated flux then still equals the column sink. The SGS correction comes
+from
 `set_sfc_sgs_precip_energy_flux!`, which dispatches on the
 turbulence-convection model.
 """

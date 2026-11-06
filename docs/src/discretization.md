@@ -465,11 +465,15 @@ Laplacian. Reading the terms in order:
     the central interpolation ``I^f(h)``; with non-equilibrium microphysics it
     uses the first-order upwind value, the same reconstruction the condensates
     receive, so that energy, total water, and condensates cross each face
-    consistently. In both cases the Courant-limited (`min(1, 1 / C_γ)`)
-    difference between the `energy_q_tot_upwinding` flux (the van Leer limiter
-    by default) and the implicit flux is applied after the Newton solve as a
-    `T_post_imp!` correction (`correct_implicit_advection_tendency!`), so the
-    high-order flux sees the Newton-solved velocity.
+    consistently. Unless `energy_q_tot_upwinding` is `none`, the
+    Courant-limited (`min(1, 1 / C_γ)`) difference between the
+    `energy_q_tot_upwinding` flux (the van Leer limiter by default) and the
+    implicit flux is applied after the Newton solve as a `T_post_imp!`
+    correction (`correct_implicit_advection_tendency!`), so the high-order flux
+    sees the Newton-solved velocity. With `none`, the transport is central in
+    dry and 0M configurations and first-order upwind with non-equilibrium
+    microphysics. Where `C_γ > 1`, the upwind part retains the fraction
+    `1 - 1 / C_γ` of the first-order dissipation, also on smooth profiles.
   - The radiative flux divergence is explicit and applied separately.
   - Hyperdiffusion is two Laplacians with the completion ``\mathcal{P}`` in
     between, each a weak divergence of a strong gradient.
