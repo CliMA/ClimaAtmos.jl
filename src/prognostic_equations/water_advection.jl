@@ -137,7 +137,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 @inline
                 ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
                 ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
-                e_int_func = internal_energy_func(get_ρχ_name(q_name))
+                # A function broadcasts through a heap `Ref` that this nested
+                # broadcast does not elide; the 1-tuple broadcasts as a
+                # scalar without one.
+                e_int_func = (internal_energy_func(get_ρχ_name(q_name)),)
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
                     CT3(
                         ᶠ∂ξ³∂x³ * (
