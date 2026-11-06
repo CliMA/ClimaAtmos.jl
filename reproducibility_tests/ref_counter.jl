@@ -1,4 +1,4 @@
-461
+462
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+462
+- 1M rain and snow are placed on the precipitation shaft by default
+  (`sgs_precip_incloud_fraction = 1`, `sgs_precip_fraction_floor = 0.1`).
+
 461
 - Update dependencies for v0.42.18
 

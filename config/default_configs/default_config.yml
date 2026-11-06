@@ -279,6 +279,9 @@ use_sgs_quadrature:
 tq_correlation_model:
   help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `diagnosed` uses the covariance of the subgrid displacement that produces the variances, ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed `Tq_correlation_coefficient` where the variances vanish. `constant` uses the prescribed coefficient everywhere. [`diagnosed` (default), `constant`]"
   value: "diagnosed"
+sgs_variance_fidelity_model:
+  help: "Closure for the variance fidelity α of the condensate reconstruction. `equilibrium` uses α = α_Da α_eq. `updraft` (PrognosticEDMFX with non-equilibrium microphysics; ignored otherwise) sets α σ_S = c_u q_c,up from the condensate q_c,up of the cloudy updrafts, bounded to [α_min, 1/(1 − w_eq)], blended with α_Da α_eq as their area grows above the EDMF minimum area, and α_Da α_eq without them. [`equilibrium` (default), `updraft`]"
+  value: "equilibrium"
 sgs_distribution:
   help: "Distribution of the SGS fluctuations over which the microphysics is integrated. `gaussian`: the bivariate Gaussian (`GaussianSGS`); the 1M microphysics nodes sit at the conditional moments of the saturation excess between the cloud and shaft edges, and the 0M microphysics uses Gauss–Hermite quadrature. [`gaussian` (default), `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"

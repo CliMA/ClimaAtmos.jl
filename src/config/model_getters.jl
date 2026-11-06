@@ -1041,6 +1041,13 @@ function check_case_consistency(parsed_args)
     smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
     config = parsed_args["config"]
 
+    if get(parsed_args, "sgs_variance_fidelity_model", "equilibrium") == "updraft" &&
+       !(turbconv == "prognostic_edmfx" && microphysics in ("1M", "2M", "2MP3"))
+        @warn "sgs_variance_fidelity_model: updraft acts only with \
+               turbconv: prognostic_edmfx and non-equilibrium (1M, 2M or 2MP3) \
+               microphysics; it is ignored here."
+    end
+
     # Geometry consistency (always checked, independent of the case-specific
     # checks below)
     valid_configs = ("sphere", "column", "box", "plane")
@@ -1172,12 +1179,31 @@ function get_tq_correlation_model(parsed_args)
 end
 
 """
+    get_sgs_variance_fidelity_model(parsed_args)
+
+Return the `AbstractVarianceFidelityModel` selected by the
+`sgs_variance_fidelity_model` config key: `"equilibrium"` →
+`EquilibriumVarianceFidelity()` (default), `"updraft"` →
+`UpdraftVarianceFidelity()`.
+"""
+function get_sgs_variance_fidelity_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_fidelity_model", "equilibrium"),
+        Dict(
+            "equilibrium" => EquilibriumVarianceFidelity(),
+            "updraft" => UpdraftVarianceFidelity(),
+        ),
+        "sgs_variance_fidelity_model",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
 
-Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`,
+`get_tracer_nonnegativity_method` and `get_sgs_variance_fidelity_model`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
 (the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
@@ -1193,6 +1219,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
     sgs_variance_curvature = pa["sgs_variance_curvature"]
+    sgs_variance_fidelity_model = get_sgs_variance_fidelity_model(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1237,6 +1264,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         sgs_quadrature,
         tq_correlation_model,
         sgs_variance_curvature,
+        sgs_variance_fidelity_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
