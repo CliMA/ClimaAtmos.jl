@@ -315,8 +315,8 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
 end
 
 @inline _precip_lin_nt(
-    w_lcl_base,
-    w_icl_base,
+    w_lcl_jac,
+    w_icl_jac,
     w_rai_jac,
     w_sno_jac,
     f_guess_lcl,
@@ -333,8 +333,8 @@ end
     e_sno,
     f_e_sgs,
 ) = (;
-    w_lcl_base,
-    w_icl_base,
+    w_lcl_jac,
+    w_icl_jac,
     w_rai_jac,
     w_sno_jac,
     f_guess_lcl,
@@ -365,11 +365,13 @@ bottom-face sedimentation flux
 
 where `w_base` is the level-1 terminal velocity (`ᶠJ_1 / ᶠJ_{1/2}`-scaled) and
 `w_jac` is the Jacobian terminal velocity: `w_base` for cloud liquid and ice,
-and the column maxima `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for rain and
-snow. This linearization matches the discrete column sink applied by one direct
-Newton iteration (`max_newton_iters_ode == 1`, no line search, non-Krylov linear
+the column maxima `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for rain and
+snow, and zero where `ρq^g < 0`, as in `update_sedimentation_jacobian!`. This
+linearization matches the discrete column sink applied by one direct Newton
+iteration (`max_newton_iters_ode == 1`, no line search, non-Krylov linear
 solve) with the Jacobian updated at every solve
-(`update_jacobian_every = "solve"`). The SGS correction comes from
+(`update_jacobian_every = "solve"`), so the flux is downward or zero on every
+stage, including stages a cell enters negative. The SGS correction comes from
 `set_sfc_sgs_precip_energy_flux!`, which dispatches on the
 turbulence-convection model.
 """
@@ -421,8 +423,12 @@ function record_stage_precipitation_linearization!(Y, p)
     w_icl_base = @. lazy(-sfc_wᵢ * J_ratio)
     w_rai_base = @. lazy(-sfc_wᵣ * J_ratio)
     w_sno_base = @. lazy(-sfc_wₛ * J_ratio)
-    w_rai_jac = @. lazy(-sfc_wᵣ_jac * J_ratio)
-    w_sno_jac = @. lazy(-sfc_wₛ_jac * J_ratio)
+    # The Jacobian velocity is zero in a cell whose guess is negative,
+    # matching the clamped residual flux (`update_sedimentation_jacobian!`).
+    w_lcl_jac = @. lazy(ifelse(int_ρq_lcl < 0, zero_FT, w_lcl_base))
+    w_icl_jac = @. lazy(ifelse(int_ρq_icl < 0, zero_FT, w_icl_base))
+    w_rai_jac = @. lazy(ifelse(int_ρq_rai < 0, zero_FT, -sfc_wᵣ_jac * J_ratio))
+    w_sno_jac = @. lazy(ifelse(int_ρq_sno < 0, zero_FT, -sfc_wₛ_jac * J_ratio))
     f_guess_lcl = @. lazy(w_lcl_base * max(zero_FT, int_ρq_lcl))
     f_guess_icl = @. lazy(w_icl_base * max(zero_FT, int_ρq_icl))
     f_guess_rai = @. lazy(w_rai_base * max(zero_FT, int_ρq_rai))
@@ -442,8 +448,8 @@ function record_stage_precipitation_linearization!(Y, p)
         sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
     )
     @. sfc_precip_lin_state = _precip_lin_nt(
-        w_lcl_base,
-        w_icl_base,
+        w_lcl_jac,
+        w_icl_jac,
         w_rai_jac,
         w_sno_jac,
         f_guess_lcl,

@@ -44,12 +44,15 @@ unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
 
 For `PrognosticEDMFX`:
 
- 1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the raw stage-entering
-    state (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), clamp
-    grid-mean non-equilibrium condensates to `[0, ρq_tot]`, refresh the implicit
-    precomputed cache (`set_implicit_precomputed_quantities_core!`), and clamp
-    `Y.c.sgsʲs.:(j).ρa` to `[0, a_max ρʲ]` so the Picard and Newton predictors
-    start from a feasible state.
+ 1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the stage-entering state
+    (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), refresh the
+    implicit precomputed cache (`set_implicit_precomputed_quantities_core!`),
+    and clamp `Y.c.sgsʲs.:(j).ρa` to `[0, a_max ρʲ]` so the Picard and Newton
+    predictors start from a feasible draft area. The grid-mean condensates are
+    left at their stage-entering values: the cache clamps them where it reads
+    them, and a guess raised above the stage-entering state would enter the
+    Newton residual `U − temp − dtγ T(U)` as a source that the sedimentation
+    Jacobian then drains through the surface.
 
  2. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
     the analytic `u₃` solve, the two-pass area solve (`solve_sgs_ρa_two_pass!`),
@@ -97,20 +100,14 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     FT = eltype(p.params)
     dtγ = FT(dtγ)
 
-    # `-u₃_old / dtγ` and `-ρa_old / dtγ` are recorded before the clamps so the
-    # Newton residual reproduces `u₃_stage` and `ρa_stage`. The clamps bound the
-    # predictor that `ᶜsnapshot` and the Picard solves start from: grid-mean
-    # condensates to `[0, ρq_tot]` (before the cache refresh so `ᶜT`, `ᶜh_tot`,
-    # `ᶜq_liq`, and `ᶜq_ice` reflect the constrained state) and `ρa` to
-    # `[0, a_max ρʲ]` (after `ᶜρʲs` is refreshed). `initialize_imp!` does not
-    # receive `t`, and `t` is unused along both calls below, so `zero(FT)` is
-    # passed.
+    # `-u₃_old / dtγ` and `-ρa_old / dtγ` are recorded before the area clamp so
+    # the Newton residual reproduces `u₃_stage` and `ρa_stage`. The clamp bounds
+    # the predictor that `ᶜsnapshot` and the Picard solves start from, `ρa` to
+    # `[0, a_max ρʲ]`, after `ᶜρʲs` is refreshed. `initialize_imp!` does not
+    # receive `t`, and `t` is unused in the call below, so `zero(FT)` is passed.
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
         @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
-    end
-    if nonequilibrium_mp
-        enforce_grid_mean_microphysics_constraints!(Y, p, zero(FT))
     end
     set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
     a_max = CAP.max_area(CAP.turbconv_params(p.params))
@@ -183,35 +180,35 @@ end
 """
     warm_start_grid_mean_tracers!(Y, p)
 
-Set the grid-mean `ρq_χ` of the Newton initial guess for each 1M condensate
-tracer `χ ∈ {q_lcl, q_icl, q_rai, q_sno}` so that the environment specific
-content equals its stage-initial value, floored at zero,
+Move the grid-mean `ρq_χ` of the Newton initial guess, for each 1M condensate
+tracer `χ ∈ {q_lcl, q_icl, q_rai, q_sno}` and for `ρq_tot` and `ρe_tot`, by the
+Picard predictor's updraft increment, so that each environment specific
+content (and `mse⁰`) keeps its stage-initial value:
 
-    ρq_χ = ρa⁰ max(0, q_χ⁰_old) + Σⱼ ρaʲ q_χʲ,
+    Δρq_χ   = (ρa⁰_new − ρa⁰_old) max(0, q_χ⁰_old)
+            + Σⱼ (ρaʲ_new q_χʲ_new − ρaʲ_old q_χʲ_old),
+    Δρq_tot = (ρa⁰_new − ρa⁰_old) max(0, q_tot⁰_old)
+            + Σⱼ (ρaʲ_new q_totʲ_new − ρaʲ_old q_totʲ_old),
+    Δρe_tot = (ρa⁰_new − ρa⁰_old) mse⁰_old
+            + Σⱼ (ρaʲ_new mseʲ_new − ρaʲ_old mseʲ_old),
 
-with `ρa⁰`, `ρaʲ`, and `q_χʲ` the Picard-converged draft state and `q_χ⁰_old`
-diagnosed from `Y.c.ρq_χ` and the stage-initial draft scalars in
-`p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor moves `q_χʲ` (by
+with `ρa⁰_new`, `ρaʲ_new`, and `χʲ_new` the Picard-converged draft state and the
+`*_old` values diagnosed from `Y.c` and the stage-initial draft scalars in
+`p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor moves `χʲ` (by
 transport, entrainment, and the explicit / implicit microphysics sources);
-without this update the environment of the guess loses `Σⱼ ρaʲ Δq_χʲ / ρa⁰` and
+without this update the environment of the guess loses `Σⱼ ρaʲ Δχʲ / ρa⁰` and
 goes negative where the environment is clear. For `q_lcl` / `q_icl` the
 environment source has zero derivative on that clipped branch; for `q_rai` /
 `q_sno` the same holds for the precipitation evaporation / sublimation branches.
 
-For `ρq_tot` and `ρe_tot`, whose vertical advection `-∂ᵥ(ρ u³ χ)` has no
-self-block in the Jacobian (`BlockArrowheadSolve` keeps their advection
-diagonals at `-I` and evaluates `-∂ᵥ(ρ u³ χ)` only in the residual `T_imp` at
-the Newton guess), the warm start is applied in incremental form:
-
-    Δρq_tot = (ρa⁰_new − ρa⁰_old) max(0, q_tot⁰_old)
-            + Σⱼ (ρaʲ_new q_totʲ_new − ρaʲ_old q_totʲ_old),
-    Δρe_tot = (ρa⁰_new − ρa⁰_old) mse⁰_old
-            + Σⱼ (ρaʲ_new mseʲ_new − ρaʲ_old mseʲ_old).
-
-When the updraft increment vanishes (`Δ(ρaʲ χʲ) = 0`), `Y.c.ρq_tot` and
-`Y.c.ρe_tot` stay equal to the stage-entering state `temp`, so `T_imp`
-evaluates `-∂ᵥ(ρ u³ q_tot)` on the actual stage-entering profile rather than a
-clipped profile.
+The increment is the only difference between the guess and the stage-entering
+state `temp`: where the environment value is negative, `max(0, ·)` scales the
+area change by zero and the negative value persists, scaled by
+`ρa⁰_old / ρa⁰_new`. A guess raised above `temp` would enter the Newton
+residual `U − temp − dtγ T(U)` as a source, which the sedimentation Jacobian
+drains through the surface as an upward flux. When the updraft increment
+vanishes, the guess equals `temp`, so `T_imp` evaluates the vertical advection
+on the stage-entering profile.
 
 Applies with `PrognosticEDMFX` 1M microphysics, regardless of which
 implicit microphysics sources are on. Writes `p.scratch.ᶜtemp_scalar`.
@@ -243,9 +240,12 @@ function warm_start_grid_mean_tracers!(Y, p)
                 turbconv_model,
             ),
         )
-        @. ρq_χ =
-            ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) * ᶜq⁰_old +
-            draft_sum(contrib, Y.c.sgsʲs)
+        @. ρq_χ +=
+            (
+                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) -
+                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model)
+            ) * ᶜq⁰_old +
+            draft_sum(contrib, Y.c.sgsʲs) - draft_sum(contrib, ᶜsnapshot)
         return nothing
     end
 

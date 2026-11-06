@@ -393,11 +393,12 @@ column(f) = vec(Array(parent(f)))
             )
             return column(ᶜtmp)
         end
-        # A depleted grid mean aloft leaves a negative environment value there,
-        # which the guess floors at zero.
+        # A depleted grid mean aloft leaves a negative environment value there.
         @. Y.c.ρq_lcl *= ifelse(ᶜz > 3 * z_max / 4, FT(0.1), FT(1))
         q_lcl⁰_old = env_q_lcl(Y)
         @test any(<(0), q_lcl⁰_old) && any(>(0), q_lcl⁰_old)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_old = column(ᶜtmp)
         Y_old = similar(Y)
         Y_old .= Y
         p.precomputed.ᶜsgsʲs_picard_snapshot.:(1) .= sgsʲ
@@ -406,8 +407,17 @@ column(f) = vec(Array(parent(f)))
         @. sgsʲ.ρa *= ifelse(ᶜz < z_max / 2, FT(1.5), FT(0.5))
         @. sgsʲ.q_lcl += FT(4e-4)
         CA.warm_start_grid_mean_tracers!(Y, p)
-        @test env_q_lcl(Y) ≈ max.(q_lcl⁰_old, 0) rtol = 1e4 * eps(FT) atol =
-            eps(FT)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_new = column(ᶜtmp)
+        # A non-negative environment value is kept; a negative one is left in
+        # place (the area change is scaled by `max(0, q_lcl⁰_old) = 0`), so it
+        # persists scaled by the environment area ratio.
+        expected = ifelse.(
+            q_lcl⁰_old .>= 0,
+            q_lcl⁰_old,
+            q_lcl⁰_old .* ρa⁰_old ./ ρa⁰_new,
+        )
+        @test env_q_lcl(Y) ≈ expected rtol = 1e4 * eps(FT) atol = eps(FT)
         @test parent(Y.c.ρq_lcl) != parent(Y_old.c.ρq_lcl)
         # `warm_start_grid_mean_tracers!` also rewrites `ρq_icl`, `ρq_rai`,
         # `ρq_sno`, `ρq_tot`, and `ρe_tot` so the predictor's updraft move

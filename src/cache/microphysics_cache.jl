@@ -1659,12 +1659,12 @@ function accumulate_stage_precipitation_surface_fluxes!(
 
     f_lcl = @. lazy(
         sfc_precip_lin_state.f_guess_lcl +
-        sfc_precip_lin_state.w_lcl_base *
+        sfc_precip_lin_state.w_lcl_jac *
         (int_ρq_lcl - sfc_precip_lin_state.ρq_lcl_guess),
     )
     f_icl = @. lazy(
         sfc_precip_lin_state.f_guess_icl +
-        sfc_precip_lin_state.w_icl_base *
+        sfc_precip_lin_state.w_icl_jac *
         (int_ρq_icl - sfc_precip_lin_state.ρq_icl_guess),
     )
     f_rai = @. lazy(
