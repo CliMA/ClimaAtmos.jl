@@ -313,6 +313,18 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
     placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
     half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `edmf_tail_entr_weight`: Weight `w` in `[0, 1]` with which the air drawn in
+    by the dynamical EDMF entrainment is taken from the upper half of the
+    environment's subgrid `(T, q_tot)` distribution, ranked by moist static
+    energy, instead of the environment mean (`tail_entrainment_increments`);
+    `0` (default) entrains the mean [-].
+  - `edmf_satinst_source_coeff`: Coefficient `c_s` of the saturated-instability
+    mass source of the EDMF updraft (`set_edmf_satinst_source!`): where the
+    saturated (moist-adiabatic) buoyancy gradient `N²_sat` is negative, the
+    environment air that is saturated and at least as buoyant as the updraft
+    is transferred to the updraft at the rate `c_s √(−N²_sat)`, weighted by
+    `a_min / (aʲ + a_min)` so that it mainly starts updrafts; `0` (default)
+    disables it [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -373,6 +385,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_sigma_abs::FT
     sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
+    edmf_tail_entr_weight::FT
+    edmf_satinst_source_coeff::FT
 end
 
 """

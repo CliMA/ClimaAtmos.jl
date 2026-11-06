@@ -309,6 +309,24 @@ main
   equilibrium condensate of the moist SCM cases by 2 % or less, with LWP and
   RWP changes within the spread of a time-step perturbation. The
   curvature-aware condensate (`sgs_variance_curvature`) is unchanged.
+- ![][badge-✨feature/enhancement] Saturated-instability mass source of the
+  prognostic EDMF updraft (provisional parameter `edmf_satinst_source_coeff`,
+  default 0 = off). Where the saturated (moist-adiabatic) buoyancy gradient
+  `N²_sat` is negative, the environment air that is saturated and at least as
+  buoyant as the updraft moves into the updraft at
+  `c_s ρa⁰ f √(−N²_sat) · a_min/(aʲ + a_min)` (`set_edmf_satinst_source!`), with
+  `f` the saturated environment fraction capped by buoyancy selection
+  (`buoyancy_selected_fraction`); the moved air is the most buoyant part of the
+  environment's subgrid distribution. The source is an exchange between
+  environment and updraft, so grid-mean tendencies are unchanged. Diagnostic
+  `satinst_src`.
+- ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
+  updraft (provisional parameter `edmf_tail_entr_weight`, default 0 = off): the
+  air drawn in by the dynamical entrainment comes from the upper half, in moist
+  static energy, of the environment's Gaussian subgrid `(T, q_tot)`
+  distribution instead of the environment mean
+  (`tail_entrainment_increments`). The environment is diagnosed as grid mean
+  minus updraft, so total water and energy are unchanged.
 - ![][badge-🔥behavioralΔ] The EDMF TKE shear production matches the resolved
   kinetic energy removed by the SGS stresses. The vertical production uses the
   vertical shear of the horizontal wind, `|∂_z uₕ|²/2`

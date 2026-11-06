@@ -348,6 +348,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
                     ᶜturb_entrʲs.:($$j)
                 ) * ᶜa⁰_inv,
             )
+        # The saturated-instability source brings environment momentum,
+        # S (w₀ − w)/ρa ≈ −(S/ρa) w / a⁰, at the specific rate of
+        # `satinst_specific_rate`.
+        @. ᶠb += ᶠinterp(
+            satinst_specific_rate(
+                p.precomputed.ᶜsatinst_source, Y.c.sgsʲs.:($$j).ρa,
+                ᶜρʲs.:($$j), a_min,
+            ) * ᶜa⁰_inv,
+        )
 
         # Implicit NH pressure drag a⁰ d_c (w - w₀)|w - w₀| ≈ d_c w² / a⁰
         # contributes a quadratic sink: two factors of 1/a⁰ from the velocity
@@ -634,6 +643,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         )
         ᶜnumerator_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
         @. ᶜnumerator_first += mass_flux_source_val
+        # Saturated-instability source (`set_edmf_satinst_source!`): an
+        # area-independent volumetric source at every level (zero when off).
+        @. ᶜnumerator += p.precomputed.ᶜsatinst_source
 
         # ρʲ is in the input tuple so the per-cell cap `ρʲ·a_max` is available
         # inside the closure.
@@ -678,15 +690,21 @@ cell 1 for `mse` and `q_tot`, the surface mass-flux relaxation at the rate
 `χ_sfc`,
 
     (χ_new - χ_old) / dtγ + α · (χ_new - χ_new[i-1])
-        = ε_tot · (χ⁰ - χ_new) + δ_{i,1} r_sfc · (χ_sfc - χ_new),
+        = ε_tot · (χ⁰ - χ_new) + ε · Δχ_tail + r_s · (χ⁰ + Δχ_s - χ_new)
+          + δ_{i,1} r_sfc · (χ_sfc - χ_new),
     α = ᶜbottom_bias(ᶠw) / ᶜdz,
 
 is swept bottom-to-top with `Operators.column_accumulate!` as
 
     χ_new[i] =
-        (χ_old[i]/dtγ + ε_tot[i] · χ⁰[i]
+        (χ_old[i]/dtγ + ε_tot[i] · χ⁰[i] + ε[i] · Δχ_tail[i]
+            + r_s[i] · (χ⁰[i] + Δχ_s[i])
             + δ_{i,1} r_sfc · χ_sfc + α[i] · χ_new[i-1]) /
-        (1/dtγ + α[i] + ε_tot[i] + δ_{i,1} r_sfc).
+        (1/dtγ + α[i] + ε_tot[i] + r_s[i] + δ_{i,1} r_sfc),
+
+with the tail-entrainment increment `Δχ_tail` and the saturated-instability
+source at rate `r_s` with increment `Δχ_s`, zero unless switched on
+(`_add_sweep_mass_supply_sources!`).
 
 `α[1]` is zero: the bottom face of cell 1 is the surface, through which there
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
@@ -804,14 +822,22 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
         # Cell 1: no flow through the surface, whatever the covariant `u₃`
         # there; with α[1] = 0 the sweep's `init` value drops out.
         @. advection_factor_first = FT(0)
-        @. ᶜentr_tot =
+        ᶜentrʲ = @. lazy(
             compute_entrainment(
                 p.precomputed.ᶜentr_vel_scaleʲs.:($$j),
                 p.precomputed.ᶜentr_nonvel_rateʲs.:($$j),
                 p.precomputed.ᶜarea_bounding_entr_detrʲs.:($$j),
                 ᶜinterp(ᶠw),
-            ) + p.precomputed.ᶜturb_entrʲs.:($$j)
+            ),
+        )
+        @. ᶜentr_tot = ᶜentrʲ + p.precomputed.ᶜturb_entrʲs.:($$j)
         @. ᶜdenominator = 1 / dtγ + ᶜadvection_factor + ᶜentr_tot
+        if CAP.edmf_satinst_source_coeff(p.params) > 0
+            @. ᶜdenominator += satinst_specific_rate(
+                p.precomputed.ᶜsatinst_source, sgsʲ.ρa,
+                p.precomputed.ᶜρʲs.:($$j), a_min,
+            )
+        end
 
         ρʲ_int_val =
             Fields.field_values(Fields.level(p.precomputed.ᶜρʲs.:($j), 1))
@@ -830,6 +856,9 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
                 χ_name === @name(mse) ? ᶜspecific_env_mse(Y, p) :
                 ᶜspecific_env_value(χ_name, Y, p)
             @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
+            _add_sweep_mass_supply_sources!(
+                ᶜnumerator, χ_name, ᶜχ⁰, ᶜentrʲ, Y, p, j, a_min,
+            )
             # Cell 1 of `mse` and `q_tot` relaxes toward the buoyant surface
             # value; the denominator includes `r_sfc` only while one of them
             # is swept.
@@ -853,6 +882,74 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
                 return (num + α * χ_prev) / den
             end
             sfc_forced && (@. den_first -= sfc_rate_val)
+        end
+    end
+    return nothing
+end
+
+"""
+    _add_sweep_mass_supply_sources!(
+        ᶜnumerator, χ_name, ᶜχ⁰, ᶜentrʲ, Y, p, j, a_min,
+    )
+
+Add to the numerator of the tracer sweep of updraft `j` the terms of
+`edmfx_entr_detr_tendency!` beyond entrainment of the environment value `ᶜχ⁰`:
+the tail-entrainment increment `ᶜentrʲ Δχ_tail` (`tail_entrainment_increments`,
+when `edmf_tail_entr_weight > 0`) and the saturated-instability source
+`r_s (ᶜχ⁰ + Δχ_s)` (`satinst_specific_rate`, `set_edmf_satinst_source!`, when
+`edmf_satinst_source_coeff > 0`), whose rate `r_s` the caller adds to the
+denominator. The increments are nonzero for `mse` and `q_tot` only and do not
+depend on the draft scalar, so the sweep stays linear in it. The buoyancy of
+the predicted draft, which the final `u₃` and `ρa` solves use, then includes
+both.
+"""
+function _add_sweep_mass_supply_sources!(
+    ᶜnumerator, χ_name, ᶜχ⁰, ᶜentrʲ, Y, p, j, a_min,
+)
+    FT = eltype(p.params)
+    is_mse = χ_name === @name(mse)
+    is_q_tot = χ_name === @name(q_tot)
+    ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    if w_tail > zero(FT) && (is_mse || is_q_tot)
+        hasproperty(p.precomputed, :ᶜT′T′) ||
+            error("edmf_tail_entr_weight > 0 needs the SGS quadrature")
+        thermo_params = CAP.thermodynamics_params(p.params)
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+            p.precomputed
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
+        if is_mse
+            @. ᶜnumerator +=
+                ᶜentrʲ * tail_entrainment_Δmse(
+                    thermo_params, w_tail, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                    ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, p.dt,
+                )
+        else
+            @. ᶜnumerator +=
+                ᶜentrʲ * tail_entrainment_Δq_tot(
+                    thermo_params, w_tail, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                    ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, p.dt,
+                )
+        end
+    end
+
+    if CAP.edmf_satinst_source_coeff(p.params) > 0
+        (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot, ᶜρʲs) =
+            p.precomputed
+        ᶜr_s = @. lazy(
+            satinst_specific_rate(ᶜsatinst_source, ᶜρaʲ, ᶜρʲs.:($$j), a_min),
+        )
+        # The moved air carries the saturated part's `mse` and `q_tot` and the
+        # environment value of the other tracers.
+        if is_mse
+            @. ᶜnumerator += ᶜr_s * (ᶜχ⁰ + ᶜsatinst_Δmse)
+        elseif is_q_tot
+            @. ᶜnumerator += ᶜr_s * (ᶜχ⁰ + ᶜsatinst_Δq_tot)
+        else
+            @. ᶜnumerator += ᶜr_s * ᶜχ⁰
         end
     end
     return nothing

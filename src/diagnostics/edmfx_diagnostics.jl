@@ -332,6 +332,18 @@ add_diagnostic_variable!(short_name = "entr", units = "s^-1",
     compute = compute_entr,
 )
 
+compute_satinst_src(state, cache, time) =
+    compute_satinst_src(state, cache, time, cache.atmos.turbconv_model)
+compute_satinst_src(_, _, _, turbconv_model) =
+    error_diagnostic_variable("satinst_src", turbconv_model)
+compute_satinst_src(state, cache, _, ::PrognosticEDMFX) = cache.precomputed.ᶜsatinst_source
+
+add_diagnostic_variable!(short_name = "satinst_src", units = "kg m^-3 s^-1",
+    long_name = "Saturated-instability mass source of the updraft",
+    comments = "Volumetric mass source of the first updraft from the saturated, moist-unstable part of the environment (edmf_satinst_source_coeff)",
+    compute = compute_satinst_src,
+)
+
 compute_turbentr(state, cache, time) =
     compute_turbentr(state, cache, time, cache.atmos.turbconv_model)
 compute_turbentr(_, _, _, turbconv_model) =
