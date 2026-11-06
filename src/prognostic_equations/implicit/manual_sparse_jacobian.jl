@@ -825,12 +825,10 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     ᶜgⁱʲ,
     q_tot_cols,
     phase_cols
-        ᶜkappa_m = @. TD.gas_constant_air(
-            thermo_params,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
-        ) / TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+        ᶜkappa_m = @. lazy(
+            TD.gas_constant_air(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) /
+            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        )
         ᶠp_grad = @. DiagonalMatrixRow(-1 / ᶠinterp(Yc.ρ)) * ᶠgradᵥ_matrix()
 
         ᶜθ_v = @. lazy(

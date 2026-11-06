@@ -618,7 +618,7 @@ Column body of `set_strain_rate_norm!`, shared with the fused EDMF
 closure loop.
 """
 @inline function set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
-    ᶠu_col = @. C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³)
+    ᶠu_col = @. lazy(C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³))
     ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
     @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
     return nothing
@@ -669,7 +669,8 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke, 1)
-    val_master = Val{:master}()
+    # A tuple, since broadcasting wraps a bare `Val` in a heap-allocated `Ref` per column.
+    val_master = (Val{:master}(),)
 
     DataLayouts.foreach_column(
         ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z,
@@ -684,9 +685,9 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
             ᶠ∂θli∂z,
             ᶠ∂qt∂z,
         )
-        ᶠκ = @. ᶠinterp(max(ᶜtke, zero_FT))
-        ᶠstrain = @. ᶠinterp(ᶜstrain_rate_norm)
-        ᶠPr = @. turbulent_prandtl_number(turbconv_params, ᶠbuoygrad, ᶠstrain)
+        ᶠκ = @. lazy(ᶠinterp(max(ᶜtke, zero_FT)))
+        ᶠstrain = @. lazy(ᶠinterp(ᶜstrain_rate_norm))
+        ᶠPr = @. lazy(turbulent_prandtl_number(turbconv_params, ᶠbuoygrad, ᶠstrain))
         ᶠml = @. lazy(
             mixing_length_lopez_gomez_2020(
                 turbconv_params,

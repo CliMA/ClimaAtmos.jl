@@ -63,7 +63,7 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 variable (default `all`). `Pkg.test` inherits the calling process's environment, so set it inline:
 
 ```bash
-TEST_GROUP=parameterizations julia +1.11 --project -e 'import Pkg; Pkg.test()'
+TEST_GROUP=parameterizations julia +1.13 --project -e 'import Pkg; Pkg.test()'
 ```
 
 ### Test layout
@@ -89,8 +89,8 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 ## Local commands
 
-  - Prefer Julia 1.11.x for local work. GitHub CI runs every test group on 1.11 and only `infrastructure` on 1.10.
-  - For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
+  - Prefer Julia 1.13.x for local work. GitHub CI runs every test group on 1.13 and only `infrastructure` on 1.10.
+  - For runtime validation, prefer `julia +1.13 --project=.buildkite .buildkite/ci_driver.jl ...`.
   - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 
 ## Self-correction

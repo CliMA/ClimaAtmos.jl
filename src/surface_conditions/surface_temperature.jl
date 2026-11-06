@@ -119,9 +119,16 @@ For an [`ExternalTemperature`](@ref), [`SlabOceanTemperature`](@ref), or
 [`CoupledTemperature`](@ref) this is a `DataLayout` of per-cell values (the
 external input is evaluated at `t_time` first). For an
 [`AnalyticTemperature`](@ref) it is the temperature object itself, which
-`resolve_T_sfc` evaluates per coordinate inside the surface broadcast.
+`resolve_T_sfc` evaluates per coordinate inside the surface broadcast. On column
+spaces its `f` sees only the height, as a `ZPoint`.
 """
-surface_temperature(t::AnalyticTemperature, Y, p, _) = t
+function surface_temperature(t::AnalyticTemperature, Y, p, _)
+    iscolumn(axes(Y.c)) || return t
+    return AnalyticTemperature(
+        (coordinates, surface_temp_params, t_time) ->
+            t.f(Geometry.ZPoint(coordinates.z), surface_temp_params, t_time),
+    )
+end
 
 function surface_temperature(::ExternalTemperature, Y, p, t_time)
     (; surface_fields, surface_timevaryinginputs) = p.external_forcing

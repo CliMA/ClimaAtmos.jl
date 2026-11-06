@@ -29,13 +29,14 @@ Return the viscous sponge coefficient
 
 Return a lazy broadcast of the viscous sponge tendency `β_viscous(s, z, zmax) * ∇ₕ²uₕ` for
 the cell-center horizontal velocity, or a `NullBroadcasted` when `s isa Nothing` or the
-space is a single column (horizontal operators are undefined there).
+space is a column space of one or more columns (horizontal operators are undefined
+there).
 
 The horizontal vector Laplacian is computed as `∇ₕ²u = ∇ₕ(∇ₕ·u) - ∇ₕ×(∇ₕ×u)`, projected
 onto the horizontal (Covariant12) axis.
 """
 function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
-    if s isa Nothing || axes(ᶜuₕ) isa Spaces.FiniteDifferenceSpace
+    if s isa Nothing || iscolumn(axes(ᶜuₕ))
         return NullBroadcasted()
     end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
