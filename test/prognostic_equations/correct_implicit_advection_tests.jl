@@ -342,9 +342,11 @@ end
             Array(parent(p.precomputed.col_integrated_precip_energy_tendency))[1]
         E_actual = Array(parent(col_de))[1]
 
-        if step != 4
-            @test P_diag < FT(0)
-        end
+        # The surface flux is downward on every step, including step 4, where
+        # the bottom cell enters the stage negative: the Newton guess stays at
+        # the stage-entering state and the Jacobian velocity is zero in the
+        # negative cell, so the closure flux through the surface is downward.
+        @test P_diag < FT(0)
         @test abs(P_diag - P_actual_q) * FT(86400) < FT(1e-9)
         @test abs(P_diag - P_actual_ρ) * FT(86400) < FT(1e-7)
         @test abs(E_diag - E_actual) < FT(1e-8)

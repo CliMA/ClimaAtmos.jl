@@ -1002,7 +1002,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     # for rain number (so the super-diagonal does not collapse where the
     # species is empty), and the pointwise `ᶜwₚ` for cloud liquid, cloud ice,
     # cloud-liquid number, ice number, and the P3 rime quantities, which fall
-    # slowly enough that the pointwise stencil is stable. The pointwise `ᶜwₚ`
+    # slowly enough that the pointwise stencil is stable; in a cell whose
+    # tracer is negative it is replaced by zero (`ᶠband`). The pointwise `ᶜwₚ`
     # is still passed for the sedimentation kinetic energy carried into
     # `ρe_tot`.
     ρχ_names = sedimenting_tracer_names(Y)
@@ -1093,13 +1094,24 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         end
 
         ᶜbidiag = @. dtγ * (-(ᶜprecipdivᵥ_matrix())) * DiagonalMatrixRow(ᶠρ_col)
-        @inline ᶠband(ᶜwₚ_jac) = @. lazy(
-            DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
-            (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ_jac) / ᶜρ_col)),
+        # The sedimentation flux of a negative cell is clamped to zero in the
+        # residual (`specific_nonneg`), so its derivative there is zero too;
+        # an empty cell (exactly zero) keeps the column-max velocity so that
+        # rain arriving in it during the stage can leave it in the same stage.
+        @inline ᶠband(ᶜwₚ_jac, ᶜρχ) = @. lazy(
+            DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) * (
+                ᶠtop_bias_matrix() * DiagonalMatrixRow(
+                    ifelse(ᶜρχ < 0, zero(ᶜwₚ_jac), -(ᶜwₚ_jac)) / ᶜρ_col,
+                )
+            ),
         )
-        MatrixFields.unrolled_foreach(other_groups) do (∂ᶜρχ_diag, ᶜwₚ_jac)
+        MatrixFields.unrolled_foreach(
+            map(tuple, other_names, other_groups),
+        ) do (ρχ_name, (∂ᶜρχ_diag, ᶜwₚ_jac))
             @inline
-            @. ∂ᶜρχ_diag = ᶜadv_tracer_op + ᶜbidiag * $(ᶠband(ᶜwₚ_jac)) - (I,)
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            @. ∂ᶜρχ_diag =
+                ᶜadv_tracer_op + ᶜbidiag * $(ᶠband(ᶜwₚ_jac, ᶜρχ)) - (I,)
             return nothing
         end
         ᶜuvw = @. Geometry.UVWVector(ᶜu_col) # converted once for every species
@@ -1108,7 +1120,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ) do (ρχ_name, (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ, ᶜwₚ_jac))
             @inline
             e_int_func = internal_energy_function(condensate_phase(ρχ_name))
-            ᶜsed_op = @. ᶜbidiag * $(ᶠband(ᶜwₚ_jac))
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜsed_op = @. ᶜbidiag * $(ᶠband(ᶜwₚ_jac, ᶜρχ))
             @. ∂ᶜρχ_diag = ᶜadv_tracer_op + ᶜsed_op - (I,)
             # Sedimentation moves (moist air) mass: the same vtt is added to
             # Yₜ.c.ρ and Yₜ.c.ρq_tot in `vertical_advection_of_water_tendency!`.

@@ -257,9 +257,9 @@ advanced by the Newton solve. At the start of every implicit stage, before the
 solve, `initialize_implicit_stage_problem!` records
 ``-u_3^{j,\mathrm{old}} / (\gamma \Delta t)`` and
 ``-\hat{\rho}^{j,\mathrm{old}} / (\gamma \Delta t)``,
-clamps the grid-mean non-equilibrium condensates to ``[0, \rho q_t]``, refreshes
-`set_implicit_precomputed_quantities_core!`, and clamps ``\hat{\rho}^j`` to
-``[0, a_{\max} \rho^j]``. It then overwrites ``u_3^j`` and ``\hat{\rho}^j`` in
+refreshes `set_implicit_precomputed_quantities_core!`, and clamps
+``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``; the grid-mean state is left as it
+enters the stage. It then overwrites ``u_3^j`` and ``\hat{\rho}^j`` in
 the state with values obtained from closed-form column solves, and caches the
 implied tendencies
 
@@ -289,12 +289,13 @@ and surface relaxation limiters at ``\max(\hat{\rho}^{j,\mathrm{old}}, \hat{\rho
 (upwind vertical advection, lateral and turbulent entrainment toward the
 environment diagnosed from the stage-start draft snapshot, first-cell surface
 mass-source relaxation of ``h_s^j`` and ``q_t^j``, and 1M microphysics), each
-round starting from the clamped stage-initial `Y.(f,c).sgsʲs`. Within a round,
-the sweep transports every draft scalar first; the draft thermodynamics and
-`ᶜmp_tendencyʲs` are then evaluated at the transported state, so that the vapor
-of each cell is consistent with the condensate that arrives with it, and the
-condensate and precipitation tracers receive ``\gamma \Delta t`` times that
-source (clamped to ``[0, q_t^j]`` as a predictor bound); the draft
+round starting from the stage-initial `Y.(f,c).sgsʲs` with the clamped area.
+Within a round, the sweep transports every draft scalar first; the draft
+thermodynamics and `ᶜmp_tendencyʲs` are then evaluated at the transported
+state, so that the vapor of each cell is consistent with the condensate that
+arrives with it, and the condensate and precipitation tracers receive
+``\gamma \Delta t`` times that source (clamped to ``[0, q_t^j]`` as a
+predictor bound); the draft
 thermodynamics are refreshed again at the full iterate for the next ``u_3^j``
 solve. The final analytic ``u_3^j`` and two-pass ``\hat{\rho}^j`` solves then
 run with Picard-converged buoyancy and microphysics inputs; `ᶜmp_tendencyʲs` is
@@ -403,7 +404,9 @@ and pile the whole Newton step into the first empty cell below the shaft; one
 Newton iteration therefore carries the mass (or number) across multiple empty
 cells at Courant numbers above one. The grid-mean sedimentation Jacobian
 (`update_sedimentation_jacobian!`) uses the same substitution, so both solves
-agree on where the species goes. Cloud liquid, cloud ice, and
+agree on where the species goes; in a grid-mean cell whose tracer is negative,
+its Jacobian velocity is zero, matching the clamped sedimentation flux of the
+residual. Cloud liquid, cloud ice, and
 ``n_{\mathrm{lcl}}`` fall slowly enough that the pointwise stencil is stable
 and keep it. The lateral-mixing diagonal keeps the pointwise ``w^n``.
 The stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for

@@ -37,15 +37,17 @@ main
   defaults of `AtmosSimulation` and `ManualSparseJacobian`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
   `set_implicit_precomputed_quantities_core!` at the explicit predictor state
-  entering `initialize_implicit_stage_problem!`, clamp the grid-mean
-  condensates of the Newton initial guess to `[0, ρq_tot]` and updraft `ρa` to
-  `[0, a_max ρʲ]` (the residual keeps the unclamped stage-entry state),
-  diagnose the entrained environment in the Picard tracer sweep from the
-  stage-start draft snapshot, evaluate the analytic updraft area predictor with
-  a two-pass `solve_sgs_ρa_two_pass!` sweep inside and after the Picard loop,
-  and update `ρq_tot` incrementally in `warm_start_grid_mean_tracers!` (matching
-  `ρe_tot`) so centered implicit vertical advection `-∂ᵥ(ρ u³ q_tot)` sees the
-  stage-entering profile when the updraft increment vanishes.
+  entering `initialize_implicit_stage_problem!`, clamp updraft `ρa` of the
+  Newton initial guess to `[0, a_max ρʲ]`, diagnose the entrained environment
+  in the Picard tracer sweep from the stage-start draft snapshot, evaluate the
+  analytic updraft area predictor with a two-pass `solve_sgs_ρa_two_pass!`
+  sweep inside and after the Picard loop, and apply
+  `warm_start_grid_mean_tracers!` incrementally to the condensates, `ρq_tot`,
+  and `ρe_tot`, so the guess differs from the stage-entering state only by the
+  updraft increment. A guess raised above the stage-entering state enters the
+  Newton residual as a source that the sedimentation Jacobian drains through
+  the surface; with the incremental form and no grid-mean clamp on the guess,
+  the diagnosed surface precipitation flux is downward on every stage.
 - ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
   explicit `OrographicGravityWave` drag with backward-Euler damping
   (`D_∥ / (1 + dt d / |uₕ|)`, `d = max(0, -D ⋅ û)`), which keeps one step from
@@ -88,7 +90,10 @@ main
   a single Newton iteration can carry rain/snow across multiple cells at
   CFL > 1 and the leading-edge pile-up spikes disappear. Cloud liquid and
   cloud ice keep the pointwise-`w` Jacobian — they fall slowly enough that
-  the pointwise stencil is stable.
+  the pointwise stencil is stable. In a cell whose tracer is negative, the
+  Jacobian velocity is zero, matching the clamped sedimentation flux of the
+  tendency, so the stage-weighted surface precipitation flux is downward or
+  zero on every stage.
 - ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
   the implicit path with cloud-liquid condensation / evaporation. A single
   `implicit_microphysics` toggle controls both: when `true` (default), the

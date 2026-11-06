@@ -101,8 +101,8 @@ function precipitation_surface_flux_accumulator_quantities(
     } || return (;)
     sfc_space = axes(Fields.level(Y.f, half))
     PrecipLinNT = @NamedTuple{
-        w_lcl_base::FT,
-        w_icl_base::FT,
+        w_lcl_jac::FT,
+        w_icl_jac::FT,
         w_rai_jac::FT,
         w_sno_jac::FT,
         f_guess_lcl::FT,
