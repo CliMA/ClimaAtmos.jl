@@ -505,11 +505,27 @@ correction. All other fields of `Yₜ` are zero. Returns `nothing`.
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
+    add_vertical_advection_corrections!(Yₜ, Y, p, p.dtγ)
+    return nothing
+end
+
+"""
+    add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
+
+Add to `Yₜ` the Courant-limited upwind correction of the central vertical
+advection of `ρe_tot` and `ρq_tot` (`energy_q_tot_upwinding`) and the
+antidiffusive correction of the first-order upwind vertical advection of the
+sedimenting microphysics tracers (`tracer_upwinding`), with the Courant limiter
+`min(1, 1 / (|u³| dtγ))`. `correct_implicit_advection_tendency!` passes the
+implicit stage step `p.dtγ`; `fully_explicit_tendency!` passes `zero(dtγ)`, for
+which the limiter is 1 and the corrected fluxes are the full `upwinding`
+fluxes. Returns `nothing`.
+"""
+function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
     (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
     energy_q_tot_upwinding == Val(:none) &&
         tracer_upwinding == Val(:none) &&
         return nothing
-    (; dtγ) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J

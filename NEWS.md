@@ -33,11 +33,13 @@ main
 - ![][badge-🔥behavioralΔ] Change the default `ode_algo` from `ARS343` to
   `ARS222`, the default `approximate_linear_solve_iters` from `1` to `2`, and
   the default `update_constrain_state_every` from `step` to `stage` in
-  `config/default_configs/default_config.yml`.
+  `config/default_configs/default_config.yml`, and the matching keyword
+  defaults of `AtmosSimulation` and `ManualSparseJacobian`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
   `set_implicit_precomputed_quantities_core!` at the explicit predictor state
-  entering `initialize_implicit_stage_problem!`, clamp the stage-entry
-  grid-mean condensates to `[0, ρq_tot]` and updraft `ρa` to `[0, a_max ρʲ]`,
+  entering `initialize_implicit_stage_problem!`, clamp the grid-mean
+  condensates of the Newton initial guess to `[0, ρq_tot]` and updraft `ρa` to
+  `[0, a_max ρʲ]` (the residual keeps the unclamped stage-entry state),
   diagnose the entrained environment in the Picard tracer sweep from the
   stage-start draft snapshot, evaluate the analytic updraft area predictor with
   a two-pass `solve_sgs_ρa_two_pass!` sweep inside and after the Picard loop,
@@ -64,7 +66,8 @@ main
   sedimenting microphysics tracers, while `ρtke` stays on unconditionally
   monotone `ᶠupwind1`. With `tracer_upwinding = none`, the sedimenting tracers
   are advected with `ᶠupwind1`, and dry configurations with prognostic `ρtke`
-  use the approximate linear solve.
+  use the approximate linear solve. With `prescribed_flow`, the fully explicit
+  tendency applies the same corrections with a unit Courant limiter.
 - ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
   MUSCL slope has no Courant-number factor at any Courant number; this applies
   to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass

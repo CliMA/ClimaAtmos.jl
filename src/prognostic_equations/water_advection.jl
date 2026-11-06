@@ -232,11 +232,11 @@ sum to more than the grid-mean flux.
 end
 
 """
-    sfc_sgs_precip_energy_flux(Y, p, turbconv_model, gm)
+    set_sfc_sgs_precip_energy_flux!(dest, Y, p, turbconv_model, gm)
 
-Return the subdomain correction to the bottom-face sedimentation energy flux at
-the Newton linearization state, summed over the four condensate species, as a
-lazy surface-level broadcast [W/m²]. `gm` holds the surface-level grid-mean
+Write into the surface-level field `dest` the subdomain correction to the
+bottom-face sedimentation energy flux at the Newton linearization state, summed
+over the four condensate species [W/m²]. `gm` holds the surface-level grid-mean
 inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
 `int_T`, `int_uvw`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
 `J_ratio (ρʲ fʲ + ρ⁰ f⁰)` with `fʲ` and `f⁰` from `updraft_precip_energy_flux`
@@ -244,11 +244,18 @@ and `environment_precip_energy_flux`, which is the value of the column
 correction flux through the surface face. Zero for every turbulence-convection
 model other than `PrognosticEDMFX`, and for a `PrognosticEDMFX` whose updrafts
 carry no precipitation.
+
+The environment density is first stored in `p.scratch.sfc_precip_env_density`,
+and the species terms are added in separate broadcasts: a single fused
+broadcast repeats the lazy density in every term and exceeds the 4 KiB kernel
+parameter limit of some GPUs.
 """
-sfc_sgs_precip_energy_flux(Y, p, _, gm) = zero(eltype(p.params))
-function sfc_sgs_precip_energy_flux(Y, p, ::PrognosticEDMFX, gm)
+set_sfc_sgs_precip_energy_flux!(dest, Y, p, _, gm) =
+    fill!(dest, zero(eltype(p.params)))
+function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
     FT = eltype(p.params)
-    MatrixFields.has_field(Y.c.sgsʲs.:(1), @name(q_rai)) || return zero(FT)
+    fill!(dest, zero(FT))
+    MatrixFields.has_field(Y.c.sgsʲs.:(1), @name(q_rai)) || return nothing
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
     (; sfc_lev, J_ratio, int_T, int_uvw) = gm
@@ -259,17 +266,16 @@ function sfc_sgs_precip_energy_flux(Y, p, ::PrognosticEDMFX, gm)
     int_uvwʲ = @. lazy(Geometry.UVWVector($(sfc_lev(ᶜuʲs.:(1)))))
     int_T⁰ = sfc_lev(ᶜT⁰)
     int_uvw⁰ = @. lazy(Geometry.UVWVector($(sfc_lev(ᶜu⁰))))
-    int_ρ⁰ = @. lazy(
-        max(
-            eps(FT),
-            TD.air_density(
-                thp,
-                int_T⁰,
-                $(sfc_lev(ᶜp)),
-                $(sfc_lev(ᶜq_tot_nonneg⁰)),
-                $(sfc_lev(ᶜq_liq⁰)),
-                $(sfc_lev(ᶜq_ice⁰)),
-            ),
+    int_ρ⁰ = p.scratch.sfc_precip_env_density
+    @. int_ρ⁰ = max(
+        eps(FT),
+        TD.air_density(
+            thp,
+            int_T⁰,
+            $(sfc_lev(ᶜp)),
+            $(sfc_lev(ᶜq_tot_nonneg⁰)),
+            $(sfc_lev(ᶜq_liq⁰)),
+            $(sfc_lev(ᶜq_ice⁰)),
         ),
     )
     int_ρaʲ = sfc_lev(Y.c.sgsʲs.:(1).ρa)
@@ -292,8 +298,8 @@ function sfc_sgs_precip_energy_flux(Y, p, ::PrognosticEDMFX, gm)
             gm.int_ρq_sno, gm.sfc_wₛ, TD.internal_energy_ice,
         ),
     )
-    terms = unrolled_map(species) do (int_qʲ, sfc_wʲ, int_ρq, sfc_w, e_int_func)
-        @. lazy(
+    MatrixFields.unrolled_foreach(species) do (int_qʲ, sfc_wʲ, int_ρq, sfc_w, e_int_func)
+        @. dest +=
             J_ratio * (
                 int_ρʲ * updraft_precip_energy_flux(
                     int_qʲ, sfc_wʲ, int_Tʲ, int_uvwʲ, sfc_w, int_T, int_uvw,
@@ -303,10 +309,9 @@ function sfc_sgs_precip_energy_flux(Y, p, ::PrognosticEDMFX, gm)
                     int_qʲ, sfc_wʲ, int_ρq, sfc_w, int_T, int_uvw, int_T⁰,
                     int_uvw⁰, int_ρ⁰, int_ρaʲ, e_int_func, thp,
                 )
-            ),
-        )
+            )
     end
-    return @. lazy(terms[1] + terms[2] + terms[3] + terms[4])
+    return nothing
 end
 
 @inline _precip_lin_nt(
@@ -363,8 +368,10 @@ where `w_base` is the level-1 terminal velocity (`ᶠJ_1 / ᶠJ_{1/2}`-scaled) a
 and the column maxima `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for rain and
 snow. This linearization matches the discrete column sink applied by one direct
 Newton iteration (`max_newton_iters_ode == 1`, no line search, non-Krylov linear
-solve) with the Jacobian updated at every solve (`update_jacobian_every = "solve"`). The SGS correction comes from `sfc_sgs_precip_energy_flux`, which
-dispatches on the turbulence-convection model.
+solve) with the Jacobian updated at every solve
+(`update_jacobian_every = "solve"`). The SGS correction comes from
+`set_sfc_sgs_precip_energy_flux!`, which dispatches on the
+turbulence-convection model.
 """
 function record_stage_precipitation_linearization!(Y, p)
     (
@@ -434,8 +441,6 @@ function record_stage_precipitation_linearization!(Y, p)
         int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
         sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
     )
-    f_e_sgs = sfc_sgs_precip_energy_flux(Y, p, p.atmos.turbconv_model, gm)
-
     @. sfc_precip_lin_state = _precip_lin_nt(
         w_lcl_base,
         w_icl_base,
@@ -453,7 +458,14 @@ function record_stage_precipitation_linearization!(Y, p)
         e_icl,
         e_rai,
         e_sno,
-        f_e_sgs,
+        zero_FT,
+    )
+    set_sfc_sgs_precip_energy_flux!(
+        sfc_precip_lin_state.f_e_sgs,
+        Y,
+        p,
+        p.atmos.turbconv_model,
+        gm,
     )
     return nothing
 end
