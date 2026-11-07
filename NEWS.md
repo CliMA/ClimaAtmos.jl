@@ -3,6 +3,18 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The 1M rain and snow are placed on the precipitation
+  shaft of the SGS distribution by default (`sgs_precip_incloud_fraction = 1`,
+  `sgs_precip_fraction_floor = 0.1`; previously `0`, uniform, and `0.5`). Spread
+  uniformly over the cell, rain evaporates 2.5–4.5× the rate of 3.75 km MPAS
+  truth within ne30 cells; the shaft brings it to about 0.9–1.4×.
+- ![][badge-✨feature/enhancement] Opt-in `sgs_variance_fidelity_model: updraft`
+  (PrognosticEDMFX with non-equilibrium microphysics; default `equilibrium`
+  unchanged): sets the variance fidelity from the in-cloud condensate of the
+  updrafts, `α σ_S = c_u q_c,up`, bounded to `[α_min, 1/(1 − w_eq)]` and blended
+  in by the updrafts' cloud cover and lower area-limiter factor
+  (`updraft_variance_fidelity`). New provisional parameters:
+  `sgs_fidelity_updraft_coeff` and `sgs_fidelity_updraft_min`.
 
 0.42.18
 -------

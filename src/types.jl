@@ -2197,7 +2197,25 @@ struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
 struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractVarianceFidelityModel
+
+Closure for the variance fidelity `α` of the condensate reconstruction
+(`set_covariance_cache!`). Selected by the YAML key
+`sgs_variance_fidelity_model`.
+
+  - `EquilibriumVarianceFidelity` (`"equilibrium"`, default):
+    `α = α_Da · α_eq` (`sgs_variance_fidelity`).
+  - `UpdraftVarianceFidelity` (`"updraft"`): with `PrognosticEDMFX` and
+    non-equilibrium microphysics, `α` is set from the condensate of the cloudy
+    updrafts where they are active (`updraft_variance_fidelity`), and is
+    `α_Da · α_eq` elsewhere. Other configurations ignore it.
+"""
+abstract type AbstractVarianceFidelityModel end
+struct EquilibriumVarianceFidelity <: AbstractVarianceFidelityModel end
+struct UpdraftVarianceFidelity <: AbstractVarianceFidelityModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2221,6 +2239,8 @@ Group of moisture, cloud, and microphysics choices inside an
     by the largest excess the displaced (quadratic) profile reaches; `false`
     (default) keeps
     the truncated-Gaussian expectation.
+  - `sgs_variance_fidelity_model`: An `AbstractVarianceFidelityModel`;
+    `EquilibriumVarianceFidelity()` by default.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
     `FixedTerminalVelocity()` for cloud liquid and cloud ice, and
@@ -2235,7 +2255,7 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
@@ -2243,6 +2263,7 @@ water = ClimaAtmos.AtmosWater(;
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = DiagnosedTqCorrelation()
     sgs_variance_curvature::Bool = false
+    sgs_variance_fidelity_model::SVF = EquilibriumVarianceFidelity()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = Chen2022TerminalVelocity()
@@ -2691,7 +2712,7 @@ struct's docstring for the full list of admissible values.
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
     `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
-    `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `sgs_variance_fidelity_model`, `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
