@@ -462,14 +462,20 @@ Laplacian. Reading the terms in order:
   - The vertical advective flux is the face mass flux ``\mathcal{M}^f(\rho)``
     times the enthalpy reconstructed at faces, differenced with ``D^c``. This
     term is **implicit**. In dry and 0M configurations the implicit solve uses
-    the central interpolation ``I^f(h)``; with non-equilibrium microphysics it
-    uses the first-order upwind value, the same reconstruction the condensates
-    receive, so that energy, total water, and condensates cross each face
-    consistently. In both cases the Courant-limited (`min(1, 1 / C_γ)`)
-    difference between the `energy_q_tot_upwinding` flux (the van Leer limiter
-    by default) and the implicit flux is applied after the Newton solve as a
-    `T_post_imp!` correction (`correct_implicit_advection_tendency!`), so the
-    high-order flux sees the Newton-solved velocity.
+    the central interpolation ``I^f(h)``. With non-equilibrium microphysics the
+    flux is split into the material transport
+    ``\tfrac{I^f(\rho J)}{J^f} U^f_1(\tilde{\boldsymbol{u}}, e)`` of the
+    specific total energy, with the first-order upwind reconstruction the
+    condensates receive, and the pressure work ``\tilde{\boldsymbol{u}} I^f(p)``
+    with the central face pressure: ``e`` is a property of the air and crosses
+    each face like total water and the condensates, while ``p`` is continuous
+    across a density jump, where an upwind ``p/\rho`` would be off by
+    ``\Delta R_m T / 2``. In both cases the Courant-limited
+    (`min(1, 1 / C_γ)`) difference between the `energy_q_tot_upwinding` flux
+    (the van Leer limiter by default) and the implicit advective flux is
+    applied after the Newton solve as a `T_post_imp!` correction
+    (`correct_implicit_advection_tendency!`), so the high-order flux sees the
+    Newton-solved velocity; the pressure work receives none.
   - The radiative flux divergence is explicit and applied separately.
   - Hyperdiffusion is two Laplacians with the completion ``\mathcal{P}`` in
     between, each a weak divergence of a strong gradient.

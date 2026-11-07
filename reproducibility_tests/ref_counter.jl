@@ -1,4 +1,4 @@
-461
+462
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+462
+- With non-equilibrium microphysics, the implicit vertical energy flux
+  upwinds `e_tot` and treats the pressure work `u³ ᶠinterp(p)` centrally,
+  which changes every moist non-equilibrium reference.
+
 461
 - Two approximate linear-solve iterations and stage-wise state constraints
   by default; implicit first-order upwind vertical advection of the

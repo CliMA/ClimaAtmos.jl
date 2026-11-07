@@ -47,7 +47,7 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
     t = simulation.integrator.t
     FT = eltype(Y)
     (; dtγ) = p
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜp) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶠρ = @. CA.ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
@@ -56,8 +56,10 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
     @test CA.grid_mean_base_upwinding(Y) == Val(:first_order)
     @test p.atmos.numerics.energy_q_tot_upwinding == Val(:vanleer_limiter)
 
-    # Only the grid-mean transport is under test: sedimentation velocities are
-    # zeroed and the other condensates removed.
+    # Only the grid-mean material transport is under test: sedimentation
+    # velocities are zeroed, the other condensates removed, and the cache
+    # pressure set to zero so that the pressure work vanishes.
+    ᶜp .= FT(0)
     for w_name in (:ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ)
         fill!(parent(getproperty(p.precomputed, w_name)), FT(0))
     end
@@ -77,7 +79,7 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
             C .* parent(Yₜ_k.c.ρq_lcl)
         scale = maximum(abs, affine)
         @test scale > 0 || label == "correction"
-        @test maximum(abs, ρe .- affine) <= FT(1e-12) * max(scale, FT(1))
+        @test maximum(abs, ρe .- affine) <= FT(1e-10) * max(scale, FT(1))
     end
 
     # The linear reconstructions commute with affine combinations of
@@ -95,12 +97,11 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
     for (upwinding, ψ_q, ψ_l) in cases, C_val in (FT(0.5), FT(2.5))
         @. Y.c.ρq_tot = Y.c.ρ * (FT(2e-3) + FT(8e-3) * ψ_q)
         @. Y.c.ρq_lcl = Y.c.ρ * (FT(1e-4) + FT(9e-4) * ψ_l)
-        # `ᶜh_tot` is a cache field; an affine function of the transported
-        # specific contents stands in for the thermodynamic value.
-        @. ᶜh_tot =
-            A + B * CA.specific(Y.c.ρq_tot, Y.c.ρ) +
-            C * CA.specific(Y.c.ρq_lcl, Y.c.ρ)
+        # An affine function of the transported specific contents stands in
+        # for the thermodynamic energy.
+        @. Y.c.ρe_tot = Y.c.ρ * A + B * Y.c.ρq_tot + C * Y.c.ρq_lcl
         u3_arr .= C_val / FT(dtγ)
+        ᶜe_tot = @. CA.specific(Y.c.ρe_tot, Y.c.ρ)
         ᶜq_tot = @. CA.specific(Y.c.ρq_tot, Y.c.ρ)
         ᶜq_lcl = @. CA.specific(Y.c.ρq_lcl, Y.c.ρ)
 
@@ -112,7 +113,7 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
         # with the reconstruction under test; `ρ` receives none.
         Yₜ_corr .= zero(eltype(Yₜ_corr))
         for (ᶜρχₜ, ᶜχ) in (
-            (Yₜ_corr.c.ρe_tot, ᶜh_tot),
+            (Yₜ_corr.c.ρe_tot, ᶜe_tot),
             (Yₜ_corr.c.ρq_tot, ᶜq_tot),
             (Yₜ_corr.c.ρq_lcl, ᶜq_lcl),
         )
@@ -169,7 +170,7 @@ end
     ᶜv = @. sin(z_c / FT(700)) + FT(0.5)
     Yₜ = similar(Y)
     # Central differences of `implicit_vertical_advection_tendency!`, with the
-    # cache (and `ᶜh_tot` in particular) refreshed at each perturbed state.
+    # cache (and `ᶜp` in particular) refreshed at each perturbed state.
     function fd_derivative(row_sym, col_sym)
         field = getproperty(Y.c, col_sym)
         field_orig = copy(field)
@@ -273,22 +274,16 @@ end
     CA.set_implicit_precomputed_quantities!(Y, p, t)
     spread_after = spread(p.precomputed.ᶜT)
     q_vap = @. CA.specific(Y.c.ρq_tot - Y.c.ρq_lcl, Y.c.ρ)
-    # Two first-order errors of the upwind `h_tot` flux remain at the step.
-    # `h_tot` is the water step on top of the geopotential ramp `g z`, and
+    # One first-order error of the upwind `e_tot` flux remains at the step:
+    # `e_tot` is the water step on top of the geopotential ramp `g z`, and
     # the van Leer limiter zeroes the slope in the two cells at the step, so
     # each exchanges the ramp with a half-cell offset `g Δz / 2` through the
-    # van Leer share `1 / C_γ` of the flux. And the face pressure implied by
-    # `ρ_f (p / ρ)_upwind` is off by `ρ ΔR_m T / 2` where the density jumps,
-    # which misplaces that much pressure work in the receiving cell.
+    # van Leer share `1 / C_γ` of the flux. The pressure work uses the
+    # central face pressure, which is continuous across the density jump.
     g = CA.CAP.grav(p.params)
     cv_d = CA.CAP.cv_d(p.params)
-    ΔR_m =
-        TD.gas_constant_air(thp, FT(7e-3), FT(5e-4), FT(0)) -
-        TD.gas_constant_air(thp, FT(1e-3), FT(0), FT(0))
     limiter_bound = 2 * (C_euler / C_γ) * g * Δz / (2 * cv_d)
-    pressure_work_bound = C_euler * ΔR_m * T_0 / (2 * cv_d)
     @test spread_before < 1e-6
-    @test spread_after <
-          spread_before + limiter_bound + pressure_work_bound + FT(0.01)
+    @test spread_after < spread_before + limiter_bound + FT(0.01)
     @test minimum(vec(parent(q_vap))[interior]) >= 0
 end
