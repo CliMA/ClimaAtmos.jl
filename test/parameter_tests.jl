@@ -254,7 +254,8 @@ end
         sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
         @test CAP.edmf_shallow_support_height_scale(sq) == zero(FT)
 
-        # Datum-shift invariance and asymptotic limits of `shallow_support_weight`.
+        # Datum-shift invariance and asymptotic limits of
+        # `shallow_support_weight`.
         @test CA.shallow_support_weight(FT(0.5), FT(4000), FT(500), zero(FT)) ==
               FT(0.5)
         @test CA.shallow_support_weight(FT(0.5), FT(500), FT(500), FT(2000)) ==
