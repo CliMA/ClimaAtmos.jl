@@ -1,4 +1,4 @@
-461
+462
 
 # **README**
 #
@@ -32,6 +32,18 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+462
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; implicit first-order upwind vertical advection of the
+  sedimenting microphysics tracers and `ρtke` and, alongside them, of `ρe_tot`
+  and `ρq_tot`, with one Courant-limited post-Newton correction; Courant-
+  independent van Leer slopes; stage-weighted surface precipitation fluxes;
+  parameter-free semi-implicit damping of orographic gravity-wave drag; the
+  incremental implicit-stage condensate predictor; a Jacobian sedimentation
+  velocity of zero in negative cells; Jacobian velocity blocks with the
+  residual's upwind face values; and the implicit-cache refresh only before
+  Picard rounds. All change results.
+
 461
 - Update dependencies for v0.42.18
 

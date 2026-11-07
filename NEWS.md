@@ -33,6 +33,70 @@ main
   converted with `cp_d`, so potential temperature relaxes at the published
   rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
   changes the `held_suarez_equil` reference.
+- ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
+  from `1` to `2` and the default `update_constrain_state_every` from `step`
+  to `stage` in `config/default_configs/default_config.yml`, and the matching
+  keyword defaults of `AtmosSimulation` and `ManualSparseJacobian`. The default
+  `ode_algo` stays `ARS343`: the explicit tableau of `ARS222` amplifies
+  undamped oscillatory modes, which blows up the plane test cases and the
+  coarse moist baroclinic wave example within a few hundred steps.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
+  `set_implicit_precomputed_quantities_core!` at the explicit predictor state
+  entering `initialize_implicit_stage_problem!` when Picard rounds follow,
+  clamp updraft `ρa` of the
+  Newton initial guess to `[0, a_max ρʲ]`, diagnose the entrained environment
+  in the Picard tracer sweep from the stage-start draft snapshot, evaluate the
+  analytic updraft area predictor with a two-pass `solve_sgs_ρa_two_pass!`
+  sweep inside and after the Picard loop, and apply
+  `warm_start_grid_mean_tracers!` incrementally to the condensates, `ρq_tot`,
+  and `ρe_tot`, so the guess differs from the stage-entering state only by the
+  updraft increment. A guess raised above the stage-entering state enters the
+  Newton residual as a source that the sedimentation Jacobian drains through
+  the surface; with the incremental form and no grid-mean clamp on the guess,
+  a bottom cell that enters the stage negative passes no flux through the
+  surface.
+- ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
+  explicit `OrographicGravityWave` drag with backward-Euler damping
+  (`D_∥ / (1 + dt d / |uₕ|)`, `d = max(0, -D ⋅ û)`), which keeps one step from
+  reversing the horizontal wind at any wind speed, while leaving the
+  perpendicular turning component undamped.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Accumulate `surface_rain_flux`,
+  `surface_snow_flux`, and `col_integrated_precip_energy_tendency` across IMEX
+  stages weighted by the tableau `b_imp` coefficients (the weighting the column
+  water sink receives), and clamp negative tracer densities to zero in the
+  grid-mean, updraft, and environment sedimentation fluxes.
+- ![][badge-🔥behavioralΔ] Implicitize vertical grid-mean `ᶠu³` advection of
+  sedimenting microphysics tracers and `ρtke` with first-order upwinding
+  (`ᶠupwind1`) and bidiagonal Jacobian blocks that are exact in the tracer `χ`
+  (with velocity coupling omitted outside the central EDMFX mass-flux block).
+  With non-equilibrium microphysics, `ρe_tot` and `ρq_tot` are advected
+  implicitly with the same `ᶠupwind1` reconstruction as the condensates, and
+  all three receive one Courant-limited (`min(1, 1 / C_γ)`) post-Newton
+  `energy_q_tot_upwinding` antidiffusion. With a linear reconstruction, a
+  scalar that is affine in the others then stays affine under transport at any
+  stage Courant number; the van Leer limiter and the `p / ρ` part of `h_tot`
+  leave first-order departures at sharp gradients. Where `C_γ > 1`, smooth
+  `h_tot` and `q_tot` profiles keep the fraction `1 - 1 / C_γ` of the
+  first-order upwind dissipation, and `energy_q_tot_upwinding = none` gives
+  first-order upwind transport with no correction. The Jacobian gains the
+  matching `(ρe_tot, ρq_tot)`, `(ρe_tot, ρq_χ)`, `(ρe_tot, ρ)`, and
+  `(ρq_tot, ρ)` advection blocks and upwind `(·, u₃)` blocks for `ρe_tot`,
+  `ρq_tot`, and the condensates. Dry and 0M configurations keep the central
+  implicit advection of `ρe_tot` and `ρq_tot` with Courant-limited post-Newton
+  upwind dissipation. `tracer_upwinding` applies to the explicitly advected
+  passive tracers, and `ρtke` stays on unconditionally monotone `ᶠupwind1`.
+  Under `PrognosticEDMFX`, the updraft water species follow `edmfx_mse_q_tot_upwinding` and `edmfx_tracer_upwinding`
+  covers the passive updraft tracers; a one-time log message reports when the
+  two keys differ. Dry configurations with prognostic `ρtke` use the
+  approximate linear solve. With `prescribed_flow`, the fully explicit tendency
+  applies the same corrections with a unit Courant limiter.
+- ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
+  MUSCL slope has no Courant-number factor at any Courant number; this applies
+  to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass
+  flux, non-orographic gravity-wave heating, and the post-Newton corrections).
+- ![][badge-🐛bugfix] Synchronize `check_nans` across MPI ranks with
+  `ClimaComms.allreduce` and log per-variable and per-updraft `NaN` counts on
+  every rank that detects a `NaN`.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
@@ -46,7 +110,9 @@ main
   a single Newton iteration can carry rain/snow across multiple cells at
   CFL > 1 and the leading-edge pile-up spikes disappear. Cloud liquid and
   cloud ice keep the pointwise-`w` Jacobian — they fall slowly enough that
-  the pointwise stencil is stable.
+  the pointwise stencil is stable. In a cell whose tracer is negative, the
+  Jacobian velocity is zero, matching the clamped sedimentation flux of the
+  tendency, so a negative bottom cell passes no surface precipitation flux.
 - ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
   the implicit path with cloud-liquid condensation / evaporation. A single
   `implicit_microphysics` toggle controls both: when `true` (default), the

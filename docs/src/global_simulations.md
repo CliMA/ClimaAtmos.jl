@@ -91,8 +91,10 @@ fall on each side of it.
 
 Two related keys matter at these resolutions:
 
-  - `ode_algo` selects the implicit–explicit scheme, `ARS343` by default. The
-    PROPHET production runs use `ARS222`.
+  - `ode_algo` selects the implicit–explicit scheme, `ARS343` by default.
+    `ARS222` has fewer stages per step, but its explicit tableau amplifies
+    undamped oscillatory modes, so it is only selected in configurations whose
+    horizontal damping per step is strong enough to absorb that.
   - `dt_rad` sets how often radiation is called, 6 hours by default and 1 hour
     in the production configurations. Radiation takes more run time than any
     other parameterization in a global run, so this interval needs to be set

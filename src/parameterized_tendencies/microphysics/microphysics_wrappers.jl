@@ -612,23 +612,32 @@ positive when a source of the corresponding tracer.
     mode = BMT.LinearizedAverage(),
 )
     FT = typeof(ρ)
+    q_lcl_pos = max(zero(FT), q_lcl)
+    q_icl_pos = max(zero(FT), q_icl)
+    q_rai_pos = max(zero(FT), q_rai)
+    q_sno_pos = max(zero(FT), q_sno)
+    q_tot_safe = max(
+        zero(FT),
+        q_tot_nonneg,
+        q_lcl_pos + q_icl_pos + q_rai_pos + q_sno_pos,
+    )
     # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
     # return zero without running the substepped 4x4 linear solver.
-    if no_1m_condensate(q_lcl, q_icl, q_rai, q_sno)
+    if no_1m_condensate(q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos)
         tps = _unwrapped(thp)
         q_smin = ifelse(
             T >= TD.Parameters.T_freeze(tps),
             TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
             TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
         )
-        if q_tot_nonneg < q_smin * (one(FT) - 2 * eps(FT))
+        if q_tot_safe < q_smin * (one(FT) - 2 * eps(FT))
             return zero_1m_tendency(FT)
         end
     end
     return _call_bmt_1m(
         mode, BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp),
         ρ, T, w,
-        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, (),
+        q_tot_safe, q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos, dt, nsubs, (),
     )
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m

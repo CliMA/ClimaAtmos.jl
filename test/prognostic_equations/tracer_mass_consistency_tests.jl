@@ -16,6 +16,13 @@ import ClimaTimeSteppers as CTS
 
 include("../test_helpers.jl")
 
+# Measured behind a function barrier: an inline `@allocated` at testset scope
+# counts the allocations of the dynamic dispatch to `f!`.
+function _measure_allocs(f!, args...)
+    f!(args...)
+    return @allocated f!(args...)
+end
+
 @testset "Grid-mean transport consistency over topography" begin
     # Uniform 10 m/s wind over a Schar mountain with linear mesh warping, so
     # coordinate surfaces are sloped up to the model top and ᶠuₕ³ ≠ 0 there.
@@ -63,10 +70,10 @@ include("../test_helpers.jl")
     tol = 100 * eps(FT) * maximum(abs, ρ_tendency)
     @test maximum(abs, parent(Yₜ_imp.c.ρq_tot) .- ρ_tendency) <= tol
 
-    # Passive-tracer advection with the grid-mean flow (explicit pathway) must
-    # reproduce the advective part of the continuity tendency for uniform χ.
-    # (The ρ row of Yₜ_imp cannot serve as the reference here because it also
-    # includes water sedimentation, which is not part of this pathway.)
+    # Microphysics tracer advection with the grid-mean flow (in
+    # `implicit_vertical_advection_tendency!`) must reproduce the advective part
+    # of the continuity tendency for uniform χ when sedimentation velocities are
+    # zeroed.
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜρ_advection = similar(Y.c.ρ)
@@ -74,11 +81,14 @@ include("../test_helpers.jl")
     ρ_advection = parent(ᶜρ_advection)
     @test maximum(abs, ρ_advection) > 0
     adv_tol = 100 * eps(FT) * maximum(abs, ρ_advection)
-    Yₜ_exp = similar(Y)
-    Yₜ_exp .= zero(eltype(Yₜ_exp))
-    CA.explicit_vertical_advection_tendency!(Yₜ_exp, Y, p, t)
-    for ρχ_name in (:ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
-        ρχ_tendency = parent(getproperty(Yₜ_exp.c, ρχ_name))
+    for w_name in (:ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ)
+        fill!(parent(getproperty(p.precomputed, w_name)), FT(0))
+    end
+    Yₜ_imp_adv = similar(Y)
+    Yₜ_imp_adv .= zero(eltype(Yₜ_imp_adv))
+    CA.implicit_vertical_advection_tendency!(Yₜ_imp_adv, Y, p, t)
+    for ρχ_name in (:ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+        ρχ_tendency = parent(getproperty(Yₜ_imp_adv.c, ρχ_name))
         @test maximum(abs, ρχ_tendency .- ρ_advection) <= adv_tol
     end
 
@@ -162,6 +172,85 @@ end
     flux_scale = maximum(abs, parent(Yₜ.c.ρq_tot))
     @test flux_scale > 0  # non-vacuous: the SGS q_tot flux is active
     @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
+
+    # The `(c.ρtke, c.ρtke)` self-advection block initialized by
+    # `update_sedimentation_jacobian!` must match central finite differences of
+    # `implicit_vertical_advection_tendency!` in `Float64`.
+    u₃_orig = copy(Y.f.u₃)
+    z_f = Fields.coordinate_field(Y.f).z
+    z_c = Fields.coordinate_field(Y.c).z
+    @. Y.f.u₃ = CA.Geometry.Covariant3Vector(
+        CA.Geometry.WVector(FT(1.5) * sin(FT(π) * z_f / FT(1500))),
+    )
+    CA.set_implicit_precomputed_quantities!(Y, p, t)
+    matrix = integrator.cache.newtons_method_cache.j.cache.matrix.matrix
+    dtγ = FT(60)
+    CA.update_sedimentation_jacobian!(matrix, Y, p, dtγ)
+    block_tke = matrix[CA.@name(c.ρtke), CA.@name(c.ρtke)]
+    ᶜv = @. sin(z_c / FT(300)) + FT(0.5)
+    tke_orig = copy(Y.c.ρtke)
+    δ = FT(1e-7) * maximum(abs, parent(tke_orig))
+    @. Y.c.ρtke = tke_orig + δ * ᶜv
+    Yₜ .= zero(eltype(Yₜ))
+    CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    t_plus = copy(Array(parent(Yₜ.c.ρtke)))
+    @. Y.c.ρtke = tke_orig - δ * ᶜv
+    Yₜ .= zero(eltype(Yₜ))
+    CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    t_minus = copy(Array(parent(Yₜ.c.ρtke)))
+    @. Y.c.ρtke = tke_orig
+    fd_tke = dtγ .* (t_plus .- t_minus) ./ (2 * δ)
+    Jv_tke = Array(parent(@. block_tke * ᶜv)) .+ Array(parent(ᶜv))
+    @test maximum(abs, Jv_tke .- fd_tke) <= FT(1e-8) * maximum(abs, fd_tke)
+
+    # DryModel + ρtke branch of `update_sedimentation_jacobian!` must match the
+    # same `(c.ρtke, c.ρtke)` block at the same `ᶠu³` and allocate 0 bytes. That
+    # branch reads only `p.atmos.microphysics_model` and `p.precomputed.ᶠu³`,
+    # so a NamedTuple stands in for the `AtmosCache`.
+    p_dry = (;
+        atmos = (; microphysics_model = CA.DryModel()),
+        precomputed = (; ᶠu³ = p.precomputed.ᶠu³),
+    )
+    fill!(parent(block_tke), zero(eltype(parent(block_tke))))
+    CA.update_sedimentation_jacobian!(matrix, Y, p_dry, dtγ)
+    Jv_tke_dry = Array(parent(@. block_tke * ᶜv)) .+ Array(parent(ᶜv))
+    @test Jv_tke_dry == Jv_tke
+    @test _measure_allocs(
+        CA.update_sedimentation_jacobian!,
+        matrix,
+        Y,
+        p_dry,
+        dtγ,
+    ) == 0
+    @. Y.f.u₃ = u₃_orig
+    CA.set_implicit_precomputed_quantities!(Y, p, t)
+
+    # Non-negative specific humidity clamp across all four sedimentation flux
+    # sites (`implicit_vertical_advection_tendency!`,
+    # `vertical_advection_of_water_tendency!`, `set_precipitation_velocities!`,
+    # and `set_precipitation_surface_fluxes!`): negative condensate in a
+    # pre-Newton state must produce zero sedimentation flux rather than an
+    # upward moisture/energy source from below the surface.
+    Y_neg = copy(Y)
+    @. Y_neg.f.u₃ = zero(Y_neg.f.u₃)
+    for ρχ_name in (:ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+        getproperty(Y_neg.c, ρχ_name) .= FT(-1e-4) .* Y_neg.c.ρ
+    end
+    CA.set_implicit_precomputed_quantities!(Y_neg, p, t)
+    @. p.precomputed.ᶜwₗ = FT(0.05)
+    @. p.precomputed.ᶜwᵢ = FT(0.1)
+    @. p.precomputed.ᶜwᵣ = FT(4.0)
+    @. p.precomputed.ᶜwₛ = FT(1.0)
+    p.scratch.precip_stage_idx[] = 0
+    CA.set_precipitation_surface_fluxes!(Y_neg, p, p.atmos.microphysics_model)
+    @test maximum(abs, parent(p.precomputed.surface_rain_flux)) == 0
+    @test maximum(abs, parent(p.precomputed.surface_snow_flux)) == 0
+    Yₜ .= zero(eltype(Yₜ))
+    CA.implicit_vertical_advection_tendency!(Yₜ, Y_neg, p, t)
+    for ρχ_name in (:ρ, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+        @test maximum(abs, parent(getproperty(Yₜ.c, ρχ_name))) == 0
+    end
+    CA.set_precomputed_quantities!(Y, p, t)
 
     # With χ uniform across the grid mean and all subdomains (χ ≡ 1), the
     # difference-form SGS fluxes must vanish identically. Only Y is modified;
