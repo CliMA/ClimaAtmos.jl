@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With non-equilibrium microphysics, the implicit
+  vertical energy flux is split into the material transport
+  `ᶠρ ᶠupwind1(u³, e_tot)` and the pressure work `u³ ᶠinterp(p)`. The specific
+  total energy crosses each face with the same first-order upwind
+  reconstruction and post-Newton `energy_q_tot_upwinding` correction as total
+  water and the condensates, and the pressure work uses the central face
+  pressure, which is continuous across a density jump; an upwind `p / ρ` is
+  off by `ΔR_m T / 2` there. The Jacobian applies the pressure derivatives of
+  the `u₃` blocks to the energy row through the central operator. Dry and 0M
+  configurations keep the central transport of `h_tot`.
 - ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
   production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
   detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the

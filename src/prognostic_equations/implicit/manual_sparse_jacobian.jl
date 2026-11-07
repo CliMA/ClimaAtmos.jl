@@ -286,7 +286,8 @@ Also allocates the `ρe_tot`, `ρq_tot`, and `ρtke` diagonal blocks and the
 and which diffusion and SGS mass flux accumulate into. Alongside condensate
 masses, where `grid_mean_base_upwinding(Y)` is `Val(:first_order)`, the
 `(ρe_tot, ρ)` and `(ρq_tot, ρ)` couplings are allocated as well, for the
-density dependence of the upwind transport of `h_tot` and `q_tot`. For
+density dependence of the upwind transport of `e_tot` and `q_tot` and of the
+pressure work. For
 `DryModel`, returns the `ρtke` diagonal block when `c.ρtke` is present in `Y`,
 or `()` otherwise.
 
@@ -566,11 +567,12 @@ function jacobian_solver_algorithm(
         # Scalar solve order: gs condensate masses precede ρ because the ρ row
         # carries their sedimentation derivatives ∂(ρ tendency)/∂ρq_x; ρ
         # precedes ρq_tot and ρe_tot, whose rows depend on the ρ column (SGS
-        # mass flux, and the upwind grid-mean transport of h_tot and q_tot
+        # mass flux, and the upwind grid-mean transport of e_tot and q_tot
         # alongside condensates); ρq_tot precedes ρe_tot, whose row depends on
-        # the ρq_tot and condensate columns through h_tot. The condensate-mass
-        # rows carry no (·, ρ) blocks (see `diffusion_jacobian_blocks`), so
-        # this order is block lower triangular.
+        # the ρq_tot and condensate columns through the pressure work. The
+        # condensate-mass rows carry no (·, ρ) blocks (see
+        # `diffusion_jacobian_blocks`), so this order is block lower
+        # triangular.
         gs_scalar_subalg = if !(atmos.microphysics_model isa DryModel)
             MatrixFields.BlockLowerTriangularSolve(
                 mass_names...,
@@ -957,13 +959,15 @@ Also initializes the scalar blocks of `ρe_tot` and `ρq_tot` that diffusion and
 SGS mass flux accumulate into: the diagonals, the `(ρe_tot, ρq_tot)` coupling,
 and, where present, the `(ρe_tot, ρ)` and `(ρq_tot, ρ)` couplings. With
 `grid_mean_base_upwinding(Y) == Val(:first_order)` these hold the first-order
-upwind grid-mean transport of `h_tot` and `q_tot` (minus `I` on the diagonals),
-linearized through `h_tot(ρ, ρe_tot, ρq_tot, ρq_cond)` and `q_tot(ρ, ρq_tot)`
-and through the face density `ᶠρ = ᶠinterp(ρJ)/ᶠJ` of the mass flux, with the
-same thermodynamic factors as `update_sgs_massflux_jacobian!`; otherwise the
-diagonals are `-I` and the couplings zero. The `ρtke` diagonal block is
-initialized to its first-order upwind grid-mean vertical self-advection
-operator minus `I`. Mutates `matrix` and returns `nothing`.
+upwind grid-mean transport of `e_tot` and `q_tot` (minus `I` on the diagonals),
+linearized through `e_tot(ρ, ρe_tot)` and `q_tot(ρ, ρq_tot)` and through the
+face density `ᶠρ = ᶠinterp(ρJ)/ᶠJ` of the mass flux, plus the central pressure
+work `-∂ᵥ(u³ ᶠinterp(p))` of the energy row linearized through
+`p(ρ, ρe_tot, ρq_tot, ρq_cond)` with the same thermodynamic factors as the
+`u₃` blocks; otherwise the diagonals are `-I` and the couplings zero. The
+`ρtke` diagonal block is initialized to its first-order upwind grid-mean
+vertical self-advection operator minus `I`. Mutates `matrix` and returns
+`nothing`.
 """
 function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     FT = Spaces.undertype(axes(Y.c))
@@ -1067,15 +1071,16 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         return nothing
     end
 
-    # Alongside condensate masses, h_tot and q_tot are transported with the
-    # same first-order upwind operator as the condensates. The derivatives of
-    # h_tot with respect to (ρ, ρe_tot, ρq_tot, ρq_cond) are those of
-    # `update_sgs_massflux_jacobian!`; in addition, the face density of the
-    # grid-mean mass flux, ᶠρ = ᶠinterp(ρJ)/ᶠJ, depends on ρ, which cancels
-    # the -χ/ρ part of ∂χ/∂ρ for a scalar in equilibrium with the
-    # density. The sedimenting-tracer diagonals omit that coupling because
-    # their rows precede ρ in the scalar solve.
-    (; ᶜK, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    # Alongside condensate masses, e_tot and q_tot are transported with the
+    # same first-order upwind operator as the condensates, and the pressure
+    # work -∂ᵥ(u³ ᶠinterp(p)) is a central term (`add_energy_transport!`).
+    # The derivatives of p with respect to (ρ, ρe_tot, ρq_tot, ρq_cond) are
+    # those of the u₃ blocks in `update_advection_jacobian!`; in addition,
+    # the face density of the grid-mean mass flux, ᶠρ = ᶠinterp(ρJ)/ᶠJ,
+    # depends on ρ, which cancels the -χ/ρ part of ∂χ/∂ρ for a scalar in
+    # equilibrium with the density. The sedimenting-tracer diagonals omit that
+    # coupling because their rows precede ρ in the scalar solve.
+    (; ᶜK, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
     cv_d = FT(CAP.cv_d(params))
@@ -1164,7 +1169,6 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜΦ,
         ᶜu,
         ᶜK,
-        ᶜh_tot,
         ᶜq_tot_nonneg,
         ᶜq_liq,
         ᶜq_ice,
@@ -1185,7 +1189,6 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     ᶜΦ_col,
     ᶜu_col,
     ᶜK_col,
-    ᶜh_tot_col,
     ᶜq_tot_nonneg_col,
     ᶜq_liq_col,
     ᶜq_ice_col,
@@ -1202,6 +1205,11 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
                ᶠset_upwind1_matrix_bcs(ᶠupwind1_matrix(ᶠu³_col))
            )
         ᶜadv_tracer_op = @. ᶜadv_op * DiagonalMatrixRow(1 / ᶜρ_col)
+        # The pressure work -∂ᵥ(u³ ᶠinterp(p)) of the energy row, applied to
+        # the derivatives of p below.
+        ᶜpw_op = @. dtγ *
+           (-(ᶜadvdivᵥ_matrix())) *
+           (DiagonalMatrixRow(ᶠu³_col) * ᶠinterp_matrix())
         # ∂(ᶠρ u³ χ_up)/∂ρ through the face density, for a face value χ_up
         # held fixed: the upwind flux divided by ᶠJ, applied to ᶠinterp(δρ J).
         @inline ᶜmass_op(ᶜχ) = @. lazy(
@@ -1214,31 +1222,33 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             ),
         )
 
-        ᶜkappa_m = @. TD.gas_constant_air(
-            thermo_params,
-            ᶜq_tot_nonneg_col,
-            ᶜq_liq_col,
-            ᶜq_ice_col,
-        ) / TD.cv_m(thermo_params, ᶜq_tot_nonneg_col, ᶜq_liq_col, ᶜq_ice_col)
+        ᶜkappa_m = @. lazy(
+            TD.gas_constant_air(
+                thermo_params,
+                ᶜq_tot_nonneg_col,
+                ᶜq_liq_col,
+                ᶜq_ice_col,
+            ) / TD.cv_m(thermo_params, ᶜq_tot_nonneg_col, ᶜq_liq_col, ᶜq_ice_col),
+        )
         ᶜ∂p∂ρq_tot = @. lazy(
             ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT_col - T_0)) +
             ΔR_v * ᶜT_col,
         )
         ᶜq_tot = @. lazy(specific(Yc.ρq_tot, ᶜρ_col))
+        ᶜe_tot = @. lazy(specific(Yc.ρe_tot, ᶜρ_col))
+        ᶜ∂p∂ρ = @. lazy(
+            ᶜkappa_m * (T_0 * cp_d - ᶜK_col - ᶜΦ_col) +
+            (R_d - ᶜkappa_m * cv_d) * ᶜT_col,
+        )
 
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
-            ᶜadv_op * DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ_col) - (I,)
-        @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
-            ᶜadv_op * DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ_col)
+            ᶜadv_tracer_op + ᶜpw_op * DiagonalMatrixRow(ᶜkappa_m) - (I,)
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot = ᶜpw_op * DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot = ᶜadv_tracer_op - (I,)
         @. ∂ᶜρe_tot_err_∂ᶜρ =
-            ᶜadv_op * DiagonalMatrixRow(
-                (
-                    -(ᶜh_tot_col) +
-                    ᶜkappa_m * (T_0 * cp_d - ᶜK_col - ᶜΦ_col) +
-                    (R_d - ᶜkappa_m * cv_d) * ᶜT_col
-                ) / ᶜρ_col,
-            ) + $(ᶜmass_op(ᶜh_tot_col))
+            ᶜadv_op * DiagonalMatrixRow(-(ᶜe_tot) / ᶜρ_col) +
+            $(ᶜmass_op(ᶜe_tot)) +
+            ᶜpw_op * DiagonalMatrixRow(ᶜ∂p∂ρ)
         @. ∂ᶜρq_tot_err_∂ᶜρ =
             ᶜadv_op * DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ_col) +
             $(ᶜmass_op(ᶜq_tot))
@@ -1287,9 +1297,9 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             @. ∂ᶜρq_tot_col = ᶜsed_op
             @. ∂ᶜρ_col = ᶜsed_op
             # The grid-mean sedimentation energy flux (specific energy
-            # e_int + Φ + Kin) and the dependence of the upwind h_tot flux on
-            # the condensate through the pressure. The EDMFX subdomain
-            # corrections to the sedimentation energy flux in
+            # e_int + Φ + Kin) and the dependence of the pressure work on the
+            # condensate. The EDMFX subdomain corrections to the sedimentation
+            # energy flux in
             # `vertical_advection_of_water_tendency!`, which replace the
             # grid-mean thermodynamic state with updraft/environment states, are
             # treated explicitly — a convergence-rate approximation in EDMF
@@ -1300,9 +1310,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
                 ᶜsed_op * DiagonalMatrixRow(
                     e_int_func(thermo_params, ᶜT_col) + ᶜΦ_col + $(Kin(ᶜwₚ, ᶜuvw)),
                 ) +
-                ᶜadv_op * DiagonalMatrixRow(
-                    (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT_col - T_0)) - R_v * ᶜT_col) /
-                    ᶜρ_col,
+                ᶜpw_op * DiagonalMatrixRow(
+                    ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT_col - T_0)) - R_v * ᶜT_col,
                 )
             return nothing
         end

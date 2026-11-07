@@ -77,11 +77,13 @@ end
     @test p.scratch.precip_stage_idx[] == stage_idx
 
     # Base and full-upwind vertical fluxes, materialized from
-    # `vertical_transport`.
+    # `vertical_transport`. Alongside condensates the energy correction acts
+    # on `e_tot`, the material part of the split energy flux.
     base_ρe = similar(Y.c.ρe_tot)
     upwind_ρe = similar(Y.c.ρe_tot)
-    vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, base)
-    vtt_up = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, upwinding)
+    ᶜe_tot = @. CA.specific(Y.c.ρe_tot, Y.c.ρ)
+    vtt_0 = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜe_tot, dt, base)
+    vtt_up = CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜe_tot, dt, upwinding)
     @. base_ρe = vtt_0
     @. upwind_ρe = vtt_up
 
