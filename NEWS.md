@@ -45,6 +45,11 @@ main
   converted with `cp_d`, so potential temperature relaxes at the published
   rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
   changes the `held_suarez_equil` reference.
+- AtmosphericProfilesLibrary.jl is now the `ClimaAtmos.AtmosphericProfilesLibrary`
+  submodule, copied from AtmosphericProfilesLibrary.jl v0.1.10, and ClimaAtmos no
+  longer depends on the standalone package. Replace
+  `import AtmosphericProfilesLibrary as APL` with
+  `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
