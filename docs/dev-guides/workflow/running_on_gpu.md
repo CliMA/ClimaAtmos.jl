@@ -6,7 +6,7 @@ This is a *run-the-model* guide. For writing GPU-compatible code (kernels, broad
 
 ## 1. Install Julia
 
-Install via [`juliaup`](https://julialang.org/downloads/) as described in [onboarding.md §1](onboarding.md). No system CUDA toolkit is required — `CUDA.jl` ships its own runtime (see step 3). You only need a working NVIDIA **driver** on the machine.
+Install via [`juliaup`](https://julialang.org/downloads/) as described in [onboarding.md §1](onboarding.md). The machine needs a working NVIDIA **driver**; `CUDA.jl` downloads its own CUDA runtime (step 3), so no system CUDA toolkit is needed.
 
 ## 2. Add `CUDA.jl`
 
@@ -17,20 +17,20 @@ using Pkg
 Pkg.add("CUDA")
 ```
 
-Installing `CUDA.jl` does **not** by itself move the model onto the GPU — the device is selected by an environment variable, not by hardware autodetection (step 5).
+The device is selected by the `CLIMACOMMS_DEVICE` environment variable (step 5); installing `CUDA.jl` alone leaves the model on the CPU.
 
 ## 3. CUDA runtime compatibility
 
-The CUDA *runtime* used by `CUDA.jl` must be compatible with the underlying CUDA *driver* installed on the machine. There are two ways to satisfy this:
+The CUDA *runtime* used by `CUDA.jl` must be compatible with the CUDA *driver* installed on the machine. There are three ways to satisfy this:
 
-- **Automatic (default).** On instantiation, `CUDA.jl` downloads a CUDA runtime that is compatible with the local driver. This requires no system CUDA install and is the right choice on a personal workstation or a fresh cloud node.
+- **Automatic (default).** On instantiation, `CUDA.jl` downloads a CUDA runtime that is compatible with the local driver. This is the right choice on a personal workstation or a fresh cloud node.
 - **Pin a specific runtime version**, e.g. when the auto-selected version misbehaves:
 
   ```julia
   CUDA.set_runtime_version!(v"11.8")
   ```
 
-- **Use the local system toolkit.** This works well on HPC systems where CUDA is provided through environment modules:
+- **Use the local system toolkit.** Use this on HPC systems where CUDA is provided through environment modules:
 
   ```julia
   CUDA.set_runtime_version!(local_toolkit = true)
@@ -40,32 +40,32 @@ The CUDA *runtime* used by `CUDA.jl` must be compatible with the underlying CUDA
 
 ## 4. Load the backend with `@import_required_backends`
 
-`ClimaComms` discovers device and MPI backends through package extensions that load only when the underlying package (`CUDA`, `MPI`) is present. The macro loads whichever backends are available in the current environment:
+`ClimaComms` discovers device and MPI backends through package extensions that load only when the underlying package (`CUDA`, `MPI`) is present. The macro loads every backend available in the current environment:
 
 ```julia
 using ClimaComms
 ClimaComms.@import_required_backends   # loads the CUDA (and MPI) extension if installed
 ```
 
-Place this near the top of your entry point or test file, before calling `ClimaComms.device()`. This is the standard preamble in CliMA GPU test files (e.g. `test/gpu_tests.jl`). If you set `CLIMACOMMS_DEVICE="CUDA"` (step 5) without importing `CUDA.jl`, `ClimaComms` errors; the macro is what loads the backend so the device can resolve to `CUDADevice`.
+Place this near the top of your entry point or test file, before calling `ClimaComms.device()`. It is the standard preamble in CliMA GPU test files (e.g. `test/gpu_tests.jl` in CloudMicrophysics, `test/runtests_gpu.jl` in SurfaceFluxes). With `CLIMACOMMS_DEVICE="CUDA"` (step 5) set and `CUDA.jl` not imported, `ClimaComms` errors; the macro loads the backend so that the device resolves to `CUDADevice`.
 
 ## 5. Select the device at run time
 
-`ClimaComms.device()` does not probe the hardware — it reads the `CLIMACOMMS_DEVICE` environment variable and **defaults to `CPU`**. To run on the GPU you must set it to `CUDA`:
+`ClimaComms.device()` reads the `CLIMACOMMS_DEVICE` environment variable and **defaults to `CPU`**; it does not probe the hardware. To run on the GPU, set it to `CUDA`:
 
 ```bash
 export CLIMACOMMS_DEVICE="CUDA"   # in the shell, no spaces around =
 ```
 
-or, equivalently, at the very top of your Julia script before any CliMA package loads:
+or, equivalently, at the top of your Julia script before any CliMA package loads:
 
 ```julia
 ENV["CLIMACOMMS_DEVICE"] = "CUDA"
 ```
 
-Allowed values are `CPU`, `CPUSingleThreaded`, `CPUMultiThreaded`, and `CUDA`. This env-var switch is the preferred way to choose a device; the older `ARGS`-based `ArrayType` pattern in [clima_comms.md §4](../infrastructure/clima_comms.md) is used only in some test entry points.
+Allowed values are `CPU`, `CPUSingleThreaded`, `CPUMultiThreaded`, and `CUDA`. Some test entry points instead select the array type from `ARGS` ([clima_comms.md §4](../infrastructure/clima_comms.md)).
 
-A related variable controls the communication context. On a cluster, `ClimaComms` may try to initialize MPI and crash (e.g. `PMI2_Init failed`) even for a single-process run. Force a non-distributed context with:
+A related variable controls the communication context. On a cluster, `ClimaComms` may try to initialize MPI and crash (e.g. `PMI2_Init failed`) even for a single-process run. Force a singleton context with:
 
 ```bash
 export CLIMACOMMS_CONTEXT="SINGLETON"
@@ -73,7 +73,7 @@ export CLIMACOMMS_CONTEXT="SINGLETON"
 
 ## 6. Verify the device
 
-Confirm the model is actually on the GPU rather than silently on CPU:
+Confirm that the device resolved to the GPU:
 
 ```julia
 using ClimaComms

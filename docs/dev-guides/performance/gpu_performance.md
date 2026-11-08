@@ -4,10 +4,10 @@ This guide covers patterns and pitfalls for writing high-performance, GPU-compat
 
 ## What counts as a "kernel" or "hot path"
 
-The rules below apply whenever the surrounding code is a *kernel* or runs inside a *hot path*. Define both concretely:
+The rules below apply whenever the surrounding code is a *kernel* or runs inside a *hot path*. The definitions:
 
 - **Kernel**: the right-hand side of a `@.` broadcast, the body of a `ClimaCore.lazy()` expression, the closure passed to `Operators.column_integral_*`, `Operators.column_reduce!`, or `Fields.bycolumn`, and any function transitively `@inline`d into one of the above.
-- **Hot path**: any function called once per timestep (or once per Runge–Kutta stage) for every column or every grid point. In model repos this includes tendency functions, precomputed-quantity setters, and Jacobian-update functions. In library repos (e.g. Thermodynamics.jl, CloudMicrophysics.jl), it includes any function that is designed to be called from a broadcast kernel.
+- **Hot path**: any function called once per timestep (or once per Runge–Kutta stage) for every column or every grid point. In model repos this includes tendency functions, precomputed-quantity setters, and Jacobian-update functions. In library repos (e.g. Thermodynamics.jl, CloudMicrophysics.jl), it includes any function designed to be called from a broadcast kernel.
 
 If a function is called in either context, treat every rule in this file and in [software_design_patterns.md](../code-quality/software_design_patterns.md) as binding.
 
@@ -19,13 +19,13 @@ On GPU architectures (CUDA, ROCm), threads are grouped into warps (typically 32 
 
 Use `ifelse(cond, a, b)` to remove the divergent branch predicate. See [SDP 17](../code-quality/software_design_patterns.md) for the canonical pattern, and the [Branchless Code Guide](branchless_code.md) for the broader discipline: why rare branches are not rare at 10⁶+ grid points, physical case splits, and fixed-iteration solvers.
 
-**Underlying principle**: `ifelse` is an ordinary function call. Both `a` and `b` are evaluated to a value *on every thread* before the call; `ifelse` only selects which value to return. Using `ifelse` does **not** save the work of the un-taken branch; its purpose is to eliminate the warp-divergent predicate, not to skip computation. If one branch is significantly more expensive than the other, every thread still pays its cost; sometimes a divergent `if/else` is the better trade and you should measure.
+**Underlying principle**: `ifelse` is an ordinary function call. Both `a` and `b` are evaluated *on every thread* before the call, and `ifelse` selects which value to return. It removes the warp-divergent predicate and leaves the work of both arms in place. When one arm is much more expensive than the other, a divergent `if/else` can be the better trade; measure, and see [Branchless Code Guide §6](branchless_code.md) for when a branch is acceptable.
 
 Three consequences follow:
 
-- **Guard mathematically invalid operations** (`log` of a non-positive, `sqrt` of a negative, division by a possibly-zero denominator) *before* the `ifelse`. See [Numerical Robustness §1–2](numerical_robustness.md) for how to choose the floor (it is not `eps(FT)` in general).
-- **No `begin...end` blocks in arguments.** Statements inside `begin...end` run unconditionally: they are not "guarded" by the condition.
-- **No recursion through `ifelse`.** Since both branches evaluate, using `ifelse` to choose between a base case and a recursive call produces unbounded recursion. Use a plain `if` for recursion.
+- **Guard mathematically invalid operations** (`log` of a non-positive, `sqrt` of a negative, division by a possibly-zero denominator) *before* the `ifelse`. [Numerical Robustness §1–2](numerical_robustness.md) covers how to choose the floor (in general it is not `eps(FT)`).
+- **No `begin...end` blocks in arguments.** Statements inside `begin...end` run unconditionally.
+- **No recursion through `ifelse`.** Use a plain `if` for recursion; see [Branchless Code Guide §6](branchless_code.md).
 
 ```julia
 # ❌ Bad: log(x) executes even when x ≤ 0; the begin-block runs unconditionally
@@ -55,7 +55,7 @@ Closures that capture local variables produce heap allocations ("boxed variables
 
 ### When to use `lazy()`
 
-`lazy` is exported by the [`LazyBroadcast.jl`](https://github.com/CliMA/LazyBroadcast.jl) package (`import LazyBroadcast: lazy`) and is re-exported through `ClimaCore`. Use `@. lazy(expr)` for any intermediate computed quantity that is consumed by a subsequent broadcast: it prevents heap allocation of a temporary `Field`.
+`lazy` is exported by the [`LazyBroadcast.jl`](https://github.com/CliMA/LazyBroadcast.jl) package (`import LazyBroadcast: lazy`) and is re-exported through `ClimaCore`. Use `@. lazy(expr)` for any intermediate quantity that a later broadcast reads; no temporary `Field` is allocated.
 
 ```julia
 # ✅ Lazy: no temporary Field allocated
@@ -68,7 +68,7 @@ result = @. lazy(physics_func(ᶜT, Y.c.ρ))
 
 ### NamedTuple field-access pitfall
 
-A `lazy()` wrapper returns a `Broadcasted` object, not a real `NamedTuple`. Accessing `.field_name` on it outside a fused broadcast fails with `ERROR: type Broadcasted has no field X`.
+A `lazy()` wrapper returns a `Broadcasted` object, not a `NamedTuple`. Accessing `.field_name` on it outside a fused broadcast fails with `ERROR: type Broadcasted has no field X`.
 
 ```julia
 # ❌ FAILS: lazy object is not a NamedTuple
@@ -78,7 +78,7 @@ limited = @. lazy(limit_tendencies(A, B, C))
 
 ### Materialization pattern
 
-When you need to extract multiple fields from a function's `NamedTuple` result, remove `lazy()` to materialize into a pre-allocated `Field`. **Do not** create a new temporary field inline each timestep: this allocates on every call. Instead, use a scratch field from the cache that was allocated once during model construction.
+To extract multiple fields from a function's `NamedTuple` result, remove `lazy()` and materialize into a scratch field from the cache, allocated once during model construction.
 
 ```julia
 # ❌ Allocates a new Field every timestep
@@ -90,36 +90,32 @@ limited_field = @. limit_tendencies(A, B, C)
 @. Yₜ.c.ρq_ice += p.scratch.ᶜlimited.Sqᵢᵐ
 ```
 
-**General rule**: any `Field` that is computed inside a function called during timestepping must be pre-allocated in the cache (typically in `src/cache/`). The cache is built once during model construction. Never allocate new `Field`s inside tendency functions, callbacks, or any code that runs per-timestep.
+**General rule**: every `Field` computed during timestepping (in a tendency function, a callback, or any other per-timestep code) is pre-allocated in the cache, typically in `src/cache/`, which is built once during model construction.
 
 ### Multi-field updates
 
-ClimaCore's broadcast machinery does not support a tuple of `Field`s on the LHS: `@. (Yₜ.c.ρq_liq, Yₜ.c.ρq_ice) += f(...)` fails in `check_broadcast_shape` / `copyto!`. Use the scratch-field pattern from the previous section: materialize the multi-field result into a pre-allocated `NamedTuple`-of-`Field`s in the cache, then issue one `@.` per target. The cost of repeating the broadcast is paid back because the RHS is just a field load, not a recomputation.
+ClimaCore's broadcast machinery does not support a tuple of `Field`s on the LHS: `@. (Yₜ.c.ρq_liq, Yₜ.c.ρq_ice) += f(...)` fails in `check_broadcast_shape` / `copyto!`. Use the scratch-field pattern from the previous section: materialize the multi-field result into a pre-allocated `NamedTuple`-of-`Field`s in the cache, then issue one `@.` per target. The function runs once; each extra `@.` reads the stored field.
 
 ## 4. `@.` broadcast rules
 
 ### Dollar interpolation for non-field arguments
 
-Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression. This is essential for singleton dispatch types and computed scalars.
+Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression, in particular singleton dispatch types and computed scalars.
 
 ```julia
 # ✅ Singleton escaped from broadcast
 @. result = physics_func(Field_A, $(GridMeanSGS()))
 ```
 
-### Do not use `Ref()` as a broadcast scalar escape
-
-`Ref()` is not the standard broadcast-escape pattern in this codebase. Its use in `src/` is limited to mutable scalar boxes in callbacks and non-broadcast contexts. Prefer parameter extraction ([SDP 20](../code-quality/software_design_patterns.md)).
-
 ### Parameter extraction
 
-Extract non-`Field` arguments to local variables before the `@.` block; see [SDP 20](../code-quality/software_design_patterns.md) for the rule and rationale.
+Extract non-`Field` arguments to local variables before the `@.` block, and do not use `Ref()` as a scalar escape; see [SDP 20](../code-quality/software_design_patterns.md) for the rule and rationale.
 
 ## 5. Register pressure and function size
 
-Large functions (roughly > 200–300 lines) may exceed the Julia compiler's inlining budget. When this happens, broadcast kernels inside the function are not inlined, causing heap allocations for each broadcast.
+Large functions (roughly > 200–300 lines) may exceed the Julia compiler's inlining budget. When this happens, the broadcast kernels inside the function stay un-inlined and each broadcast heap-allocates.
 
-**Solution**: extract complex logical blocks into smaller `@inline` helper functions. Keeping the parent function small allows the compiler to stay within its heuristics threshold, ensuring all broadcasts are correctly fused.
+**Solution**: extract logical blocks into smaller `@inline` helper functions. A small parent function stays within the compiler's inlining heuristics, so all broadcasts fuse.
 
 ## 6. Fixed iteration solvers
 
@@ -131,7 +127,7 @@ Use `error("static message")` instead of `@assert`, and do not interpolate runti
 
 ## 8. `isbits` requirement
 
-Anything passed into a GPU kernel must be `isbits` *after device adaptation*. That is the actual contract, not that the host-side object is `isbits`. Many ClimaCore objects (notably `Field`, `Space`, and anything wrapping a `CuArray`) are deliberately not `isbits` on the host because they hold `Array`/`CuArray` payloads; they become `isbits` only after `Adapt.adapt(CUDA.KernelAdaptor(), x)` (equivalently `CUDA.cudaconvert(x)`) rewrites the array fields into device-side `CuDeviceArray`s and similar.
+Anything passed into a GPU kernel must be `isbits` *after device adaptation*; the host-side object need not be. Many ClimaCore objects (`Field`, `Space`, and anything wrapping a `CuArray`) hold `Array`/`CuArray` fields and so are not `isbits` on the host; they become `isbits` after `Adapt.adapt(CUDA.KernelAdaptor(), x)` (equivalently `CUDA.cudaconvert(x)`) rewrites those fields into device-side `CuDeviceArray`s and similar.
 
 ```julia
 julia> a = fill(0.0f0, axes(Y.c));   # ClimaCore Field
@@ -149,28 +145,28 @@ Verify with the post-adapt check:
 
 If the post-adapt check returns `false`, check for:
 
-- `Vector` or `Array` fields that aren't backed by a `CuArray` and don't have an `Adapt.adapt_structure` method (use `SVector`/`Tuple`, or add an `Adapt` rule that rewrites the field to a device-side equivalent)
+- `Vector` or `Array` fields that are neither backed by a `CuArray` nor covered by an `Adapt.adapt_structure` method (use `SVector`/`Tuple`, or add an `Adapt` rule that rewrites the field to a device-side equivalent)
 - `String` fields
 - `Function` fields without a type parameter (use `struct A{F <: Function}; f::F; end`)
-- `mutable struct` (prefer immutable structs for data passed into kernels; `mutable struct` is acceptable for infrastructure objects like grids and integrators that are never passed into kernels)
+- `mutable struct` (use an immutable struct for data passed into kernels; [SDP 8](../code-quality/software_design_patterns.md) covers where `mutable struct` is acceptable)
 
 When defining a new struct that wraps device-resident arrays, add an `Adapt.adapt_structure(to, x::MyStruct) = MyStruct(adapt(to, x.field1), ...)` method so the post-adapt object becomes `isbits`.
 
-Avoid using `DataTypes` (e.g. `Float64`) or their aliases (e.g `FT`) directly in broadcast kernels. This can cause `isbits` failures on different julia versions.
+Avoid passing a `DataType` (e.g. `Float64`, or its alias `FT`) directly into a broadcast kernel; on some Julia versions this fails the `isbits` check.
 
 ## 9. Allocation verification
 
-After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression-test pattern documented in [allocation_debugging.md §1](allocation_debugging.md). Allocation benchmarks in `perf/` are not run automatically in CI, so allocation regressions must be caught at review time.
+After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression-test pattern in [allocation_debugging.md §1](allocation_debugging.md). The `perf/` benchmarks run outside the unit-test CI, so this check happens at review time (see [ecosystem_conventions.md §5](../architecture/ecosystem_conventions.md)).
 
 ## 10. Elementary functions: exponents and roots
 
-Transcendental functions dominate the cost of many physics kernels (size distributions, terminal velocities), and the general power operator `x^y` is one of the most expensive. Choosing the right form for a fractional power is frequently a several-fold kernel speedup: removing rational exponents alone gave a ~7x speedup in a CloudMicrophysics 2-moment kernel.
+Transcendental functions dominate the cost of many physics kernels (size distributions, terminal velocities), and the general power operator `x^y` is one of the most expensive. Choosing the right form for a fractional power often speeds a kernel up several-fold: removing rational exponents alone gave ~7x in a CloudMicrophysics 2-moment kernel.
 
-**Underlying principle**: the cost of `x^y` depends entirely on the *type of the exponent*.
+**Underlying principle**: the cost of `x^y` depends on the *type of the exponent*.
 
 - **Floating-point exponent** (`x^y`, `x^2.0f0`, `x^0.5f0`): computed as roughly `exp(y * log(x))`, two transcendentals plus special-case handling. Expensive.
 - **Integer-literal exponent** (`x^2`, `x^3`): non-negative integer literals dispatch to `Base.literal_pow`, which is plain multiplies (`x*x`, `x*x*x`). Negative integer literals (`x^-2`) take the general integer-exponent path (`inv` + multiplies), which is equally cheap. No transcendental either way.
-- **Rational-literal exponent** (`x^(2//3)`): the worst case on GPU. It is not reliably constant-folded by the GPU compiler. When it is not folded, each thread constructs a 16-byte `Rational{Int64}` and runs a 64-bit integer `gcd` (with overflow checks) to normalize it *before the power is even computed*. 64-bit integer division is emulated on the GPU and the `gcd` loop diverges. Even in the best case where it does fold, it still reduces to a floating-point `pow`.
+- **Rational-literal exponent** (`x^(2//3)`): the worst case on GPU. The GPU compiler folds it only sometimes. When it is not folded, each thread constructs a 16-byte `Rational{Int64}` and runs a 64-bit integer `gcd` (with overflow checks) to normalize it before computing the power; 64-bit integer division is emulated on the GPU and the `gcd` loop diverges. When it is folded, it still reduces to a floating-point `pow`.
 
 `sqrt` and `cbrt` map to dedicated, much cheaper routines than `pow`, so express fractional powers through them.
 
@@ -178,7 +174,7 @@ The rules:
 
 1. **Never put a `Rational` literal in an exponent inside a kernel.** Not `x^(2//3)`, not `x^(-1//2)`, not `x^(3//2)`.
 2. **Rewrite a fractional power as a root composed with an integer-literal power:** `x^(p//q) == root_q(x)^p`, using `sqrt` for `q = 2` and `cbrt` for `q = 3`, with an integer *literal* for `p`.
-3. **Take the root first.** Prefer `cbrt(x)^2` over `cbrt(x^2)`: doing the root first keeps the intermediate in range. For large or small `x`, squaring first can overflow or underflow to `0`/`Inf` where the root-first form is still correct. (Square-first is marginally more accurate and is acceptable only for moderate compile-time constants where overflow is impossible.)
+3. **Take the root first.** Prefer `cbrt(x)^2` over `cbrt(x^2)`: the root first keeps the intermediate in range, whereas for large or small `x` squaring first overflows or underflows to `Inf`/`0`. Square-first is marginally more accurate and is acceptable for moderate compile-time constants, where overflow is impossible.
 4. **The exponent must be a literal, not a variable.** Only a written literal hits `literal_pow`; a *float* literal such as `x^2.0f0` is a `pow`, so write `x^2`. If a moment order or similar must be a variable, make it an `Int`, never a `Rational`.
 
 | Instead of | Write |
@@ -198,14 +194,14 @@ v = a * D^(2//3)
 v = a * cbrt(D)^2
 ```
 
-A constant fractional power of compile-time parameters is best precomputed once, on the host, into a parameter or constructor field so it never appears in the kernel at all. Note the Float32 hazard: `Rational{Int64}` is a 64-bit type, so `x::Float32 ^ (2//3)` promotes the result to `Float64`, breaking Float32 kernels (see [type_stability.md §1](type_stability.md) for the general Float32-pollution checklist). See [Numerical Robustness §1–2](numerical_robustness.md) for guarding `sqrt` of a possibly-negative argument (`cbrt` accepts negatives, `sqrt` does not).
+A constant fractional power of compile-time parameters is best precomputed once, on the host, into a parameter or constructor field so it never appears in the kernel. A Float32 hazard: `Rational{Int64}` is a 64-bit type, so `x::Float32 ^ (2//3)` promotes the result to `Float64`, breaking Float32 kernels (see [type_stability.md §1](type_stability.md) for the general Float32-pollution checklist). See [Numerical Robustness §1–2](numerical_robustness.md) for guarding `sqrt` of a possibly-negative argument (`cbrt` accepts negatives, `sqrt` does not).
 
 ## 11. Other patterns worth checking
 
-Two further patterns are not yet documented in depth here; worth considering when looking for more performance:
+Two further patterns to consider when looking for more performance:
 
-- **Deduplicating a repeated pure computation across sibling functions.** If several functions each recompute the same expensive quantity from the same inputs, consider computing it once and threading it through as a default-valued optional argument, rather than duplicating the computation and relying on the compiler to CSE it across function-call boundaries (not guaranteed).
-- **Reducing quadrature order (or other numerical-integration resolution).** Beyond the fixed-iteration-count guidance for solvers in [Branchless Code Guide §§4–5](branchless_code.md), a quadrature-order reduction needs its own offline convergence study, and should be checked against integrand smoothness: a cusp or kink can cap achievable accuracy independent of node count.
+- **Deduplicating a repeated pure computation across sibling functions.** If several functions each recompute the same expensive quantity from the same inputs, compute it once and pass it through as a default-valued optional argument; the compiler does not reliably eliminate the common subexpression across function-call boundaries.
+- **Reducing quadrature order (or other numerical-integration resolution).** Like a fixed iteration count ([Branchless Code Guide §§4–5](branchless_code.md)), a reduced order needs its own offline convergence study, checked against integrand smoothness: a cusp or kink can cap achievable accuracy independent of node count. [review.md §1](../workflow/review.md) lists what that study must show.
 
 ## Self-correction
 

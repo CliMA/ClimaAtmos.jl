@@ -4,21 +4,19 @@ This guide covers formatting and naming conventions for CliMA repositories. For 
 
 ## 1. JuliaFormatter
 
-The root `.JuliaFormatter.toml` is the authoritative source of truth for code formatting. Run the formatter locally before committing:
+The root `.JuliaFormatter.toml` is authoritative for code formatting. Run the formatter locally before committing:
 
 ```bash
 julia -e 'using JuliaFormatter; format(".")'
 ```
 
-or, on Julia 1.12+ (`Pkg.Apps` does not exist on 1.11 or earlier, including the 1.10 LTS; check with `isdefined(Pkg, :Apps)`), install JuliaFormatter as an app and use directly from the command-line:
+or, on Julia 1.12+, install JuliaFormatter as an app (`Pkg.Apps` is absent on 1.11 and earlier, including the 1.10 LTS; check with `isdefined(Pkg, :Apps)`):
 
 ```julia-repl
 julia> import Pkg; Pkg.Apps.add("JuliaFormatter")
 ```
 
-and add `~/.julia/bin/` to your PATH.
-
-Then you can run the formatter directly:
+add `~/.julia/bin/` to your PATH, and run it from the command line:
 
 ```bash
 jlfmt -i .
@@ -26,7 +24,7 @@ jlfmt -i .
 
 ### Version consistency
 
-Match the JuliaFormatter version used in CI to prevent unnecessary diff churn. Repos use the `julia-actions/julia-format` GitHub Action and pin a JuliaFormatter major version via the `version:` input:
+Match the JuliaFormatter major version CI uses; a different version reformats unrelated lines. Repos use the `julia-actions/julia-format` GitHub Action and pin the major version via the `version:` input:
 
 ```yaml
 - uses: julia-actions/julia-format@v4
@@ -34,16 +32,15 @@ Match the JuliaFormatter version used in CI to prevent unnecessary diff churn. R
     version: '1'   # JuliaFormatter major version; check the repo's workflow file
 ```
 
-Note: the JuliaFormatter major version is not uniform across CliMA repos. Some pin `'1'`, others `'2'`, and some leave the default. Always cross-check `.github/workflows/JuliaFormatter.yml` (or `julia_formatter.yml`) in the repo you're working in before formatting. Run the formatter with `julia -e 'using JuliaFormatter; format(".")'` from the repo root.
+The pinned major version varies across CliMA repos: some pin `'1'`, others `'2'`, and some leave the default. Check `.github/workflows/JuliaFormatter.yml` (or `julia_formatter.yml`) in the repo you are working in before formatting.
 
 ### Pre-commit hooks with prek
 
-If you want formatter checks to run automatically on commit, you can follow the
-same general pattern used in ClimaAtmos.jl:
+To run formatter checks on each commit, follow the pattern used in ClimaAtmos.jl:
 
 - add a `.pre-commit-config.yaml` at repo root,
 - optionally use a dedicated formatter environment (for example `.dev/format/`),
-- keep your CI formatter check and local hook behavior aligned.
+- keep the CI formatter check and the local hook aligned.
 
 Use [`prek`](https://prek.j178.dev) to manage hooks:
 
@@ -58,18 +55,10 @@ uv tool install prek
 prek install
 ```
 
-After that, hooks run automatically on each `git commit` (staged files).
-
-For manual runs:
+Hooks then run on each `git commit`, on staged files. For manual runs:
 
 - `prek run` checks the files selected by normal hook matching.
 - `prek run --all-files` checks the whole repository.
-
-Use this when you want a full-repo sweep:
-
-```sh
-prek run --all-files
-```
 
 `pre-commit` also works if you already use it; `prek` is a drop-in replacement.
 
@@ -79,9 +68,9 @@ prek run --all-files
 
 ### Avoiding formatting noise
 
-Do not manually format code inconsistently with the formatter. If the formatter produces unwanted results, adjust `.JuliaFormatter.toml` rather than overriding manually.
+Hand-formatting that disagrees with the formatter is undone on its next run. If the formatter produces unwanted results, adjust `.JuliaFormatter.toml`.
 
-Be cautious with `git checkout -- .` to undo formatting changes; this also undoes any uncommitted functional changes. Prefer `git checkout -p` or `git add -i` for selective staging.
+`git checkout -- .` to undo formatting changes also discards uncommitted functional changes. Use `git checkout -p` or `git add -i` to select hunks.
 
 ## 2. Variable locality
 
@@ -95,7 +84,7 @@ function compute_gradient(x, y)
 end
 ```
 
-This minimizes global namespace pollution and improves code clarity.
+This keeps the module namespace small.
 
 ## 3. File organization
 
@@ -123,19 +112,19 @@ The `test/` directory structure should mirror `src/`:
 
 ### Function names
 
-- **Prefer full words over abbreviations.** `compute_strain_rate_full!` is better than `csrf!`. A few extra characters at the definition site are a vanishingly small cost compared to the cost of decoding an unfamiliar abbreviation every time a reader encounters it.
-- **Acceptable abbreviations** are universally-understood physics/math symbols (`Φ`, `ρ`, `χ`, `θ`) and well-established acronyms used widely in the relevant subfield (`EDMF`, `RRTMGP`, `SGS`, `PDF`, `LES`). When in doubt, spell it out.
-- **Lazy field prefixes (ClimaCore-based repos):** functions that return a lazy cell-center–valued field are prefixed with `ᶜ`; those that return a lazy cell-face–valued field are prefixed with `ᶠ`. Unprefixed functions are understood to be pointwise. For example, `ᶜρ` is a lazy field at cell centers; `ρ` (no prefix) is a pointwise scalar.
+- **Prefer full words over abbreviations.** `compute_strain_rate_full!` is better than `csrf!`. The author types the full name once; a reader decodes an abbreviation on every encounter.
+- **Acceptable abbreviations** are standard physics/math symbols (`Φ`, `ρ`, `χ`, `θ`) and acronyms standard in the relevant subfield (`EDMF`, `RRTMGP`, `SGS`, `PDF`, `LES`). When in doubt, spell it out.
+- **Staggered-grid prefixes (ClimaCore-based repos):** `ᶜ` marks a name whose value is a cell-center field and `ᶠ` a cell-face field, including functions that return one; pointwise names have no prefix. See [ecosystem_conventions.md §3](../architecture/ecosystem_conventions.md).
 
 ### Type names
 
-- **Abstract types: use the bare concept name, not an `Abstract`-prefixed form.** Prefer `CloudModel`, `SpongeModel`, `JacobianAlgorithm` over `AbstractCloudModel`, `AbstractSpongeModel`, `AbstractJacobianAlgorithm`. The concept name reads more naturally in dispatch signatures (`f(x::CloudModel)`) and in documentation. Some legacy code uses `AbstractFoo`; keep it consistent within an existing module, but new hierarchies should drop the prefix.
-- **Common suffixes** signal what kind of type a struct is. Use them to make intent obvious at the call site:
+- **Abstract types: use the bare concept name, not an `Abstract`-prefixed form.** Prefer `CloudModel`, `SpongeModel`, `JacobianAlgorithm` over `AbstractCloudModel`, `AbstractSpongeModel`, `AbstractJacobianAlgorithm`. The concept name reads better in dispatch signatures (`f(x::CloudModel)`) and in documentation. Some legacy code uses `AbstractFoo`; keep it consistent within an existing module, but new hierarchies should drop the prefix.
+- **Common suffixes** signal what kind of type a struct is:
   - `…Model`: dispatch tag for a parameterization choice (e.g. `SmagorinskyLilly`, `EDMFModel`).
   - `…Method` / `…Algorithm`: algorithmic choice (e.g. `JacobianAlgorithm`, `TracerNonnegativityMethod`).
   - `…Parameters` or `…Params`: immutable bag of numerical parameters (e.g. `ThermodynamicsParameters`).
   - `…Cache`: mutable workspace or precomputed state (e.g. `AtmosCache`).
-- **Avoid generic `…Type` or `…Helper` suffixes**: they don't tell the reader what kind of thing they are looking at.
+- **Avoid generic `…Type` or `…Helper` suffixes**: they say nothing about the type's role.
 
 ### Variables
 
@@ -147,7 +136,7 @@ The `test/` directory structure should mirror `src/`:
 
 - Limit use of Unicode. Avoid combining accents (dot, hat, vec) that create visually ambiguous characters.
 - Use only standard Greek letters (`α`, `β`, `Δ`, `χ`, `ρ`, …) and common math symbols (`∇`, `∂`, `∫`, `≤`).
-- Exception: the modifier-letter prefixes `ᶜ` and `ᶠ` are idiomatic in ClimaCore-based repos for lazy center/face field functions (see "Function names" above). They are visually distinct and unambiguous.
+- Exception: the staggered-grid prefixes `ᶜ` and `ᶠ` (see "Function names" above).
 
 ### Line length
 

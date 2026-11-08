@@ -1,15 +1,13 @@
 # Searching Issues & PRs Across CliMA
 
-CliMA spans dozens of repositories with no built-in cross-repo view of
-issues and PRs. GitHub's **org-scoped search** is that view: one query
-returns matches from every repo in the org at once.
+GitHub's **org-scoped search** returns issues and PRs from every CliMA
+repository in one query.
 
 ## 1. The org-scoped search pattern
 
 Scope to the org with `org:CliMA` and narrow with state/type/label
-qualifiers. The canonical example (from the group-meeting discussion on
-getting an overview across CliMA) is open issues/PRs labelled "bug 🐞",
-shown here in all three forms:
+qualifiers. The example below, open issues and PRs labelled "bug 🐞", is
+shown in all three forms:
 
 - **Web UI**: paste into the box at <https://github.com/search>:
 
@@ -35,7 +33,7 @@ shown here in all three forms:
 Labels with spaces or emoji **must be quoted** (`label:"bug 🐞"`); the
 emoji is part of the string. Copy it from an existing labelled issue.
 
-## 2. Filter recipes
+## 2. Filters
 
 Combine `org:CliMA` with these qualifiers (all work in the web UI, the URL
 form, and `gh search` with the equivalent flags):
@@ -45,7 +43,7 @@ form, and `gh search` with the equivalent flags):
 | Open bugs across the org      | `org:CliMA state:open label:"bug 🐞"`               |
 | PRs awaiting your review      | `org:CliMA is:pr is:open review-requested:@me`      |
 | Issues assigned to you        | `org:CliMA is:issue is:open assignee:@me`           |
-| Stale PRs (untouched 30 days) | `org:CliMA is:pr is:open updated:<2026-04-16`       |
+| Stale PRs (untouched 30 days) | `org:CliMA is:pr is:open updated:<YYYY-MM-DD` (a date 30 days ago; GitHub search has no relative dates) |
 | Dependabot update PRs         | `org:CliMA is:pr is:open label:dependencies`        |
 | Untriaged issues              | `org:CliMA is:issue is:open no:label`               |
 | Mentions needing a reply      | `org:CliMA is:open mentions:@me`                    |

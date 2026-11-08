@@ -1,6 +1,6 @@
 # Type Stability Guide
 
-This guide covers patterns for ensuring type-stable Julia code across the CliMA ecosystem, with particular emphasis on Float32 compatibility for GPU simulations.
+This guide covers patterns for ensuring type-stable Julia code across the CliMA ecosystem, with emphasis on Float32 compatibility for GPU simulations.
 
 ## 1. Float32 pollution checklist
 
@@ -29,7 +29,7 @@ Visual inspection of inferred types. Look for red `Any` or `Union` annotations i
 
 ### `JET.@report_opt`
 
-Finds dynamic dispatch call sites in complex call graphs. Prefer this over `@code_warntype` for deeply nested code.
+Finds dynamic dispatch call sites in deep call graphs. Prefer it over `@code_warntype` for deeply nested code.
 
 ```julia
 using JET
@@ -38,7 +38,7 @@ JET.@report_opt my_tendency(Y, p, t)
 
 ### `@inferred`
 
-Fails at test time if the return type is not fully inferred by the compiler. Use as a CI regression gate.
+Fails at test time when the compiler cannot fully infer the return type. Use as a CI regression gate.
 
 ```julia
 @test @inferred(my_physics_func(FT(1.0), FT(2.0))) isa FT
@@ -50,7 +50,7 @@ Struct fields should be concrete or parametric for type stability and performanc
 
 ### Splitting dispatch on `Union{T, Nothing}`
 
-When a struct contains an optional field typed as `Union{T, Nothing}`, accessing that field in a hot path triggers runtime type checks. Split the method based on the type parameter to compile away the branch.
+When a struct contains an optional field typed as `Union{T, Nothing}`, accessing that field in a hot path triggers runtime type checks. Split the method on the type parameter so the branch is compiled away.
 
 ```julia
 struct MyParams{ICE}
@@ -102,20 +102,17 @@ A `BroadcastInferenceError` from `ClimaCore` usually means a function inside a `
 
 ### Diagnosis steps
 
-1. **Test the scalar function directly** with `@inferred` and `Float32` inputs. Do not rely only on the broadcast-level test.
-2. **Trigger all branches**: type instability often hides in conditional branches (for example, `iszero(x) ? Inf : ...`). Ensure reproduction scripts test edge cases (zeros, thresholds) that trigger every logical path.
+1. **Test the scalar function directly** with `@inferred` and `Float32` inputs, in addition to the broadcast-level test.
+2. **Trigger all branches**: type instability often hides in conditional branches (for example, `iszero(x) ? Inf : ...`). Make reproduction scripts cover the edge cases (zeros, thresholds) that reach every path.
 3. **Check `@code_warntype` output**: look for `Union{Float32, Float64}` in the return type, which indicates one branch is polluting the floating-point context.
 
 ### Common "false pass" scenario
 
-A unit test may pass with standard inputs but fail in integrated simulations because:
+A unit test passes with standard inputs and the integrated simulation fails when only edge-case inputs (zero, negative, large) reach the path containing the `Float64`, `Inf`, or `NaN` literal.
 
-- The test inputs never trigger the code path containing the Float64 literal.
-- Edge-case inputs (zero, negative, very large) expose a hidden `Inf` or `NaN` literal.
+## 6. Prefer Base Julia's generic number functions
 
-## 6. Prefer using base julia general number functions
-
-Use general number functions from Base Julia that are designed to work across numeric types, as they often have optimized methods for different types and can help maintain type stability. Examples include `iszero`, `isfinite`, `isinf`, `isone`, `isodd`, and `isnan`. These functions are more likely to return consistent types across different numeric inputs, reducing the risk of type instability in your code.
+Use Base's generic number predicates (`iszero`, `isfinite`, `isinf`, `isone`, `isodd`, `isnan`) rather than hand-written comparisons. They have optimized methods per numeric type and return consistent types across numeric inputs, which reduces the risk of type instability.
 
 ## Self-correction
 
