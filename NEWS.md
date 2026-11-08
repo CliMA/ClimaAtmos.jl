@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
+  from `1` to `2` and the default `update_constrain_state_every` from `step`
+  to `stage` in `config/default_configs/default_config.yml`, and the matching
+  keyword defaults of `AtmosSimulation` and `ManualSparseJacobian`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
   `set_implicit_precomputed_quantities_core!` at the explicit predictor state
   entering `initialize_implicit_stage_problem!` when Picard rounds follow,

@@ -45,7 +45,7 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ManualSparseJacobian(; approximate_solve_iters = 1)
+    ManualSparseJacobian(; approximate_solve_iters = 2)
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
 derived tendency derivatives and inverts it using a specialized nested linear
@@ -59,7 +59,7 @@ functions; see the implicit Jacobian section of [Implicit Solver](@ref).
 
 # Keyword Arguments
 
-  - `approximate_solve_iters = 1`: Number of iterations to take for the
+  - `approximate_solve_iters = 2`: Number of iterations to take for the
     approximate linear solve required when grid-scale diffusion is treated
     implicitly, the configuration is moist, or `ρtke` is prognostic [-].
 
@@ -70,7 +70,7 @@ functions; see the implicit Jacobian section of [Implicit Solver](@ref).
 struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
 end
-ManualSparseJacobian(; approximate_solve_iters::Int = 1) =
+ManualSparseJacobian(; approximate_solve_iters::Int = 2) =
     ManualSparseJacobian(approximate_solve_iters)
 
 """

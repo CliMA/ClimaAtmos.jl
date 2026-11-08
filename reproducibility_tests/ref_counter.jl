@@ -1,4 +1,4 @@
-463
+464
 
 # **README**
 #
@@ -32,6 +32,20 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+464
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; unified implicit first-order upwind vertical advection of
+  `e_tot - Φ`, `q_tot`, sedimenting microphysics tracers, and `ρtke` across
+  moist models (`0M`, `1M`, `2M`, `2MP3`) and central implicit `e_tot - Φ`
+  in `DryModel`, with central geopotential and pressure-work fluxes
+  `ᶠρ u³ ᶠinterp(Φ) + u³ ᶠinterp(p)`, central `ᶠinterp` Jacobian velocity
+  blocks, and one Courant-limited post-Newton `e_tot - Φ` correction;
+  Courant-independent van Leer slopes; stage-weighted surface precipitation
+  fluxes; parameter-free semi-implicit damping of orographic gravity-wave drag;
+  the incremental implicit-stage condensate predictor; non-negative clamping of
+  sedimentation fluxes (`specific_nonneg`); and the implicit-cache refresh only
+  before Picard rounds. All change results.
+
 463
 - `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
   results at the level of Float32 rounding.
