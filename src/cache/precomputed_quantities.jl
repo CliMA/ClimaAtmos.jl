@@ -998,9 +998,9 @@ end
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
-The full implicit precomputed-quantities update, used by the Newton inner
-loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!` and
-then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
+Update all implicit precomputed quantities for `Y` at time `t`, used by the
+Newton inner loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!`
+and then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
 (because Newton moves `q_lcl + q_icl`, and `λ_lagrange` in `ᶜsgs_moments`
 follows that sum) and overwrites the implicit 1M condensation / sublimation
 tendency `ᶜmp_tendency_implicit*` at the Newton iterate.
@@ -1011,7 +1011,8 @@ their last `set_explicit_precomputed_quantities!` values; only
 `ᶜsgs_moments` and the 1M BMT call track the iterate.
 """
 function set_implicit_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_core!(Y, p, t)
+    FT = eltype(p.params)
+    set_implicit_precomputed_quantities_core!(Y, p, FT(t))
     if has_implicit_1m_microphysics(p)
         set_sgs_moments!(Y, p)
         update_implicit_1m_tendency!(
@@ -1140,8 +1141,10 @@ The Newton inner loop (`cache_imp!`) calls the full
 refresh with step 1 since the covariances are frozen through Newton.
 """
 function set_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_core!(Y, p, t)
-    set_explicit_precomputed_quantities!(Y, p, t)
+    FT = eltype(p.params)
+    t_ft = FT(t)
+    set_implicit_precomputed_quantities_core!(Y, p, t_ft)
+    set_explicit_precomputed_quantities!(Y, p, t_ft)
     if has_implicit_1m_microphysics(p)
         update_implicit_1m_tendency!(
             Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,

@@ -310,6 +310,21 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             )
         end
     end
+    # With "dss", `constrain_state!` also runs after `initialize_imp!`, once
+    # ClimaTimeSteppers has copied the stage-entering state, so the grid-mean
+    # condensate clamp of `enforce_grid_mean_microphysics_constraints!` moves
+    # the Newton guess away from that state, which the sedimentation Jacobian
+    # then drains through the surface.
+    if update_constrain_state_every == "dss" &&
+       atmos.microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        @warn(
+            "`update_constrain_state_every = dss` clamps the grid-mean \
+             condensates of the Newton guess after the stage-entering state \
+             is copied, which can produce an upward surface precipitation \
+             flux; use `stage` or `step`."
+        )
+    end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 

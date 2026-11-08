@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
+  `set_implicit_precomputed_quantities_core!` at the explicit predictor state
+  entering `initialize_implicit_stage_problem!` when Picard rounds follow,
+  clamp updraft `ρa` of the
+  Newton initial guess to `[0, a_max ρʲ]`, diagnose the entrained environment
+  in the Picard tracer sweep from the stage-start draft snapshot, evaluate the
+  analytic updraft area predictor with a two-pass `solve_sgs_ρa_two_pass!`
+  sweep inside and after the Picard loop, and apply
+  `warm_start_grid_mean_tracers!` incrementally to the condensates, `ρq_tot`,
+  and `ρe_tot`, so the guess differs from the stage-entering state only by the
+  updraft increment. A guess raised above the stage-entering state enters the
+  Newton residual as a source that the sedimentation Jacobian drains through
+  the surface; the incremental form and unclamped grid-mean guess eliminate
+  that artificial source.
 - ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
   explicit `OrographicGravityWave` drag with backward-Euler damping
   (`D_∥ / (1 + dt d / |uₕ|)`, `d = max(0, -D ⋅ û)`), which keeps one step from
