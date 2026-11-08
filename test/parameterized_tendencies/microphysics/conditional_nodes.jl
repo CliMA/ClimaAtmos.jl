@@ -347,3 +347,65 @@ const CA = ClimaAtmos
         end
     end
 end
+
+@testset "lazy rule matches the materialized rule exactly" begin
+    for FT in (Float32, Float64)
+        toml_dict = CP.create_toml_dict(FT)
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        cmp = CMP.Microphysics1MParams(toml_dict)
+        ρ = FT(1.1)
+        T = FT(285)
+        T′T′ = FT(0.25)
+        q′q′ = FT(2.5e-7)
+        corr = FT(0.5)
+        σ_S = CA._sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr)
+        β_T = CA.sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr)
+        σ⊥ = CA.sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S)
+        for z in FT.((-3, -1.5, -0.5, 0, 1)), α in FT.((0.3, 1)),
+            a_p in FT.((0.3, 1))
+
+            mu_S = z * σ_S
+            q_c = FT(0.6) * CA.truncated_gaussian_condensate(mu_S, σ_S)
+            λ_lagrange = CA._continuous_lagrange(q_c, α * σ_S)
+            t_p = CA.sgs_precip_shaft_threshold(a_p, σ_S)
+            args = (
+                thp, ρ, T, mu_S, σ_S, β_T, -λ_lagrange / α, -mu_S, t_p,
+                FT(150), FT(0.05),
+            )
+            rule = CA.conditional_rule(args...)
+            lazy = CA.lazy_conditional_rule(args...)
+            # the same eight nodes, in the same order
+            pairs = ntuple(i -> CA.interval_nodes(lazy, Val(i)), 4)
+            nodes = (
+                pairs[1][1], pairs[1][2], pairs[2][1], pairs[2][2],
+                pairs[3][1], pairs[3][2], pairs[4][1], pairs[4][2],
+            )
+            for (n, m) in zip(rule.nodes, nodes)
+                for k in (:T, :q, :S′, :w, :shaft)
+                    @test getproperty(n, k) === getproperty(m, k)
+                end
+            end
+            # and the same sums, bit for bit, since the accumulators associate
+            # the eight terms identically
+            g = CA.NodeCondensate(λ_lagrange, α)
+            @test CA.conditional_rule_mean(g, lazy) ===
+                  CA.conditional_rule_mean(g, rule)
+            @test CA.conditional_rule_shaft_fraction(lazy) ===
+                  CA.conditional_rule_shaft_fraction(rule)
+            spread = CA.TemperatureSpread(
+                thp, ρ, mu_S, σ⊥, FT(TD.Parameters.T_freeze(thp)),
+                FT(150), FT(0.05),
+            )
+            ev = CA.Microphysics1MEvaluator(
+                BMT.Microphysics1Moment(), cmp, thp, ρ, FT(1),
+                FT(2e-4), FT(3e-5), FT(0.7),
+                FT(0), FT(1), FT(3e-4), FT(5e-5),
+                λ_lagrange, mu_S, α,
+                FT(0), FT(1),
+                FT(30), 2, (),
+            )
+            @test CA.sum_over_conditional_nodes(ev, lazy, spread) ===
+                  CA.sum_over_conditional_nodes(ev, rule, spread)
+        end
+    end
+end

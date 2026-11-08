@@ -675,8 +675,8 @@ end
                               λ_lagrange, λ_eq, α, q_c,
                               T′T′, q′q′, corr_Tq, β_precip, S_star, sgs_quad)
 
-Shared conditional-moment integration driver. Builds the `conditional_rule`
-with cloud edges `−λ_lagrange/α`, `−λ_eq` and the shaft edge
+Shared conditional-moment integration driver. Builds the
+`lazy_conditional_rule` with cloud edges `−λ_lagrange/α`, `−λ_eq` and the shaft edge
 `t_p = β_precip > 0 ? S_star : Inf`; rescales `(λ_lagrange, α)` by the common
 factor `s` that makes the node mean of `max(0, λ + α S′)` equal `q_c` to
 rounding; computes the shaft fraction (`1` when `β_precip = 0`) and the
@@ -699,7 +699,7 @@ tendency SGS integration).
     t_e = -FT(λ_eq)
     t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
-    rule = conditional_rule(
+    rule = lazy_conditional_rule(
         thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
     )
     # Scale (λ, α) together so the node mean of the actual condensate is q_c

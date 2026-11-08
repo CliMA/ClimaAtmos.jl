@@ -251,6 +251,39 @@ the node's shaft flag, `1` or `0`.
 end
 
 """
+    _conditional_bounds(σ_S, t_a, t_e, t_p)
+
+The four intervals of the rule as the five sorted bounds `(-Inf, b₁, b₂, b₃, Inf)` on the centred saturation excess, and the upper tail probability
+`Q(|b|/σ_S)` of each bound's standardized edge, shared by the two intervals it
+bounds and zero at the infinite ends.
+"""
+@inline function _conditional_bounds(σ_S, t_a, t_e, t_p)
+    FT = typeof(σ_S)
+    # A sliver interval between nearly coincident actual and equilibrium
+    # cloud edges, |t_e − t_a| < 10⁻³ σ_S, collapses onto the actual edge. Its
+    # moments are differences of nearly equal tail integrals, so its
+    # conditional mean is rounding noise and its node could land far outside
+    # the interval with a small but nonzero weight.
+    t_e_guarded = ifelse(
+        isfinite(t_e) & isfinite(t_a) &
+        (abs(FT(t_e) - FT(t_a)) < FT(1e-3) * FT(σ_S)),
+        FT(t_a),
+        FT(t_e),
+    )
+    (b₁, b₂, b₃) = _sort3(FT(t_a), t_e_guarded, FT(t_p))
+    return (
+        (FT(-Inf), b₁, b₂, b₃, FT(Inf)),
+        (
+            zero(FT),
+            normal_tail_prob(abs(b₁ / σ_S)),
+            normal_tail_prob(abs(b₂ / σ_S)),
+            normal_tail_prob(abs(b₃ / σ_S)),
+            zero(FT),
+        ),
+    )
+end
+
+"""
     conditional_rule(
         thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
     )
@@ -274,29 +307,7 @@ weights sum to one; an interval of zero width contributes zero weight.
 @inline function conditional_rule(
     thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
 )
-    FT = typeof(σ_S)
-    # A sliver interval between nearly coincident actual and equilibrium
-    # cloud edges, |t_e − t_a| < 10⁻³ σ_S, collapses onto the actual edge. Its
-    # moments are differences of nearly equal tail integrals, so its
-    # conditional mean is rounding noise and its node could land far outside
-    # the interval with a small but nonzero weight.
-    t_e_guarded = ifelse(
-        isfinite(t_e) & isfinite(t_a) &
-        (abs(FT(t_e) - FT(t_a)) < FT(1e-3) * FT(σ_S)),
-        FT(t_a),
-        FT(t_e),
-    )
-    (b₁, b₂, b₃) = _sort3(FT(t_a), t_e_guarded, FT(t_p))
-    bounds = (FT(-Inf), b₁, b₂, b₃, FT(Inf))
-    # the upper tail probability Q(|b|/σ_S) of each edge, shared by the two
-    # intervals it bounds (zero at the infinite ends)
-    Qs = (
-        zero(FT),
-        normal_tail_prob(abs(b₁ / σ_S)),
-        normal_tail_prob(abs(b₂ / σ_S)),
-        normal_tail_prob(abs(b₃ / σ_S)),
-        zero(FT),
-    )
+    (bounds, Qs) = _conditional_bounds(σ_S, t_a, t_e, t_p)
     nodes = ntuple(Val(4)) do i
         lo = bounds[i]
         hi = bounds[i + 1]
@@ -417,32 +428,41 @@ total water is set so that the evaluator recovers the node's `S′`. The first
 point of the first node is always evaluated (it seeds the accumulator); every
 other point only where its weight is positive.
 """
+# The first node carries the accumulator's initial value, so its first
+# temperature point is added unconditionally.
+@inline function _first_node_acc(f, n, spread)
+    pts = _temperature_points(n.T, spread)
+    (p, t) = pts[1]
+    acc = _point_value(f, n, t, spread) * (n.w * p)
+    for j in 2:length(pts)
+        (p, t) = pts[j]
+        if n.w * p > zero(p)
+            acc += _point_value(f, n, t, spread) * (n.w * p)
+        end
+    end
+    return acc
+end
+
+@inline function _add_node(acc, f, n, spread)
+    n.w > zero(n.w) || return acc
+    pts = _temperature_points(n.T, spread)
+    for j in 1:length(pts)
+        (p, t) = pts[j]
+        if p > zero(p)
+            acc += _point_value(f, n, t, spread) * (n.w * p)
+        end
+    end
+    return acc
+end
+
 function sum_over_conditional_nodes(
     f, rule::ConditionalRule{N}, spread::TemperatureSpread,
 ) where {N}
     nodes = rule.nodes
     @inbounds begin
-        n₁ = nodes[1]
-        pts = _temperature_points(n₁.T, spread)
-        (p, t) = pts[1]
-        acc = _point_value(f, n₁, t, spread) * (n₁.w * p)
-        for j in 2:length(pts)
-            (p, t) = pts[j]
-            if n₁.w * p > zero(p)
-                acc += _point_value(f, n₁, t, spread) * (n₁.w * p)
-            end
-        end
+        acc = _first_node_acc(f, nodes[1], spread)
         for k in 2:N
-            nₖ = nodes[k]
-            if nₖ.w > zero(nₖ.w)
-                pts = _temperature_points(nₖ.T, spread)
-                for j in 1:length(pts)
-                    (p, t) = pts[j]
-                    if p > zero(p)
-                        acc += _point_value(f, nₖ, t, spread) * (nₖ.w * p)
-                    end
-                end
-            end
+            acc = _add_node(acc, f, nodes[k], spread)
         end
     end
     return drop_auto_broadcasters(acc)
@@ -515,4 +535,119 @@ deep tail.
         z = ifelse(Φz > ϵ_numerics(FT), z_new, z)
     end
     return z * σ
+end
+
+"""
+    LazyConditionalRule{FT, P}
+
+The state `conditional_rule` builds its nodes from rather than the nodes
+themselves: the cell mean, the two flags' thresholds, and the sorted interval
+bounds with their tail probabilities (`_conditional_bounds`).
+`interval_nodes` rebuilds one interval's node pair on demand, so a single pair
+is live where a `ConditionalRule{8}` keeps the whole node table live across the
+integration. The rule it stands in for is `conditional_rule`, which the tests
+compare it against; the two traverse the same nodes in the same order.
+"""
+struct LazyConditionalRule{FT, P}
+    thp::P
+    ρ::FT
+    T::FT
+    mu_S::FT
+    σ_S::FT
+    β_T::FT
+    t_a::FT
+    t_p::FT
+    b₁::FT
+    b₂::FT
+    b₃::FT
+    Q₁::FT
+    Q₂::FT
+    Q₃::FT
+    T_min::FT
+    q_max::FT
+end
+
+"""
+    lazy_conditional_rule(thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max)
+
+The `LazyConditionalRule` of a cell, from the same arguments as
+`conditional_rule` and over the same four intervals.
+"""
+@inline function lazy_conditional_rule(
+    thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
+)
+    FT = typeof(σ_S)
+    (bounds, Qs) = _conditional_bounds(σ_S, t_a, t_e, t_p)
+    return LazyConditionalRule{FT, typeof(thp)}(
+        thp, FT(ρ), FT(T), FT(mu_S), FT(σ_S), FT(β_T), FT(t_a), FT(t_p),
+        bounds[2], bounds[3], bounds[4], Qs[2], Qs[3], Qs[4],
+        FT(T_min), FT(q_max),
+    )
+end
+
+"""
+    interval_nodes(rule::LazyConditionalRule, ::Val{i})
+
+The two nodes of the `i`th interval of a `LazyConditionalRule`, in the order
+`conditional_rule` places them, rebuilt from the rule's state.
+"""
+@inline function interval_nodes(
+    rule::LazyConditionalRule{FT}, ::Val{i},
+) where {FT, i}
+    lo = i == 1 ? FT(-Inf) : i == 2 ? rule.b₁ : i == 3 ? rule.b₂ : rule.b₃
+    hi = i == 1 ? rule.b₁ : i == 2 ? rule.b₂ : i == 3 ? rule.b₃ : FT(Inf)
+    Qlo = i == 1 ? zero(FT) : i == 2 ? rule.Q₁ : i == 3 ? rule.Q₂ : rule.Q₃
+    Qhi = i == 1 ? rule.Q₁ : i == 2 ? rule.Q₂ : i == 3 ? rule.Q₃ : zero(FT)
+    # an interval between sorted thresholds lies entirely on one side of each
+    # threshold, so its lower bound decides every flag
+    return _conditional_interval_nodes(
+        rule.thp, rule.ρ, rule.T, rule.mu_S, rule.σ_S, rule.β_T,
+        lo, hi, Qlo, Qhi, lo >= rule.t_a, lo >= rule.t_p,
+        rule.T_min, rule.q_max,
+    )
+end
+
+# The accumulators below are threaded through the four intervals rather than
+# summed pairwise, so the eight terms associate exactly as they do over a
+# materialized `ConditionalRule`.
+@inline _add_pair_mean(acc, g, (n₁, n₂)) =
+    acc + n₁.w * g(n₁.S′) + n₂.w * g(n₂.S′)
+
+@inline function conditional_rule_mean(g, rule::LazyConditionalRule)
+    acc = zero(rule.σ_S)
+    acc = _add_pair_mean(acc, g, interval_nodes(rule, Val(1)))
+    acc = _add_pair_mean(acc, g, interval_nodes(rule, Val(2)))
+    acc = _add_pair_mean(acc, g, interval_nodes(rule, Val(3)))
+    acc = _add_pair_mean(acc, g, interval_nodes(rule, Val(4)))
+    return acc
+end
+
+@inline _add_pair_shaft(acc, (n₁, n₂)) =
+    acc + n₁.w * n₁.shaft + n₂.w * n₂.shaft
+
+@inline function conditional_rule_shaft_fraction(rule::LazyConditionalRule)
+    acc = zero(rule.σ_S)
+    acc = _add_pair_shaft(acc, interval_nodes(rule, Val(1)))
+    acc = _add_pair_shaft(acc, interval_nodes(rule, Val(2)))
+    acc = _add_pair_shaft(acc, interval_nodes(rule, Val(3)))
+    acc = _add_pair_shaft(acc, interval_nodes(rule, Val(4)))
+    return acc
+end
+
+function sum_over_conditional_nodes(
+    f, rule::LazyConditionalRule, spread::TemperatureSpread,
+)
+    (n₁, n₂) = interval_nodes(rule, Val(1))
+    acc = _first_node_acc(f, n₁, spread)
+    acc = _add_node(acc, f, n₂, spread)
+    (n₃, n₄) = interval_nodes(rule, Val(2))
+    acc = _add_node(acc, f, n₃, spread)
+    acc = _add_node(acc, f, n₄, spread)
+    (n₅, n₆) = interval_nodes(rule, Val(3))
+    acc = _add_node(acc, f, n₅, spread)
+    acc = _add_node(acc, f, n₆, spread)
+    (n₇, n₈) = interval_nodes(rule, Val(4))
+    acc = _add_node(acc, f, n₇, spread)
+    acc = _add_node(acc, f, n₈, spread)
+    return drop_auto_broadcasters(acc)
 end
