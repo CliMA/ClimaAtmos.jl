@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
+  MUSCL slope has no Courant-number factor at any Courant number; this applies
+  to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass
+  flux, non-orographic gravity-wave heating, and the post-Newton corrections).
 - ![][badge-🐛bugfix] Synchronize `check_nans` across MPI ranks with
   `ClimaComms.allreduce` and log per-variable and per-updraft `NaN` counts on
   every rank that detects a `NaN`.
