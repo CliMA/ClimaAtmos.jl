@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
+  explicit `OrographicGravityWave` drag with backward-Euler damping
+  (`D_∥ / (1 + dt d / |uₕ|)`, `d = max(0, -D ⋅ û)`), which keeps one step from
+  reversing the horizontal wind at any wind speed, while leaving the
+  perpendicular turning component undamped.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Accumulate `surface_rain_flux`,
   `surface_snow_flux`, and `col_integrated_precip_energy_tendency` across IMEX
   stages weighted by the tableau `b_imp` coefficients (the weighting the column

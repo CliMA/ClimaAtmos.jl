@@ -345,13 +345,51 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
 end
 
 """
+    _semi_implicit_gw_drag(du, dv, uvw, dt)
+
+Evaluate the effective horizontal momentum tendency of an orographic
+gravity-wave drag vector `(du, dv)` [m/s²] by applying backward-Euler Rayleigh
+damping to its decelerating component parallel to the horizontal wind
+`(uvw.u, uvw.v)`. With `s = |uₕ|`, `û = uₕ / s`, and the deceleration
+`d = max(0, -D ⋅ û)` along the wind, the parallel component `D_∥ = -d û` is
+replaced by
+
+    D_∥ / (1 + dt d / s) = -û d s / (s + dt d),
+
+whose magnitude is below `s / dt` for every `s > 0`, so a single timestep
+cannot reverse the horizontal wind at any wind speed. The perpendicular
+component `D_⊥` (turning the wind without changing its speed) and any
+accelerating component (`D ⋅ uₕ ≥ 0`) are left unchanged; as `s → 0⁺` with
+opposing drag the result tends to `D_⊥`, and at `s = 0`, where `û` is
+undefined, it is `D`. Reduces to `(du, dv)` at first order when
+`dt d / s ≪ 1`. The reciprocal `1 / s` is taken only above `floatmin`, so
+subnormal winds return `D` in `Float32`.
+"""
+@inline function _semi_implicit_gw_drag(du, dv, uvw, dt)
+    u = uvw.u
+    v = uvw.v
+    s = hypot(u, v)
+    inv_s = ifelse(s > floatmin(s), inv(s), zero(s))
+    û = u * inv_s
+    v̂ = v * inv_s
+    d = max(zero(s), -(du * û + dv * v̂))
+    # D_∥ = -d û; replacing it by -û d s / (s + dt d) adds
+    # û d (1 - s / (s + dt d)) = û dt d² / (s + dt d) to D.
+    denom = s + dt * d
+    corr = ifelse(denom > zero(denom), (dt * d * d) / denom, zero(denom))
+    return Geometry.UVVector(du + corr * û, dv + corr * v̂)
+end
+
+"""
     orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing)
     orographic_gravity_wave_apply_tendency!(Yₜ, p, ::OrographicGravityWave)
 
 Add the cached orographic gravity wave drag to the horizontal momentum tendency.
 
-Mutates `Yₜ.c.uₕ` by adding the covariant form of the cached `ᶜuforcing`/`ᶜvforcing`
-[m/s²]. The `::Nothing` method is a no-op.
+Mutates `Yₜ.c.uₕ` by adding the covariant form of the cached
+`ᶜuforcing`/`ᶜvforcing` [m/s²], with its decelerating parallel component damped
+by `_semi_implicit_gw_drag` so a single timestep cannot reverse the horizontal
+wind. The `::Nothing` method is a no-op.
 
 This runs every integrator step, while the forcing itself is refreshed only on the `dt_ogw`
 callback by `orographic_gravity_wave_compute_tendency!`, which also clamps it to
@@ -365,10 +403,19 @@ function orographic_gravity_wave_apply_tendency!(
     ::OrographicGravityWave,
 )
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
+    (; ᶜu) = p.precomputed
+    FT = Spaces.undertype(axes(Yₜ.c))
+    dt = FT(p.dt)
 
-    @. Yₜ.c.uₕ +=
-        C12.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
-
+    @. Yₜ.c.uₕ += C12(
+        _semi_implicit_gw_drag(
+            ᶜuforcing,
+            ᶜvforcing,
+            Geometry.UVWVector(ᶜu),
+            dt,
+        ),
+    )
+    return nothing
 end
 
 
@@ -573,11 +620,12 @@ hydrostatic wave, `Σ (z − z_pbl)·N/V_τ`, exceeds `π`, i.e. half a vertical
 is clamped to `[0.7e-2, 1.7e-2]` 1/s and `V_τ` floored at 1 m/s so the layer depth stays
 physical. If the phase never reaches `π`, `z_ref` ends up at the model top.
 
-The mask keeps cells overlapping `[z_pbl, z_ref)` (upper face above `z_pbl` and lower face
-below `z_ref`, so at least one cell survives whenever `z_ref > z_pbl`) and drops cells of
-zero weight, which contribute nothing and would divide by zero. The tendency is then
-`g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to zero in columns where
-the mask is empty.
+The mask keeps cells overlapping `[z_pbl, z_ref)` (upper face above `z_pbl` and
+lower face below `z_ref`, so at least one cell survives when `z_ref > z_pbl`)
+and drops cells of zero or `NaN` weight, which contribute nothing and would
+divide by zero or propagate `NaN`. The tendency is then
+`g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to zero in
+columns where the mask is empty or the weight sum is `NaN`.
 
 # Arguments
 
@@ -698,12 +746,11 @@ function calc_nonpropagating_forcing!(
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
-    # Exclude cells with zero weights from the mask to avoid division by zero.
-    # Zero weight means p == p_ref at that cell, so it contributes nothing
-    # to the pressure-weighted average.
-    @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
+    # Exclude zero and NaN weights so `ᶜdiff / ᶜweights` stays finite, and zero
+    # masked cells with `ifelse` so `NaN` weights do not remain in `ᶜweights`.
+    @. ᶜmask = ᶜmask && (!iszero(ᶜweights)) && (!isnan(ᶜweights))
 
-    ᶜweights .= ᶜweights .* ᶜmask
+    @. ᶜweights = ifelse(ᶜmask, ᶜweights, FT(0))
 
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
 
@@ -715,16 +762,15 @@ function calc_nonpropagating_forcing!(
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
-    # Compute drag, handling empty mask case (wtsum=0) gracefully
-    # When wtsum=0, the mask is empty (no cells between z_pbl and z_ref),
-    # so we set forcing to 0 for those columns
+    # Zero the tendency in columns where the mask is empty (`wtsum == 0`) or
+    # `wtsum` is `NaN`.
     @. ᶜuforcing += ifelse(
-        iszero(ᶜwtsum),
+        iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
         grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
-        iszero(ᶜwtsum),
+        iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
