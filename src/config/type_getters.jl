@@ -8,8 +8,9 @@ import Logging, NVTX
 Translate a configuration into a typed `ClimaAtmosParameters`.
 
 The microphysics model, the 1-moment process options, the 0-moment precipitation
-evaporation option, and the gravity-wave toggles are resolved from the config first, so the underlying constructor only loads the parameter
-sets that the run will actually use.
+evaporation option, and the gravity-wave toggles are resolved from the config
+first, so the underlying constructor only loads the parameter sets that the run
+will actually use.
 """
 function ClimaAtmosParameters(config::AtmosConfig)
     pa = config.parsed_args

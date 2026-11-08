@@ -356,9 +356,9 @@ Build the `CloudMicrophysics` 0-moment parameter set, `CMP.Microphysics0MParams`
 The below-cloud evaporation of the precipitation flux is a model option (config
 key `precipitation_evaporation_0m`): with `precipitation_evaporation_0m = false`
 the evaporation parameters are `nothing` and no `precipitation_evaporation_*`
-parameter is read. With `true` they are read from `toml_dict`, and
-`precipitation_evaporation_coefficient` must be positive (its ClimaParams
-default is 0); otherwise this errors. The option applies only to
+parameter is read. With `true` they are read from `toml_dict` (ClimaParams
+defaults unless overridden), and `precipitation_evaporation_coefficient` must
+be positive; otherwise this errors. The option applies only to
 `EquilibriumMicrophysics0M` and errors for any other `microphysics_model`
 (`nothing` is allowed).
 """
@@ -384,9 +384,9 @@ function microphysics_0m_parameters(
         error(
             "`precipitation_evaporation_0m` is on, but \
              `precipitation_evaporation_coefficient` = \
-             $(mp0.evaporation.k_E) (the ClimaParams default is 0, which \
-             gives no evaporation); set a positive value [1/s] in the \
-             parameter TOML (e.g. 1.36e-4)",
+             $(mp0.evaporation.k_E), which gives no evaporation; set a \
+             positive value [1/s] in the parameter TOML, or remove the \
+             entry to use the ClimaParams default",
         )
     end
     return mp0

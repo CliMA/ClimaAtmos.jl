@@ -53,8 +53,9 @@ built (see `microphysics_0m_parameters`); `~` (null) disables the process:
 |:---------------------------------------- |:------------------------------ |:------------------------ |
 | below-cloud evaporation of precipitation | `precipitation_evaporation_0m` | `Kessler`, `~` (default) |
 
-With `Kessler`, the `precipitation_evaporation_*` parameters are read from the
-parameter TOML, and `precipitation_evaporation_coefficient` must be positive.
+With `Kessler`, the `precipitation_evaporation_*` parameters are read (ClimaParams
+defaults unless set in the parameter TOML), and
+`precipitation_evaporation_coefficient` must be positive.
 """
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 

@@ -306,7 +306,7 @@ end
 @testset "0M precipitation evaporation parameters" begin
     m0 = CA.EquilibriumMicrophysics0M()
     override = Dict(
-        "precipitation_evaporation_coefficient" => 1.36e-4,
+        "precipitation_evaporation_coefficient" => 2e-4,
         "precipitation_evaporation_rh_crit" => 0.85,
         "precipitation_evaporation_area_fraction" => 0.5,
         "precipitation_evaporation_flux_scale" => 4e-3,
@@ -338,7 +338,7 @@ end
         evaporation = CAP.microphysics_0m_params(params).evaporation
         @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
         @test isbits(CAP.microphysics_0m_params(params))
-        @test evaporation.k_E === FT(1.36e-4)
+        @test evaporation.k_E === FT(2e-4)
         @test evaporation.RH_c === FT(0.85)
         @test evaporation.a_p === FT(0.5)
         @test evaporation.α₂ === FT(4e-3)
@@ -347,9 +347,24 @@ end
             @test "CloudMicrophysics" in toml_dict.data[name]["used_in"]
         end
 
-        # Option on with the default coefficient (0) is an error.
-        @test_throws ErrorException CA.ClimaAtmosParameters(
+        # Option on with the ClimaParams defaults: the default coefficient is
+        # positive, so no TOML entry is needed.
+        params = CA.ClimaAtmosParameters(
             CP.create_toml_dict(FT);
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
+        )
+        @test CAP.microphysics_0m_params(params).evaporation.k_E === FT(1.36e-4)
+
+        # Option on with a coefficient that is not positive is an error.
+        @test_throws ErrorException CA.ClimaAtmosParameters(
+            CP.create_toml_dict(
+                FT;
+                override_file = Dict(
+                    "precipitation_evaporation_coefficient" =>
+                        Dict("value" => 0.0, "type" => "float"),
+                ),
+            );
             microphysics_model = m0,
             precipitation_evaporation_0m = true,
         )
@@ -368,7 +383,7 @@ end
                 io,
                 """
       [precipitation_evaporation_coefficient]
-      value = 1.36e-4
+      value = 2e-4
       """,
             )
             flush(io)
@@ -384,6 +399,6 @@ end
         end
     end
     @test isnothing(config_0m(nothing).evaporation)
-    @test config_0m("Kessler").evaporation.k_E === Float32(1.36e-4)  # default FLOAT_TYPE
+    @test config_0m("Kessler").evaporation.k_E === Float32(2e-4)  # default FLOAT_TYPE
     @test_throws ErrorException config_0m("NotAnOption")
 end

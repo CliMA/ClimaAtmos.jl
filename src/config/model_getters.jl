@@ -46,8 +46,8 @@ on, from the `precipitation_evaporation_0m` config key: `"Kessler"` (the
 Kessler-type evaporation of CloudMicrophysics `Evaporation0M`) → `true`, `~`
 (null, the default) → `false`. Parsed with `parse_option`, so an unknown string
 raises an error. The option is only valid with `microphysics_model: "0M"`, and
-needs a positive `precipitation_evaporation_coefficient` in the parameter TOML;
-both are checked in `microphysics_0m_parameters`.
+needs a positive `precipitation_evaporation_coefficient` (the ClimaParams
+default is positive); both are checked in `microphysics_0m_parameters`.
 """
 get_precipitation_evaporation_0m(parsed_args) =
     !isnothing(
