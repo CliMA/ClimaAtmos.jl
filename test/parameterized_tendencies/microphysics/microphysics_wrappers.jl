@@ -570,8 +570,7 @@ import ClimaAtmos:
                     for (a_p, σ_S) in
                         ((FT(0.3), FT(2e-4)), (FT(0.15), FT(5e-5)), (FT(1), FT(1e-4)))
                         rule = ClimaAtmos.conditional_rule(
-                            thp, ρ, T, mu_S, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S),
-                            FT(150), FT(0.05),
+                            T, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S), FT(150),
                         )
                         frac = ClimaAtmos.conditional_rule_shaft_fraction(rule)
                         # exact up to the quantile approximation of the threshold:

@@ -699,9 +699,7 @@ tendency SGS integration).
     t_e = -FT(λ_eq)
     t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
-    rule = conditional_rule(
-        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
-    )
+    rule = conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min)
     # Scale (λ, α) together so the node mean of the actual condensate is q_c
     # to rounding; the cloud edge −λ/α is unchanged by a common factor.
     g = conditional_rule_mean(NodeCondensate(FT(λ_lagrange), α_safe), rule)
