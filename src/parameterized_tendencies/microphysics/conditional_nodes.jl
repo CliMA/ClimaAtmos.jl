@@ -388,29 +388,28 @@ end
 """
     _point_value(f, n, t, spread)
 
-`f(T, q, shaft)` at the temperature point of the node `n` offset by `t` [-],
-in units of the spread `σ⊥` at fixed saturation excess (`_temperature_points`):
-the point's temperature is `n.T + t σ⊥` floored at `spread.T_min` [K], and its
-total water is set from the `TemperatureSpread` `spread` so that the evaluator
-recovers the node's `S′`, clamped to `[0, spread.q_max]` [kg/kg]. The value is
-wrapped for accumulation (`add_auto_broadcasters`), so `f` may return a
-scalar or a `NamedTuple` of scalars.
+`f(T, q, shaft, q_sat)` at the temperature point of the node `n` offset by `t`
+[-], in units of the spread `σ⊥` at fixed saturation excess
+(`_temperature_points`): the point's temperature is `n.T + t σ⊥` floored at
+`spread.T_min` [K], and its total water is set from the `TemperatureSpread`
+`spread` so that the evaluator recovers the node's `S′`, clamped to
+`[0, spread.q_max]` [kg/kg]. The saturation specific humidity the point's total
+water was built from is passed to `f`, which needs the same value to recover
+`S′`. The value is wrapped for accumulation (`add_auto_broadcasters`), so `f`
+may return a scalar or a `NamedTuple` of scalars.
 """
 @inline function _point_value(f, n, t, spread)
     FT = typeof(n.w)
     T_pt = max(spread.T_min, n.T + t * spread.σ⊥)
-    q_pt = clamp(
-        TD.q_vap_saturation(_unwrapped(spread.thp), T_pt, spread.ρ) + spread.mu_S + n.S′,
-        zero(FT),
-        spread.q_max,
-    )
-    return add_auto_broadcasters(f(T_pt, q_pt, n.shaft))
+    q_sat_pt = TD.q_vap_saturation(_unwrapped(spread.thp), T_pt, spread.ρ)
+    q_pt = clamp(q_sat_pt + spread.mu_S + n.S′, zero(FT), spread.q_max)
+    return add_auto_broadcasters(f(T_pt, q_pt, n.shaft, q_sat_pt))
 end
 
 """
     sum_over_conditional_nodes(f, rule, spread)
 
-Weighted sum of `f(T, q, shaft)` over the nodes of a `ConditionalRule` and,
+Weighted sum of `f(T, q, shaft, q_sat)` over the nodes of a `ConditionalRule` and,
 for each node, over its points in temperature at fixed saturation excess
 (`_temperature_points`, with the `TemperatureSpread` `spread`); a point's
 total water is set so that the evaluator recovers the node's `S′`. The first
