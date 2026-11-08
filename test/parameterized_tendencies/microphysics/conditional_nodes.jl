@@ -74,7 +74,7 @@ const CA = ClimaAtmos
                 a_p = FT(0.3)
                 t_p = CA.sgs_precip_shaft_threshold(a_p, σ_S)
                 rule = CA.conditional_rule(
-                    thp, ρ, T, mu_S, σ_S, β_T, -λ / α, -mu_S, t_p, FT(150), FT(0.05),
+                    T, σ_S, β_T, -λ / α, -mu_S, t_p, FT(150),
                 )
                 @test rule isa CA.ConditionalRule{8, FT}
                 # the weights are differences of tail probabilities from two
@@ -82,10 +82,16 @@ const CA = ClimaAtmos
                 @test sum(n.w for n in rule.nodes) ≈ 1 atol = (FT == Float32 ? 1e-6 : 1e-8)
                 @test all(n.w >= 0 for n in rule.nodes)
                 @test rule.nodes[1].w > 0
-                # the evaluator recovers S′ = q − q_sat(T, ρ) − μ_S at each node
+                # the evaluator recovers S′ = q − q_sat − μ_S at each node, from
+                # the point state and saturation `_point_value` hands it
+                unsplit_pt = CA.TemperatureSpread(
+                    thp, ρ, mu_S, FT(0), FT(273.16), FT(150), FT(0.05),
+                )
                 for n in rule.nodes
-                    S′ = n.q - TD.q_vap_saturation(thp, n.T, ρ) - mu_S
-                    @test S′ ≈ n.S′ atol = 64 * eps(FT) * (abs(n.q) + σ_S)
+                    S′ = CA._point_value(
+                        (T, q, s, q_sat) -> q - q_sat - mu_S, n, FT(0), unsplit_pt,
+                    )
+                    @test S′ ≈ n.S′ atol = 64 * eps(FT) * (FT(0.05) + σ_S)
                 end
                 # the node means of the linear condensates are the continuous
                 # ones, to the accuracy of the Φ approximations in the tail
@@ -120,26 +126,24 @@ const CA = ClimaAtmos
             t_a = -mu_S
             t_p = CA.sgs_precip_shaft_threshold(FT(0.3), σ_S)
             rule_ref = CA.conditional_rule(
-                thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a, t_p, FT(150), FT(0.05),
+                T, σ_S, β_T, t_a, t_a, t_p, FT(150),
             )
             # an equilibrium edge within 10⁻³ σ_S of the actual edge gives the
             # rule of coincident edges, so no node is built from the rounding
             # noise of a sliver interval's moments
             for δ in FT[1e-4, -1e-4, 1e-7]
                 rule = CA.conditional_rule(
-                    thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a + δ * σ_S, t_p,
-                    FT(150), FT(0.05),
+                    T, σ_S, β_T, t_a, t_a + δ * σ_S, t_p, FT(150),
                 )
                 @test all(
-                    n.S′ == m.S′ && n.w == m.w && n.T == m.T && n.q == m.q
+                    n.S′ == m.S′ && n.w == m.w && n.T == m.T
                     for (n, m) in zip(rule.nodes, rule_ref.nodes)
                 )
             end
             # an equilibrium edge well apart from the actual edge keeps its
             # own interval
             rule_apart = CA.conditional_rule(
-                thp, ρ, T, mu_S, σ_S, β_T, t_a, t_a + σ_S / 2, t_p,
-                FT(150), FT(0.05),
+                T, σ_S, β_T, t_a, t_a + σ_S / 2, t_p, FT(150),
             )
             @test any(
                 n.w != m.w for (n, m) in zip(rule_apart.nodes, rule_ref.nodes)
@@ -282,8 +286,7 @@ const CA = ClimaAtmos
             )
             t_p = CA.sgs_precip_shaft_threshold(FT(0.5), σ_S)
             rule = CA.conditional_rule(
-                thp, ρ, T_frz + FT(0.2), mu_S, σ_S, β_T, -λ, -mu_S, t_p, FT(150),
-                FT(0.05),
+                T_frz + FT(0.2), σ_S, β_T, -λ, -mu_S, t_p, FT(150),
             )
             σ⊥ = CA.sgs_temperature_spread_at_fixed_excess(FT(1), β_T, σ_S)
             @test (β_T * σ_S)^2 + σ⊥^2 ≈ 1
