@@ -288,9 +288,9 @@ const CA = ClimaAtmos
             σ⊥ = CA.sgs_temperature_spread_at_fixed_excess(FT(1), β_T, σ_S)
             @test (β_T * σ_S)^2 + σ⊥^2 ≈ 1
             spread = CA.TemperatureSpread(thp, ρ, mu_S, σ⊥, T_frz, FT(150), FT(0.05))
-            one_f = (T, q, s) -> one(T)
-            T_f = (T, q, s) -> T
-            S_f = (T, q, s) -> q - TD.q_vap_saturation(thp, T, ρ) - mu_S
+            one_f = (T, q, s, q_sat) -> one(T)
+            T_f = (T, q, s, q_sat) -> T
+            S_f = (T, q, s, q_sat) -> q - q_sat - mu_S
             # the unsplit rule: no spread at fixed S′
             unsplit = CA.TemperatureSpread(thp, ρ, mu_S, FT(0), T_frz, FT(150), FT(0.05))
             @test CA.sum_over_conditional_nodes(one_f, rule, spread) ≈
