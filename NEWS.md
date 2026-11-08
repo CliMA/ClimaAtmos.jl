@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Accumulate `surface_rain_flux`,
+  `surface_snow_flux`, and `col_integrated_precip_energy_tendency` across IMEX
+  stages weighted by the tableau `b_imp` coefficients (the weighting the column
+  water sink receives), and clamp negative tracer densities to zero in the
+  grid-mean, updraft, and environment sedimentation fluxes.
 - ![][badge-🔥behavioralΔ] Implicitize vertical grid-mean `ᶠu³` advection of
   sedimenting microphysics tracers and `ρtke` with first-order upwinding
   (`ᶠupwind1`) and bidiagonal Jacobian blocks that are exact in the tracer `χ`.

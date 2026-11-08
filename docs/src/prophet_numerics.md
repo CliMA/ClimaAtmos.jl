@@ -396,10 +396,13 @@ precipitation shaft, where the pointwise ``w(q^n \approx 0)`` would collapse
 and pile the whole Newton step into the first empty cell below the shaft; one
 Newton iteration therefore carries the mass (or number) across multiple empty
 cells at Courant numbers above one. The grid-mean sedimentation Jacobian
-(`update_sedimentation_jacobian!`) uses the same substitution, so both solves
-agree on where the species goes. Cloud liquid, cloud ice, and
-``n_{\mathrm{lcl}}`` fall slowly enough that the pointwise stencil is stable
-and keep it. The lateral-mixing diagonal keeps the pointwise ``w^n``.
+(`update_sedimentation_jacobian!`) uses the same substitution across empty and
+negative cells, so both solves agree on where the species goes and
+precipitation arriving from above at Courant numbers above one traverses
+negative cells in the same stage rather than piling up there. Cloud
+liquid, cloud ice, and ``n_{\mathrm{lcl}}`` fall slowly enough that the
+pointwise stencil is stable and keep it. The lateral-mixing diagonal keeps the
+pointwise ``w^n``.
 The stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
 the condensate, so the mass the draft gains matches the dilution
 ``\chi^j S / \hat{\rho}^j`` that it applies, also at Courant numbers above

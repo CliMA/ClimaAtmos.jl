@@ -1123,11 +1123,11 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     # columns into the loop; the other sedimenting tracers only their diagonal.
     # `ᶜwₚ_jac` is the running column max of `ᶜwₚ` for rain and snow mass and
     # for rain number (so the super-diagonal does not collapse where the
-    # species is empty), and the pointwise `ᶜwₚ` for cloud liquid, cloud ice,
-    # cloud-liquid number, ice number, and the P3 rime quantities, which fall
-    # slowly enough that the pointwise stencil is stable. The pointwise `ᶜwₚ`
-    # is passed separately for the sedimentation kinetic energy carried into
-    # `ρe_tot`.
+    # species is empty or negative), and the pointwise `ᶜwₚ` for cloud liquid,
+    # cloud ice, cloud-liquid number, ice number, and the P3 rime quantities,
+    # which fall slowly enough that the pointwise stencil is stable. The
+    # pointwise `ᶜwₚ` is passed separately for the sedimentation kinetic energy
+    # carried into `ρe_tot`.
     ρχ_names = sedimenting_tracer_names(Y)
     mass_names = unrolled_filter(n -> !isnothing(condensate_phase(n)), ρχ_names)
     other_names = unrolled_filter(n -> isnothing(condensate_phase(n)), ρχ_names)
@@ -1280,6 +1280,11 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         end
 
         ᶜbidiag = @. dtγ * (-(ᶜprecipdivᵥ_matrix())) * DiagonalMatrixRow(ᶠρ_col)
+        # Although the residual clamps the sedimentation flux of a negative cell
+        # to zero (`specific_nonneg`, zero exact derivative), `ᶠband` keeps
+        # `ᶜwₚ_jac` in empty and negative cells so precipitation arriving from
+        # above at Courant numbers above one traverses them in the same stage
+        # rather than piling up; this matches `updraft_sedimentation_matrix!`.
         @inline ᶠband(ᶜwₚ_jac) = @. lazy(
             DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
             (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ_jac) / ᶜρ_col)),

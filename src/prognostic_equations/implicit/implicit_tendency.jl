@@ -375,8 +375,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, Yc.ρ))
             @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))
+            # The donor-cell sedimentation flux leaves a negative cell at
+            # zero, so a negative excursion stays in the cell that produced it
+            # and is filled by the inflow from above, whose donor value does
+            # not depend on the receiving cell.
             @. ᶜρχₜ -= ᶜprecipdivᵥ(
-                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜχ))),
+                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific_nonneg(ᶜρχ, Yc.ρ)))),
             )
         end
 
@@ -560,12 +564,37 @@ for `Val(:first_order)` and `Val(:none)`.
 ) = nothing
 
 """
+    post_newton_stage_update!(Yₜ, Y, p, t)
+
+Accumulate stage-weighted surface precipitation fluxes and write the
+post-Newton vertical advection correction into `Yₜ` at `Y = U*`.
+
+Registered as the `T_post_imp!` hook of `ClimaODEFunction`, which
+`ClimaTimeSteppers.solve_stage_implicit!` invokes once per implicit stage and
+applies as `U ← U* + dtγ · Yₜ`. Calls
+`accumulate_stage_precipitation_surface_fluxes!` (advancing
+`p.scratch.precip_stage_idx[]`) and then overwrites `Yₜ` with
+`correct_implicit_advection_tendency!`. Keeping the accumulation outside
+`correct_implicit_advection_tendency!` leaves the stage counter in phase when
+tendency diagnostics sample the correction. Returns `nothing`.
+"""
+function post_newton_stage_update!(Yₜ, Y, p, t)
+    accumulate_stage_precipitation_surface_fluxes!(
+        Y,
+        p,
+        p.atmos.microphysics_model,
+    )
+    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
 Apply the Courant-limited post-Newton high-order correction to the implicit
 vertical advection of `implicit_vertical_advection_tendency!`, evaluated at
-the Newton-solved stage state `Y = U*`. Registered as `T_post_imp!` and called
-by the tendency diagnostics; it leaves `p` unchanged.
+the Newton-solved stage state `Y = U*`. Called by `post_newton_stage_update!`
+and by the tendency diagnostics; it leaves `p` unchanged.
 
 Overwrites `Yₜ` with `add_vertical_advection_corrections!` at the stage step
 `p.dtγ`: the face-wise Courant-limited (`min(1, 1 / C_γ)`) difference between

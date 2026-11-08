@@ -72,6 +72,11 @@ end
     # Post-Newton upwinding correction: `(upwind - centered)` at C ≤ 1.
     Yₜ_corr = similar(Y)
     CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
+    # Only the `T_post_imp!` hook advances the precipitation stage counter, so
+    # sampling the correction as a tendency diagnostic leaves it in phase.
+    stage_idx = p.scratch.precip_stage_idx[]
+    CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
+    @test p.scratch.precip_stage_idx[] == stage_idx
 
     # Base and full-upwind vertical fluxes, materialized from
     # `vertical_transport`. In every configuration, the energy correction acts
@@ -293,4 +298,123 @@ end
         @test norm(Jv .- fd) / norm(fd) < FT(5e-4)
     end
 
+    # Stage-weighted precipitation surface flux conservation across full IMEX
+    # steps (`ARS343` with `T_post_imp!`).
+    @. Y = Y_init
+    @. Y.c.ρq_rai = Y.c.ρ * FT(1e-4) * exp(-z_c / FT(2000))
+    @. Y.c.ρq_sno = Y.c.ρ * FT(5e-5) * exp(-z_c / FT(3000))
+    p.scratch.precip_stage_idx[] = 0
+    CA.set_precomputed_quantities!(Y, p, t)
+
+    ρ_prev = similar(Y.c.ρ)
+    ρq_prev = similar(Y.c.ρq_tot)
+    ρe_prev = similar(Y.c.ρe_tot)
+    col_dmass = similar(p.precomputed.surface_rain_flux)
+    col_dq = similar(p.precomputed.surface_rain_flux)
+    col_de = similar(p.precomputed.surface_rain_flux)
+
+    for step in 1:4
+        if step == 2
+            # Exercise the 4-site non-negative sedimentation clamp (`max(q, 0)`)
+            # on a negative snow cell prior to the step.
+            parent(Y.c.ρq_sno)[1] = -FT(1e-6) * parent(Y.c.ρ)[1]
+            CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+        elseif step == 3
+            # Column whose z₁ rain is weaker than rain aloft (w_jac,1 > w₁)
+            @. Y.c.ρq_rai = Y.c.ρ * FT(1e-4) * (z_c / FT(5000) + FT(0.1))
+            CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+        elseif step == 4
+            # Slightly negative rain cell at bottom level z₁ with rain aloft
+            @. Y.c.ρq_rai = Y.c.ρ * FT(1e-4) * exp(-z_c / FT(2000))
+            parent(Y.c.ρq_rai)[1] = -FT(1e-6) * parent(Y.c.ρ)[1]
+            CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+        end
+        @. ρ_prev = Y.c.ρ
+        @. ρq_prev = Y.c.ρq_tot
+        @. ρe_prev = Y.c.ρe_tot
+
+        CTS.step!(simulation.integrator)
+
+        dt_step = FT(p.dt)
+        Operators.column_integral_definite!(
+            col_dmass,
+            @. (Y.c.ρ - ρ_prev) / dt_step
+        )
+        Operators.column_integral_definite!(
+            col_dq,
+            @. (Y.c.ρq_tot - ρq_prev) / dt_step
+        )
+        Operators.column_integral_definite!(
+            col_de,
+            @. (Y.c.ρe_tot - ρe_prev) / dt_step
+        )
+
+        P_diag =
+            Array(parent(p.precomputed.surface_rain_flux))[1] +
+            Array(parent(p.precomputed.surface_snow_flux))[1]
+        P_actual_q = Array(parent(col_dq))[1]
+        P_actual_ρ = Array(parent(col_dmass))[1]
+        E_diag =
+            Array(parent(p.precomputed.col_integrated_precip_energy_tendency))[1]
+        E_actual = Array(parent(col_de))[1]
+
+        # The surface flux is downward on every step, including step 4, where
+        # the bottom rain cell enters the stage negative: the Newton guess stays
+        # at the stage-entering state with zero base outflow while rain inflow
+        # from aloft raises `ρq_rai` at level 1 across the solve. The rain flux
+        # is checked on its own so that the snow flux cannot mask its sign.
+        @test P_diag < FT(0)
+        @test Array(parent(p.precomputed.surface_rain_flux))[1] <= FT(0)
+        @test abs(P_diag - P_actual_q) * FT(86400) < FT(1e-9)
+        @test abs(P_diag - P_actual_ρ) * FT(86400) < FT(1e-7)
+        @test abs(E_diag - E_actual) < FT(1e-8)
+    end
+
+    p.scratch.precip_stage_idx[] = 1
+    @test _measure_allocs(CA.record_stage_precipitation_linearization!, Y, p) == 0
+    @test _measure_allocs(
+        CA.accumulate_stage_precipitation_surface_fluxes!,
+        Y,
+        p,
+        p.atmos.microphysics_model,
+    ) == 0
+    @test _measure_allocs(
+        CA.set_precipitation_surface_fluxes!,
+        Y,
+        p,
+        p.atmos.microphysics_model,
+    ) == 0
+
+    # Empty and negative cells below a `CFL_sed > 1` rain shaft keep the
+    # column-max Jacobian velocity, so falling rain traverses them in one stage.
+    @. Y = Y_init
+    fill!(parent(Y.f.u₃), FT(0))
+    fill!(parent(Y.c.ρq_rai), FT(0))
+    ρ_col = arr(Y.c.ρ)
+    parent(Y.c.ρq_rai)[5] = FT(2e-3) * ρ_col[5]
+    parent(Y.c.ρq_rai)[4] = -FT(1e-12) * ρ_col[4]
+    parent(Y.c.ρq_rai)[3] = -FT(1e-12) * ρ_col[3]
+    CA.set_precomputed_quantities!(Y, p, t)
+    dtγ_sed = FT(1200)
+    CA.update_sedimentation_jacobian!(matrix, Y, p, dtγ_sed)
+    fill!(Yₜ_corr, 0)
+    CA.implicit_vertical_advection_tendency!(Yₜ_corr, Y, p, t)
+    s_rai = CA.MatrixFields.FieldName(:c, :ρq_rai)
+    block_rai = matrix[s_rai, s_rai]
+    nz = length(ρ_col)
+    J_dense = zeros(FT, nz, nz)
+    e_j = similar(Y.c.ρq_rai)
+    for j in 1:nz
+        fill!(parent(e_j), FT(0))
+        parent(e_j)[j] = FT(1)
+        J_dense[:, j] .= vec(arr(@. block_rai * e_j))
+    end
+    δρq = (-J_dense) \ (dtγ_sed .* vec(arr(Yₜ_corr.c.ρq_rai)))
+    ρq_next = vec(arr(Y.c.ρq_rai)) .+ δρq
+    @test J_dense[4, 4] < -FT(2)
+    @test J_dense[3, 4] > FT(0.5)
+    @test δρq[3] > FT(0)
+    @test δρq[2] > FT(0)
+    @test δρq[1] > FT(0)
+    @test maximum(ρq_next) < FT(2e-3) * ρ_col[5]
 end
