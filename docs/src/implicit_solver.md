@@ -89,8 +89,10 @@ treated implicitly. Which blocks are nonzero follows from the `AtmosModel` —
 the presence of topography, the diffusion mode, and the prognostic variables in
 ``Y`` — and is fixed when the cache is built, not configured by the user.
 
-When grid-scale diffusion is implicit, the linear solve is itself approximate;
-`approximate_linear_solve_iters` sets how many iterations it takes.
+When grid-scale diffusion is implicit, the configuration is moist, or
+``\rho e_{\mathrm{tke}}`` is prognostic, the linear solve is itself approximate;
+`approximate_linear_solve_iters` (default `2`) sets how many iterations it
+takes.
 
 ### Automatic differentiation
 

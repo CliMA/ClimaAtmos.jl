@@ -3,6 +3,38 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Implicitize vertical grid-mean `ᶠu³` advection of
+  sedimenting microphysics tracers and `ρtke` with first-order upwinding
+  (`ᶠupwind1`) and bidiagonal Jacobian blocks that are exact in the tracer `χ`.
+  In all moist configurations (`0M`, `1M`, `2M`, and `2MP3`), specific
+  internal-plus-kinetic energy `e_tot - Φ`, `q_tot`, and any sedimenting
+  condensates are advected implicitly with the same `ᶠupwind1` reconstruction
+  and receive one Courant-limited (`min(1, 1 / C_γ)`) post-Newton
+  `energy_q_tot_upwinding` antidiffusion, while the gravitational-potential flux
+  `ᶠρ u³ ᶠinterp(Φ)` and the pressure work `u³ ᶠinterp(p)` stay central. Because
+  `e_tot - Φ = e_int(T, q_tot, q_liq, q_ice) + K` has no static `g z` ramp,
+  at uniform `(T, u)` it is a spatially constant affine function of
+  `(1, q_tot, q_liq, q_ice)`: linear reconstructions commute with any affine
+  combination at any stage Courant number, and the van Leer limiter commutes
+  where the scalars share one spatial shape with same-sign coefficients, while
+  keeping `(Φ, p)` central matches central mass continuity at `∂ₜΦ = 0` without
+  diffusing `Φ`. Where `C_γ > 1`, smooth `e_tot - Φ`
+  and `q_tot` profiles keep the fraction `1 - 1 / C_γ` of the first-order upwind
+  dissipation, and `energy_q_tot_upwinding = none` gives first-order upwind
+  material transport with no correction. The Jacobian gains the matching
+  `(ρe_tot, ρq_tot)`, `(ρe_tot, ρq_χ)`, `(ρe_tot, ρ)`, and `(ρq_tot, ρ)`
+  advection, geopotential, and pressure-work blocks, and central `ᶠinterp`
+  `(·, u₃)` and `(·, uₕ)` velocity blocks for `ρe_tot`, `ρq_tot`, and the
+  sedimenting tracers. Dry configurations use central implicit advection of
+  `e_tot - Φ` with the same central geopotential and pressure-work fluxes and
+  Courant-limited post-Newton upwind dissipation on `e_tot - Φ`.
+  `tracer_upwinding` applies to the explicitly advected passive tracers, and
+  `ρtke` stays on monotone `ᶠupwind1`. Under `PrognosticEDMFX`, the updraft
+  water species follow `edmfx_mse_q_tot_upwinding` and `edmfx_tracer_upwinding`
+  covers the passive updraft tracers; a one-time log message reports when the
+  two keys differ. Dry configurations with prognostic `ρtke` use the
+  approximate linear solve. With `prescribed_flow`, the fully explicit tendency
+  applies the same corrections with a unit Courant limiter.
 - ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)`, so the
   MUSCL slope has no Courant-number factor at any Courant number; this applies
   to every `vanleer_limiter` vertical transport (passive tracers, EDMFX SGS mass

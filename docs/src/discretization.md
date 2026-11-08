@@ -256,7 +256,10 @@ Each operator below has a short name in the ClimaAtmos source, documented under
     zero Courant step so the MUSCL slope reconstruction is purely spatial). The
     van Leer limiter is the default for grid-mean energy and tracer vertical
     transport, set by the `energy_q_tot_upwinding` and `tracer_upwinding`
-    configuration keys.
+    configuration keys (applied via the Courant-limited post-Newton correction
+    for `ρe_tot`, `ρq_tot`, and any sedimenting microphysics tracers, all
+    governed by `energy_q_tot_upwinding` so that parcel energy and water cross
+    each face with one reconstruction).
 
 ### Horizontal differential operators
 
@@ -434,13 +437,15 @@ is
 
 stabilized by fourth-order hyperdiffusion of the total enthalpy, decomposed into
 sensible heat, geopotential, and a water-enthalpy piece (see
-[Hyperdiffusion](hyperdiffusion.md)). Discretized, it reads
+[Hyperdiffusion](hyperdiffusion.md)). Discretized (dry form shown), it reads
 
 ```math
 \frac{\partial}{\partial t} \rho e_{tot} \approx
 - \mathcal{D}^{split}_h \left[ \rho \bar{\boldsymbol{u}},
     \tfrac{\rho e_{tot} + p}{\rho} \right]
-- D^c \left[ \mathcal{M}^f(\rho) \, I^f \left( \tfrac{\rho e_{tot} + p}{\rho} \right) \right]
+- D^c \left[ \mathcal{M}^f(\rho) \, I^f(e_{tot} - \Phi)
+    + \mathcal{M}^f(\rho) \, I^f(\Phi)
+    + \tilde{\boldsymbol{u}}^v \, I^f(p) \right]
 - D^c \left[ \boldsymbol{F}_R \right]
 - \nu_h \left[ \hat{\mathcal{D}}_h \left( \rho \, c_p \, \mathcal{G}_h(\psi_T) \right)
   + \hat{\mathcal{D}}_h \left( \rho \, \mathcal{G}_h(\psi_\Phi) \right)
@@ -456,14 +461,40 @@ Laplacian. Reading the terms in order:
   - The horizontal advective flux uses the split divergence
     ``\mathcal{D}^{split}_h`` of the center velocity, the entropy-stable form
     from the rule above.
-  - The vertical advective flux is the face mass flux ``\mathcal{M}^f(\rho)``
-    times the centrally interpolated enthalpy, differenced with ``D^c``. This
-    term is **implicit**. When upwinding is enabled for energy (the van Leer
-    limiter by default), the implicit solve still uses this central form, and
-    the difference between the upwinded and central fluxes is applied after the
-    Newton solve as a `T_post_imp!` correction
-    (`correct_implicit_advection_tendency!`), so the upwind flux sees the
-    Newton-solved velocity.
+  - The vertical advective flux of energy splits into material parcel energy,
+    geopotential, and pressure work,
+    ``D^c [ \mathcal{M}^f(\rho) \, I^f(e_{tot} - \Phi) + \mathcal{M}^f(\rho) \, I^f(\Phi) + \tilde{\boldsymbol{u}}^v \, I^f(p) ]``
+    in dry configurations and
+    ``D^c [ \tfrac{I^f(\rho J)}{J^f} \, U^f_1(\tilde{\boldsymbol{u}}, e_{tot} - \Phi) + \mathcal{M}^f(\rho) \, I^f(\Phi) + \tilde{\boldsymbol{u}}^v \, I^f(p) ]``
+    in moist configurations. This term is **implicit**. Although total enthalpy
+    ``h = e_{int} + p / \rho + \Phi + K`` is the adiabatic invariant of steady
+    hydrostatic flow (where ``de_{int} + p \, d(1 / \rho) = 0`` along an adiabat
+    and ``dp / \rho + d\Phi = 0`` in hydrostatic balance, so
+    ``d(e_{int} + p / \rho + \Phi) = 0`` at fixed ``K``), ``(p, \Phi)`` form a
+    hydrostatic pair and ``p / \rho = R_m T`` jumps across density and moisture
+    steps at continuous ``p``, so ``\tilde{\boldsymbol{u}}^v \, I^f(p)`` is
+    evaluated centrally rather than through
+    ``\tfrac{I^f(\rho J)}{J^f} \, U^f(\tilde{\boldsymbol{u}}, p / \rho)``.
+    Evaluating ``\mathcal{M}^f(\rho) \, I^f(\Phi)`` centrally keeps ``(p, \Phi)``
+    on one stencil and matches the central mass flux ``-D^c[\mathcal{M}^f(\rho)]``
+    via the discrete product rule
+    ``-D^c[\mathcal{M}^f(\rho) \, I^f(\Phi)] - \Phi \, (-D^c[\mathcal{M}^f(\rho)]) = -I^c[J^f \mathcal{M}^f(\rho) \, G^f(\Phi)] / J``,
+    since ``\partial_t \Phi = 0``, whereas upwinding ``\Phi`` injects
+    ``D^c[\tfrac{1}{2} \tfrac{I^f(\rho J)}{J^f} |\tilde{\boldsymbol{u}}^v| \Delta \Phi]``
+    into ``\rho e_{int}``. In moist configurations, the remaining parcel energy
+    ``e_{tot} - \Phi = e_{int} + K`` shares ``U^f_1`` and the post-Newton
+    reconstruction with ``q_t`` and any sedimenting condensates.
+    Unless `energy_q_tot_upwinding` is `none`, the Courant-limited
+    (`min(1, 1 / C_γ)`) difference between the `energy_q_tot_upwinding` flux
+    (the van Leer limiter by default) and the implicit material flux on
+    ``e_{tot} - \Phi`` is applied after the Newton solve as a `T_post_imp!`
+    correction (`correct_implicit_advection_tendency!`), so the high-order flux
+    sees the Newton-solved velocity. With `none`, the material transport of
+    ``e_{tot} - \Phi`` is central in dry configurations and first-order upwind
+    in moist configurations. Smooth profiles at `C_γ ≤ 1` remain second-order;
+    where upwind dissipation is active (`C_γ > 1` in moist configurations, where
+    the fraction `1 - 1 / C_γ` of first-order dissipation remains, or at extrema
+    and boundary cells), it damps gradients of ``e_{int} + K`` rather than ``h``.
   - The radiative flux divergence is explicit and applied separately.
   - Hyperdiffusion is two Laplacians with the completion ``\mathcal{P}`` in
     between, each a weak divergence of a strong gradient.
@@ -475,13 +506,14 @@ each term uses and where it lives. Everything in the "Implicit" column is
 solved column by column as described under [Timestepping](@ref); everything
 else is explicit.
 
-| Equation                                 | Horizontal                                                                                                                                        | Vertical                                                                                                                                                                             | Implicit part                                               | Source                                                                                                                          |
-|:---------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |:----------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------- |
-| Mass ``\rho``                            | ``\hat{\mathcal{D}}_h[\rho \bar{\boldsymbol{u}}]``, which is ``\mathcal{D}^{split}_h`` with unit scalar                                           | ``D^c[\mathcal{M}^f(\rho)]``                                                                                                                                                         | the vertical flux, with the full ``\tilde{\boldsymbol{u}}`` | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
-| Horizontal momentum ``\boldsymbol{u}_h`` | strong gradient ``\mathcal{G}_h`` of ``\Phi - \Phi_r + K`` and the split-form pressure gradient; weak curls ``\hat{\mathcal{C}}_h`` for vorticity | ``I^c\{\boldsymbol{\omega}^h \times I^f(\rho J)\tilde{\boldsymbol{u}}^v\} / \rho J``, with ``\boldsymbol{\omega}^h = C^f[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]`` | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
-| Vertical momentum ``u_3``                | the same vorticity terms, ``\times I^f(\boldsymbol{u}^h)``                                                                                        | ``G^f[K]``, and ``I^f[c_{pd}\theta_v'] \, G^f[\Pi] + G^f[\Phi - \Phi_r]``                                                                                                            | the pressure-gradient and geopotential term                 | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
-| Total water ``\rho q_t``                 | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, q_t]``                                                                                         | ``D^c[\mathcal{M}^f(\rho) I^f(q_t)]``, upwind correction after the solve as for energy                                                                                               | the central vertical flux                                   | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
-| Other grid-mean tracers ``\rho \chi``    | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, \chi]``                                                                                        | ``D^c\left[\tfrac{I^f(\rho J)}{J^f} U^f(\tilde{\boldsymbol{u}}, \chi)\right]`` with `tracer_upwinding`                                                                               | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
+| Equation                                                       | Horizontal                                                                                                                                        | Vertical                                                                                                                                                                                                                    | Implicit part                                               | Source                                                                                                                          |
+|:-------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |:----------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------- |
+| Mass ``\rho``                                                  | ``\hat{\mathcal{D}}_h[\rho \bar{\boldsymbol{u}}]``, which is ``\mathcal{D}^{split}_h`` with unit scalar                                           | ``D^c[\mathcal{M}^f(\rho)]``                                                                                                                                                                                                | the vertical flux, with the full ``\tilde{\boldsymbol{u}}`` | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
+| Horizontal momentum ``\boldsymbol{u}_h``                       | strong gradient ``\mathcal{G}_h`` of ``\Phi - \Phi_r + K`` and the split-form pressure gradient; weak curls ``\hat{\mathcal{C}}_h`` for vorticity | ``I^c\{\boldsymbol{\omega}^h \times I^f(\rho J)\tilde{\boldsymbol{u}}^v\} / \rho J``, with ``\boldsymbol{\omega}^h = C^f[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]``                                        | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
+| Vertical momentum ``u_3``                                      | the same vorticity terms, ``\times I^f(\boldsymbol{u}^h)``                                                                                        | ``G^f[K]``, and ``I^f[c_{pd}\theta_v'] \, G^f[\Pi] + G^f[\Phi - \Phi_r]``                                                                                                                                                   | the pressure-gradient and geopotential term                 | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
+| Total water ``\rho q_t``                                       | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, q_t]``                                                                                         | ``D^c\left[\tfrac{I^f(\rho J)}{J^f} U^f_1(\tilde{\boldsymbol{u}}, q_t)\right]``, plus Courant-limited `energy_q_tot_upwinding` antidiffusion after the solve as for ``e_{tot} - \Phi``                                      | the first-order upwind vertical flux                        | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
+| Sedimenting microphysics tracers and ``\rho e_{\mathrm{tke}}`` | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, \chi]``                                                                                        | ``D^c\left[\tfrac{I^f(\rho J)}{J^f} U^f_1(\tilde{\boldsymbol{u}}, \chi)\right]``, plus Courant-limited `energy_q_tot_upwinding` antidiffusion after the solve for the sedimenting tracers, alongside energy and total water | the first-order upwind vertical flux (and sedimentation)    | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
+| Passive non-water tracers ``\rho \chi``                        | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, \chi]``                                                                                        | ``D^c\left[\tfrac{I^f(\rho J)}{J^f} U^f(\tilde{\boldsymbol{u}}, \chi)\right]`` with `tracer_upwinding`                                                                                                                      | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
 
 Two details of the momentum rows are worth spelling out. The pressure-gradient
 and geopotential terms in the momentum equation are written as a departure from

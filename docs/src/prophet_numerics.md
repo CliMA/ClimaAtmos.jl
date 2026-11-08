@@ -102,9 +102,11 @@ vertical divergence,
 
 so that the reconstruction and the divergence operator are the same ones the
 flux form would use. The reconstruction ``U^f`` is selected by the
-configuration: `edmfx_mse_q_tot_upwinding` for ``h_s^j`` and ``q_t^j`` (default
-`first_order`), `edmfx_tracer_upwinding` for the remaining draft tracers
-(default `first_order`), and `none` for the central reconstruction. The
+configuration: `edmfx_mse_q_tot_upwinding` for ``h_s^j``, ``q_t^j``, and the
+sedimenting draft microphysics species (default `first_order`), so that the
+draft energy and water cross each face with one reconstruction;
+`edmfx_tracer_upwinding` for the remaining draft tracers (default
+`first_order`); and `none` for the central reconstruction. The
 resolvability argument of
 [the high-resolution limit](prophet.md#The-high-resolution-limit) bears on this
 choice: upwinding adds numerical diffusion to the draft variables, which acts

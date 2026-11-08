@@ -226,13 +226,17 @@ end
 
 Assemble the positional arguments and keyword arguments for `ClimaTimeSteppers.init`.
 
-Wires the tendency functions into a `ClimaODEFunction`: the explicit and limited
-tendencies, the implicit tendency with its Jacobian (both replaced by a single fully
-explicit tendency when `prescribed_flow` is set, so that sound waves are not treated
-implicitly), the post-implicit upwinding correction (skipped when energy and total water
-are not upwinded), the cache and implicit-cache updates, the limiter, the DSS, and the
-state constraints. The cache and constraint update frequencies come from
-`update_cache_signal_handler` and `update_constrain_state_signal_handler`.
+Passes the tendency and stage hooks to a `ClimaODEFunction`: the explicit and
+limited tendencies, the implicit tendency with its Jacobian (both replaced by
+`fully_explicit_tendency!` when `prescribed_flow` is set, so sound waves are not
+treated implicitly), the implicit-stage initializer
+(`initialize_implicit_stage_problem!`), the post-Newton stage hook
+(`correct_implicit_advection_tendency!`, skipped when `T_imp!` is absent,
+`p.dtγ == 0`, or both `energy_q_tot_upwinding` and `tracer_upwinding` are
+`Val(:none)`), the cache and
+implicit-cache updates, the limiter, DSS, and the state constraints. The cache
+and constraint update frequencies come from `update_cache_signal_handler` and
+`update_constrain_state_signal_handler`.
 
 # Returns
 
@@ -245,6 +249,29 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     verbose = false,
 )
     (; atmos) = p
+    if grid_mean_base_upwinding(Y) == Val(:first_order)
+        (; energy_q_tot_upwinding, tracer_upwinding) = atmos.numerics
+        if !isempty(sedimenting_tracer_names(Y)) &&
+           energy_q_tot_upwinding != tracer_upwinding
+            @info(
+                "Sedimenting microphysics species follow \
+                 `energy_q_tot_upwinding` ($(energy_q_tot_upwinding)); \
+                 `tracer_upwinding` ($(tracer_upwinding)) applies to the \
+                 passive tracers."
+            )
+        end
+        (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = atmos.numerics
+        if atmos.turbconv_model isa PrognosticEDMFX &&
+           !isempty(sedimenting_sgs_tracer_names(Y)) &&
+           edmfx_mse_q_tot_upwinding != edmfx_tracer_upwinding
+            @info(
+                "Updraft microphysics species follow \
+                 `edmfx_mse_q_tot_upwinding` ($(edmfx_mse_q_tot_upwinding)); \
+                 `edmfx_tracer_upwinding` ($(edmfx_tracer_upwinding)) applies \
+                 to the passive updraft tracers."
+            )
+        end
+    end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
@@ -265,12 +292,19 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # Only wire `T_post_imp!` when the upwind correction is nontrivial;
-        # otherwise `nothing` so CTS skips the post-Newton path (including
-        # its `cache_imp!` refresh) at every implicit stage.
+        # Set `T_post_imp!` when the post-Newton advection correction is
+        # nontrivial and the tableau has a single-γ implicit stage (`p.dtγ > 0`);
+        # otherwise `nothing`, so CTS skips the post-Newton path (and its
+        # `cache_imp!` refresh) at every stage.
         T_post_imp! =
-            (isnothing(T_imp!) || atmos.numerics.energy_q_tot_upwinding == Val(:none)) ?
-            nothing : correct_implicit_advection_tendency!
+            (
+                isnothing(T_imp!) ||
+                iszero(p.dtγ) ||
+                (
+                    atmos.numerics.energy_q_tot_upwinding == Val(:none) &&
+                    atmos.numerics.tracer_upwinding == Val(:none)
+                )
+            ) ? nothing : correct_implicit_advection_tendency!
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,

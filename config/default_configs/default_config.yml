@@ -359,10 +359,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
+  help: "Upwinding mode for passive tracers; the sedimenting microphysics species follow `energy_q_tot_upwinding` [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 energy_q_tot_upwinding:
-  help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
+  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]. With `none`, the material transport of `e_tot - Φ` is central in `DryModel` and first-order upwind in moist configurations."
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
@@ -515,10 +515,10 @@ edmfx_detr_model:
   help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. This is a placeholder for new detrainment models. For now only supports `Generalized`. [`Generalized` (default)]"
   value: "Generalized"
 edmfx_mse_q_tot_upwinding:
-  help: "Eddy-diffusivity mass-flux upwinding mode [`none`, `first_order` (default), `third_order`]"
+  help: "Eddy-diffusivity mass-flux upwinding mode for updraft moist static energy, total water, and condensate masses and numbers [`none`, `first_order` (default), `third_order`]. Only `first_order` keeps the updraft condensates and number concentrations nonnegative."
   value: first_order
 edmfx_tracer_upwinding:
-  help: "Eddy-diffusivity mass-flux tracer upwinding mode [`none`, `first_order` (default)]"
+  help: "Eddy-diffusivity mass-flux upwinding mode for passive updraft tracers; updraft water species follow `edmfx_mse_q_tot_upwinding` [`none`, `first_order` (default)]"
   value: first_order
 edmfx_sgsflux_upwinding:
   help: "Eddy-diffusivity mass-flux subgrid-scale mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"

@@ -1850,13 +1850,16 @@ symbols or strings.
 # Fields
 
   - `energy_q_tot_upwinding`: Upwinding for the vertical advection of `ρe_tot`
-    and `ρq_tot`.
-  - `tracer_upwinding`: Upwinding for the vertical advection of the remaining
-    grid-scale tracers.
+    (`e_tot - Φ`, with central geopotential and pressure work), `ρq_tot`, and
+    the sedimenting microphysics species (`sedimenting_tracer_names`).
+  - `tracer_upwinding`: Upwinding for the explicit vertical advection of passive
+    non-water grid-scale tracers (`passive_gs_tracer_names`; `ρtke` is advected
+    implicitly with `ᶠupwind1`).
   - `edmfx_mse_q_tot_upwinding`: Upwinding for the EDMF subdomain `mse`,
-    `q_tot`, and TKE advection.
+    `q_tot`, and sedimenting microphysics species (`sedimenting_sgs_tracer_names`).
   - `edmfx_sgsflux_upwinding`: Upwinding for the EDMF subgrid-scale mass flux.
-  - `edmfx_tracer_upwinding`: Upwinding for the EDMF subdomain tracers.
+  - `edmfx_tracer_upwinding`: Upwinding for the passive EDMF subdomain tracers
+    (`passive_sgs_tracer_names`).
   - `test_dycore_consistency`: Whether to fill the cache with `NaN`s before each
     tendency evaluation, so that any quantity the dycore reads without first
     setting it shows up as a `NaN`.
@@ -1909,18 +1912,20 @@ types for compile-time dispatch.
 
 # Keyword Arguments
 
-  - `energy_q_tot_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot` and
-    `ρq_tot` vertical advection. Valid values are `:none`, `:first_order`,
-    `:third_order`, and `:vanleer_limiter`, given as a `Symbol`, a `String`, or
-    an already-wrapped `Val`.
-  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the other grid-scale
-    tracers, same valid values.
+  - `energy_q_tot_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot`,
+    `ρq_tot`, and the sedimenting microphysics species in vertical advection.
+    Valid values are `:none`, `:first_order`, `:third_order`, and
+    `:vanleer_limiter`, given as a `Symbol`, a `String`, or an already-wrapped
+    `Val`. With `:none`, the material transport of `e_tot - Φ` is central in
+    `DryModel` and first-order upwind in moist configurations.
+  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the passive non-water
+    grid-scale tracers (`ρtke` stays on `ᶠupwind1`), same valid values.
   - `edmfx_mse_q_tot_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    `mse`, `q_tot`, and TKE.
+    `mse`, `q_tot`, and sedimenting microphysics species.
   - `edmfx_sgsflux_upwinding = :none`: Upwinding for the EDMF subgrid-scale mass
     flux.
-  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    tracers.
+  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the passive EDMF
+    subdomain tracers.
   - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
