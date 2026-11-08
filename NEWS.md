@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Synchronize `check_nans` across MPI ranks with
+  `ClimaComms.allreduce` and log per-variable and per-updraft `NaN` counts on
+  every rank that detects a `NaN`.
 - ![][badge-🔥behavioralΔ] The 1M rain and snow are placed on the precipitation
   shaft of the SGS distribution by default (`sgs_precip_incloud_fraction = 1`,
   `sgs_precip_fraction_floor = 0.1`; previously `0`, uniform, and `0.5`). Spread
