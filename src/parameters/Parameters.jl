@@ -588,10 +588,11 @@ accessors generated at the bottom of this module, e.g.
     `cloud_liquid_formation` and `cloud_ice_formation` are nulled when
     `implicit_microphysics: true`. `nothing` outside 1M configurations.
   - `microphysics_1m_implicit_params`: 1-moment parameters with only
-    `cloud_liquid_formation` and `cloud_ice_formation` enabled (everything
-    else `nothing`), consumed by a second CM BMT call to isolate the
-    implicit condensation / sublimation tendency. `nothing` outside 1M
-    configurations.
+    `cloud_liquid_formation`, `cloud_ice_formation`,
+    `rain_condensation_evaporation`, and `snow_deposition_sublimation`
+    enabled (everything else `nothing`), consumed by a second CM BMT call
+    to isolate the implicit condensation / sublimation tendency. `nothing`
+    outside 1M configurations.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
     or `nothing`.
   - `microphysics_2mp3_params`: `CloudMicrophysics` 2-moment plus P3-ice

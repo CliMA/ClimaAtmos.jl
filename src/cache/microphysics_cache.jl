@@ -801,16 +801,19 @@ end
 """
     has_implicit_1m_microphysics(p)
 
-Whether the implicit 1M condensation / sublimation tendency is active: 1M
-microphysics with `cloud_liquid_formation` or `cloud_ice_formation` assigned to
-`microphysics_1m_implicit_params` (`implicit_microphysics: true`). When it is
-not, `ᶜmp_tendency_implicit*` keep their zero initialization.
+Whether the implicit 1M tendency is active: 1M microphysics with at least one
+of `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+or `snow_deposition_sublimation` assigned to `microphysics_1m_implicit_params`
+(`implicit_microphysics: true`). When it is not, `ᶜmp_tendency_implicit*` keep
+their zero initialization.
 """
 function has_implicit_1m_microphysics(p)
     p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return false
     procs = CAP.microphysics_1m_implicit_params(p.params).processes
     return !isnothing(procs.cloud_liquid_formation) ||
-           !isnothing(procs.cloud_ice_formation)
+           !isnothing(procs.cloud_ice_formation) ||
+           !isnothing(procs.rain_condensation_evaporation) ||
+           !isnothing(procs.snow_deposition_sublimation)
 end
 
 """

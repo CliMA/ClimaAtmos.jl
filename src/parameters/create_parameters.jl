@@ -107,11 +107,11 @@ function ClimaAtmosParameters(
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
     # Two 1M parameter sets: `bulk` carries the user's process choices for CM
-    # BMT; `implicit` carries ONLY `cloud_liquid_formation` and
-    # `cloud_ice_formation` (all other processes nulled) so a second CM BMT
-    # call isolates the condensation / sublimation tendency the implicit stage
-    # treats separately. `implicit_microphysics` moves the two formation
-    # options from `bulk` to `implicit`.
+    # BMT; `implicit` carries only `cloud_liquid_formation`, `cloud_ice_formation`,
+    # `rain_condensation_evaporation`, and `snow_deposition_sublimation` (all
+    # other processes nulled) so a second CM BMT call isolates the implicit
+    # condensation / sublimation tendency. `implicit_microphysics` moves those
+    # four options from `bulk` to `implicit`.
     _mp1m_opts = microphysics_1m_options(microphysics_model)
     _clf =
         microphysics_model isa NonEquilibriumMicrophysics1M ?
@@ -121,17 +121,29 @@ function ClimaAtmosParameters(
         microphysics_model isa NonEquilibriumMicrophysics1M ?
         microphysics_model.processes.cloud_ice_formation :
         CM.Parameters.ConstantTimescale()
+    _rce =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.rain_condensation_evaporation :
+        CM.Parameters.RainEvaporation()
+    _sds =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.snow_deposition_sublimation :
+        CM.Parameters.DepositionAndSublimation()
     _bulk_clf, _implicit_clf = _split_formation(_clf, implicit_microphysics)
     _bulk_cif, _implicit_cif = _split_formation(_cif, implicit_microphysics)
+    _bulk_rce, _implicit_rce = _split_formation(_rce, implicit_microphysics)
+    _bulk_sds, _implicit_sds = _split_formation(_sds, implicit_microphysics)
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
         _mp1m_opts...,
         cloud_liquid_formation = _bulk_clf,
         cloud_ice_formation = _bulk_cif,
+        rain_condensation_evaporation = _bulk_rce,
+        snow_deposition_sublimation = _bulk_sds,
     )
     # Null out every other process on the implicit set so CM BMT with this
-    # set returns only the cond/subl contribution. Explicitly list the other
-    # processes rather than merging options to keep the implicit kernel's
+    # set returns only the cond/evap/subl contribution. Explicitly list the
+    # other processes rather than merging options to keep the implicit kernel's
     # output narrow regardless of `_mp1m_opts`.
     microphysics_1m_implicit_params = microphys_1m_parameters(
         toml_dict;
@@ -141,8 +153,8 @@ function ClimaAtmosParameters(
         cloud_liquid_freezing = nothing,
         rain_autoconversion = nothing,
         snow_autoconversion = nothing,
-        rain_condensation_evaporation = nothing,
-        snow_deposition_sublimation = nothing,
+        rain_condensation_evaporation = _implicit_rce,
+        snow_deposition_sublimation = _implicit_sds,
         snow_melt = nothing,
         cloud_liquid_rain_accretion = nothing,
         cloud_liquid_snow_accretion = nothing,

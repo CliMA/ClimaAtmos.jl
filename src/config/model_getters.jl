@@ -69,8 +69,10 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     the ClimaParams `prescribed_cloud_droplet_number_concentration`, the value also used by the
     radiation effective radius.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
-  - `rain_condensation_evaporation`: `"RainEvaporation"`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
+  - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
+    the same way as `cloud_liquid_formation`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`. Routed by
+    `implicit_microphysics` the same way as `cloud_liquid_formation`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
     `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
@@ -1253,9 +1255,10 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     terminal_velocity_snow =
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
-    # `implicit_microphysics` only controls whether 1M condensation /
-    # sublimation flow through the implicit cache with a Jacobian; the
-    # microphysics tendency itself is always applied in the implicit stage.
+    # `implicit_microphysics` controls which 1M processes (cloud
+    # liquid/ice formation, rain evaporation, snow sublimation) flow
+    # through the implicit cache with a Jacobian; the microphysics
+    # tendency itself is always applied in the implicit stage.
     return AtmosWater(;
         microphysics_model,
         cloud_model,
