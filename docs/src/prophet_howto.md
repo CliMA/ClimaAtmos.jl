@@ -73,6 +73,7 @@ mass-flux contribution, and as a lighter boundary-layer scheme.
 | `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian` (the conditional-moment node rule for the 1M microphysics, Gauss–Hermite for 0M) or `mean`.                               |
 | `quadrature_order`                    | `3`               | Gauss–Hermite order per dimension, 1–5.                                                                                                                                        |
 | `sgs_variance_curvature`              | `false`           | Evaluate the equilibrium condensate under the vertical displacement of the curved saturation-excess profile, which bounds the moist tail. See [Closures](prophet_closures.md). |
+| `sgs_variance_fidelity_model`         | `"equilibrium"`   | Closure for the variance fidelity ``\alpha``: `equilibrium` or `updraft` (from the updraft condensate; PrognosticEDMFX only). See [Closures](prophet_closures.md).             |
 
 The generated [Configuration Options](configuration_options.md) table is the
 authoritative list; the help strings there come from
@@ -209,7 +210,7 @@ including the per-subdomain microphysics process rates. Prepend one to a case
 configuration:
 
 ```bash
-julia +1.11 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
+julia +1.13 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
 ```
 
 Later `--config_file` arguments win on conflicting keys; see

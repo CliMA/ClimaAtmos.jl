@@ -447,7 +447,7 @@ struct ExternalTVInsolation <: AbstractInsolation end
     Larcform1Insolation
 
 Polar-night insolation for the LARCFORM-1 setup: zero TOA flux, with the cosine
-of the zenith angle set to `eps(FT)` because RRTMGP requires a positive value.
+of the zenith angle set to 0.
 """
 struct Larcform1Insolation <: AbstractInsolation end
 
@@ -456,9 +456,9 @@ struct Larcform1Insolation <: AbstractInsolation end
 
 Compute insolation from the orbital parameters at the current simulation date.
 
-When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
-`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
-(the default global behavior). When provided, the explicit lat/lon are used
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid on
+the sphere and fall back to `(0, 0)` on other grids (the default global
+behavior). When provided, the explicit lat/lon are used
 instead — useful for single-column setups whose coordinate system doesn't
 carry lat/lon (e.g. ARM VARANAL).
 
@@ -1235,7 +1235,8 @@ Surface-temperature and insolation requirements are derived from the resolved
 
 # Fields
 
-  - `dataset`: The `ColumnDatasets.ColumnDataset` handle for the forcing file.
+  - `dataset`: The `ColumnDatasets.AbstractColumnData` forcing source, or a
+    `PerColumnDatasets` with one source per column.
   - `forcing`: Tuple of composed forcing terms, validated at construction.
   - `time_interpolation_method`: Time-interpolation method handed to the file's
     `TimeVaryingInput`s.
@@ -1244,14 +1245,16 @@ Surface-temperature and insolation requirements are derived from the resolved
 
     ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnDataset; forcing, time_interpolation_method)
     ExternalDrivenTVForcing(path::String; kwargs...)
+    ExternalDrivenTVForcing(datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData}; kwargs...)
 
 The `path` method opens the file as a `ColumnDataset` and forwards the keyword
-arguments. `forcing` defaults to `default_forcing_terms()` and
+arguments. With a vector of column data sources, column `h` of a multi-column
+grid is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
 struct ExternalDrivenTVForcing{
-    CD <: ColumnDatasets.AbstractColumnData,
+    CD <: Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets},
     F <: Tuple,
     M,
 }
@@ -1260,7 +1263,7 @@ struct ExternalDrivenTVForcing{
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.AbstractColumnData;
+    dataset::Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets};
     forcing = default_forcing_terms(),
     time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )
@@ -1279,6 +1282,10 @@ end
 function ExternalDrivenTVForcing(path::String; kwargs...)
     return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
+ExternalDrivenTVForcing(
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData};
+    kwargs...,
+) = ExternalDrivenTVForcing(ColumnDatasets.PerColumnDatasets(datasets); kwargs...)
 
 """
     ISDACForcing
@@ -1661,8 +1668,6 @@ by `rad: "ISDAC"`.
     F₁::FT = 15  # W/m²
     κ::FT = 170  # m²/kg
 end
-
-import AtmosphericProfilesLibrary as APL
 
 """
     RadiationTRMM_LBA(::Type{FT})
@@ -2190,7 +2195,25 @@ struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
 struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractVarianceFidelityModel
+
+Closure for the variance fidelity `α` of the condensate reconstruction
+(`set_covariance_cache!`). Selected by the YAML key
+`sgs_variance_fidelity_model`.
+
+  - `EquilibriumVarianceFidelity` (`"equilibrium"`, default):
+    `α = α_Da · α_eq` (`sgs_variance_fidelity`).
+  - `UpdraftVarianceFidelity` (`"updraft"`): with `PrognosticEDMFX` and
+    non-equilibrium microphysics, `α` is set from the condensate of the cloudy
+    updrafts where they are active (`updraft_variance_fidelity`), and is
+    `α_Da · α_eq` elsewhere. Other configurations ignore it.
+"""
+abstract type AbstractVarianceFidelityModel end
+struct EquilibriumVarianceFidelity <: AbstractVarianceFidelityModel end
+struct UpdraftVarianceFidelity <: AbstractVarianceFidelityModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2214,6 +2237,8 @@ Group of moisture, cloud, and microphysics choices inside an
     by the largest excess the displaced (quadratic) profile reaches; `false`
     (default) keeps
     the truncated-Gaussian expectation.
+  - `sgs_variance_fidelity_model`: An `AbstractVarianceFidelityModel`;
+    `EquilibriumVarianceFidelity()` by default.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
     `FixedTerminalVelocity()` for cloud liquid and cloud ice, and
@@ -2228,7 +2253,7 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
@@ -2236,6 +2261,7 @@ water = ClimaAtmos.AtmosWater(;
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = DiagnosedTqCorrelation()
     sgs_variance_curvature::Bool = false
+    sgs_variance_fidelity_model::SVF = EquilibriumVarianceFidelity()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = Chen2022TerminalVelocity()
@@ -2684,7 +2710,7 @@ struct's docstring for the full list of admissible values.
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
     `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
-    `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `sgs_variance_fidelity_model`, `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.

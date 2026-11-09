@@ -545,6 +545,9 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
     `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
     otherwise. Without TKE, `TKE = 0` and `l_mix = 1 m`, so the Damköhler
     factor is 1; under 0M microphysics, `ᶜα = 1 / A`.
+    With `sgs_variance_fidelity_model: updraft` (PrognosticEDMFX,
+    non-equilibrium microphysics), `ᶜα` is then replaced by the updraft rule
+    with the same `σ_S` (`set_updraft_variance_fidelity!`).
 
 Scratch: the caller fills `ᶜtemp_scalar_5`, `temp_data`, and `ᶜtemp_scalar_6`
 with the moisture, potential-temperature, and cross invariants.
@@ -694,6 +697,50 @@ function set_covariance_cache!(
         Val(has_curvature),
         Val(has_α),
         Val(is_0m),
+    )
+    has_α && set_updraft_variance_fidelity!(
+        p.atmos.sgs_variance_fidelity_model, turbconv_model,
+        p.atmos.microphysics_model,
+        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq,
+    )
+    return nothing
+end
+
+"""
+    set_updraft_variance_fidelity!(fidelity_model, turbconv_model, microphysics_model, Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq)
+
+With `UpdraftVarianceFidelity`, `PrognosticEDMFX` and non-equilibrium
+microphysics, blend the updraft rule (`updraft_variance_fidelity`) into the
+equilibrium variance fidelity `ᶜα`, with `σ_S` the linearized width
+(`_sgs_linear_sigma_S`) at the environment state `(ᶜρ_env, ᶜT_mean)`.
+Otherwise do nothing.
+"""
+set_updraft_variance_fidelity!(
+    fidelity_model,
+    turbconv_model,
+    microphysics_model,
+    args...,
+) =
+    nothing
+function set_updraft_variance_fidelity!(
+    ::UpdraftVarianceFidelity, ::PrognosticEDMFX,
+    microphysics_model::NonEquilibriumMicrophysics,
+    Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq,
+)
+    FT = eltype(p.params)
+    c_u = FT(CAP.sgs_fidelity_updraft_coeff(p.params))
+    α_min = FT(CAP.sgs_fidelity_updraft_min(p.params))
+    α_max = inv(one(FT) - FT(w_eq))  # `Inf` for `w_eq = 1`
+    σ_abs = FT(CAP.cloud_fraction_sigma_abs(p.params))
+    turbconv_params = CAP.turbconv_params(p.params)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    ᶜsigma_S = @. lazy(
+        _sgs_linear_sigma_S(thermo_params, ᶜρ_env, ᶜT_mean, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq),
+    )
+    @. ᶜα = updraft_variance_fidelity(
+        ᶜα, Y.c.sgsʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs,
+        ᶜsigma_S, thermo_params, microphysics_model, turbconv_params, σ_abs,
+        c_u, α_min, α_max,
     )
     return nothing
 end
@@ -1491,6 +1538,74 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
     return α_Da * α_eq
 end
 
+
+"""
+    updraft_variance_fidelity(
+        α, sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs, sigma_S,
+        thermo_params, microphysics_model, turbconv_params, σ_abs,
+        c_u, α_min, α_max,
+    )
+
+Variance fidelity of the updraft rule (`sgs_variance_fidelity_model: updraft`):
+the width `α σ_S` of the environment's condensate ramp is set by the in-cloud
+condensate of the updrafts,
+
+    α_up = clamp(c_u q_c,up / σ_S, α_min, α_max),    q_c,up = Σ a_j q_c,j / Σ a_j f_j,
+
+with `a_j` the area, `q_c,j = q_lcl + q_icl` the condensate and `f_j` the cloud
+cover (`_updraft_cloud_fraction`) of updraft `j`, and `α_max = 1 / (1 − w_eq)`
+the bound of the equilibrium rule. The result is `(1 − W) α + W α_up`, with
+
+    W = Σ a_j f_j L_j / Σ a_j,
+
+`L_j` the lower area limiter factor of EDMF (`lower_area_limiter_factor`, `0` at
+the minimum area): `α` is unchanged without cloudy updrafts, and updrafts held
+at the minimum area by the limiters carry no weight.
+"""
+@inline function updraft_variance_fidelity(
+    α, sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs, sigma_S,
+    thermo_params, microphysics_model, turbconv_params, σ_abs,
+    c_u, α_min, α_max,
+)
+    FT = typeof(α)
+    terms = unrolled_map(
+        (sgsʲ, ρʲ, Tʲ, q_totʲ, q_liqʲ, q_iceʲ) -> _cloudy_updraft_terms(
+            sgsʲ, ρʲ, Tʲ, q_totʲ, q_liqʲ, q_iceʲ,
+            thermo_params, microphysics_model, turbconv_params, σ_abs,
+        ),
+        sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs,
+    )
+    (af, aq, afL, a) = unrolled_reduce(
+        (x, y) -> (x[1] + y[1], x[2] + y[2], x[3] + y[3], x[4] + y[4]),
+        terms,
+    )
+    q_c_up = aq / max(af, floatmin(FT))
+    α_up = clamp(
+        FT(c_u) * q_c_up / max(FT(sigma_S), ϵ_numerics(FT)),
+        FT(α_min),
+        FT(α_max),
+    )
+    W = afL / max(a, floatmin(FT))
+    return (one(FT) - W) * α + W * α_up
+end
+
+# For one updraft: `(a f, a q_c, a f L, a)`, with `a = ρa/ρʲ` its area, `f` its
+# cloud cover, `q_c = max(0, q_lcl + q_icl)` and `L` the lower area limiter
+# factor.
+@inline function _cloudy_updraft_terms(
+    sgsʲ, ρʲ, Tʲ, q_totʲ, q_liqʲ, q_iceʲ,
+    thermo_params, microphysics_model, turbconv_params, σ_abs,
+)
+    FT = typeof(ρʲ)
+    a = max(zero(FT), FT(draft_area(sgsʲ.ρa, ρʲ)))
+    q_c = max(zero(FT), FT(sgsʲ.q_lcl) + FT(sgsʲ.q_icl))
+    f = _updraft_cloud_fraction(
+        thermo_params, Tʲ, ρʲ, q_totʲ, q_liqʲ, q_iceʲ,
+        sgsʲ.q_lcl, sgsʲ.q_icl, σ_abs, microphysics_model,
+    )
+    L = lower_area_limiter_factor(a, turbconv_params)
+    return (a * f, a * q_c, a * f * L, a)
+end
 
 """
     _compute_z(C)

@@ -35,9 +35,9 @@ function trmm_lba_profiles(thermo_params)
         p_v_sat = TD.saturation_vapor_pressure(thermo_params, T_profile(z), TD.Liquid())
         denominator =
             measured_p(z) - p_v_sat +
-            (1 / Rv_over_Rd) * p_v_sat * measured_RH(z) / 100
+            (1 / Rv_over_Rd) * p_v_sat * measured_RH(z)
         q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denominator
-        return q_v_sat * measured_RH(z) / 100
+        return q_v_sat * measured_RH(z)
     end
     n = length(measured_z_values)
     q_tot = CI1D.Interpolate1D(
