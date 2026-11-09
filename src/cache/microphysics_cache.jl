@@ -1294,11 +1294,21 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
+        # This kernel compiles within two registers of the top of its A100
+        # occupancy band, so without a cap `ptxas` lands past the edge and the
+        # launch drops from 16 resident warps per multiprocessor to 12.
+        Fields.copyto_capped!(
+            ᶜmp_tendency⁰,
+            Base.Broadcast.instantiate(
+                Base.broadcasted(
+                    microphysics_tendencies_1m,
+                    BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰,
+                    ᶜw⁰_air, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                    ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
+                ),
+            ),
+            Val(128),
         )
     end
 
