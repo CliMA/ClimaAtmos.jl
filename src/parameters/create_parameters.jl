@@ -278,6 +278,7 @@ atmos_name_map = (;
     :held_suarez_minimum_temperature => :T_min_hs,
     :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
+    :ocean_subsurface_reflectance => :ocean_subsurface_reflectance,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
