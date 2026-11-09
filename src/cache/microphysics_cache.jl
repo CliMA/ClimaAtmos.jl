@@ -1310,11 +1310,21 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
+        # 128 registers per thread is the top of this kernel's A100 occupancy
+        # band, and it compiles within two of the edge, so the cap keeps the
+        # 512-thread blocks that 16 resident warps need.
+        copyto!(
+            ᶜmp_tendency⁰,
+            Base.Broadcast.instantiate(
+                Base.broadcasted(
+                    microphysics_tendencies_1m,
+                    BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰,
+                    ᶜw⁰_air, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                    ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
+                ),
+            );
+            maxregs = Val(128),
         )
     end
 
