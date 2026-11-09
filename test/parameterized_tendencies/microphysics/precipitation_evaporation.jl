@@ -3,7 +3,8 @@ Single-column test of the below-cloud evaporation and sublimation of the
 0-moment precipitation flux, without EDMF and with PrognosticEDMFX: the water,
 mass and energy column budgets close with the surface fluxes, which stay
 never upward (non-positive) when the frozen evaporation exceeds the production
-refreshed from a Newton iterate.
+refreshed from a Newton iterate. When all precipitation evaporates (virga), no
+energy reaches the surface.
 =#
 using Test
 using Dates
@@ -30,20 +31,21 @@ tm_pedmfx(params) = (;
     ),
 )
 
-const EVAP_COEFFICIENT = Dict(
+evap_coefficient(k_E) = Dict(
     "precipitation_evaporation_coefficient" =>
-        Dict("value" => 5.44e-4, "type" => "float"),
+        Dict("value" => k_E, "type" => "float"),
 )
 
 """
 Build a 0M column (optionally with PrognosticEDMFX) with a cloudy layer at
 3-6 km (q_tot = 1.5 q_sat) over dry air (q_tot = 0.4 q_sat), and set all
-precomputed quantities. The TOML always sets a positive evaporation coefficient;
-`evaporation` turns the `precipitation_evaporation_0m` option on.
+precomputed quantities. The TOML always sets the positive evaporation
+coefficient `k_E`; `evaporation` turns the `precipitation_evaporation_0m`
+option on.
 """
-function build(edmf::Bool; evaporation = false)
+function build(edmf::Bool; evaporation = false, k_E = 5.44e-4)
     params = CA.ClimaAtmosParameters(
-        CP.create_toml_dict(FT; override_file = EVAP_COEFFICIENT);
+        CP.create_toml_dict(FT; override_file = evap_coefficient(k_E));
         precipitation_evaporation_0m = evaporation,
     )
     model = CA.AtmosModel(
@@ -168,6 +170,28 @@ getd(name, Y, p) = Base.materialize(
                 @test scalar(colint(Y2, Yₜ2.c.ρq_tot)) ≈ rain2 + snow2 atol = tol
                 @test scalar(colint(Y2, Yₜ2.c.ρ)) ≈ rain2 + snow2 atol = tol
                 @test scalar(colint(Y2, Yₜ2.c.ρe_tot)) ≈ energy2 atol = etol
+            end
+
+            @testset "virga: no energy reaches the surface without water" begin
+                # A large coefficient evaporates all precipitation in the dry
+                # layer below the cloud.
+                (Y3, p3) = build(edmf; evaporation = true, k_E = 10.0)
+                Yₜ3 = mp_tendency(Y3, p3)
+                (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p3.precomputed
+                prod3 = -scalar(colint(Y3, ᶜρ_dq_tot_dt))
+                eprod3 = scalar(colint(Y3, @. abs(ᶜρ_de_tot_dt)))
+                @test prod3 > 0
+                @test scalar(getd("prevap", Y3, p3)) ≈ prod3 rtol = 1e-10
+                (rain3, snow3, energy3) = sfc(p3)
+                @test rain3 <= 0 && snow3 <= 0
+                @test rain3 ≈ 0 atol = 1e-10 * prod3
+                @test snow3 ≈ 0 atol = 1e-10 * prod3
+                @test energy3 ≈ 0 atol = 1e-10 * eprod3
+                # Column budgets still close with the surface fluxes.
+                tol, etol = 1e-10 * prod3, 1e-10 * eprod3
+                @test scalar(colint(Y3, Yₜ3.c.ρq_tot)) ≈ rain3 + snow3 atol = tol
+                @test scalar(colint(Y3, Yₜ3.c.ρ)) ≈ rain3 + snow3 atol = tol
+                @test scalar(colint(Y3, Yₜ3.c.ρe_tot)) ≈ energy3 atol = etol
             end
         end
     end

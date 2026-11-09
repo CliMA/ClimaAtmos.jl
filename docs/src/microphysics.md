@@ -27,7 +27,9 @@ the option is only valid with `microphysics_model: "0M"`). When it is on, the
 `precipitation_evaporation_coefficient = 1.36e-4` [1/s], unless they are set in the
 parameter TOML; the run errors if the coefficient is not positive); a top-down
 column scan then returns part of the falling flux to vapor, limited by the flux and by
-wet-bulb cooling.
+wet-bulb cooling. The scan also carries the energy the falling precipitation was removed
+from the air with; evaporated water returns the flux-mean specific energy of its phase,
+so precipitation that evaporates entirely leaves no energy flux at the surface.
 With `PrognosticEDMFX`, updraft condensate precipitates on its own timescale,
 `precipitation_timescale_updraft_ratio` times `precipitation_timescale`
 (the default ratio is 1).

@@ -269,9 +269,12 @@ add_diagnostic_variable!(short_name = "prup", units = "kg m^-2 s^-1",
     long_name = "Updraft Precipitation",
     comments = """
     Column integral of the 0-moment precipitation sink of all updrafts,
-    sum over j of ρaʲ dq_totʲ/dt (the convective part of the precipitation).
-    Same sign convention as `pr` (upward-positive, so negative when it
-    precipitates); `pr - prup` is the environment (stratiform) part.
+    sum over j of ρaʲ dq_totʲ/dt: the gross updraft (convective) production,
+    before below-cloud evaporation. Same sign convention as `pr`
+    (upward-positive, so negative when it precipitates). `pr` is net of
+    below-cloud evaporation, so the gross environment (stratiform) production
+    is `pr - prevap - prup` with `precipitation_evaporation_0m` on and
+    `pr - prup` with it off.
     """,
     compute = compute_prup,
 )

@@ -1320,14 +1320,18 @@ evaporation is off (the `evaporation` parameters of
 
 Must run after `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt` are set. The column is scanned
 top-down (`precipitation_evaporation_step`): the rain and snow fluxes gain the
-0M sink of each cell, partitioned by the grid-mean `T` at the freezing
-temperature as in `set_precipitation_surface_fluxes!`, and lose what
-evaporates. The layer depth is the one `Operators.column_integral_definite!`
-uses, so the flux at the surface is the column integral of sink minus
-evaporation. Also writes the column integrals of the rain and snow evaporation,
+0M sink `-ᶜρ_dq_tot_dt` of each cell, partitioned by the grid-mean `T` at the
+freezing temperature as in `set_precipitation_surface_fluxes!`, and lose what
+evaporates. Their energy fluxes gain the energy `-ᶜρ_de_tot_dt` removed from
+the air with that sink and lose what returns with the evaporated water, which
+carries the flux-mean specific energy of its phase. The layer depth is the one
+`Operators.column_integral_definite!` uses, so the water and energy fluxes at
+the surface are the column integrals of sink minus evaporation, and a phase
+that evaporates entirely reaches the surface with neither. Also writes the
+column integrals of the rain and snow evaporation,
 `p.precomputed.col_integrated_precip_evap_rai` and `_sno` [kg m⁻² s⁻¹].
 
-Overwrites `p.scratch.ᶜtemp_scalar` to `ᶜtemp_scalar_6`.
+Overwrites `p.scratch.ᶜtemp_scalar` to `ᶜtemp_scalar_5`.
 """
 function set_precipitation_evaporation_cache!(
     Y, p, ᶜρ_env, ᶜρa_env, ᶜT_env, ᶜq_vap,
@@ -1336,7 +1340,6 @@ function set_precipitation_evaporation_cache!(
     isnothing(evaporation) && return nothing
 
     (; dt) = p
-    (; ᶜΦ) = p.core
     (; ᶜT, ᶜp, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ᶜprecip_evap) = p.precomputed
     FT = eltype(p.params)
     thp = CAP.thermodynamics_params(p.params)
@@ -1352,26 +1355,25 @@ function set_precipitation_evaporation_cache!(
     ᶜp_over_ps = p.scratch.ᶜtemp_scalar_2
     ᶜp_sfc = Fields.level(ᶜp, 1)
     @. ᶜp_over_ps = ᶜp / ᶜp_sfc
-    ᶜλ_src = p.scratch.ᶜtemp_scalar_3
-    @. ᶜλ_src = precipitation_source_liquid_fraction(
-        thp, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ᶜT, ᶜΦ,
-    )
     # Materialize the (possibly lazy) air properties with parallel broadcasts,
     # so the serial column scan reads plain fields.
-    ᶜq_vap_scan = p.scratch.ᶜtemp_scalar_4
-    ᶜρ_scan = p.scratch.ᶜtemp_scalar_5
-    ᶜρa_scan = p.scratch.ᶜtemp_scalar_6
+    ᶜq_vap_scan = p.scratch.ᶜtemp_scalar_3
+    ᶜρ_scan = p.scratch.ᶜtemp_scalar_4
+    ᶜρa_scan = p.scratch.ᶜtemp_scalar_5
     @. ᶜq_vap_scan = ᶜq_vap
     @. ᶜρ_scan = ᶜρ_env
     @. ᶜρa_scan = ᶜρa_env
-    # 0M precipitation produced in each cell, by phase.
+    # 0M precipitation produced in each cell and the energy removed from the
+    # air with it, by phase.
     ᶜS_r = @. lazy(ifelse(ᶜT >= T_freeze, -(ᶜρ_dq_tot_dt), FT(0)))
     ᶜS_s = @. lazy(ifelse(ᶜT < T_freeze, -(ᶜρ_dq_tot_dt), FT(0)))
+    ᶜSe_r = @. lazy(ifelse(ᶜT >= T_freeze, -(ᶜρ_de_tot_dt), FT(0)))
+    ᶜSe_s = @. lazy(ifelse(ᶜT < T_freeze, -(ᶜρ_de_tot_dt), FT(0)))
 
     input = @. lazy(
         tuple(
-            ᶜS_r, ᶜS_s, ᶜλ_src, ᶜΔz, ᶜρ_scan, ᶜρa_scan, ᶜT_env, ᶜp_over_ps,
-            ᶜq_vap_scan, ᶜΦ,
+            ᶜS_r, ᶜS_s, ᶜSe_r, ᶜSe_s, ᶜΔz, ᶜρ_scan, ᶜρa_scan, ᶜT_env,
+            ᶜp_over_ps, ᶜq_vap_scan,
         ),
     )
     Operators.column_accumulate!(
@@ -1858,11 +1860,19 @@ Dispatch on `microphysics_model`:
     evaporation `ᶜprecip_evap`, partitioned into rain and snow by the freezing
     temperature; the energy tendency is the column integral of
     `ᶜρ_de_tot_dt` plus the evaporation energy `ᶜprecip_evap.ρe_evap_rai` and
-    `ᶜprecip_evap.ρe_evap_sno`. Per column, the evaporation of rain
-    (snow) is rescaled by `precip_evap_scale_rai` (`_sno`), the factor that
-    limits it to the rain (snow) produced in the column, so the surface fluxes
-    are never upward (non-positive); the microphysics tendency applies the same
-    factors.
+    `ᶜprecip_evap.ρe_evap_sno`. The evaporated water returns the energy it was
+    removed from the air with, so the energy tendency is that of the water
+    reaching the surface and is zero (to roundoff) when all precipitation
+    evaporates. Per column, the evaporation of rain (snow), its water and
+    energy alike, is rescaled by `precip_evap_scale_rai` (`_sno`), the factor
+    that limits it to the rain (snow) produced in the column, so the surface
+    fluxes are never upward (non-positive); the microphysics tendency applies
+    the same factors. The factors fall below 1 mainly when the production is
+    refreshed from a Newton iterate while the evaporation stays frozen; the
+    energy tendency without surface water is then not exactly zero but the
+    refreshed production times the difference between its mean specific
+    energy and that of the evaporated water (small when the production
+    changes little within the Newton iterations).
   - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: when all
     implicit stages of the current step have been accumulated
     (`precip_stage_idx[] == n_imp_stages` and `!reproducible_restart`;

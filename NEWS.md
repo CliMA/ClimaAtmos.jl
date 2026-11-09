@@ -6,11 +6,13 @@ main
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
   sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`),
   turned on with the new config option `precipitation_evaporation_0m: "Kessler"`
-  (default `~`, off; valid only with `microphysics_model: "0M"`). With the
-  option on, the `precipitation_evaporation_*` parameters are read (ClimaParams
-  defaults, e.g. `precipitation_evaporation_coefficient = 1.36e-4`, unless set
-  in the parameter TOML; a coefficient that is not positive is an error); with
-  it off none of them are read. With `PrognosticEDMFX`, a separate updraft
+  (default `~`, off; valid only with `microphysics_model: "0M"`). Evaporated
+  precipitation returns the energy it was removed from the air with, so no
+  energy reaches the surface without water. With the option on, the
+  `precipitation_evaporation_*` parameters are read (ClimaParams defaults,
+  e.g. `precipitation_evaporation_coefficient = 1.36e-4`, unless set in the
+  parameter TOML; a coefficient that is not positive is an error); with it off
+  none of them are read. With `PrognosticEDMFX`, a separate updraft
   precipitation timescale
   `precipitation_timescale_updraft_ratio * precipitation_timescale` (ratio 1 by
   default, so behavior is unchanged). Requires ClimaParams 1.3.9 and the next
