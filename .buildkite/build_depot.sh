@@ -54,6 +54,10 @@ fi
 echo "--- Instantiate + precompile"
 julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.precompile(strict=true)'
 
+# Leave out the registry so each consumer build downloads a current one into
+# its own writable depot.
+rm -rf "$STAGING/registries"
+
 echo "--- Lock and publish (atomic symlink swap)"
 # Make everything readable before removing write access. Julia copies the
 # permission bits of a package's source file onto its compiled cache file, so

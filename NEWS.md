@@ -3,6 +3,56 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
+  (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
+  albedos `α_s` in `RegressionFunctionAlbedo`, as `α_s + (1 - α_s) R_sub`.
+- ![][badge-🔥behavioralΔ] The 1M rain and snow are placed on the precipitation
+  shaft of the SGS distribution by default (`sgs_precip_incloud_fraction = 1`,
+  `sgs_precip_fraction_floor = 0.1`; previously `0`, uniform, and `0.5`). Spread
+  uniformly over the cell, rain evaporates 2.5–4.5× the rate of 3.75 km MPAS
+  truth within ne30 cells; the shaft brings it to about 0.9–1.4×.
+- ![][badge-✨feature/enhancement] Opt-in `sgs_variance_fidelity_model: updraft`
+  (PrognosticEDMFX with non-equilibrium microphysics; default `equilibrium`
+  unchanged): sets the variance fidelity from the in-cloud condensate of the
+  updrafts, `α σ_S = c_u q_c,up`, bounded to `[α_min, 1/(1 − w_eq)]` and blended
+  in by the updrafts' cloud cover and lower area-limiter factor
+  (`updraft_variance_fidelity`). New provisional parameters:
+  `sgs_fidelity_updraft_coeff` and `sgs_fidelity_updraft_min`.
+
+0.42.18
+-------
+- ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
+  production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
+  detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the
+  implicit stage next to `edmfx_sgs_diffusive_flux_tendency!`, so production
+  and dissipation see the same `Y.c.ρtke` within the Newton solve. Previously
+  production ran in `remaining_tendency!` while dissipation ran implicitly,
+  which let `ρtke` inflate across IMEX sub-stages before the one implicit
+  damping fired. The Jacobian is unchanged (`∂Yₜ/∂ρtke` still carries only the
+  dissipation sink); `ᶠK_u`, `ᶠK_h`, `ᶠbuoygrad` are still refreshed only in
+  `set_explicit_precomputed_quantities!` and stay frozen during Newton, so
+  production is effectively `K_u`-frozen within a stage. For `diff_mode ==
+  Explicit()` the sources stay in `remaining_tendency!` alongside the explicit
+  diffusive-flux tendency and behavior is unchanged.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Prescribed temperature
+  tendencies are converted to energy tendencies with the isobaric heat capacity
+  `cp_m`: large-scale advection and radiative cooling (BOMEX, RICO), the
+  TRMM-LBA prescribed heating rate, and the file-driven forcings and
+  temperature nudging (`apply_Tq_forcing!`, including ISDAC). The tendencies
+  are rates at constant pressure; with the isochoric `cv_m`, a single-column
+  run realized about `cv_m / cp_m ≈ 0.72` of the prescribed
+  potential-temperature tendency. The realized forcing increases by about 40%,
+  which changes the `prognostic_edmfx_rico_column` and
+  `prognostic_edmfx_trmm_column` references, and single-column calibrations
+  against these cases need refitting. The Held–Suarez thermal relaxation is
+  converted with `cp_d`, so potential temperature relaxes at the published
+  rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
+  changes the `held_suarez_equil` reference.
+- AtmosphericProfilesLibrary.jl is now the `ClimaAtmos.AtmosphericProfilesLibrary`
+  submodule, copied from AtmosphericProfilesLibrary.jl v0.1.10, and ClimaAtmos no
+  longer depends on the standalone package. Replace
+  `import AtmosphericProfilesLibrary as APL` with
+  `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
 - ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
   `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
   falls at a state-dependent speed by default; set
@@ -100,6 +150,21 @@ main
   temperature and humidity in previously generated `ReanalysisTimeVarying` and
   `ReanalysisMonthlyAveragedDiurnal` forcing files had the wrong sign; regenerate
   them.
+- ![][badge-✨feature/enhancement] A column configuration can run several
+  independent columns in one simulation: set `n_columns` with `config:
+  "column"`, or use `MultiColumnGrid(FT; n_columns)`. NetCDF output gains a
+  `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and
+  `ExternalDrivenTVForcing` take a vector of column data sources, one per column
+  of a multi-column grid: each column is initialized and forced from its own
+  source. In the configuration, one value per column can be given for
+  `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude`
+  (ERA5).
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file
+  formats returns a ClimaUtilities boundary method (`TimeVaryingInputs.Flat()`,
+  `Linear()`, or `Throw()`) for above and below the file's levels, instead of a
+  tuple of Interpolations.jl boundary conditions.
 
 0.42.17
 -------

@@ -47,6 +47,7 @@ import ClimaAnalysis:
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
+import OrderedCollections: OrderedDict
 
 using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
@@ -142,6 +143,20 @@ function parse_var_attributes(var)
     return join(info, ", ")
 end
 
+# Multi-column output has a `column` dimension; plots are made one column at a time.
+ncolumns(var::ClimaAnalysis.OutputVar) =
+    haskey(var.dims, "column") ? length(var.dims["column"]) : 1
+ncolumns(vars::Union{Tuple, AbstractVector}) = maximum(ncolumns, vars; init = 1)
+slice_column(var::ClimaAnalysis.OutputVar, i) =
+    haskey(var.dims, "column") ?
+    slice(var; column = i, by = ClimaAnalysis.Index()) : var
+slice_column(vars::Union{Tuple, AbstractVector}, i) =
+    map(var -> slice_column(var, i), vars)
+# Files from an earlier per-column stage are vectors indexed by column; a shared
+# file is united (and then deleted) with the first column only.
+column_files(files, i) =
+    String[f isa AbstractVector ? f[i] : f for f in files if f isa AbstractVector || i == 1]
+
 """
     make_plots_generic(
         output_path::Union{<:AbstractString, Vector{<:AbstractString}},
@@ -191,6 +206,18 @@ function make_plots_generic(
     save_jpeg_copy = false,
     kwargs...,
 )
+    if ncolumns(vars) > 1
+        return map(1:ncolumns(vars)) do i
+            make_plots_generic(
+                output_path, slice_column(vars, i), args...;
+                plot_fn, output_name = "$(output_name)_column_$i",
+                summary_files = column_files(summary_files, i),
+                trailing_files = column_files(trailing_files, i),
+                MAX_NUM_COLS, MAX_NUM_ROWS, fig_size, save_jpeg_copy, kwargs...,
+            )
+        end
+    end
+
     # When output_path is a Vector with multiple elements, this means that this function is
     # being used to produce a comparison plot. In that case, we modify the output name, and
     # the number of columns (to match how many simulations we are comparing).
@@ -363,7 +390,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     if !isempty(times)
         output_spectrum =
             zeros((length(times), num_output, length(var.dims[dim3])))
-        dims = Dict(time => times)
+        dims = OrderedDict(time => times)
         dim_attributes = Dict(time => var.dim_attributes[time])
         for index in 1:length(times)
             spectrum_data, _wave_numbers, _spherical, mesh_info =
@@ -375,7 +402,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
                 ]
         end
     else
-        dims = Dict{String, Vector{FT}}()
+        dims = OrderedDict{String, Vector{FT}}()
         dim_attributes = Dict{String, Dict{String, String}}()
         output_spectrum = zeros((num_output, length(var.dims[dim3])))
         spectrum_data, _wave_numbers, _spherical, mesh_info =
@@ -1329,6 +1356,7 @@ EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
+    Val{:prognostic_edmfx_tv_era5driven_multicolumn},
 }
 
 EDMFColumnPlotsWithPrecip = Union{

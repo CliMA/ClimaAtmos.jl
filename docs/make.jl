@@ -121,6 +121,7 @@ makedocs(;
             "API" => "api.md",
             "Configuration Options" => "configuration_options.md",
             "Setups (Initial Conditions & Cases)" => "setups.md",
+            "Atmospheric Profiles Library" => "atmospheric_profiles_library.md",
             "Column Datasets" => "column_datasets_reference.md",
             "Grids" => "grids.md",
             "Surface Conditions" => "surface_conditions.md",
