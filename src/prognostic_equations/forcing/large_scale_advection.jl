@@ -66,12 +66,16 @@ as `prof(thermo_params, ᶜp, t, z)`, supply the prescribed advective tendencies
 `T` [K/s] and `q_tot` [1/s]. They are converted to an energy tendency with
 
 ```math
-ρ \\left( c_{v,m} \\, \\partial_t T + e_{int,vap}(T) \\, \\partial_t q_{tot} \\right)
+ρ \\left( c_{p,m} \\, \\partial_t T + e_{int,vap}(T) \\, \\partial_t q_{tot} \\right)
 ```
 
-where `c_{v,m}` is the isochoric specific heat of the moist mixture and
-`e_{int,vap}` the specific internal energy of water vapor. No potential-energy
-term appears, because this represents horizontal advection at constant height.
+where `c_{p,m}` is the isobaric specific heat of the moist mixture and
+`e_{int,vap}` the specific internal energy of water vapor. The setups prescribe
+potential-temperature tendencies at constant pressure, supplied as
+`∂_t T = Π ∂_t θ` with `Π` the Exner function. Heat `Q` per unit mass changes
+`θ` by `Q / (c_{p,m} Π)`, so `c_{p,m} ∂_t T` realizes the prescribed rate. No
+potential-energy term appears, because this represents horizontal advection at
+constant height.
 
 # Arguments
 
@@ -112,7 +116,7 @@ function large_scale_advection_tendency_ρe_tot(
     # it's just horizontal advection of specific humidity
     return @. lazy(
         ᶜρ * (
-            TD.cv_m(thermo_params, q_tot, q_liq, q_ice) * ᶜdTdt_hadv +
+            TD.cp_m(thermo_params, q_tot, q_liq, q_ice) * ᶜdTdt_hadv +
             TD.internal_energy_vapor(thermo_params, ᶜT) * ᶜdqtdt_hadv
         ),
     )

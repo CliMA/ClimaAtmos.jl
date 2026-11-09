@@ -1,5 +1,3 @@
-import ClimaCore.Fields: @fused_direct
-
 struct NoOpCOSPSubcolumnConsumer end
 (::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
 
@@ -188,10 +186,8 @@ function prepare_cosp_subcolumns!(Y, p)
     set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
 
     FT = eltype(ᶜcloud_fraction)
-    @fused_direct begin
-        @. ᶜsampled_cloud_fraction = zero(FT)
-        @. ᶜsampled_precip_fraction = zero(FT)
-    end
+    @. ᶜsampled_cloud_fraction = zero(FT)
+    @. ᶜsampled_precip_fraction = zero(FT)
     for isubcolumn in 1:nsubcolumns
         COSP.COSPSubcolumns.scops_subcolumn!(
             ᶜsubcolumn_cloud,
@@ -268,12 +264,10 @@ function foreach_cosp_subcolumn(
     ᶜq_rai = p.scratch.ᶜtemp_scalar_3
     ᶜq_sno = p.scratch.ᶜtemp_scalar_4
 
-    @fused_direct begin
-        @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
-        @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
-        @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
-        @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
-    end
+    @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
+    @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
+    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
 
     grid_mean_hydrometeors =
         (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)

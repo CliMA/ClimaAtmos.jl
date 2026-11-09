@@ -1,0 +1,7 @@
+[deps]
+ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
+Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+ClimaAtmos = {path = "../.."}

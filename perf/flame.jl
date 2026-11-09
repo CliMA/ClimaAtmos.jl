@@ -4,6 +4,10 @@ ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+# Loaded before the first step, since loading a package clears Julia's cached method
+# lookups, and the next step allocates while it redoes them.
+import Profile, ProfileCanvas
+using Test
 
 include("common.jl")
 
@@ -20,7 +24,6 @@ import ClimaTimeSteppers as CTS
 CTS.step!(integrator) # compile first
 CTS.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
 CA.call_all_callbacks!(integrator) # compile callbacks
-import Profile, ProfileCanvas
 output_dir = job_id
 mkpath(output_dir)
 
@@ -75,7 +78,6 @@ ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
 # We're grouping allocation tests here for convenience.
 
 @info "testing allocations"
-using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified

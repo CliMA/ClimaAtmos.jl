@@ -169,11 +169,6 @@ Dispatches on `p.atmos.insolation`:
     the column coordinates, falling back to the equator on a flat space.
   - `ExternalTVInsolation`: values read from the external forcing, with the TOA flux
     reconstructed as `rsdt / coszen`.
-
-!!! note
-
-    RRTMGP requires a strictly positive cosine zenith angle, so the modes that can reach
-    zero clamp it to `eps(FT)` rather than letting it vanish.
 """
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
@@ -200,7 +195,7 @@ end
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     FT = Spaces.undertype(axes(Y.c))
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    if issphere(axes(Y.c))
         latitude = Fields.field2array(bottom_coords.lat)
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -219,7 +214,7 @@ end
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_solver) = p.radiation
-    RRTMGP.cos_zenith(rrtmgp_solver) .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    RRTMGP.cos_zenith(rrtmgp_solver) .= FT(0) # polar night
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(0)
 end
 
@@ -244,7 +239,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     )
 
     # Use Insolation API: insolate_tuple = insolation(datetime, lat, lon, params)
-    # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
+    # Insolation.jl clamps μ to [0, 1], so night-side columns get μ = 0.
     if !isnothing(tvi.latitude) && !isnothing(tvi.longitude)
         # Explicit lat/lon override (e.g. single-column setups whose coordinate
         # system doesn't carry lat/lon).
@@ -256,7 +251,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
                 insolation_params,
             ),
         )
-    elseif eltype(bottom_coords) <: Geometry.LatLongZPoint
+    elseif issphere(axes(Y.c))
         @. insolation_tuple = Insolation.insolation(
             current_datetime,
             bottom_coords.lat,
@@ -272,7 +267,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
             insolation_params,
         ))
     end
-    @. cos_zenith = max(insolation_tuple.μ, eps(FT))
+    @. cos_zenith = insolation_tuple.μ
     @. toa_flux = insolation_tuple.S
 end
 

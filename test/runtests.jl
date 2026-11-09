@@ -36,6 +36,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+    @safetestset "AtmosphericProfilesLibrary" begin @time include("atmospheric_profiles_library.jl") end
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
@@ -107,6 +108,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "Updraft variance fidelity tests" begin @time include("parameterized_tendencies/microphysics/updraft_variance_fidelity.jl") end
     @safetestset "Cloud inhomogeneity tests" begin @time include("parameterized_tendencies/microphysics/cloud_inhomogeneity.jl") end
     @safetestset "Displacement length wiring" begin @time include("parameterized_tendencies/microphysics/displacement_length_wiring.jl") end
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end

@@ -305,14 +305,14 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
     that is confined to the precipitation shaft of the SGS PDF
     (`sgs_precip_shaft_threshold`) instead of being
-    spread over all nodes, in `[0, 1]`; `0` disables the placement [-].
+    spread over all nodes, in `[0, 1]`; default `1`; `0` is the uniform placement [-].
   - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
     maximum-random overlap recursion that diagnoses the precipitation fraction
     `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`
     is maximum overlap, `0` re-seeds the shaft from each level's own cover [-].
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
-    placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
-    half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+    placement uses, in `(0, 1]`; the default `0.1` keeps the shaft at least
+    a tenth of the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -326,9 +326,16 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     with 1M, it and the cloud-species flux blend
     (`add_cloud_species_diffusionᵥ!`) use them where
     `sgs_cloud_species_constant_timescales > 0` [s].
-  - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
+  - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ [0, 1]` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
+  - `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min`: Coefficient `c_u`
+    and lower bound `α_min` of the updraft rule of the variance fidelity
+    (`sgs_variance_fidelity_model: updraft`),
+    `α = clamp(c_u q_c,up / σ_S, α_min, 1 / (1 − w_eq))`, blended in by the
+    cloud cover and area-limiter factor of the updrafts
+    (`updraft_variance_fidelity`). `α_min` is a provisional floor that keeps
+    the environment condensate from spreading uniformly over the cell [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
     width (`_sgs_augmented_sigma`) and on the updraft cover width
     (`_updraft_cloud_fraction`) [kg/kg].
@@ -370,6 +377,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     condensation_evaporation_timescale::FT
     sublimation_deposition_timescale::FT
     sgs_fidelity_equilibrium_weight::FT
+    sgs_fidelity_updraft_coeff::FT
+    sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
     sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
@@ -630,6 +639,8 @@ accessors generated at the bottom of this module, e.g.
   - `idealized_ocean_albedo`: Ocean surface albedo for idealized simulations [-].
   - `water_refractive_index`: Refractive index of water relative to air, for the
     broadband ocean-albedo model [-].
+  - `ocean_subsurface_reflectance`: Subsurface volume reflectance of the ocean,
+    added to the broadband ocean-albedo model [-].
   - `constant_horizontal_diffusion_D`: Constant horizontal diffusivity [m²/s].
   - `T_min_sgs`: Lower temperature bound of the SGS quadrature [K].
   - `q_max_sgs`: Upper specific-humidity bound of the SGS quadrature [kg/kg].
@@ -714,6 +725,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
+    ocean_subsurface_reflectance::FT
     # Constant horizontal diffusion
     constant_horizontal_diffusion_D::FT
     # SGS quadrature bounds

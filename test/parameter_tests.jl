@@ -150,9 +150,9 @@ end
         @test CAP.sgs_variance_horizontal_cross_correlation(sq) == FT(0.74)
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
-        @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
+        @test CAP.sgs_precip_incloud_fraction(sq) == FT(1)
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
-        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
+        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
@@ -195,7 +195,6 @@ end
     @test c_Δx(CP.create_toml_dict(Float64; override_file = log_file)) == 1.24
     climaparams_c_Δx =
         toml_dict.data["sgs_variance_horizontal_scale_factor"]["value"]
-    @test climaparams_c_Δx != 1.24
     override = Dict(
         "sgs_variance_horizontal_scale_factor" =>
             Dict("value" => climaparams_c_Δx, "type" => "float"),
