@@ -85,7 +85,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
             set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
             set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+            ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
             @inline function ᶜχ⁰(name) # the environment value of a specific tracer
                 ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(name))
                 return @. lazy(

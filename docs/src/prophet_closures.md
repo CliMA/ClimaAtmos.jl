@@ -719,6 +719,18 @@ with ``\gamma = \partial q_{\mathrm{sat}}/\partial T``, so neither the nodes nor
 the cloud fraction need a quadrature pass.
 The zero-moment microphysics is integrated with the Gauss–Hermite tensor rule.
 
+The slope ``\alpha`` of the condensate ramp ``\max(0, \lambda + \alpha S')`` is
+the variance fidelity ``\alpha_{\mathrm{Da}} \alpha_{\mathrm{eq}}``
+(`sgs_variance_fidelity`). With `sgs_variance_fidelity_model: updraft`
+(PrognosticEDMFX with non-equilibrium microphysics), the ramp width is instead
+set by the in-cloud condensate of the updrafts,
+``\alpha \sigma_S = c_u q_{c,\mathrm{up}}``, bounded to
+``[\alpha_{\min}, 1/(1 - w_{\mathrm{eq}})]`` and blended in by the updrafts'
+cloud cover and EDMF lower area-limiter factor (`updraft_variance_fidelity`): in
+cumulus, environmental cloud is mostly detrained, and its spread follows the
+updraft condensate rather than the variance closure. ``c_u = 0.6`` is
+provisional, from FastEddy BOMEX and SGP environment liquid.
+
 The rule follows from the shape of the integrand: the
 node evaluator is piecewise linear in ``S'`` between the three edges, so the
 edges set where the nodes go. It was developed offline
@@ -759,8 +771,8 @@ non-equilibrium microphysics.
     with the microphysics coupling in
     [Microphysics](microphysics.md); the configuration keys are `cloud_model`,
     `use_sgs_quadrature`, `sgs_distribution`, `quadrature_order`,
-    `tq_correlation_model` (default `diagnosed`), and `sgs_variance_curvature`
-    (default `false`).
+    `tq_correlation_model` (default `diagnosed`), `sgs_variance_curvature`
+    (default `false`), and `sgs_variance_fidelity_model` (default `equilibrium`).
 
 ## Boundary conditions
 

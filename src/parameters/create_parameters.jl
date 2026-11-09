@@ -278,6 +278,7 @@ atmos_name_map = (;
     :held_suarez_minimum_temperature => :T_min_hs,
     :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
+    :ocean_subsurface_reflectance => :ocean_subsurface_reflectance,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
@@ -704,15 +705,24 @@ function SGSQuadratureParameters(
         sgs_displacement_truncation = FT(3),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
+        # Updraft rule for the variance fidelity (`sgs_variance_fidelity_model:
+        # updraft`): α σ_S = c_u q_c,up, bounded below by α_min and above by the
+        # equilibrium bound 1/(1 − w_eq). c_u is fitted to FastEddy BOMEX and
+        # SGP environment liquid, against the model's own BOMEX updraft (0.75
+        # against the LES updraft). α_min is provisional.
+        sgs_fidelity_updraft_coeff = FT(0.6),
+        sgs_fidelity_updraft_min = FT(0.05),
         # Precipitation-fraction placement of rain and snow over the quadrature:
-        # 0 = uniform (off).
-        sgs_precip_incloud_fraction = FT(0),
+        # all of the rain and snow on the precipitation shaft (0 = uniform). A
+        # uniform placement evaporates 2.5-4.5x the rain of 3.75 km MPAS truth
+        # within ne30 cells; the shaft with a floor of 0.1 matches it to ~0.9-1.4.
+        sgs_precip_incloud_fraction = FT(1),
         # Overlap precipitation fraction (`set_precip_fraction!`): per-level
         # decay of the max-random overlap recursion; 1 = maximum overlap.
         sgs_precip_overlap_decay = FT(1),
         # Floor on the overlap precipitation fraction seen by the placement:
-        # the shaft is never narrower than half the cell.
-        sgs_precip_fraction_floor = FT(0.5),
+        # the shaft is never narrower than a tenth of the cell.
+        sgs_precip_fraction_floor = FT(0.1),
         # Unresolved in-cloud condensate inhomogeneity seen by radiation
         # (`cloud_condensate_relative_variance`): relative variance 0.25, a
         # relative standard deviation of 0.5, within the 0.4–0.8 observed for
@@ -760,6 +770,16 @@ function SGSQuadratureParameters(
         ArgumentError(
             "sgs_displacement_truncation must be at least 1; got $c",
         ),
+    )
+    for (name, value) in (
+        (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
+        (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
+    )
+        value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
+    end
+    w_eq = parameters.sgs_fidelity_equilibrium_weight
+    0 <= w_eq <= 1 || throw(
+        ArgumentError("sgs_fidelity_equilibrium_weight must lie in [0, 1]; got $w_eq"),
     )
     rv_floor = parameters.cloud_condensate_relative_variance_floor
     rv_floor >= 0 || throw(

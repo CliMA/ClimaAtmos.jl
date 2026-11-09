@@ -1,4 +1,4 @@
-457
+463
 
 # **README**
 #
@@ -32,6 +32,34 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+463
+- `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
+  results at the level of Float32 rounding.
+
+462
+- 1M rain and snow are placed on the precipitation shaft by default
+  (`sgs_precip_incloud_fraction = 1`, `sgs_precip_fraction_floor = 0.1`).
+
+461
+- Update dependencies for v0.42.18
+
+460
+- CI moves from Julia 1.11 to 1.13.3, which changes results.
+
+459
+- When `diff_mode == Implicit()`, `edmfx_tke_tendency!` (shear, buoyancy,
+  pressure-drag, detrainment shear-mixing) runs in the implicit stage next
+  to `edmfx_sgs_diffusive_flux_tendency!`, so production and dissipation
+  share the Newton iterate. The Jacobian is unchanged.
+- Remove clipping of zenith angle
+
+458
+- Prescribed temperature tendencies (large-scale advection and radiative
+  cooling, the TRMM-LBA heating rate, file-driven forcings and nudging) and
+  the Held–Suarez thermal relaxation are converted to energy with the isobaric
+  heat capacity (`cp_m`, `cp_d`), which changes `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_trmm_column`, and `held_suarez_equil`.
+
 457
 - The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
   so rain now falls at the state-dependent Chen et al. (2022) speed by
