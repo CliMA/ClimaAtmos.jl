@@ -1,8 +1,6 @@
 import ClimaCore: InputOutput, Fields
 import ClimaComms
 import OrderedCollections
-# Bare name for `parse_file`, which evaluates printed `OrderedDict`s in `Main`.
-import OrderedCollections: OrderedDict
 import PrettyTables
 import Test: @testset, @test, @test_broken
 

@@ -42,6 +42,8 @@ Subtypes:
 """
 abstract type SparseJacobian <: JacobianAlgorithm end
 
+# Mutable (with const fields) for the same compile-time reason as `AtmosCache`.
+
 """
     Jacobian(alg, Y, atmos; [verbose])
 
@@ -51,9 +53,9 @@ and invert the Jacobian. ClimaTimeSteppers.jl interacts with it through
 linear solve). The optional `verbose` flag specifies whether debugging
 information should be printed during initialization.
 """
-struct Jacobian{A <: JacobianAlgorithm, C}
-    alg::A
-    cache::C
+mutable struct Jacobian{A <: JacobianAlgorithm, C}
+    const alg::A
+    const cache::C
 end
 function Jacobian(alg, Y, atmos; verbose = false)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
