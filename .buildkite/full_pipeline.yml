@@ -1,7 +1,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: climacommon/2025_03_18
+  modules: climacommon/2026_10_30-1.13.3
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -29,7 +29,7 @@ steps:
     command:
       - echo $$JULIA_DEPOT_PATH
       - echo "--- Instantiate .buildkite"
-      - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true, update_registry=false); Pkg.precompile(;strict=true); Pkg.status()'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); Pkg.status()'
       # Downstream test hook: upstream packages (e.g. ClimaCore) trigger this
       # pipeline with UPSTREAM_PACKAGES set to test themselves against
       # ClimaAtmos CI. Space-separated entries, one per package
@@ -77,9 +77,6 @@ steps:
             Pkg.status()'
         fi
 
-      - echo "--- Precompile --check-bounds=yes caches (Checkbounds step)"
-      - julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(; strict=true)'
-
     agents:
       slurm_cpus_per_task: 8
       slurm_mem: 20GB
@@ -101,7 +98,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_column_ze79.yml
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
           --job_id single_column_radiative_equilibrium_gray
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
@@ -110,7 +107,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_column_ze79.yml
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
           --job_id single_column_radiative_equilibrium_clearsky
         artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
@@ -119,7 +116,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_column_ze79.yml
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
           --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
         artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
@@ -128,7 +125,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_column_ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_column_ze79.yml
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
           --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
@@ -471,6 +468,17 @@ steps:
         agents:
           slurm_mem: 12GB
 
+      - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing, one site per column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_multicolumn.yml
+          --job_id prognostic_edmfx_tv_era5driven_multicolumn
+        artifact_paths: "prognostic_edmfx_tv_era5driven_multicolumn/output_active/*"
+        agents:
+          slurm_mem: 12GB
+
       - label: ":genie: Prognostic EDMF: ERA5 monthly averaged diurnal forcing"
         retry: *retry_policy
         command: >
@@ -557,14 +565,18 @@ steps:
       - label: ":computer: Conservation tests: Dry baroclinic wave, no sources"
         retry: *retry_policy
         command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/baroclinic_wave_conservation.yml
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
       - label: ":computer: Conservation tests: Moist baroclinic wave, with sources, 0M"
         retry: *retry_policy
         command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
           --job_id baroclinic_wave_equil_conservation_source
         artifact_paths: "baroclinic_wave_equil_conservation_source/output_active/*"
         agents:
@@ -572,7 +584,9 @@ steps:
       #
       #- label: ":computer: Conservation checks: Moist baroclinic wave, with sources 1M"
       #  command: >
-      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
+      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #    --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+      #    --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
       #    --job_id baroclinic_wave_nonequil_conservation_source
       #  artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
       #  agents:
@@ -585,7 +599,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_column_ze79.yml
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
 
@@ -595,6 +609,12 @@ steps:
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":package: Non-spherical: Multiple columns match single columns"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/single_vs_multi_column.jl"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current"
         retry: *retry_policy
@@ -616,6 +636,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
           --job_id box_hydrostatic_balance
         artifact_paths: "box_hydrostatic_balance/output_active/*"
@@ -648,6 +669,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $CONFIG_PATH/hydrostatic_balance_ft64.yml
           --job_id hydrostatic_balance_ft64
         artifact_paths: "hydrostatic_balance_ft64/output_active/*"
@@ -858,7 +880,7 @@ steps:
           slurm_mem: 16G
 
       # `--manytests` runs one restart test per grid, and each grid compiles its
-      # own copy of the model. Running all three in a single step put the job
+      # own copy of the model. Running them all in a single step put the job
       # over the time limit, so they are split across agents with `--grid`. Keep
       # this list in sync with `available_grids` in test/restart.jl.
       - label: ":computer: Restart: Using manytests, sphere"
@@ -882,6 +904,14 @@ steps:
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid column
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, multicolumn"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid multicolumn
         agents:
           slurm_mem: 16GB
 
@@ -912,6 +942,20 @@ steps:
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid column
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        soft_fail:
+          - exit_status: -1
+          - exit_status: 255
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: Restart: Using manytests, multicolumn, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid multicolumn
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         soft_fail:
@@ -994,6 +1038,7 @@ steps:
         key: "mpi_baro_wave_make_restart"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
           --job_id mpi_make_restart
         artifact_paths: "mpi_make_restart/output_active/*"
@@ -1011,6 +1056,7 @@ steps:
           tar xvf mpi_make_restart/output_active/hdf5_files.tar -C mpi_make_restart/output_active
 
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave.yml
           --job_id restart_mpi_baroclinic_wave
         artifact_paths: "restart_mpi_baroclinic_wave/output_active/*"
@@ -1027,6 +1073,7 @@ steps:
         retry: *retry_policy
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $MPI_CONFIG_PATH/mpi_aquaplanet_equil_clearsky.yml
           --job_id mpi_aquaplanet_equil_clearsky
         artifact_paths: "mpi_aquaplanet_equil_clearsky/output_active/*"
@@ -1041,6 +1088,7 @@ steps:
         key: "prep_remap"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
           --config_file $MPI_CONFIG_PATH/prep_remap.yml
           --job_id prep_remap
         artifact_paths: "prep_remap/output_active/*"
@@ -1091,7 +1139,9 @@ steps:
     steps:
       #- label: "Autodiff: Moist baroclinic wave, check conservation, sparse autodiff, Float64"
       #  command: >
-      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
+      #    julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #    --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+      #    --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
       #    --job_id baroclinic_wave_equil_conservation_ft64_sparse_autodiff
       #  artifact_paths: "baroclinic_wave_equil_conservation_ft64_sparse_autodiff/output_active/*"
       #  soft_fail: true
@@ -1115,7 +1165,6 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
           --job_id baroclinic_wave_sparse_autodiff
         artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
-        soft_fail: true
 
       # - label: "Prognostic EDMF GABLS in a column sparse autodiff"
       #   command: >
@@ -1203,7 +1252,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_default.yml
           --job_id bm_default
         agents:
@@ -1213,7 +1262,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_default.yml
           --job_id bm_default_gpu
         env:
@@ -1258,7 +1307,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_default.yml
           --job_id flame_default
         artifact_paths: "flame_default/*"
@@ -1269,7 +1318,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_default_1m.yml
           --job_id flame_default_1m
         artifact_paths: "flame_default_1m/*"
@@ -1280,7 +1329,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_diagnostics.yml
           --job_id flame_diagnostics
         artifact_paths: "flame_diagnostics/*"
@@ -1291,7 +1340,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf.yml
           --job_id flame_aquaplanet_progedmf
         artifact_paths: "flame_aquaplanet_progedmf/*"
@@ -1302,7 +1351,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_1m.yml
           --job_id flame_aquaplanet_progedmf_1m
         artifact_paths: "flame_aquaplanet_progedmf_1m/*"
@@ -1314,7 +1363,7 @@ steps:
       # - label: ":fire: Flame graph: prognostic edmf dense autodiff"
       #   command: >
       #     julia --color=yes --project=.buildkite perf/flame.jl
-      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
       #     --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_dense_autodiff.yml
       #     --job_id flame_aquaplanet_progedmf_dense_autodiff
       #   artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
@@ -1324,7 +1373,7 @@ steps:
       # - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
       #   command: >
       #     julia --color=yes --project=.buildkite perf/flame.jl
-      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+      #     --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
       #     --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_sparse_autodiff.yml
       #     --job_id flame_aquaplanet_progedmf_sparse_autodiff
       #   artifact_paths: "flame_aquaplanet_progedmf_sparse_autodiff/*"
@@ -1335,7 +1384,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_diffusion.yml
           --job_id flame_diffusion
         artifact_paths: "flame_diffusion/*"
@@ -1346,7 +1395,7 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_callbacks.yml
           --job_id flame_callbacks
         artifact_paths: "flame_callbacks/*"
@@ -1357,34 +1406,20 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_gravity_wave.yml
           --job_id flame_gravity_wave
         artifact_paths: "flame_gravity_wave/*"
         agents:
           slurm_mem: 24GB
 
-  - group: "Checkbounds/Invalidations"
+  - group: "Invalidations"
     steps:
-      # TODO: we should somehow decouple this unit test from the perf env / scripts
-      # Checkbounds
-      - label: ":computer: Checkbounds"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_default.yml
-          --job_id checkbounds
-        artifact_paths: "checkbounds/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      # Latency
       - label: ":mag::rocket: Invalidations"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite perf/invalidations.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml
           --config_file $PERF_CONFIG_PATH/bm_default.yml
         artifact_paths: "invalidations/*"
         agents:

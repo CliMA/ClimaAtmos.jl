@@ -12,7 +12,6 @@ concurrency:
   # so that the workflow badge does not report a cancellation as "failing".
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# Needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
   actions: write
   contents: read
@@ -60,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.11'
+          - '1.13'
         # Ubuntu only. `main` then exercises the required jobs that gate a 
         # pull request, so the workflow badge means "the required checks are 
         # green". 
@@ -88,7 +87,13 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v3
+      # One depot per Julia version, shared by the test groups, which have the
+      # same dependencies.
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml') }}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
@@ -100,6 +105,36 @@ jobs:
         with:
           file: lcov.info
           token: ${{secrets.CODECOV_TOKEN}}
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}
+
+  # Musica supports Julia 1.11 and 1.12, so its test runs in its own
+  # environment on 1.12.
+  musica:
+    name: musica 1.12 - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: musica-julia1.12-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml', 'test/musica/Project.toml') }}
+      - run: >-
+          julia --color=yes --project=test/musica -e
+          'using Pkg; Pkg.instantiate(); include("test/musica/runtests.jl")'
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}
 
   # Single required status check for branch protection / the merge queue. Set
   # THIS ("ci-required") as the required check instead of the individual matrix

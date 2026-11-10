@@ -160,9 +160,10 @@ Compute the horizontal advective tendencies of temperature and specific humidity
 site, using centered differences of the smoothed fields at the four neighboring grid
 points.
 
-Grid spacings are derived from the longitude and latitude increments of `column_ds` and
-the planet radius in `external_tv_params`. The routine warns when the data are coarser
-than 2°.
+Each difference is divided by the signed distance between the two neighbors, derived
+from the coordinates of `column_ds` and the planet radius in `external_tv_params`, so
+the gradients hold for ascending and descending coordinates alike (raw ERA5 latitude
+descends). The routine warns when the data are coarser than 2°.
 
 # Returns
 
@@ -179,44 +180,38 @@ function get_horizontal_tendencies(
     rearth = external_tv_params.planet_radius
     lat_rad = deg2rad(lat)
     coslat = cos(lat_rad)
+    lons = column_ds["longitude"]
+    lats = column_ds["latitude"]
 
-    # compute grid resolution in degrees from file for estimation of dx and dy in meters
-    longitudinal_resolution = abs(
-        column_ds["longitude"][lon_index + 1] -
-        column_ds["longitude"][lon_index],
-    )
-    latitudinal_resolution = abs(
-        column_ds["latitude"][lat_index + 1] - column_ds["latitude"][lat_index],
-    )
+    # compute grid resolution in degrees from file to check the spacing
+    longitudinal_resolution = abs(lons[lon_index + 1] - lons[lon_index])
+    latitudinal_resolution = abs(lats[lat_index + 1] - lats[lat_index])
 
     # check that the resolution is not zero and reasonable resolution (typical atmosphere observations are not coarser than 2°)
     @assert longitudinal_resolution > 0 && latitudinal_resolution > 0 "Horizontal resolution must be greater than zero."
     if longitudinal_resolution > 2 || latitudinal_resolution > 2
         @warn "Observational resolution is longitudinal: $longitudinal_resolution°, latitudinal: $latitudinal_resolution°, which is greater than or equal to 2 degrees."
     end
-    # compute horizontal spacing in meters
-    dx = 2 * π * rearth * coslat / 360 * longitudinal_resolution
-    dy = 2 * π * rearth / 360 * latitudinal_resolution
+    # signed eastward and northward distances [m] from index - 1 to index + 1
+    Δx = rearth * coslat * deg2rad(lons[lon_index + 1] - lons[lon_index - 1])
+    Δy = rearth * deg2rad(lats[lat_index + 1] - lats[lat_index - 1])
 
     # get velocities at site location
     ᶜu = smooth_4D_era5(column_ds, "u", lon_index, lat_index)
     ᶜv = smooth_4D_era5(column_ds, "v", lon_index, lat_index)
 
-    # get temperature at N S E W of center for gradient calculation
-    ʷT = smooth_4D_era5(column_ds, "t", lon_index - 1, lat_index)
-    ⁿT = smooth_4D_era5(column_ds, "t", lon_index, lat_index + 1)
-    ˢT = smooth_4D_era5(column_ds, "t", lon_index, lat_index - 1)
-    ᵉT = smooth_4D_era5(column_ds, "t", lon_index + 1, lat_index)
-
-    # get specific humidity at N S E W of center for gradient calculation
-    ʷq = smooth_4D_era5(column_ds, "q", lon_index - 1, lat_index)
-    ⁿq = smooth_4D_era5(column_ds, "q", lon_index, lat_index + 1)
-    ˢq = smooth_4D_era5(column_ds, "q", lon_index, lat_index - 1)
-    ᵉq = smooth_4D_era5(column_ds, "q", lon_index + 1, lat_index)
+    # differences of a smoothed field across the site, from index - 1 to index + 1
+    # along each axis
+    zonal_diff(var) =
+        smooth_4D_era5(column_ds, var, lon_index + 1, lat_index) .-
+        smooth_4D_era5(column_ds, var, lon_index - 1, lat_index)
+    meridional_diff(var) =
+        smooth_4D_era5(column_ds, var, lon_index, lat_index + 1) .-
+        smooth_4D_era5(column_ds, var, lon_index, lat_index - 1)
 
     # temperature and specific humidity advective tendency at center
-    tntha = -(ᶜu .* (ᵉT .- ʷT) ./ (2 * dx) .+ ᶜv .* (ⁿT .- ˢT) ./ (2 * dy))
-    tnhusha = -(ᶜu .* (ᵉq .- ʷq) ./ (2 * dx) .+ ᶜv .* (ⁿq .- ˢq) ./ (2 * dy))
+    tntha = -(ᶜu .* zonal_diff("t") ./ Δx .+ ᶜv .* meridional_diff("t") ./ Δy)
+    tnhusha = -(ᶜu .* zonal_diff("q") ./ Δx .+ ᶜv .* meridional_diff("q") ./ Δy)
 
     return tntha, tnhusha
 end
@@ -656,8 +651,9 @@ the `ReanalysisTimeVarying` case; `monthly = true` selects the
 monthly-averaged-diurnal file (one repeating day) used by the
 `ReanalysisMonthlyAveragedDiurnal` forcing.
 
-The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: the config getters
-just call it and hand the result to `ForcingFromFile` / `ExternalDrivenTVForcing`.
+The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: `era5_datasets`
+calls it once per site, and the config getters hand the result to
+`ForcingFromFile` / `ExternalDrivenTVForcing`.
 """
 function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
     path =
@@ -696,6 +692,23 @@ function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
         end
     end
     return ColumnDatasets.ColumnDataset(path)
+end
+
+"""
+    era5_datasets(parsed_args, FT; monthly = false)
+
+`era5_dataset` of every column: one `ColumnDataset` when `site_latitude`
+and `site_longitude` are numbers, and otherwise a vector with one per column,
+broadcasting the two keys against each other. Columns at the same site share a
+dataset.
+"""
+function era5_datasets(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
+    by_site = Dict()
+    site_dataset(latitude, longitude) = get!(by_site, (latitude, longitude)) do
+        site = Dict("site_latitude" => latitude, "site_longitude" => longitude)
+        era5_dataset(merge(parsed_args, site), FT; monthly)
+    end
+    return site_dataset.(parsed_args["site_latitude"], parsed_args["site_longitude"])
 end
 
 """

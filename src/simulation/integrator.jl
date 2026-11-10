@@ -1,10 +1,69 @@
 import ClimaTimeSteppers as CTS
 import ClimaUtilities.TimeManager: ITime
+import LinearAlgebra
 
 #####
 ##### ODE integrator construction. Takes typed inputs only, the YAML-shaped
 ##### entry points live in `config/type_getters.jl`.
 #####
+
+"""
+    MicrophysicsAveragingWindow
+
+Tag type that selects the time window `set_microphysics_tendency_cache!` for 1M
+hands to CM's `LinearizedAverage` substep solver. Two concrete subtypes:
+
+  - `StepAveraging` averages over the full dynamics step `p.dt`.
+  - `StageAveraging` averages over the implicit-stage window `p.dtγ` (so
+    stage-fired `cache!` updates see a window matched to the stage).
+
+The choice is baked into `AtmosCache` at construction (see `build_cache`) from
+`update_cache_every` and the ODE scheme's `γ`; `mp_averaging_dt` reads it at
+cache-update time.
+"""
+abstract type MicrophysicsAveragingWindow end
+
+"""
+    StepAveraging()
+
+Full dynamics-step averaging; the default.
+"""
+struct StepAveraging <: MicrophysicsAveragingWindow end
+
+"""
+    StageAveraging()
+
+Implicit-stage averaging; constructed when `update_cache_every == "stage"` and
+the ODE scheme has a well-defined single-γ DIRK diagonal.
+"""
+struct StageAveraging <: MicrophysicsAveragingWindow end
+
+"""
+    mp_averaging_dt(p, window)
+
+Return the dt the 1M bulk-tendency averager should use at `cache!` time. The
+`window` tag selects `p.dt` (step) or `p.dtγ` (stage).
+"""
+@inline mp_averaging_dt(p, ::StepAveraging) = p.dt
+@inline mp_averaging_dt(p, ::StageAveraging) = p.dtγ
+
+"""
+    imex_gamma(ode_algo)
+
+Return the single-γ DIRK diagonal of `ode_algo`'s implicit Butcher tableau, or
+`nothing` when the scheme isn't a single-γ IMEX ARK (fully explicit, or
+variable-γ ESDIRK). The explicit first-stage zero on the `a_imp` diagonal is
+skipped. Used by `build_cache` to resolve `dtγ` and the microphysics averaging
+window.
+"""
+imex_gamma(_) = nothing
+function imex_gamma(alg::CTS.IMEXAlgorithm)
+    a = alg.tableau.a_imp
+    nonzero_diags = filter(!iszero, LinearAlgebra.diag(a))
+    isempty(nonzero_diags) && return nothing
+    γ = first(nonzero_diags)
+    all(x -> x ≈ γ, nonzero_diags) ? γ : nothing
+end
 
 """
     get_jacobian(ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian; verbose = false)

@@ -22,6 +22,7 @@ include("../test_helpers.jl")
     config = CA.AtmosConfig(
         Dict(
             "config" => "column",
+            "z_stretch" => false,
             "initial_condition" => "PrecipitatingColumn",
             "microphysics_model" => "1M",
             "energy_q_tot_upwinding" => "first_order",

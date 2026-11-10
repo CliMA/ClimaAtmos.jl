@@ -44,8 +44,10 @@ ClimaAtmos.Presets.aquaplanet
 ```@docs
 ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
+ClimaAtmos.MultiColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
+ClimaAtmos.get_z_mesh
 ```
 
 ## Topography
@@ -106,8 +108,10 @@ Sedimentation and tracer positivity:
 
 ```@docs
 ClimaAtmos.AbstractTerminalVelocityMode
-ClimaAtmos.DiagnosticTerminalVelocity
 ClimaAtmos.FixedTerminalVelocity
+ClimaAtmos.StokesTerminalVelocity
+ClimaAtmos.Blk1MTerminalVelocity
+ClimaAtmos.Chen2022TerminalVelocity
 ClimaAtmos.TracerNonnegativityMethod
 ClimaAtmos.TracerNonnegativityElementConstraint
 ClimaAtmos.TracerNonnegativityVaporConstraint
@@ -128,11 +132,9 @@ ClimaAtmos.SGSQuadrature
 ClimaAtmos.AbstractSGSDistribution
 ClimaAtmos.GridMeanSGS
 ClimaAtmos.GaussianSGS
-ClimaAtmos.LogNormalSGS
 ClimaAtmos.AbstractPhysicalPointTransform
 ClimaAtmos.GridMeanPhysicalPointTransform
 ClimaAtmos.GaussianPhysicalPointTransform
-ClimaAtmos.LogNormalPhysicalPointTransform
 ClimaAtmos.create_physical_transform
 ClimaAtmos.integrate_over_sgs
 ```
@@ -422,6 +424,7 @@ ARM VARANAL and GCM cfsite converters. See the
 ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
 ClimaAtmos.ColumnDatasets.InMemoryColumnData
+ClimaAtmos.ColumnDatasets.PerColumnDatasets
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile

@@ -126,7 +126,7 @@ prefix: `wdivₕ`, `wgradₕ`, `wcurlₕ`; the split divergence is `split_divₕ
 the scalar and vector Laplacians read
 
 ```julia
-ᶜ∇²s_d = @. wdivₕ(gradₕ(s_d - sd_r))                           # weak div ∘ strong grad
+ᶜ∇²T = @. wdivₕ(gradₕ(ᶜT - T_r))                               # weak div ∘ strong grad
 ᶜ∇²u = @. C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
 ```
 
@@ -363,9 +363,11 @@ generally follows this pattern.
  3. For the vertical part, use `ᶜdivᵥ` on a face flux, and build that face flux
     with `ᶠwinterp` if it multiplies a mass flux, or with an upwind operator if it
     transports a scalar.
- 4. If the term diffuses energy, diffuse the dry static energy and the effective
+ 4. If the term diffuses energy, diffuse the sensible heat (with the heat
+    capacity of the diffusing mixture), the geopotential, and the effective
     total water separately rather than a lumped total enthalpy, so the
     decomposition stays energetically consistent. See
+    [Diffusion](diffusion.md) and
     [Thermodynamics and the Working Fluid](thermodynamics.md).
  5. If the term is vertical and fast, add it to the implicit tendency and to the
     Jacobian; see [Implicit Solver](implicit_solver.md).
@@ -430,7 +432,7 @@ is
 ```
 
 stabilized by fourth-order hyperdiffusion of the total enthalpy, decomposed into
-dry static energy and a water-enthalpy piece (see
+sensible heat, geopotential, and a water-enthalpy piece (see
 [Hyperdiffusion](hyperdiffusion.md)). Discretized, it reads
 
 ```math
@@ -439,7 +441,8 @@ dry static energy and a water-enthalpy piece (see
     \tfrac{\rho e_{tot} + p}{\rho} \right]
 - D^c \left[ \mathcal{M}^f(\rho) \, I^f \left( \tfrac{\rho e_{tot} + p}{\rho} \right) \right]
 - D^c \left[ \boldsymbol{F}_R \right]
-- \nu_h \left[ \hat{\mathcal{D}}_h \left( \rho \, \mathcal{G}_h(\psi_{s_d}) \right)
+- \nu_h \left[ \hat{\mathcal{D}}_h \left( \rho \, c_p \, \mathcal{G}_h(\psi_T) \right)
+  + \hat{\mathcal{D}}_h \left( \rho \, \mathcal{G}_h(\psi_\Phi) \right)
   + \hat{\mathcal{D}}_h \left( \rho \, h_{\mathrm{tot,cl}} \,
       \mathcal{G}_h(\psi_{q_t^{\mathrm{eff}}}) \right) \right],
 \qquad

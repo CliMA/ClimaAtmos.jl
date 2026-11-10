@@ -16,12 +16,13 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
       + `les_sgs_models/`: Smagorinsky–Lilly, anisotropic minimum dissipation, constant horizontal diffusion.
       + `sponge/`: Rayleigh and viscous sponge tendencies.
   - EDMF code lives in `src/cache/{prognostic,diagnostic}_edmf_precomputed_quantities.jl` and `src/prognostic_equations/edmfx_*.jl`, not under `parameterized_tendencies/`.
+  - `src/atmospheric_profiles_library/`: `AtmosphericProfilesLibrary` submodule (imported as `APL`) holding the published single-column case profiles (BOMEX, DYCOMS, Rico, TRMM-LBA, ...) that `src/setups/` builds on. It depends only on interpolation packages, not on the rest of ClimaAtmos. Tested in `test/atmospheric_profiles_library.jl`. `docs/src/atmospheric_profiles_library.md` plots every profile, and a new profile variable needs its units in `docs/src/atmospheric_profiles_library_plots.jl`.
   - `src/callbacks/`, `src/diagnostics/`, `src/setups/`, `src/surface_conditions/`, `src/topography/`, `src/parameters/`, `src/utils/`: remaining domain subtrees. Search by physics/runtime concept first.
   - `config/`: YAML/TOML config library. `default_configs/default_config.yml` is the schema baseline; `common_configs/` holds reusable numerics; `model_configs/`, `gpu_configs/`, `mpi_configs/`, `perf_configs/`, and `longrun_configs/` are scenario overlays.
   - `.buildkite/ci_driver.jl`: canonical run entry for CI-style simulations. It parses config, builds the simulation, runs `solve_atmos!`, and performs validation/output checks.
   - `.buildkite/pipeline.yml`: authoritative list of Buildkite jobs and their config combinations. Use it to see which config families are combined in automation. Branch dispatch is inline: each job step is gated `if: build.branch != "main"`, and a single `main`-only step moves reproducibility results into the reference store (so a merge does not re-run simulations). New top-level jobs must carry the `if: build.branch != "main"` gate.
   - `docs/make.jl` and `docs/src/`: Documenter entry point plus user/contributor docs. Good references for API usage and config recipes.
-  - `perf/`: allocation and performance benchmarks run separately from unit tests. Not run in CI; regressions must be caught in review.
+  - `perf/`: allocation and performance benchmarks, run as Buildkite jobs in `.buildkite/full_pipeline.yml`, separately from unit tests.
   - `reproducibility_tests/`: reproducibility test infrastructure. `ref_counter.jl` holds a single integer counter that partitions commit history into reference bins — increment it when simulation output intentionally changes.
   - `post_processing/`, `calibration/`, `runscripts/`, `examples/`: analysis scripts, calibration workflows, launch scripts, and smaller usage examples.
 
@@ -63,7 +64,7 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 variable (default `all`). `Pkg.test` inherits the calling process's environment, so set it inline:
 
 ```bash
-TEST_GROUP=parameterizations julia +1.11 --project -e 'import Pkg; Pkg.test()'
+TEST_GROUP=parameterizations julia +1.13 --project -e 'import Pkg; Pkg.test()'
 ```
 
 ### Test layout
@@ -79,7 +80,7 @@ When reviewing or writing changes, name the validation surface explicitly:
   - **`test/runtests.jl` test groups** for unit-level coverage.
   - **`.buildkite/ci_driver.jl` jobs** for config or runtime-workflow changes. Check `.buildkite/pipeline.yml` to identify the affected jobs.
   - **`reproducibility_tests/`** for changes that may shift simulation output. The reference counter in `reproducibility_tests/ref_counter.jl` must be incremented when output intentionally changes; do not edit it without explicit direction from the user.
-  - **`perf/` allocation benchmarks** are not run in CI. Allocation regressions must be caught during review using the `@allocated` pattern.
+  - **`perf/` allocation benchmarks** run on Buildkite only. For code not covered there, catch allocation regressions during review using the `@allocated` pattern.
 
 ## MSE / reproducibility
 
@@ -89,8 +90,8 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 ## Local commands
 
-  - Prefer Julia 1.11.x for local work. GitHub CI runs every test group on 1.11 and only `infrastructure` on 1.10.
-  - For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
+  - Prefer Julia 1.13.x for local work. GitHub CI runs every test group on 1.13 and only `infrastructure` on 1.10.
+  - For runtime validation, prefer `julia +1.13 --project=.buildkite .buildkite/ci_driver.jl ...`.
   - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 
 ## Self-correction

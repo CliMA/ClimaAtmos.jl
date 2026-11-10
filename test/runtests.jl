@@ -36,6 +36,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+    @safetestset "AtmosphericProfilesLibrary" begin @time include("atmospheric_profiles_library.jl") end
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
@@ -90,6 +91,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
@@ -107,17 +109,29 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
+    @safetestset "Implicit microphysics split tests" begin @time include("parameterized_tendencies/microphysics/implicit_microphysics_split.jl") end
+    @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
+    @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
     @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "Updraft variance fidelity tests" begin @time include("parameterized_tendencies/microphysics/updraft_variance_fidelity.jl") end
+    @safetestset "Cloud inhomogeneity tests" begin @time include("parameterized_tendencies/microphysics/cloud_inhomogeneity.jl") end
+    @safetestset "Displacement length wiring" begin @time include("parameterized_tendencies/microphysics/displacement_length_wiring.jl") end
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
+    @safetestset "Displacement condensate tests" begin @time include("parameterized_tendencies/microphysics/displacement_condensate.jl") end
+    @safetestset "Conditional node rule tests" begin @time include("parameterized_tendencies/microphysics/conditional_nodes.jl") end
+    @safetestset "Truncated displacement tests" begin @time include("parameterized_tendencies/microphysics/truncated_displacement.jl") end
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
+
+    # Full-physics sphere simulation
+    @safetestset "Checkbounds sphere simulation" begin @time include("checkbounds_sphere_simulation.jl") end
 
     # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
     # build). The simulation-based Beres tests (test_beres_single_column.jl,

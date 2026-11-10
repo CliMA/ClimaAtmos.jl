@@ -3,70 +3,591 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-✨feature/enhancement] Add the `dg_equation_form` config option
-  for horizontal DG discretizations: `vi` (default, vector-invariant) or
-  `fddg` (flux-form Cartesian momentum). The `fddg` dynamics use
-  pressure-free two-point fluxes for `(ρ, ρe_tot, ρu⃗)` with the Exner-split
-  pressure force of the vector-invariant form, which over terrain needs no
-  discrete metric identity. Options:
-  - `dg_volume_flux`: `kg_kpep` (default; Kennedy-Gruber advection with the
-    Exner force in the `{ρ}`-weighted two-point form of Souza et al. (2023)),
-    `div_exner` (mass flux averaged from the nodal mass fluxes, with the
-    nodal Exner gradient), or `kg_exner` (Kennedy-Gruber advection with the
-    nodal Exner gradient). `kg_kpep` and `div_exner` exchange kinetic and
-    potential energy exactly (KPEP) with `dg_fddg_vertical: vi`.
-  - `dg_interface_flux`: `roe_eos` (default; Roe-type wave-selective
-    dissipation with the sound speed, contact-wave energy and water-species
-    waves from automatic differentiation of the Thermodynamics.jl pressure,
-    so it is consistent across humidity fronts), `moist_es` (Lax-Friedrichs
-    on `(ρ, ρu⃗, ρe_tot, ρq_tot)` at one rate, a sink of every convex entropy
-    of the moist system), or `rusanov`.
-  - `dg_fddg_vertical`: `vi` (default; vector-invariant vertical exchange
-    terms) or `full_flux` (staggered flux form for `uₕ` and for `w` on the
-    dual grid, conserving kinetic energy in three dimensions, with a
-    ρ-weighted face jump penalty on `w`).
+- ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
+  (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
+  albedos `α_s` in `RegressionFunctionAlbedo`, as `α_s + (1 - α_s) R_sub`.
+- ![][badge-🔥behavioralΔ] The 1M rain and snow are placed on the precipitation
+  shaft of the SGS distribution by default (`sgs_precip_incloud_fraction = 1`,
+  `sgs_precip_fraction_floor = 0.1`; previously `0`, uniform, and `0.5`). Spread
+  uniformly over the cell, rain evaporates 2.5–4.5× the rate of 3.75 km MPAS
+  truth within ne30 cells; the shaft brings it to about 0.9–1.4×.
+- ![][badge-✨feature/enhancement] Opt-in `sgs_variance_fidelity_model: updraft`
+  (PrognosticEDMFX with non-equilibrium microphysics; default `equilibrium`
+  unchanged): sets the variance fidelity from the in-cloud condensate of the
+  updrafts, `α σ_S = c_u q_c,up`, bounded to `[α_min, 1/(1 − w_eq)]` and blended
+  in by the updrafts' cloud cover and lower area-limiter factor
+  (`updraft_variance_fidelity`). New provisional parameters:
+  `sgs_fidelity_updraft_coeff` and `sgs_fidelity_updraft_min`.
 
-  Grid-mean tracers and prognostic TKE ride the family's own two-point and
-  interface mass fluxes, so a uniform specific humidity stays uniform across
-  density jumps.
-- ![][badge-✨feature/enhancement] Add config options for the vector-invariant
-  horizontal DG form (`dg_equation_form: vi`):
-  - `dg_vi_velocity_penalty`: `rusanov` (default; `|u| + c` on the
-    horizontal velocity jump) or `wave_selective` (`|u_n| + c` on the normal
-    jump and `max(|u_n|, ε c)` on the tangential and vertical-velocity
-    jumps, `ε = dg_vi_shear_floor`, default `0.05`). Both are kinetic-energy
-    sinks that conserve momentum.
-  - `dg_vi_interface_flux`: `rusanov` (default; penalties on the ρ-weighted
-    jumps `{ρ}⟦e_tot⟧`, `{ρ}⟦χ⟧`), `rusanov_moist` (energy penalty on
-    `{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`, which vanishes across a humidity front at uniform
-    temperature and velocity), or `es` (penalty on the jump of `1/T` with
-    `{β}/β`-weighted velocity penalties, a sink of `−ρs` at each face). With
-    `rusanov_moist` and `es` the total-water penalty moves the mass and the
-    phase energies of the water together.
-  - `dg_tracer_penalty`: `acoustic` (default; `|u| + c`) or `advective`
-    (`max(|u|, ε c)`) for the tracer and TKE jump penalties.
+0.42.18
+-------
+- ![][badge-🔥behavioralΔ] When `diff_mode == Implicit()`, the EDMFX TKE
+  production sources (shear, buoyancy, pressure-drag return-to-isotropy, and
+  detrainment shear-mixing in `edmfx_tke_tendency!`) are now applied in the
+  implicit stage next to `edmfx_sgs_diffusive_flux_tendency!`, so production
+  and dissipation see the same `Y.c.ρtke` within the Newton solve. Previously
+  production ran in `remaining_tendency!` while dissipation ran implicitly,
+  which let `ρtke` inflate across IMEX sub-stages before the one implicit
+  damping fired. The Jacobian is unchanged (`∂Yₜ/∂ρtke` still carries only the
+  dissipation sink); `ᶠK_u`, `ᶠK_h`, `ᶠbuoygrad` are still refreshed only in
+  `set_explicit_precomputed_quantities!` and stay frozen during Newton, so
+  production is effectively `K_u`-frozen within a stage. For `diff_mode ==
+  Explicit()` the sources stay in `remaining_tendency!` alongside the explicit
+  diffusive-flux tendency and behavior is unchanged.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Prescribed temperature
+  tendencies are converted to energy tendencies with the isobaric heat capacity
+  `cp_m`: large-scale advection and radiative cooling (BOMEX, RICO), the
+  TRMM-LBA prescribed heating rate, and the file-driven forcings and
+  temperature nudging (`apply_Tq_forcing!`, including ISDAC). The tendencies
+  are rates at constant pressure; with the isochoric `cv_m`, a single-column
+  run realized about `cv_m / cp_m ≈ 0.72` of the prescribed
+  potential-temperature tendency. The realized forcing increases by about 40%,
+  which changes the `prognostic_edmfx_rico_column` and
+  `prognostic_edmfx_trmm_column` references, and single-column calibrations
+  against these cases need refitting. The Held–Suarez thermal relaxation is
+  converted with `cp_d`, so potential temperature relaxes at the published
+  rates `k_T` (it relaxed at `cv_d / cp_d ≈ 0.71 k_T` with `cv_d`); this
+  changes the `held_suarez_equil` reference.
+- AtmosphericProfilesLibrary.jl is now the `ClimaAtmos.AtmosphericProfilesLibrary`
+  submodule, copied from AtmosphericProfilesLibrary.jl v0.1.10, and ClimaAtmos no
+  longer depends on the standalone package. Replace
+  `import AtmosphericProfilesLibrary as APL` with
+  `import ClimaAtmos.AtmosphericProfilesLibrary as APL`.
+- ![][badge-🔥behavioralΔ] The 1M `rain_terminal_velocity` default flips from
+  `Fixed` to `Chen2022` (Chen et al. 2022 rain), matching snow. Rain now
+  falls at a state-dependent speed by default; set
+  `rain_terminal_velocity: "Fixed"` to recover the previous behavior.
+- ![][badge-🔥behavioralΔ] The implicit sedimentation Jacobian for rain and
+  snow mass (`ρq_rai`, `ρq_sno`, and the first-updraft `q_rai`, `q_sno`
+  under `PrognosticEDMFX`) now uses the running column max of the species'
+  terminal velocity in the derivative instead of the pointwise `w(q^n)`.
+  The tendency itself still uses pointwise `w`. The super-diagonal stays
+  nonzero wherever rain or snow exists anywhere above the current cell, so
+  a single Newton iteration can carry rain/snow across multiple cells at
+  CFL > 1 and the leading-edge pile-up spikes disappear. Cloud liquid and
+  cloud ice keep the pointwise-`w` Jacobian — they fall slowly enough that
+  the pointwise stencil is stable.
+- ![][badge-🔥behavioralΔ] 1M cloud-ice deposition / sublimation now shares
+  the implicit path with cloud-liquid condensation / evaporation. A single
+  `implicit_microphysics` toggle controls both: when `true` (default), the
+  user's `cloud_liquid_formation` and `cloud_ice_formation` are moved from
+  `microphysics_1m_params` (bulk CM BMT) to `microphysics_1m_implicit_params`,
+  and a second CM BMT call with that implicit set fills a new
+  `ᶜmp_tendency_implicit` cache. The implicit stage applies this cache
+  tendency, with CM's state-dependent `τ_vap_to_q_lcl` / `τ_vap_to_q_icl`
+  driving the Jacobian diagonals (so the ice diagonal tracks the configured
+  ice-formation variant rather than the constant
+  `sublimation_deposition_timescale` parameter). The Picard predictor reads
+  the same cache, so the manual `τ·(1 − exp(−dtγ/τ))·S` damping is gone.
+  The `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is
+  removed; `implicit_microphysics: false` reverts to the previous behavior
+  (bulk CM BMT covers condensation).
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Reformulate the
+  non-equilibrium SGS cloud-fraction closure. The cloud-fraction width
+  (`_sgs_augmented_sigma`) is the gradient width floored by `σ_abs` alone.
+  Condensate up to the equilibrium amount `q_c_eq` is normalized by it, and
+  the non-equilibrium excess `max(0, q_c − q_c_eq)` by `√(σ_aug² + δ_sub²)`
+  with the subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available
+  water (`_compute_cloud_fraction`), so the cloud fraction is `C¹`-smooth
+  across saturation and saturated cloud decks reach overcast. Under
+  `PrognosticEDMFX`, the θ→T Jacobian, the displacement curvature, the
+  moisture-variance bound and the correlation round-off guard of
+  `set_covariance_cache!` are evaluated at the environment state. The
+  non-equilibrium updraft cloud fraction (`_updraft_cloud_fraction`) is the
+  truncated-Gaussian cover against the updraft vapor subsaturation deficit.
+  The conditional-moment node rule (`conditional_rule`) collapses a sliver
+  interval between nearly coincident actual and equilibrium cloud edges onto
+  the actual edge. In the shortwave cloud-inhomogeneity factor
+  (`cloud_optical_depth_factor`), each non-equilibrium updraft has the
+  in-cloud relative variance its cover implies. The parameters
+  `cloud_fraction_eps_rel`, `cloud_fraction_floor_release_margin`,
+  `cloud_fraction_floor_release_abs_margin`,
+  `cloud_fraction_floor_release_sharpness` and `cloud_fraction_floor_residual`
+  are removed. The provisional parameter `sgs_cloud_species_constant_timescales`
+  (default `0`) is added: a positive value makes the 1M scheme use the constant
+  `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
+  in the variance-fidelity Damköhler factor and the cloud-species flux blend.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Pass in-cloud liquid specific
+  humidity `q_liq / cf` [kg/kg] to `ml_N_cloud_liquid_droplets` in
+  `update_cloud_properties!`, bound the diagnosed droplet number concentration
+  in `[N₀ / 3, 3 N₀]` with a hyperbolic-tangent log-saturation law, and
+  zero-initialize `prescribed_aerosols_field` at cache construction. Aerosol
+  species with no prescribed bins enter the closure at their reference
+  concentration and leave the droplet number unchanged. Calibration
+  coefficients `α` fitted to the linear closure need refitting; with the
+  default `α = 0`, the droplet number and the radiative fluxes are unchanged.
+  The liquid, ice, and snow effective radii, and the `reffclw` and `reffcli`
+  diagnostics, are zero where the cloud fraction is zero.
+- ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] Stretched vertical
+  grids (`z_stretch: true`) use the two-scale
+  `ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`, which refines the
+  boundary layer with scale height `z_pbl` (new key, default 2200 m) while
+  matching the layer thickness `dz_bottom` at the surface and `dz_top` (new key,
+  default 3000 m) at the model top. The rule admits `z_elem` within a range set
+  by these thicknesses and `z_max`, and building the grid raises an error that
+  names the range otherwise. `numerics_sphere_he6ze31.yml`, the 200-level
+  ERA5-driven column, and the RCEMIP box CRM set a `dz_top` inside the range
+  the rule admits for them, and `numerics_sphere_he6ze10.yml` (6500 m) and the
+  shallow LARC, ARM, and Schar-mountain cases set a `dz_top` near the top
+  spacing they have under the single-scale rule. The CI jobs for the
+  conservation, hydrostatic-balance, and MPI configurations pair them with
+  `numerics_sphere_he6ze10.yml`, and the prognostic EDMF aquaplanet, Beres
+  verification, gray radiative-equilibrium column, and performance benchmark
+  configurations take the vertical grid of the common numerics configuration
+  they are paired with in CI. The grid constructors `SphereGrid`,
+  `ColumnGrid`, `BoxGrid`, and `PlaneGrid` default to `z_stretch = false`.
+  Requires ClimaCore 1.0.8. The 63-level common configurations moved to 79
+  levels with `dz_bottom: 28.0` and are renamed: `numerics_column_ze63.yml` to
+  `numerics_column_ze79.yml`, `numerics_sphere_he16ze63.yml` to
+  `numerics_sphere_he16ze79.yml`, and `numerics_sphere_he30ze63.yml` to
+  `numerics_sphere_he30ze79.yml`. The prognostic EDMF column cases keep their
+  `z_max` and use stretched grids (`dz_bottom: 28.0` and a `dz_top` and
+  `z_elem` per case) whose spacing follows `numerics_column_ze79.yml` to within
+  about 15%.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] ERA5 forcing files take the
+  sign of the horizontal advective tendencies from the coordinate order of the
+  raw input. Raw CDS ERA5 latitude descends, so the meridional advection of
+  temperature and humidity in previously generated `ReanalysisTimeVarying` and
+  `ReanalysisMonthlyAveragedDiurnal` forcing files had the wrong sign; regenerate
+  them.
+- ![][badge-✨feature/enhancement] A column configuration can run several
+  independent columns in one simulation: set `n_columns` with `config:
+  "column"`, or use `MultiColumnGrid(FT; n_columns)`. NetCDF output gains a
+  `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and
+  `ExternalDrivenTVForcing` take a vector of column data sources, one per column
+  of a multi-column grid: each column is initialized and forced from its own
+  source. In the configuration, one value per column can be given for
+  `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude`
+  (ERA5).
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file
+  formats returns a ClimaUtilities boundary method (`TimeVaryingInputs.Flat()`,
+  `Linear()`, or `Throw()`) for above and below the file's levels, instead of a
+  tuple of Interpolations.jl boundary conditions.
 
-  The Rusanov and wave-selective rates use the moist sound speed
-  `sqrt(γ_m p / ρ)`. Prognostic TKE gets the same mass-consistent interface
-  flux as the grid-mean tracers.
-- ![][badge-✨feature/enhancement] Add the Zhang–Shu (2010) positivity limiter
-  (ClimaCore's `Limiters.PositivityLimiter`), enabled by
-  `apply_zhang_shu_limiter` (default `false`, mutually exclusive with
-  `apply_sem_quasimonotone_limiter`, requires
-  `update_constrain_state_every: "stage"` or `"dss"`), with floors
-  `zhang_shu_rho_min` (default `1e-6`) and `zhang_shu_p_min` (default
-  `1e-2`). In each element, ρ and the vapor `ρq_tot − Σ ρq_cond` are scaled
-  toward their WJ-weighted element means to meet the floors, moving the vapor
-  mass and energy consistently; negative condensates are raised to zero
-  pointwise; and a single θ on the conserved vector meets the pressure floor.
-  The grid-mean microphysics constraints are skipped while it is active.
-  Intended for DG horizontal discretizations; enabled in
-  `aquaplanet_topo_kgpert_DG.yml`.
-- ![][badge-🐛bugfix] The `rv` (relative vorticity) diagnostic on DG grids is
-  the model's `ω³` (strong horizontal curl plus the central interface lifting).
-  The weak-form curl relies on DSS, a no-op on DG spaces, and showed
-  element-aligned striping.
+0.42.17
+-------
+- ![][badge-💥breaking] Update to ClimaDiagnostics v0.4. NetCDF diagnostics no
+  longer have `date` and `date_bnds`, and `time` is in seconds since
+  `start_date`. Time-reduced diagnostics no longer include the initial state,
+  and the times saved for the `DictWriter` and `HDF5Writer` are saved at the
+  start of the output window.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
+  cadence from `t_end` rather than `t_end - dt`, so a run ending exactly on a
+  threshold (1 hour, 1 day, 30 days, 90 days) gets that threshold's cadence
+  instead of the next finer one. Because the output period also sets the compute
+  schedule, `longrun_{dry,moist}_baroclinic_wave_he60` (`t_end: "30days"`,
+  `dt: "30secs"`) were computing every default diagnostic every step for daily
+  output; they now write ten-daily output sampled six-hourly. Runs of exactly one
+  day (e.g. `held_suarez_equil`, `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_dycoms_rf02_column`) now write one daily average instead of
+  hourly ones, and runs of exactly one hour write one hourly average instead of
+  none. Because `t_end` is relative to `start_date`, the cadence is also stable
+  across a restart.
 
+- ![][badge-✨feature/enhancement] add 1M microphysics options
+  `rain_autoconversion: KK2000` and `cloud_liquid_rain_accretion: KK2000`.
+- ![][badge-✨feature/enhancement] 1M cloud-liquid condensation / evaporation can now
+  run through an SGS-integrated implicit source. Selected by
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation`, which routes CM's
+  instantaneous `conv_q_vap_to_q_lcl` rate through
+  `_add_implicit_lcl_condensation_*` with a `−dtγ / (τ_cond · Γₗ)` Jacobian
+  diagonal and a forward-Euler updraft predictor.
+  `cloud_liquid_formation: CloudLiquidFormation` (default) keeps the
+  explicit bulk-averaged tendency; `~` disables condensation.
+
+0.42.16
+-------
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  (`snow_terminal_velocity: Chen2022`); `toml/prognostic_edmfx_1M.toml` sets
+  `snow_apparent_density` to 200 kg/m³. 1M configs that do not load that TOML use
+  the ClimaParams value.
+- Update to CloudMicrophysics 0.47.
+- ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
+  reader was left to a GC finalizer; under MPI, closing the file is collective, so a
+  finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
+  4–8 GPUs while `build_cache` set up the DSS buffers).
+- ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
+  in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
+  scaled by the effective-thickness factor `χ` of the in-cloud condensate
+  (`set_sw_cloud_optical_depth_factor!`); the longwave solve keeps the mean
+  in-cloud paths, since the factor understates the emissivity of thin clouds
+  (`RRTMGPInterface.solve_fluxes!` runs the two bands separately on the same
+  McICA sample). The environment cloud is the
+  truncated-Gaussian tail of the cloud-fraction closure, Gamma-matched, and
+  under `PrognosticEDMFX` the cloudy updrafts enter as separate components of
+  the mixture; `χ` is the larger of the mixture's geometric-mean ratio
+  `exp(E[ln q]) / E[q]` and the Gamma factor of its mean and variance. An
+  unresolved inhomogeneity of relative variance
+  `cloud_condensate_relative_variance_floor` (new provisional parameter,
+  default 0.25) multiplies every component, so overcast layers keep `χ ≈ 0.84`.
+  Prescribed and idealized clouds, `GridScaleCloud`, and `MLCloud` are
+  unscaled, and the new config key `cloud_inhomogeneity_in_sw_radiation: false`
+  (field `sw_cloud_inhomogeneity` of the all-sky radiation modes) turns the
+  scaling off for comparison runs.
+- ![][badge-🔥behavioralΔ] 0M precipitation removal from a `PrognosticEDMFX`
+  updraft increments `mse` by `dq_tot_dt (e_tot_hlpr - mse)`, the
+  mass-consistent weight for removing condensate that carries its enthalpy
+  plus `Φ`. The updraft loses the static energy that the grid mean loses, and
+  `Tʲ` is unchanged when the condensate leaves at `Tʲ`. The weight
+  `e_tot_hlpr - e_int_dry(Tʲ)` cooled the updraft by about
+  `(Φ + R_d T + q_v L_v)/c_p` per unit mass removed (0.004–0.014 K per
+  1e-4 kg/kg between 1.5 and 9 km), and the environment residual warmed by the
+  same energy. With implicit microphysics (the default), the analytic ρa solve
+  removes this mass from `ρaʲ`, not from the environment.
+- ![][badge-🔥behavioralΔ] Updraft sedimentation of `q_lcl`, `q_icl`, `q_rai`,
+  and `q_sno` is a mass source of the updraft `ρaʲ` in the analytic
+  implicit-stage solve (`solve_sgs_ρa_implicit_stage_analytic!`), as it is of
+  the grid-mean `ρ`. It is applied as the rate `Σ_μ Δq_μ / dtγ`
+  (`updraft_sedimentation_rate!`), with `Δq_μ` the change of the updraft
+  condensate in one linearized backward-Euler sedimentation step, so that at
+  any Courant number the stage source matches the dilution by the condensate
+  that the Newton solve sediments. Each intensive updraft scalar receives its
+  own sedimentation source minus the dilution by the sedimented mass
+  (`edmfx_sgs_vertical_advection_tendency!`), and `mse` receives the flux-form
+  static energy tendency `(S_{h,μ}ʲ - mseʲ S_μʲ) / ρ̂ʲ`, where `S_{h,μ}ʲ` is the
+  `updraft_sedimentation!` convergence of `q_μʲ (h_μ(Tʲ) + Φ)` with laterally
+  entrained environment condensate carrying `h_μ(T⁰) + Φ`. The Jacobian
+  (`update_sgs_advection_jacobian!`) includes the `(mse, q_μ)` and
+  `(q_tot, q_μ)` couplings, with `h_μ(Tʲ) + Φ` at the donor cell,
+  `h_μ(T⁰) + Φ` on the lateral diagonal (zero where the residual environment
+  flux is clamped), and `-mseʲ` at the receiver cell. It also includes the
+  dependence of `h_μ(Tʲ)` on `mse` (`∂Tʲ/∂mse = 1/cp_m`) and on every
+  condensate at fixed `mse` and `q_tot` (`∂Tʲ/∂q_ν = L_ν(Tʲ)/cp_m`). The
+  residual environment sedimentation flux `ᶜρ⁰w⁰χ⁰` and 2M number flux
+  `ᶜρ⁰w⁰n⁰` are clamped to non-negative values in the lateral entrainment
+  branch, and `initialize_implicit_stage_problem!` refreshes terminal
+  velocities after the Picard updraft predictor before solving for `ρaʲ`.
+  Sedimentation that changed `q_tot` at fixed `mse` and fixed `ρaʲ` acted as a
+  spurious updraft heat source (for ice, the latent heat of fusion), which the
+  environment residual absorbed with the opposite sign.
+- ![][badge-🐛bugfix] Under `PrognosticEDMFX`, the 2-moment environment
+  terminal velocity calls (`set_precipitation_velocities!`) convert the
+  specific number concentrations `ᶜn_lcl⁰` and `ᶜn_rai⁰` (`[1/kg]`) to
+  volumetric number concentrations (`[1/m³]`) by multiplying by `ᶜρ⁰`, matching
+  the updraft calls and `CloudMicrophysics.Microphysics2M`. In addition,
+  `update_implicit_microphysics_cache!` refreshes terminal velocities for 2M
+  and 2M+P3 as well as 1M, and the `PrognosticEDMFX` column-integrated
+  precipitation energy flux `ᶜwₕhₜ` includes the hydrometeor kinetic energy
+  `Kin` (and uses the residual environment sedimentation flux in 2M), matching
+  `water_advection.jl` and the non-EDMF path.
+- ![][badge-🔥behavioralΔ] `radiation_tendency!` for `RadiationDYCOMS` selects the
+  inversion height `z_i` as the highest level with `q_tot ≥ 0.008` kg/kg (falling
+  back to the level closest to `0.008` kg/kg when the entire column is drier),
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`, matching `AbstractRRTMGPMode`.
+- ![][badge-🐛bugfix] The lateral term of the updraft sedimentation
+  (`updraft_sedimentation!`) has the sign of its docstring and Jacobian: where
+  the updraft widens downward (`∂a/∂z < 0`), sedimentation flux from the
+  environment enters the updraft through the tilted boundary,
+  `∂_z(a ρ w χ) − ∂a/∂z ρ⁰w⁰χ⁰`. The opposite sign, active since the lateral
+  coefficient defaulted to 1, removed `|∂a/∂z| ρ⁰w⁰χ⁰` of rain, snow and cloud
+  condensate from the updraft (and added it to the environment) wherever the
+  updraft narrows with height. The corresponding Jacobian diagonal carries the
+  area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
+- ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
+  turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
+  with the flux implied by the conserved-variable fluxes of total water and
+  liquid–ice static energy, weighted by `λ = τ_e / (τ_e + τ_μ)` with the eddy
+  turnover time `τ_e = l_mix / (c_d √tke)` and the relaxation time `τ_μ` of
+  the 1M condensation or deposition process at the cell state
+  (`add_cloud_species_diffusionᵥ!`). The equilibrium part uses the cloudy
+  fraction `Φ(λ_eq/σ_S)` of the condensate the 1M microphysics relaxes toward
+  (`ᶜsgs_moments`) and vanishes in clear air. The Damköhler factor of the SGS
+  variance fidelity uses the same per-cell relaxation times of the 1M
+  processes (`set_sgs_microphysics_timescale!`).
+  The energy flux is unchanged, so a layer well mixed in `(s_l, q_t)` remains a
+  fixed point, and its condensate flux now vanishes too. Under PrognosticEDMFX
+  the environment cloud species take the blended flux; draft cloud species
+  diffuse down their own gradients.
+- ![][badge-🔥behavioralΔ] The implicit-stage Picard updraft tracer predictor
+  (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) includes lateral and
+  turbulent entrainment `(ε + ε_turb) (χ⁰ − χʲ)` and the first-cell surface
+  mass-flux source `F_sfc (χ_sfc − χʲ[1]) / max(ρa[1], ρʲ[1] a_min)` alongside
+  upwind advection and 1M microphysics, and evaluates the draft
+  thermodynamics and `ᶜmp_tendencyʲs` at the transported state before adding
+  `dtγ` times the source to the condensate and precipitation tracers, so
+  that the updraft buoyancy and microphysics tendencies passed to the final
+  analytic `u₃` and `ρa` solves reflect entrainment dilution, surface
+  injection, and condensation over the stage. The predictor's cell-1
+  advection factor is zero, so the covariant `u₃` that
+  `set_velocity_at_surface!` leaves at the surface over sloped terrain does
+  not advect the first cell.
+- ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M
+  condensate relaxes toward (`λ_eq`), the 0M SGS saturation adjustment, and the
+  variance fidelity evaluate `E[max(0, S)]` under the Gaussian displacement
+  truncated at `c` standard deviations and stretched to keep the variance of the
+  covariance closure (`truncated_displacement_condensate`,
+  `equilibrium_condensate`), with the new provisional parameter
+  `sgs_displacement_truncation` (`c`, default 3, at least 1; `Inf` restores the
+  Gaussian).
+  The untruncated tail condensed traces of cloud at the capping inversion of
+  dry convective boundary layers (Soares: LWP up to 1e-3 g m⁻², cloud fraction
+  up to 1e-5), where the one-cell inversion makes `σ_q` up to three times the
+  LES value and `μ_S ≈ −3.6 σ_S`; the truncation removes them and changes the
+  equilibrium condensate of the moist SCM cases by 2 % or less, with LWP and
+  RWP changes within the spread of a time-step perturbation. The
+  curvature-aware condensate (`sgs_variance_curvature`) is unchanged.
+- ![][badge-🔥behavioralΔ] The EDMF TKE shear production matches the resolved
+  kinetic energy removed by the SGS stresses. The vertical production uses the
+  vertical shear of the horizontal wind, `|∂_z uₕ|²/2`
+  (`vertical_shear_norm_sqr`), without the `(∂_z w)²` term, since the vertical
+  flux acts on the horizontal wind only; the same norm enters `Ri`, `Pr_t`, and
+  the TKE-balance mixing length, and the Lilly stability factor of the
+  grid-mean Smagorinsky-Lilly length without EDMF. The production is formed
+  at the faces from `ᶠK_u` and the face strain rate of the momentum flux and
+  interpolated to the centers, like the buoyancy production, so its column
+  sum equals the kinetic energy the flux removes. With
+  `edmfx_sgs_horizontal_diffusive_flux`, the horizontal production is
+  `2 K_u,h S : Sₕ`, which adds the cross terms `K_u,h ∂ₓw ∂_z u` of the
+  horizontal stress on `w`.
+- ![][badge-🔥behavioralΔ] The 1M microphysics is integrated over the Gaussian
+  SGS distribution (`sgs_distribution: "gaussian"`) by a conditional-moment
+  node rule (`conditional_rule`) instead of the 3×3 Gauss–Hermite nodes. The
+  nodes sit between the cloud, equilibrium-cloud and precipitation-shaft edges
+  of the saturation excess, so the condensate means and the shaft fraction are
+  integrated exactly for any cloud fraction; nodes whose temperature spread
+  straddles the freezing point are split there.
+- ![][badge-💥breaking] The lognormal SGS distribution, `LogNormalSGS` with
+  `sgs_distribution: "lognormal"`, is removed.
+- ![][badge-🔥behavioralΔ] All second-order turbulent diffusion closures
+  (`vertical_diffusion_boundary_layer_tendency!`,
+  `edmfx_sgs_diffusive_flux_tendency!`,
+  `edmfx_sgs_horizontal_diffusive_flux_tendency!`,
+  `horizontal_smagorinsky_lilly_tendency!`,
+  `vertical_smagorinsky_lilly_tendency!`, `horizontal_amd_tendency!`,
+  `vertical_amd_tendency!`, `horizontal_constant_diffusion_tendency!`, and
+  `viscous_sponge_tendency!`)
+  evaluate the enthalpy flux
+  `F_h = -ρ K [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
+  (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`, and
+  their horizontal counterparts): the water terms of Yatunin et al. (2026,
+  Eqs. 30 and 33) with the sensible heat carried at the heat capacity `c_p` of
+  the diffusing mixture (`ᶜcp_diffusing!`) in place of the dry-static-energy
+  gradient `∇s_d = c_pd ∇T + ∇Φ`. The flux then equals the gradient of the
+  moist static energy of the diffusing mixture plus the enthalpy of the moist
+  mass that the water flux adds, so a moist adiabat, saturated or unsaturated,
+  is a fixed point of diffusion; the neutral unsaturated lapse rate is
+  `g / c_p`. Fourth-order hyperdiffusion uses the same split, with the cached
+  Laplacians `ᶜ∇²T` and `ᶜ∇²Φ` (of the perturbations from the hydrostatic
+  reference) replacing `ᶜ∇²s_d`. The grid-mean closures and the viscous sponge
+  assemble their scalar diffusion through the shared
+  `add_scalar_diffusion{ᵥ,ₕ}!`; the sponge's own energy, water, and tracer
+  kernels (`viscous_sponge_tendency_ρe_tot_*`, `viscous_sponge_tendency_tracer`)
+  are removed. The closures also
+  diffuse each prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`,
+  `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`) down its own specific
+  gradient with the same `ρ K` (`add_moisture_diffusionᵥ!`,
+  `add_moisture_diffusionₕ!`, with self-diagonals in
+  `update_diffusion_jacobian!`). The boundary-layer, PROPHET, and sponge
+  closures diffuse `q_t = q_tot - q_rai - q_sno`, and rain and snow do not
+  diffuse there; the LES closures (Smagorinsky–Lilly, AMD, and constant
+  horizontal diffusion) diffuse `q_t = q_tot` and also diffuse rain, snow, and
+  rain number down their own gradients, with rain and snow entering the
+  enthalpy flux as liquid and ice. The `2MP3` microphysics model takes the same
+  non-equilibrium path as `1M` and `2M` in all diffusion and hyperdiffusion
+  tendencies (rain and snow excluded from the diffusing water).
+- ![][badge-🔥behavioralΔ] Under `PrognosticEDMFX`, the grid-mean diffusive flux
+  is assembled as the sum of the environment and draft diffusive fluxes
+  (`w⁰ = ρa⁰ K_h`, and `wʲ = f_j K_h / interp(1 / max(ρaʲ, ε))` in the
+  vertical, with `f_j = edmfx_updraft_kh_diffusion_factor`). With the default
+  `edmfx_vertical_diffusion: false`, the grid mean therefore receives only the
+  environment flux `-∇·(ρa⁰ K_h ∇χ⁰)`: weaker than the grid-mean flux
+  `-∇·(ρ K_h ∇χ̄)` by the draft area fraction, and without the draft-interior
+  and cross-area (`∇aʲ`) transport. This changes every PrognosticEDMFX
+  configuration, and its calibrated parameters may need retuning. When
+  `edmfx_vertical_diffusion` or `edmfx_horizontal_diffusion` is enabled, each
+  draft scalar (`mse`, `q_tot`, suspended cloud species, and passive tracers)
+  diffuses down its own gradient (`update_sgs_diffusion_jacobian!`), and the
+  grid mean receives the same flux divergence; the horizontal draft weight
+  `ρ f_j K_h_h âʲ` uses an element-wise power mean `âʲ` of the draft area
+  (`ᶜupdraft_horizontal_diffusion_weight!`), which bounds the draft relaxation
+  rate. Grid-scale species that the drafts do not carry, such as the P3 ice
+  number and rime, diffuse down their grid-mean gradients. Updraft `mseʲ`
+  hyperdiffusion weights the diffusing water flux by `h_effʲ - h_d(Tʲ)`
+  (`ᶜh_eff_minus_h_d!`), preserving Kirchhoff reference-temperature shift
+  invariance for intensive `mseʲ`. Because the grid-mean sensible-heat term
+  uses the same heat capacity as the gradient of the draft moist static energy,
+  the energy the diagnosed environment absorbs from draft diffusion is exactly
+  the enthalpy of the dry air that the diffusing water displaces.
+- ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
+  `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
+  default) a run TOML that still sets either now stops with an unused-parameter
+  error. Remove them from run TOMLs.
+- ![][badge-🔥behavioralΔ] Snow falls at its fixed terminal velocity by default
+  (`snow_terminal_velocity: Fixed`); `Chen2022` remains available.
+- ![][badge-✨feature/enhancement] CloudMicrophysics 0.46 is supported (compat `0.45, 0.46`).
+- ![][badge-✨feature/enhancement] The equilibrium SGS condensate
+  `E[max(0, S)]` can be evaluated under the vertical displacement acting on
+  the curved profile of the saturation excess,
+  `S = μ_S + lin x + ½ curv (x² − 1) + h` with `x` standard normal,
+  `lin = ℓ_v ∂_z S̃`, `curv = ℓ_v² ∂_z² S̃` from the two bounding face gradients
+  of `q_tot` and `θ_li` (`∂_z S̃ = ∂_z q_tot − r_{v,θ} γ ∂T/∂θ_li ∂_z θ_li`), and `h` the horizontal displacement part, with the
+  variance of `S` matched to the `σ_S²` of the covariance closure
+  (`displacement_curvature_coefficients`, `displacement_condensate`). For
+  negative curvature, as at the cloud-base maximum of the mean saturation
+  excess, the moist tail is bounded by the maximum the displaced profile
+  reaches. Opt-in with `sgs_variance_curvature: true` (default `false`); it
+  enters the 0M equilibrium condensate, the 1M relaxation target `λ_eq` and
+  the equilibrium-ratio factor of the variance fidelity, and the cloud
+  fraction keeps its truncated-Gaussian closure.
+- ![][badge-🔥behavioralΔ] The SGS covariance of `(θ_li, q_tot)` is that of
+  Gaussian subgrid displacements of the two scalars acting on the resolved
+  gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
+  (`displacement_covariance`), with per-variable scales `ℓ_{h,ψ}`, `ℓ_{v,ψ}`,
+  horizontal cross-correlation `r_{h,θq}` and perfectly correlated vertical
+  displacements. `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
+  with `l_d = min(max(l_disp, l_b), z - z_s)` taking the larger of
+  the buoyancy-bounded mixing length
+  `l_disp = l_mix / √(1 + 2 c_σ max(N_disp², 0) l_mix² / (c_b κ_iso))` and the floor
+  displacement
+  `l_b = √(c_b κ_min) min(τ_N, l_disp/√(c_b κ_iso / (2 c_σ)), τ_0)` with `τ_N = 1/N_disp` for
+  `N_disp² > 0` and `∞` otherwise (continuous at `N_disp² = 0`),
+  `N_disp² = max(N_dry⁻², N_dry⁺²)`,
+  `κ_min = w_min² / (2 c_σ c_b)`
+  (`materialized_displacement_length!`): in stably stratified air
+  the displacement of the unresolved vertical motions lasts until buoyancy, the
+  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso / (2 c_σ))`) or the
+  quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N_disp`;
+  capped by the cell depth and the wall distance. The velocity
+  scale grows with the horizontal grid scale,
+  `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
+  fields requires. Defaults calibrated against the within-cell moments
+  (`var q_tot`, `var θ_li`, their covariance) of 3.75 km global MPAS (DYAMOND)
+  aggregated onto the model's cubed-sphere nodes, with the closure inputs from
+  the model's own operators on the MPAS native levels (one set for ne16–ne60
+  and the 130- and 63-level grids; `c_Δx` is specific to the model's gradient
+  operator): `sgs_variance_horizontal_scale_factor` (`c_Δx`, `1.24`; this
+  code default supersedes the ClimaParams value of `1`, and a run TOML that
+  sets the parameter still wins),
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, `1.08` m/s),
+  `sgs_variance_floor_reference_resolution` (`120` km),
+  `sgs_variance_floor_resolution_exponent` (`p`, `2/3`),
+  `sgs_variance_floor_time_scale` (`τ_0`, `300` s; bounded only from below),
+  `sgs_variance_theta_horizontal_scale_ratio` (`0.88`),
+  `sgs_variance_theta_vertical_scale_ratio` (`0.38`) and
+  `sgs_variance_horizontal_cross_correlation` (`0.74`);
+  the floor enters the variance only.
+  This replaces the turbulent block and the geometric block (the along-surface
+  (isentropic) part with its `q_sat`-variance bound, and the vertical
+  uniform-box part). `tq_correlation_model` defaults to `diagnosed`, the covariance
+  of the same displacements; `constant` keeps the prescribed value. The
+  variance-fidelity Damköhler rate uses the same buoyancy-bounded mixing
+  length `l_disp` as the displacement length. Equilibrium SGS saturation
+  adjustment (`compute_sgs_saturation_adjustment`) and 1-moment non-equilibrium
+  condensation (`Microphysics1MEvaluator`) evaluate equilibrium condensate via
+  the analytic truncated-Gaussian expectation `truncated_gaussian_condensate`
+  (mapped onto the quadrature nodes via `λ_eq` in `_compute_sgs_moments`),
+  eliminating the discrete 3-point Gauss–Hermite support cutoff at
+  `μ_S < −√3 σ_S`. The diagnosed T–q correlation (`sgs_correlation_Tq`) falls
+  back to `Tq_correlation_coefficient` only where a variance vanishes relative
+  to its grid mean (`q′q′ ≤ (ε q_tot)²` or `T′T′ ≤ (ε T)²`, `ε = eps(FT)`)
+  instead of where `T′T′ q′q′ ≤ eps(FT)²`; the absolute floor replaced the
+  diagnosed (negative) correlation by `+0.6` in the dry upper troposphere.
+
+- ![][badge-🔥behavioralΔ] Added a Picard sub-iteration for the EDMFX
+  implicit stage, enabled by default (`edmfx_updraft_picard_rounds: 2`;
+  set to `0` for the previous single-pass behavior). Each round cycles
+  `u₃` ↔ draft scalars ↔ buoyancy/microphysics at the same stage-initial
+  state, tightening the within-stage coupling so the final analytic
+  `u₃`/`ρa` solves run with Picard-converged inputs.
+- ![][badge-🔥behavioralΔ] Bump the TRMM reproducibility-test `dt` from
+  `120 s` to `180 s`. The short-`dt` TRMM variant moved to the new
+  `prognostic_edmfx_trmm_column_short_dt` configuration.
+
+0.42.15
+-------
+
+- ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
+  variance is bounded by the variance of `q_sat` along the displacement,
+  `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
+  (`adiabatic_q_sat_gradient`) and `ẑᵀD_cẑ` the vertical variance of the
+  along-surface displacement.
+- ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
+  snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
+  the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
+  where `a_p` is the overlap precipitation fraction diagnosed from the cloud cover
+  above by a maximum-random overlap sweep.
+- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
+  needs a vertical displacement (the along-surface variance beyond its
+  along-contour part, plus the across-surface uniform-box terms) and the
+  turbulent block's vertical-displacement variance are combined as the larger
+  of the two instead of their sum.
+- ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
+  for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
+  the environment condensate (`_get_condensate_means`, consistent with the
+  env-mean `(T⁰, ρ⁰, q⁰)` used throughout the SGS pipeline), weighted by the
+  environment area fraction, and binary updraft contributions are added
+  (`_apply_edmf_cloud_weighting!`).
+- ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
+  1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
+  `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
+- ![][badge-💥breaking] The `fixed_terminal_velocity_{liquid,ice,rain,snow}`
+  boolean config keys are removed. Use `cloud_liquid_terminal_velocity`
+  (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity` (`Fixed`, `Chen2022`),
+  `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`, `Blk1M`,
+  `Chen2022`). `ClimaAtmos.DiagnosticTerminalVelocity` is removed.
+- ![][badge-✨feature/enhancement] Adding Chen et al. (2022) fall speeds for rain and snow
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
+   Rain falls at fixed terminal velocity.
+- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
+  variance block is bounded by the height above the surface,
+  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
+  displacement is the vertical eddy displacement, which cannot reach below
+  the ground.
+- ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
+  per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
+  Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
+  (quiescent → 1, well-mixed → 0) and equilibrium-ratio modulator
+  `α_eq = r / (w + (1−w) r)` with `r = (q_c + q_min)/(q_c^eq + q_min)` and
+  new provisional parameter `sgs_fidelity_equilibrium_weight` (default 0.5).
+  CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
+  equilibrium part. Microphysics timescales reuse the ClimaParams
+  `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
+- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
+  is the variance from a Gaussian subgrid parcel displacement with covariance
+  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
+  the part along the local `θ_li` surface (q′q′ only, the conditional variance
+  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
+  it (the vertical uniform-box terms, with the q gradient taken across the
+  surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes. The new `vapor_relaxation`
+  config key selects `Joint` (default) or `PerProcess`.
+- ![][badge-💥breaking] CloudMicrophysics compat is v0.45 only; v0.43 and
+  v0.44 are no longer supported.
+- ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
+  term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
+  gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
+  stratification floored at the provisional `sgs_variance_isentropic_min_dtheta_dz`,
+  there is no horizontal `θ′θ′` (or `θ′q′`) term, and the displacement along the surface
+  is bounded by the cell, `ℓ² = Δx² / (1 + (s Δx / Δz)²)` with the surface slope
+  `s = |∇_h θ_li| / ∂_z θ_li`. The `q′q′` and `θ′q′` terms of the vertical uniform-box block are
+  scaled by the same factor, the share of the cell's vertical excursion not already
+  sampled along the surface.
+
+0.42.14
+-------
+- ![][badge-🔥behavioralΔ] Add a resolved vertical-gradient block
+  `c_g (c_Δz Δz)² (∂_z ψ)²` to `σ_T²`, `σ_q²` (uniform-box exact with the
+  defaults `c_g = 1/12`, `c_Δz = 1`; independent of `l_mix`), so the
+  microphysics quadrature sees non-zero variability where the turbulent
+  closure collapses. Set `sgs_variance_vertical_scale_factor = 0` to disable.
+- ![][badge-✨feature/enhancement] New `tq_correlation_model`. `constant`
+  (default) keeps the prescribed `Tq_correlation_coefficient`. `diagnosed`
+  builds `T′q′ = ρ_turb σ_T,turb σ_q,turb + c_g (c_Δx Δx_h)² ∇_h θ · ∇_h q
+  + c_g (c_Δz Δz)² ∂_z θ · ∂_z q` and forms
+  `ρ = clamp(T′q′ / √(T′T′ q′q′), -1, 1)`, falling back to the prescribed
+  value where the variances vanish. Reported via the existing
+  `env_q_tot_temperature_{covariance,correlation}` diagnostics.
+- ![][badge-🔥behavioralΔ] Remove the Richardson-number weight on the
+  horizontal geometric SGS variance term: The
+  `sgs_variance_geometric_Ri_factor` parameter is removed.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams with
+  `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.44 in compat and manifest.
 
 0.42.13
 -------

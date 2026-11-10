@@ -18,9 +18,9 @@ prognostic_tke: true
 microphysics_model: "0M"
 config: "column"
 z_max: 45e3
-z_elem: 200
-z_stretch: true
-dz_bottom: 30
+z_elem: 71
+dz_bottom: 28.0
+dz_top: 2530.0
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "10mins"

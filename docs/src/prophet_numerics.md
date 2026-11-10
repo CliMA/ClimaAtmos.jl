@@ -119,6 +119,21 @@ face-interpolated draft velocity and the normalized density excess,
 = I^c(\boldsymbol{u}_v^j) \cdot \frac{\rho^j - \rho}{\rho^j} \, G^c[\Phi] .
 ```
 
+Under non-equilibrium microphysics, `updraft_sedimentation!` evaluates, for
+each sedimenting draft condensate or precipitation species
+``q_\mu^{\sigma j}``, the downward-biased (`ᶠtop_bias`) sedimentation
+divergence ``S_\mu`` with the lateral-mixing correction where
+``\partial_z a^j < 0``. The sum ``S = \sum_\mu S_\mu`` is the sedimentation
+source of the draft mass, which the analytic draft-mass solve
+(`solve_sgs_ρa_implicit_stage_analytic!`) applies as a rate, and each
+intensive draft scalar ``\chi^j`` receives
+``(S_\chi - \chi^j S) / \hat{\rho}^j``, with ``S_\chi`` its own
+sedimentation tendency: ``S_\mu`` for ``q_\mu^{\sigma j}``,
+``S`` for ``q_t^j``, ``\sum_\mu S_{h,\mu}`` for ``h_s^j`` (the
+`updraft_sedimentation!` tendency of ``q_\mu^{\sigma j} (h_\mu(T^j) + \Phi)``,
+with laterally entrained environment condensate at ``h_\mu(T^0) + \Phi``), and
+zero for the other draft tracers.
+
 ### Draft vertical momentum
 
 Breaking the curl and cross-product terms into horizontal and vertical
@@ -160,33 +175,43 @@ enthalpy is subtracted; the ``q_t`` flux also increments ``\rho``,
 because subgrid moisture transport moves moist air mass.
 
 The diffusive fluxes are evaluated at faces from the face-native diffusivities
-``K_h``, ``K_u``, ``K_e`` (see
-[Closures](prophet_closures.md#Capping-inversions-as-unresolved-interfaces)).
-Two structural details matter for reading the code:
+``K_h``, ``K_u`` (see
+[Closures](prophet_closures.md#Unresolved-inversions)):
 
-  - The turbulent-mixing component ``K_h`` acts on
-    ``q_{t,\mathrm{eff}} = q_t - q_r - q_s``, the suspended water, distributed
-    to the cloud species by tendency scaling; rain and snow receive no turbulent
+  - The turbulent-mixing component ``K_h`` acts on the suspended water
+    ``q_{t,\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` and on
+    the suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`), which
+    diffuse down their own gradients (species the drafts do not carry, such as
+    the P3 ice number and rime quantities, down their grid-mean gradients); rain and snow receive no turbulent
     transport, so that rain shafts dominated by sedimentation are not smeared.
-    Energy diffuses as
-    ``-K_h [\nabla s_d + (h_{\mathrm{eff}} + \Phi) \nabla q_{t,\mathrm{eff}}]``,
-    the dry-static-energy-plus-water-enthalpy decomposition.
-  - The interfacial-entrainment component ``K_e`` acts per species on each
-    species' own gradient, and on ``\nabla h_{\mathrm{tot}}`` for energy,
-    because interfacial entrainment transports every constituent bodily with the
-    parcel.
-
-When `edmfx_vertical_diffusion` is enabled, each draft receives the same
-*specific* tendency the grid mean receives, which is the discrete form of the
-grid-mean-divergence requirement of [Thuburn2022](@cite).
+    Energy diffuses through the bracket of [Diffusion](diffusion.md),
+    ``\mathcal{B} = c_p \nabla T + \nabla \Phi + (h_v + \Phi) \nabla q_{t,\mathrm{eff}} + (h_l - h_v) \nabla q_l^{\mathrm{cl}} + (h_i - h_v) \nabla q_i^{\mathrm{cl}}``,
+    with ``c_p`` the heat capacity of the diffusing mixture and each
+    thermodynamic coefficient evaluated at centers and interpolated to faces.
+  - For `PrognosticEDMFX`, the grid-mean diffusive flux sums the environment and
+    draft contributions with face weights ``w^0 = I^f(\hat{\rho}^0) K_h`` and
+    ``w^j = f_j K_h / I^f(1/\max(\hat{\rho}^j, \epsilon))``
+    (``f_j =`` `edmfx_updraft_kh_diffusion_factor`), and when
+    `edmfx_vertical_diffusion` is enabled each draft scalar
+    ``\chi^j \in \{h_s^j, q_t^j, q_l^{\mathrm{cl},j}, q_i^{\mathrm{cl},j}, n_l^{\mathrm{cl},j}, n_i^{\mathrm{cl},j}\}``
+    receives ``-\max(\hat{\rho}^j, \epsilon)^{-1} D^c[-w^j G^f[\chi_{\mathrm{eff}}^j]]``,
+    where ``q_{t,\mathrm{eff}}^j = q_t^j - q_r^j - q_s^j`` and
+    ``h_{s,\mathrm{eff}}^j`` excludes non-diffusing rain and snow enthalpy. The
+    harmonic face mean in ``w^j`` is the series conductance of the adjacent
+    cells, so ``w^j / \hat{\rho}^j_c \le 2 f_j K_h`` and the intensive tendency
+    is a bounded three-point diffusion of ``\chi^j`` for every value of
+    ``\hat{\rho}^j_c`` (see [PROPHET](prophet.md)).
+    When `edmfx_vertical_diffusion` is `false`, `PrognosticEDMFX` reduces to the
+    environment diffusive flux ``-D^c[-w^0 G^f[\chi^0]]``.
 
 ### Hyperdiffusion
 
 Draft variables are hyperdiffused for numerical stability, along
 terrain-following coordinate surfaces, using the decomposed and unweighted
-subdomain fields, with the energy and moisture contributions split into a
-dry-static-energy term and a water term as in the grid mean. See [Hyperdiffusion](hyperdiffusion.md) for the
-operator and the reference-state subtraction.
+subdomain fields, with the energy and moisture contributions split into
+sensible-heat, geopotential, and water terms as in the grid mean. See
+[Hyperdiffusion](hyperdiffusion.md) for the operator and the reference-state
+subtraction.
 
 ## The implicit–explicit split
 
@@ -246,6 +271,26 @@ identity blocks, the Newton solve reproduces the analytic stage values exactly
 and leaves them alone. The result is less general than a Newton solve but
 cannot fail: each solve is exact, needs one sweep through the column, and is
 constructed so that it cannot produce a negative area or a downward updraft.
+
+`u_3^j` enters the buoyancy-affecting draft scalars (``h_s^j``, ``q_t^j``, 1M
+condensates) through the upwind-advection sweep, and those scalars in turn
+drive the buoyancy that closes the next ``u_3^j`` solve. To tighten the
+within-stage coupling, `initialize_implicit_stage_problem!` runs
+`edmfx_updraft_picard_rounds` Picard rounds (default `2`; ``0`` reproduces
+the single-pass behavior) that alternate the analytic ``u_3^j`` solve with
+the semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
+turbulent entrainment toward the environment, first-cell surface mass-source
+relaxation of ``h_s^j`` and ``q_t^j``, and 1M microphysics), each round
+starting from the stage-initial `Y.(f,c).sgsʲs`. Within a round, the sweep
+transports every draft scalar first; the draft thermodynamics and
+`ᶜmp_tendencyʲs` are then evaluated at the transported state, so that the
+vapor of each cell is consistent with the condensate that arrives with it, and
+the condensate and precipitation tracers receive ``\gamma \Delta t`` times
+that source; the draft thermodynamics are refreshed again at the full iterate
+for the next ``u_3^j`` solve. The final analytic ``u_3^j`` and
+``\hat{\rho}^j`` solves then run with Picard-converged buoyancy and
+microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve so
+the Jacobian stays consistent.
 
 ### Vertical velocity
 
@@ -318,7 +363,7 @@ n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} ,
 ```math
 d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
   \frac{1}{\gamma \Delta t} + \alpha_{\mathrm{top}}[i]
-  - (E^j - \Delta^j)[i] \right) ,
+  - (E^j - \Delta^j)[i] - r[i] \right) ,
 \qquad
 \alpha_{\mathrm{face}} = \frac{I^f(\rho^j J)}{J^f}
   \frac{u_3^j / \Delta z^f}{\rho^j_{\mathrm{upwind}} \, \Delta z} ,
@@ -326,7 +371,44 @@ d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
 
 swept bottom to top, with the upwind density ``\rho^j[i]`` at the top face and
 ``\rho^j[i-1]`` at the bottom face. The floor on the denominator caps the
-per-step growth at roughly a factor of ten.
+per-step growth at roughly a factor of ten. The sedimentation mass source of
+the condensate species enters as the rate (`updraft_sedimentation_rate!`)
+
+```math
+r = \frac{1}{\gamma \Delta t} \sum_\mu \Delta q_\mu ,
+\qquad
+\left( I - \gamma \Delta t \, \hat{\rho}^{-1}
+  \frac{\partial S_\mu}{\partial q_\mu} \right) \Delta q_\mu
+= \gamma \Delta t \, \hat{\rho}^{-1} S_\mu ,
+```
+
+the change of each draft condensate by sedimentation in one linearized
+backward-Euler step from the Picard-converged tracers, at the stage-start
+area. The flux through each face comes from the cell above, so the operator is
+upper bidiagonal and each column is solved in one top-to-bottom sweep. For
+``q_{\mathrm{rai}}`` and ``q_{\mathrm{sno}}`` (mass) and ``n_{\mathrm{rai}}``
+(2M number), the super-diagonal uses the running column max of the terminal
+velocity at and above each cell (`fill_column_max!`) instead of the pointwise
+``w^n``. This keeps the super-diagonal nonzero at the leading edge of a
+precipitation shaft, where the pointwise ``w(q^n \approx 0)`` would collapse
+and pile the whole Newton step into the first empty cell below the shaft; one
+Newton iteration therefore carries the mass (or number) across multiple empty
+cells at Courant numbers above one. The grid-mean sedimentation Jacobian
+(`update_sedimentation_jacobian!`) uses the same substitution, so both solves
+agree on where the species goes. Cloud liquid, cloud ice, and
+``n_{\mathrm{lcl}}`` fall slowly enough that the pointwise stencil is stable
+and keep it. The lateral-mixing diagonal keeps the pointwise ``w^n``.
+The stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
+the condensate, so the mass the draft gains matches the dilution
+``\chi^j S / \hat{\rho}^j`` that it applies, also at Courant numbers above
+one, where the condensate that arrives over the stage differs from the
+stage-start ``S``. Where the draft narrows downward, ``S_\mu`` and its
+derivative are proportional to the local area and ``\Delta q_\mu`` does not
+depend on it, so the rate also holds at the stage area. Under the
+equilibrium 0-moment microphysics with implicit microphysics tendencies, ``r``
+is the draft precipitation removal rate (the ``q_t^j`` tendency
+`ᶜmp_tendencyʲs.dq_tot_dt`); with explicit tendencies, the removal enters
+``\hat{\rho}^j`` through the explicit tendency, and ``r`` is zero.
 
 The recurrence routes detrainment, the surface source, and the area bound in
 ways that are easy to misread:
@@ -361,13 +443,13 @@ The implicit residual is linearized by the Jacobian algorithms of
 blocks are assembled by five update functions that mirror the tendency
 structure, in a fixed order because they accumulate into shared blocks:
 
-| Update                                    | Covers                                                                                                                                                         |
-|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
-| `update_sgs_diffusion_jacobian!`          | the diffusive coupling between the grid mean and the drafts, including ``K_e``                                                                                 |
-| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                            |
-| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                           |
-| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                           |
+| Update                                    | Covers                                                                                                                                                                                                         |
+|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux |
+| `update_sgs_diffusion_jacobian!`          | vertical diffusion of the draft scalars down their own gradients                                                                                                                                               |
+| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                                                                            |
+| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                                                                           |
+| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                                                                           |
 
 The ``\hat{\rho}^j`` and ``u_3^j`` rows receive fallback identity blocks,
 since their stage values come from the analytic solves. The block solver
@@ -442,7 +524,8 @@ grid mean is not. `edmfx_filter` is enabled in all PROPHET configurations in
   - Negative TKE is relaxed to zero within one timestep rather than being
     clipped, in `edmfx_sgs_diffusive_flux_tendency!`.
   - The subgrid total-water standard deviation is bounded by
-    ``\sigma_q \le r_{\max} q_t`` (`sgs_variance_max_rel_std`, default 0.5)
+    ``\sigma_q \le r_{\max} q_t`` (`sgs_variance_max_rel_std`, default 0.5),
+    with ``q_t`` the mean of the subdomain on which the quadrature is centred,
     before the quadrature, in `set_covariance_cache!`; see
     [Closures](prophet_closures.md#Variances-and-cloud-fraction).
   - Draft entrainment prefactors return zero at or below the surface, where
@@ -468,7 +551,7 @@ order matters because the closures depend on each other:
     microphysics tendency cache. Called before every explicit tendency evaluation.
 
 The face diffusivities are computed *after* the cloud fraction because the
-buoyancy gradient that enters ``N_{e,\mathrm{eff}}^2`` depends on it; the
+buoyancy gradient that enters ``N_e^2`` depends on it; the
 mixing length is materialized inside the Picard iteration when the configuration
 uses covariances, and separately otherwise, with `uses_covariances` as the
 shared predicate that keeps the two paths from disagreeing.

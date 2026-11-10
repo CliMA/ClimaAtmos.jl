@@ -90,8 +90,6 @@ Accumulates contributions from:
     `p.atmos.diff_mode == Explicit()` (implicit diffusion is applied in
     `implicit_tendency!`).
   - Surface fluxes, radiation, EDMFX TKE, and chemistry.
-  - Microphysics (condensation, precipitation) and surface precipitation, only when
-    `p.atmos.microphysics_tendency_timestepping == Explicit()`.
   - Non-orographic and orographic gravity-wave drag.
   - Surface temperature evolution, pressure work, Smagorinsky-Lilly, AMD LES, and
     constant horizontal diffusion.
@@ -99,9 +97,8 @@ Accumulates contributions from:
     `zero_velocity_tendency!` for advection tests (which must remain last so no
     later call reintroduces velocity tendencies).
 
-The order of calls matters: microphysics must precede `surface_temp_tendency!`
-(which reads the precipitation cache), and all `ρa` tendencies must precede
-`pressure_work_tendency!`. Called from `remaining_tendency!`. Returns `nothing`.
+Microphysics and surface precipitation are applied in `implicit_tendency!`,
+not here. Called from `remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
@@ -115,39 +112,39 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; sfc_conditions) = p.precomputed
 
-    rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
-
-    if use_prognostic_tke(turbconv_model)
-        rst_ρtke = rayleigh_sponge_tendency_tracer(Y.c.ρtke, rayleigh_sponge)
-        @. Yₜ.c.ρtke += rst_ρtke
-    end
-
-    if turbconv_model isa PrognosticEDMFX
-        ᶜmse = @. lazy(ᶜh_tot - ᶜK)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-        for j in 1:n
-            rst_sgs_mse = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).mse, ᶜmse, rayleigh_sponge,
-            )
-            @. Yₜ.c.sgsʲs.:($$j).mse += rst_sgs_mse
-            rst_sgs_q_tot = rayleigh_sponge_tendency_sgs_tracer(
-                Y.c.sgsʲs.:($j).q_tot, ᶜq_tot, rayleigh_sponge,
-            )
-            @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
-        end
-        # Auto-discovered SGS tracers (microphysics species and any
-        # user-defined passive tracers)
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-            for j in 1:n
-                ᶜsgs_χ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                ᶜsgs_χₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                rst_sgs_χ = rayleigh_sponge_tendency_sgs_tracer(ᶜsgs_χ, ᶜχ, rayleigh_sponge)
-                @. ᶜsgs_χₜ += rst_sgs_χ
+    if !isnothing(rayleigh_sponge)
+        (; ᶜz, ᶠz) = z_coordinate_fields(axes(Y.c))
+        zmax = Spaces.z_max(axes(ᶠz))
+        draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
+        χ_names = sgs_tracer_names(Y)
+        ρχ_names = unrolled_map(get_ρχ_name, χ_names)
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜh_tot, ᶜK, ᶜz,
+        ) do Yₜc, Yc, ᶜh_tot, ᶜK, ᶜz
+            @. Yₜc.uₕ -= β_rayleigh_uₕ(rayleigh_sponge, ᶜz, zmax) * Yc.uₕ
+            ᶜβ_tr = @. β_rayleigh_tracer(rayleigh_sponge, ᶜz, zmax)
+            if MatrixFields.has_field(Yc, @name(ρtke))
+                @. Yₜc.ρtke -= ᶜβ_tr * Yc.ρtke
             end
+            # Updrafts relax toward the grid mean.
+            unrolled_foreach(draft_indices) do j
+                @inline
+                ᶜsgsʲ = Yc.sgsʲs.:($j)
+                ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+                @. ᶜsgsʲₜ.mse -= ᶜβ_tr * (ᶜsgsʲ.mse - (ᶜh_tot - ᶜK))
+                @. ᶜsgsʲₜ.q_tot -= ᶜβ_tr * (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ))
+                MatrixFields.unrolled_foreach(
+                    map(tuple, χ_names, ρχ_names),
+                ) do (χ_name, ρχ_name)
+                    @inline
+                    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+                    ᶜsgs_χ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                    ᶜsgs_χₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                    @. ᶜsgs_χₜ -= ᶜβ_tr * (ᶜsgs_χ - specific(ᶜρχ, Yc.ρ))
+                end
+                return nothing
+            end
+            return nothing
         end
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
@@ -160,9 +157,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         (ᶜρ, thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
 
-    # TODO: fuse, once we fix
-    #       https://github.com/CliMA/ClimaCore.jl/issues/2165
-    @. Yₜ.c.uₕ += rst_uₕ
     viscous_sponge_tendency!(Yₜ, Y, p)
 
     # Held Suarez tendencies
@@ -190,27 +184,20 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.vertical_diffusion,
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     surface_flux_tendency!(Yₜ, Y, p, t)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
-    edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # Chemistry tendencies
     chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
 
-    # Unified microphysics tendencies (cloud condensation + precipitation)
-    if p.atmos.microphysics_tendency_timestepping == Explicit()
-        microphysics_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.microphysics_model,
-            p.atmos.turbconv_model,
-        )
-    end
+    # Unified microphysics tendencies: always applied in the implicit stage
+    # (`implicit_tendency!`). `implicit_microphysics` only controls whether
+    # cond/subl flows through the implicit cache with a Jacobian or stays in
+    # the frozen bulk tendency; both paths run in the implicit stage.
 
     non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
@@ -228,16 +215,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # NOTE: Microphysics tendencies should be applied before calling this function,
     # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface.temperature)
-    if p.atmos.microphysics_tendency_timestepping == Explicit()
-        surface_precipitation_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.surface.temperature,
-            p.atmos.microphysics_model,
-        )
-    end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

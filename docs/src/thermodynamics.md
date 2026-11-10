@@ -186,8 +186,8 @@ water, a value typical for the atmosphere, is the choice made here.
 This invariance gives a check on any new energy flux added to the model: a flux
 that breaks it is not thermodynamically consistent, and will not conserve energy
 (see [Conservation Properties](conservation.md)). The subgrid-scale enthalpy
-flux decomposition in [Hyperdiffusion](hyperdiffusion.md) and in the vertical
-diffusion scheme follows from this requirement.
+flux decompositions in [Diffusion](diffusion.md) and
+[Hyperdiffusion](hyperdiffusion.md) follow from this requirement.
 
 ## Where this is implemented
 

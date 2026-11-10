@@ -123,12 +123,13 @@ import ClimaParams as CP
                     @test result.T == T_mean
                 end
 
-                @testset "Single quadrature point = grid-mean" begin
-                    # Use GaussianSGS: only Gaussian has χ=0 → (μ_T, μ_q)
+                @testset "GridMeanSGS = grid-mean" begin
+                    # Without SGS sampling σ_S is the floor, so the result is the
+                    # grid-mean one even with nonzero (co)variances.
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
@@ -136,7 +137,7 @@ import ClimaParams as CP
                         FT(1.0), FT(1e-6), FT(0),
                     )
 
-                    # Even with variance, single point should give grid-mean
+                    # Even with variance, no SGS sampling gives the grid mean
                     @test result.q_liq ≈ q_liq_gm rtol = FT(1e-4)
                     @test result.q_ice ≈ q_ice_gm rtol = FT(1e-4)
                 end
@@ -153,6 +154,26 @@ import ClimaParams as CP
                     @test isfinite(result.q_ice)
                     @test result.q_liq >= FT(0)
                     @test result.q_ice >= FT(0)
+                end
+
+                @testset "Subsaturated tail (μ_S < -√3 σ_S): smooth positive condensate" begin
+                    # At μ_S = -2 σ_S (below the 3-point Gauss–Hermite node at √3 σ_S),
+                    # raw 3-point quadrature has zero support, whereas the analytic
+                    # truncated-Gaussian expectation is strictly positive.
+                    σ_q = FT(1e-3)
+                    q_sub = q_sat_gm - FT(2) * σ_q
+                    result = ClimaAtmos.compute_sgs_saturation_adjustment(
+                        thp, quad, ρ, T_mean, q_sub,
+                        FT(0), σ_q^2, FT(0),
+                    )
+                    mom = ClimaAtmos._sgs_saturation_moments(
+                        thp, ρ, T_mean, q_sub, quad, FT(0), σ_q^2, FT(0),
+                    )
+                    q_cond_expected =
+                        ClimaAtmos.truncated_gaussian_condensate(mom.mu_S, mom.sigma_S)
+                    @test mom.mu_S < -sqrt(FT(3)) * mom.sigma_S
+                    @test q_cond_expected > FT(0)
+                    @test result.q_liq + result.q_ice ≈ q_cond_expected rtol = FT(1e-5)
                 end
 
                 @testset "Condensate non-negativity" begin

@@ -108,9 +108,14 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
+            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
+            :ᶠsgsʲs_picard_snapshot,
+            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -170,6 +175,11 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
+            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
+            :ᶠsgsʲs_picard_snapshot,
+            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -204,7 +214,7 @@ if MANYTESTS
     # step per grid.
     available_grids =
         comms_ctx isa ClimaComms.SingletonCommsContext ?
-        ["sphere", "box", "column"] : ["sphere", "box"]
+        ["sphere", "box", "column", "multicolumn"] : ["sphere", "box"]
     grids = if isempty(GRIDS)
         available_grids
     else
@@ -262,7 +272,11 @@ if MANYTESTS
                         "check_nan_every" => 3,
                         "log_progress" => false,
                         "microphysics_model" => mp_model,
-                        "config" => grid,
+                        "config" => grid == "multicolumn" ? "column" : grid,
+                        "n_columns" => grid == "multicolumn" ? 2 : 1,
+                        # The default grid lies outside the range the
+                        # two-scale stretching admits.
+                        "z_stretch" => false,
                         "topography" => topography,
                         "turbconv" => turbconv_mode,
                         "dt" => "1secs",
@@ -300,7 +314,7 @@ else
         YAML.load_file(
             joinpath(
                 @__DIR__,
-                "../config/common_configs/numerics_sphere_he16ze63.yml",
+                "../config/common_configs/numerics_sphere_he16ze79.yml",
             ),
         ),
         YAML.load_file(
@@ -312,6 +326,9 @@ else
         Dict(
             "h_elem" => 4,
             "z_elem" => 15,
+            # 15 levels up to 60 km lie outside the range the two-scale
+            # stretching admits.
+            "z_stretch" => false,
             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
             "reproducible_restart" => true,
             "check_nan_every" => 3,

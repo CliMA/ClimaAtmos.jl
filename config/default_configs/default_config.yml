@@ -1,10 +1,16 @@
 # Default Configuration for ClimaAtmos.jl
 # Resolution
 dz_bottom:
-  help: "Model bottom grid depth. Default: 500m"
+  help: "Bottom layer thickness of the two-scale vertical stretching. Default: 500m"
   value: 500.0
+dz_top:
+  help: "Top layer thickness of the two-scale vertical stretching. Default: 3000m"
+  value: 3000.0
+z_pbl:
+  help: "Scale height of the boundary-layer refinement of the two-scale vertical stretching. Default: 2200m"
+  value: 2200.0
 z_stretch:
-  help: "Stretch grid in z-direction. [`true` (default), `false`]"
+  help: "Stretch the vertical grid with the two-scale rule, which rejects a `z_elem` outside the range that `dz_bottom`, `dz_top`, `z_pbl`, and `z_max` admit. [`true` (default), `false`]"
   value: true
 h_elem:
   help: "number of elements per edge on a cubed sphere"
@@ -21,6 +27,9 @@ y_elem:
 y_max:
   help: "Model domain size, y direction. Default: 300km"
   value: 300000.0
+n_columns:
+  help: "Number of independent columns of a `column` configuration [`1` (default)]"
+  value: 1
 z_elem:
   help: "number of vertical elements"
   value: 10
@@ -120,8 +129,8 @@ update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
 update_cache_every:
-  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step` (default), `stage`]"
-  value: "step"
+  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
+  value: "stage"
 update_constrain_state_every:
   help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
   value: "step"
@@ -134,6 +143,9 @@ rad:
   value: ~
 idealized_h2o:
   help: "Use idealized H2O in radiation model [`false` (default), `true`]"
+  value: false
+radiation_include_snow:
+  help: "Include snow in RRTMGP cloud optics as a placeholder (reuses ice optics, clamped to the ice-table max radius ~90 µm). Requires rad=allsky/allskywithclear and 1M microphysics. [`false` (default), `true`]"
   value: false
 dt_rad:
   help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
@@ -153,6 +165,9 @@ idealized_clouds:
 prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
+cloud_inhomogeneity_in_sw_radiation:
+  help: "Scale the in-cloud water paths seen by the RRTMGP shortwave solve by the subgrid inhomogeneity factor of the in-cloud condensate; the longwave always sees the mean in-cloud condensate. Only affects interactive clouds under the `quadrature` cloud model; `false` passes the mean condensate to the shortwave as well. [`true` (default), `false`]"
+  value: true
 insolation:
   help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"
@@ -295,40 +310,49 @@ cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
   value: "arch_2layers_8nodes.jld2"
 implicit_microphysics:
-  help: "Whether to treat microphysics tendencies implicitly [`true` (default), `false`]"
+  help: "Controls how 1M cloud condensation and sublimation are coupled to the implicit solve. When `true`, both processes are refreshed each Newton iterate and contribute `-dtγ/τ` diagonals to the Jacobian; when `false`, they are part of the stage-fixed CM BMT bulk tendency with no Jacobian contribution. All 1M microphysics tendencies are applied in the implicit stage either way. [`true` (default), `false`]"
   value: true
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `diagnosed` uses the covariance of the subgrid displacement that produces the variances, ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed `Tq_correlation_coefficient` where the variances vanish. `constant` uses the prescribed coefficient everywhere. [`diagnosed` (default), `constant`]"
+  value: "diagnosed"
+sgs_variance_fidelity_model:
+  help: "Closure for the variance fidelity α of the condensate reconstruction. `equilibrium` uses α = α_Da α_eq. `updraft` (PrognosticEDMFX with non-equilibrium microphysics; ignored otherwise) sets α σ_S = c_u q_c,up from the condensate q_c,up of the cloudy updrafts, bounded to [α_min, 1/(1 − w_eq)], blended with α_Da α_eq as their area grows above the EDMF minimum area, and α_Da α_eq without them. [`equilibrium` (default), `updraft`]"
+  value: "equilibrium"
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
+  help: "Distribution of the SGS fluctuations over which the microphysics is integrated. `gaussian`: the bivariate Gaussian (`GaussianSGS`); the 1M microphysics nodes sit at the conditional moments of the saturation excess between the cloud and shaft edges, and the 0M microphysics uses Gauss–Hermite quadrature. [`gaussian` (default), `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
 quadrature_order:
-  help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
+  help: "Gauss–Hermite quadrature order for the SGS integration of the 0M microphysics (1-5). Higher orders are more accurate but slower. The 1M microphysics places its own nodes and ignores it. Default: 3"
   value: 3
+sgs_variance_curvature:
+  help: "Evaluate the equilibrium SGS condensate E[max(0, S)] under the vertical displacement acting on the curved profile of the saturation excess, S = μ_S + lin x + ½ curv (x² − 1) + h with x standard normal, so that the moist tail is bounded by the largest excess the displaced (quadratic) profile reaches, μ_S + (lin² + curv²)/(2|curv|) for curv < 0. `false` keeps the truncated-Gaussian expectation. [`false` (default), `true`]"
+  value: false
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3
 microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
-fixed_terminal_velocity_liquid:
-  help: "Use fixed terminal velocity for cloud liquid sedimentation [`true` (default), `false`]"
-  value: true
-fixed_terminal_velocity_ice:
-  help: "Use fixed terminal velocity for cloud ice sedimentation [`true` (default), `false`]"
-  value: true
-fixed_terminal_velocity_rain:
-  help: "Use fixed terminal velocity for rain sedimentation [`true`, `false` (default)]"
-  value: false
-fixed_terminal_velocity_snow:
-  help: "Use fixed terminal velocity for snow sedimentation [`true` (default), `false`]"
-  value: true
+cloud_liquid_terminal_velocity:
+  help: "Cloud liquid sedimentation velocity for 1M microphysics [`Fixed` (default), `Stokes`]"
+  value: "Fixed"
+cloud_ice_terminal_velocity:
+  help: "Cloud ice sedimentation velocity for 1M microphysics [`Fixed` (default), `Chen2022` (Chen et al. 2022 small ice)]"
+  value: "Fixed"
+rain_terminal_velocity:
+  help: "Rain sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 rain)]"
+  value: "Chen2022"
+snow_terminal_velocity:
+  help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
+  value: "Chen2022"
 cloud_liquid_formation:
-  help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
+  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation; `~` disables it. The `implicit_microphysics` toggle routes the process between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`CloudLiquidFormation` (default), `~`]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `TemperatureDependentIceNumber`, `ConstantTimescale`, `TemperatureDependent`, ~]"
+  help: "Cloud ice formation option for 1M microphysics. The `implicit_microphysics` toggle routes the chosen variant between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`TemperatureDependentIceNumber` (default), `PrescribedIceNumber`, `ConstantTimescale`, `TemperatureDependent`, `~`]"
   value: "TemperatureDependentIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
@@ -337,7 +361,7 @@ cloud_liquid_freezing:
   help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
   value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values."
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, `KK2000`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values; `KK2000` is the Khairoutdinov and Kogan (2000) rate with the prescribed cloud droplet number concentration."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
@@ -352,7 +376,7 @@ snow_melt:
   help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
   value: "SnowMelt"
 cloud_liquid_rain_accretion:
-  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default), ~]"
+  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default, Marshall-Palmer kernel), `KK2000` (Khairoutdinov and Kogan 2000 rate), ~]"
   value: "CloudLiquidRainAccretion"
 cloud_liquid_snow_accretion:
   help: "Cloud liquid + snow accretion option for 1M microphysics [`CloudLiquidSnowAccretion` (default), ~]"
@@ -366,6 +390,9 @@ cloud_ice_snow_accretion:
 rain_snow_accretion:
   help: "Rain-snow collision accretion option for 1M microphysics [`RainSnowAccretion` (default), ~]"
   value: "RainSnowAccretion"
+vapor_relaxation:
+  help: "Coupling of the vapor-driven phase changes in the 1M substep solver [`Joint` (default), `PerProcess`]"
+  value: "Joint"
 
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
@@ -414,16 +441,16 @@ external_forcing:
   help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only for `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
-  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
+  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. `ForcingFromFile` and `GCM` also take a list with one path per column of a multi-column run. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`, `[path/to/file1, path/to/file2, ...]`]"
   value: ~
 cfsite_number:
-  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
+  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. A list gives one cfsite per column of a multi-column run. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`, `[siteN, siteM, ...]`]"
   value: "site23"
 site_latitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. A list gives one site per column of a multi-column run. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. A list gives one site per column of a multi-column run. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
@@ -518,7 +545,7 @@ edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"
   value: false
 edmfx_horizontal_diffusion:
-  help: "If set to true, it applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on horizontal diffusion of prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
   help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`]"
@@ -544,6 +571,9 @@ edmfx_sgs_diffusive_flux:
 edmfx_sgs_horizontal_diffusive_flux:
   help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
+edmfx_updraft_picard_rounds:
+  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `initialize_implicit_stage_problem!` before the final u₃/ρa analytic solves. `0` reproduces the single-pass behavior.  [non-negative integer; default `2`]"
+  value: 2
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1

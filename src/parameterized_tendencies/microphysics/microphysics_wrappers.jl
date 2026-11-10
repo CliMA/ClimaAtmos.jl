@@ -1,3 +1,4 @@
+import ClimaComms
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -207,17 +208,31 @@ end
 ### 1 Moment Microphysics
 ###
 
+# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
+# its value in its type, so the field costs nothing and the parameters fold to
+# literals instead of being read back from the struct -- worth 162 registers and
+# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
+# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
+@inline _unwrapped(p) = p
+@inline _unwrapped(::Val{P}) where {P} = P
+
+# Only on the device. A struct type parameter is boxed, so on the host each use
+# copies it back out and allocates per point; the device compiler has no heap
+# and folds it to a literal instead.
+@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
+@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
+
 """
     Microphysics1MEvaluator{S, MP, TPS, FT, Args}
 
-GPU-safe functor evaluating 1-moment microphysics tendencies at SGS quadrature
-points, for use with [`integrate_over_sgs`](@ref).
+GPU-safe functor evaluating 1-moment microphysics tendencies at the nodes of
+the conditional-moment rule (`sum_over_conditional_nodes`).
 
 The local condensate at each point follows the truncated-Gaussian
 Lagrange-multiplier closure described in `microphysics_tendencies_1m`.
 Precipitation (`q_rai`, `q_sno`), the liquid fraction `λ`, and the closure
-quantities (`λ_lagrange`, `mu_S`, `α`) are grid-cell constants held fixed across
-quadrature points.
+quantities (`λ_lagrange`, `λ_eq`, `mu_S`, `α`) are grid-cell constants held fixed across
+the nodes.
 
 # Fields
 
@@ -230,47 +245,127 @@ quadrature points.
     non-negative by the caller.
   - `λ`: Thermodynamic liquid fraction [-].
   - `ξ_liq`, `ξ_ice`: Uniform fractions of cloud liquid and cloud ice over the
-    quadrature [-].
+    nodes [-].
   - `q_lcl`, `q_icl`: Subdomain-mean cloud liquid and cloud ice [kg/kg].
   - `λ_lagrange`: Lagrange multiplier enforcing
-    `E[max(0, λ_lagrange + α·S′)] = q_c` under the quadrature
-    measure (fitted in `_compute_sgs_moments`) [kg/kg].
+    `E[max(0, λ_lagrange + α·S′)] = q_c` (`_compute_sgs_moments`) [kg/kg].
+  - `λ_eq`: Equilibrium Lagrange multiplier enforcing
+    `E[max(0, λ_eq + S′)] = q_c_eq` (with `α = 1`), from which the
+    node saturation excess of cloudy equilibrium nodes is reconstructed [kg/kg].
   - `mu_S`: Linearized SGS mean saturation excess `q_tot − q_sat(T, ρ)` [kg/kg].
   - `α`: Variance fidelity parameter [-].
+  - `β_precip`, `shaft_frac`: Precipitation-fraction placement of the cell-mean
+    rain and snow onto the shaft nodes and the node weight of the shaft
+    (`conditional_rule_shaft_fraction`); `β_precip = 0` disables it.
   - `dt`: Timestep used for the time-averaged process rates [s].
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
 """
-struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+struct Microphysics1MEvaluator{
+    Mode <: BMT.TendencyMode, S, MP, TPS, FT, Args <: Tuple,
+}
+    mode::Mode         # BMT.LinearizedAverage() or BMT.Instantaneous()
     scheme::S
     mp::MP
     tps::TPS
     ρ::FT
     w::FT              # physical vertical velocity [m/s]
-    # Precipitation (held fixed across quadrature points)
+    # Precipitation
     q_rai::FT
     q_sno::FT
     λ::FT              # liquid fraction (from thermodynamics, held fixed)
-    # Uniform fractions of each species over the quadrature and the subdomain
+    # Uniform fractions of each species over the nodes and the subdomain
     # means they draw on
     ξ_liq::FT
     ξ_ice::FT
     q_lcl::FT
     q_icl::FT
-    # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
-    λ_lagrange::FT # Lagrange multiplier for centred S′ (discrete fit)
+    # Truncated-Gaussian Lagrange multipliers, μ_S, and liquid fraction
+    λ_lagrange::FT # Lagrange multiplier for actual condensate q_c
+    λ_eq::FT       # equilibrium multiplier for q_c_eq (α = 1)
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
-    # Numerical parameters
+    # Precipitation-fraction placement
+    β_precip::FT
+    shaft_frac::FT
+    # Numerical parameters (used by `BMT.LinearizedAverage()`; ignored for
+    # `BMT.Instantaneous()`)
     dt::FT
     nsubs::Int
     args::Args
 end
+
+# Without `λ_eq`: the grid-mean equilibrium multiplier `max(0, μ_S − q_rai − q_sno)`,
+# as in `microphysics_tendencies_1m`.
+@inline Microphysics1MEvaluator(
+    mode, scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α,
+    β_precip, shaft_frac,
+    dt, nsubs, args,
+) = Microphysics1MEvaluator(
+    mode, scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, max(zero(ρ), mu_S - (q_rai + q_sno)), mu_S, α,
+    β_precip, shaft_frac,
+    dt, nsubs, args,
+)
+
+# Backward-compat constructor: assume `BMT.LinearizedAverage()` when no mode
+# is given. Keeps the pre-mode call sites (e.g. unit tests) working.
+@inline Microphysics1MEvaluator(
+    scheme::BMT.MicrophysicsScheme, mp, tps, ρ, w,
+    args_rest...,
+) = Microphysics1MEvaluator(
+    BMT.LinearizedAverage(), scheme, mp, tps, ρ, w, args_rest...,
+)
+
+"""
+    sgs_precip_shaft_threshold(a_p, sigma_S)
+
+Threshold `S_star` on the centred saturation excess such that the shaft covers
+the moistest fraction `a_p` of the Gaussian PDF of standard deviation `sigma_S`:
+
+    S_star = σ_S · Φ⁻¹(1 − a_p)
+
+`a_p` is clamped to `[eps, 1]`: `a_p = 1` places the threshold below the whole
+PDF (uniform precipitation). The threshold is an edge of the conditional-moment
+rule, so the node weight of the shaft (`conditional_rule_shaft_fraction`) is
+`a_p` for any `a_p`, and it normalizes the placement.
+"""
+@inline function sgs_precip_shaft_threshold(a_p, sigma_S)
+    FT = typeof(sigma_S)
+    a = clamp(FT(a_p), eps(FT), one(FT))
+    return sigma_S * normal_cdf_inv(one(FT) - a)
+end
+
+"""
+    sgs_placement_factor(β, flag, shaft_frac)
+
+Factor `φ` on a cell-mean quantity at a node when a fraction `β` of it is
+confined to the flagged nodes (`flag = 1`, total node weight `shaft_frac`) and
+the rest stays uniform,
+
+    φ = (1 − β) + β · flag / shaft_frac,
+
+so that the node mean of `φ` is 1 and the cell mean is conserved. `β = 0`
+returns exactly 1; `shaft_frac = 0` falls back to uniform.
+"""
+@inline function sgs_placement_factor(β, flag, shaft_frac)
+    FT = typeof(β)
+    φ_in = ifelse(
+        shaft_frac > zero(FT), flag / max(shaft_frac, eps(FT)), one(FT),
+    )
+    return (one(FT) - β) + β * φ_in
+end
+
 """
     sgs_local_condensate(λ, shifted_excess, ξ_liq, ξ_ice, q_lcl, q_icl)
 
 Local cloud liquid and cloud ice `(q_lcl_hat, q_icl_hat)` [kg/kg] at one
-quadrature node from the reconstructed `shifted_excess = max(0, λ_lagrange + α S′)`,
+node from the reconstructed `shifted_excess = max(0, λ_lagrange + α S′)`,
 the liquid fraction `λ`, the subdomain means `q_lcl`, `q_icl` and the uniform
 fractions `ξ_liq`, `ξ_ice`:
 
@@ -280,7 +375,7 @@ fractions `ξ_liq`, `ξ_ice`:
 `ξ = 0` is the excess reconstruction (the species sits only where the node is
 saturated, in proportion to its excess); `ξ = 1` is the uniform distribution (the
 species is the subdomain mean at every node). Either end, and any blend, conserves
-the quadrature mean of the species in cells with condensate, since the excess
+the node mean of the species in cells with condensate, since the excess
 share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction of
 `λ_lagrange`.
 """
@@ -290,21 +385,23 @@ share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction
     return (q_lcl_hat, q_icl_hat)
 end
 
-# `@noinline` here is the SGS quadrature function barrier. The functor body
+# `@noinline` here is the SGS node function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
 # `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
-# substep loop and 4×4 linearized operator) gets invoked N² times from
-# `sum_over_quadrature_points`. Without the barrier those N² copies inline
+# substep loop and 4×4 linearized operator) gets invoked at every node and
+# temperature point of `sum_over_conditional_nodes`. Without the barrier those copies inline
 # into one giant GPU broadcast kernel, pushing register pressure past the
 # 255-reg hard cap and pinning occupancy at 12.5%. Marking the functor
 # itself (vs a trivial forwarding wrapper) is the strongest signal we can
 # give LLVM/NVPTX not to re-inline this — the body is multi-statement and
 # meaningfully sized, so the late inliner won't undo it.
 """
-    (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+    (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
 
-Evaluate the 1-moment tendencies at one quadrature point `(T_hat, q_tot_hat)`
-[K, kg/kg].
+Evaluate the 1-moment tendencies at one node `(T_hat, q_tot_hat)` [K, kg/kg]
+with the node's shaft flag `flag_p` (`1` inside the precipitation shaft, `0`
+outside; the intervals of the conditional-moment rule lie entirely on one
+side of the shaft edge).
 
 The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
@@ -313,17 +410,17 @@ The local cloud condensate is obtained from the centred saturation excess
     q_lcl_hat      = (1 − ξ_liq) · λ · shifted_excess       + ξ_liq · q_lcl
     q_icl_hat      = (1 − ξ_ice) · (1 − λ) · shifted_excess + ξ_ice · q_icl
 
-The Lagrange multiplier `λ_lagrange` is fitted (in `_compute_sgs_moments`) so
+The Lagrange multiplier `λ_lagrange` is set (in `_compute_sgs_moments`) so
 that `E[shifted_excess] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean
 *cloud* condensate, excluding precipitation. The reconstruction therefore
 partitions `shifted_excess` into local cloud liquid and ice by the liquid
 fraction; the uniform fractions `ξ_liq`, `ξ_ice` replace part of a
 species' share by its subdomain mean at every node (see
 `sgs_local_condensate`). Precipitation is held constant across
-quadrature points and is accounted for downstream, where CloudMicrophysics
+the nodes (up to the placement) and is accounted for downstream, where CloudMicrophysics
 subtracts it from `q_tot` to diagnose the local vapor.
 
-`q_tot_hat` is clamped non-negative first. Subsaturated points contribute zero
+`q_tot_hat` is clamped non-negative first. Subsaturated nodes contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
 local vapor.
 
@@ -332,33 +429,109 @@ local vapor.
 NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
     # Local cloud condensate from the Lagrange-multiplier closure.
     # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
-    # local shifted excess at each quadrature point is λ + α·S′_hat where
+    # local shifted excess at each node is λ + α·S′_hat where
     # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
     # Precipitation in q_tot needs no special handling here: its mean level
-    # cancels in the centred S′ (the level is re-anchored by λ_lagrange, fitted
-    # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
+    # cancels in the centred S′ (the level is re-anchored by λ_lagrange, set
+    # by cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
-    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    αS′_hat = eval.α * S′_hat
+    shifted_excess = max(FT(0), eval.λ_lagrange + αS′_hat)
     q_lcl_hat, q_icl_hat = sgs_local_condensate(
         eval.λ, shifted_excess, eval.ξ_liq, eval.ξ_ice, eval.q_lcl, eval.q_icl,
     )
+    # Reconstruct the node saturation excess on cloudy equilibrium nodes from
+    # `λ_eq` so that condensation and evaporation relax toward the continuous
+    # truncated-Gaussian equilibrium `q_c_eq`, while preserving raw
+    # subsaturation on clear nodes (`q_c_eq_hat == 0`) for below-cloud rain
+    # evaporation and snow sublimation. The equilibrium node uses the
+    # unattenuated fluctuation `S′_hat`: `α` attenuates only the actual
+    # condensate, which lags equilibrium, and `λ_eq` has `α = 1`.
+    q_c_eq_hat = max(FT(0), eval.λ_eq + S′_hat)
+    q_precip = eval.q_rai + eval.q_sno
+    S_raw_cloud = q_tot_hat - q_precip - q_sat_hat
+    S_eff_cloud = ifelse(
+        q_c_eq_hat > zero(FT),
+        q_c_eq_hat,
+        min(zero(FT), S_raw_cloud),
+    )
+    q_tot_eff = max(FT(0), q_sat_hat + S_eff_cloud + q_precip)
 
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
-        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
-        eval.dt, eval.nsubs, eval.args...,
+    # Precipitation-fraction placement: the rain and snow this node sees are
+    # the cell means scaled by φ_p (1 when disabled); the node total water is
+    # shifted by the same amount so that the node vapour, and hence the
+    # condensate reconstruction, is unchanged by the placement.
+    q_rai_node, q_sno_node, q_tot_node =
+        if eval.β_precip > zero(FT)
+            φ_p = sgs_placement_factor(eval.β_precip, flag_p, eval.shaft_frac)
+            shift = (φ_p - one(FT)) * q_precip
+            (eval.q_rai * φ_p, eval.q_sno * φ_p, max(FT(0), q_tot_eff + shift))
+        else
+            (eval.q_rai, eval.q_sno, q_tot_eff)
+        end
+
+    # When a quadrature node has zero condensate and precipitation and lies
+    # below both liquid and ice saturation, all 1M microphysics rates vanish;
+    # return zero directly instead of running the 5-substep 4x4 linear solver.
+    if isempty(eval.args) &&
+       no_1m_condensate(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
+        tps = _unwrapped(eval.tps)
+        T_freeze = TD.Parameters.T_freeze(tps)
+        T_icenuc = TD.Parameters.T_icenuc(tps)
+        q_smin =
+            (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
+            TD.q_vap_saturation(tps, T_hat, eval.ρ, TD.Ice())
+        if q_tot_node <= q_smin
+            return zero_1m_tendency(FT)
+        end
+    end
+
+    return _call_bmt_1m(
+        eval.mode, eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+        eval.ρ, T_hat, eval.w,
+        q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
+        eval.dt, eval.nsubs, eval.args,
     )
 end
+
+# The zero 1M tendency of the early exits for cells and quadrature nodes in which all
+# 1M rates vanish, and their shared test that no condensate or precipitation is present.
+@inline zero_1m_tendency(::Type{FT}) where {FT} =
+    (;
+        dq_lcl_dt = zero(FT),
+        dq_icl_dt = zero(FT),
+        dq_rai_dt = zero(FT),
+        dq_sno_dt = zero(FT),
+    )
+@inline no_1m_condensate(q_lcl, q_icl, q_rai, q_sno) =
+    (q_lcl <= zero(q_lcl)) & (q_icl <= zero(q_icl)) &
+    (q_rai <= zero(q_rai)) & (q_sno <= zero(q_sno))
+
+# Dispatch helper: `LinearizedAverage` takes `dt`, `nsubs`, and `args`;
+# `Instantaneous` ignores them.
+@inline _call_bmt_1m(
+    mode::BMT.LinearizedAverage, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, args,
+) = BMT.bulk_microphysics_tendencies(
+    mode, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, args...,
+)
+@inline _call_bmt_1m(
+    mode::BMT.Instantaneous, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno, _dt, _nsubs, _args,
+) = BMT.bulk_microphysics_tendencies(
+    mode, scheme, mp, tps, ρ, T, w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno,
+)
 
 """
     microphysics_tendencies_1m(
@@ -367,7 +540,9 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ..., args...,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ...,
+        precip_incloud_fraction = 0, precip_frac = 1, sigma_S = (linearized),
+        precip_frac_floor = 0, λ_eq = max(0, mu_S − q_rai − q_sno), args...,
     )
 
 Compute time-averaged 1-moment microphysics tendencies.
@@ -376,17 +551,18 @@ The 11-argument (no `sgs_quad`) form takes the condensate inputs as-is and is us
 in EDMF updrafts, or wherever a grid-mean state is to be evaluated directly: a
 single CloudMicrophysics call with no SGS averaging.
 
-The quadrature form integrates over the SGS PDF using the truncated-Gaussian
-Lagrange-multiplier closure; see `Microphysics1MEvaluator` for the
-point-wise condensate diagnosis. Rain and snow are clamped non-negative before the
-integration. Subsaturated quadrature points contribute below-cloud rain
-evaporation and snow sublimation; saturated points drive autoconversion and
-accretion.
+The quadrature form integrates over the Gaussian SGS PDF with the
+conditional-moment node rule and the truncated-Gaussian Lagrange-multiplier
+closure; see `_sum_1m_over_sgs` for the rule and `Microphysics1MEvaluator` for
+the node-wise condensate diagnosis. Rain and snow are clamped non-negative before
+the integration. Subsaturated nodes contribute below-cloud rain evaporation and
+snow sublimation; saturated nodes drive autoconversion and accretion. Without SGS
+sampling (`GridMeanSGS`) it is the grid-mean form.
 
 # Arguments
 
   - `scheme`: CloudMicrophysics scheme tag (from `BulkMicrophysicsTendencies`).
-  - `sgs_quad`: `SGSQuadrature` configuration.
+  - `sgs_quad`: `SGSQuadrature` configuration (its `T_min`, `q_max` bound the nodes).
   - `cmp`, `thp`: Microphysics and thermodynamics parameters.
   - `ρ`, `T`: Air density [kg/m³] and temperature [K].
   - `w`: Physical vertical velocity [m/s], used for velocity-dependent
@@ -396,20 +572,34 @@ accretion.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg].
   - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle`` [K²].
   - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle`` [(kg/kg)²].
-  - `corr_Tq`: Correlation coefficient corr(T′, q′) from `correlation_Tq(params)` [-].
+  - `corr_Tq`: Correlation coefficient corr(T′, q′) [-], the per-cell
+    `p.precomputed.ᶜcorr_Tq` set by `set_covariance_cache!`.
   - `λ_lagrange`: Lagrange multiplier from `ᶜsgs_moments`, precomputed to
-    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
-    quadrature measure [kg/kg].
+    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
   - `ξ_liq`, `ξ_ice`: Uniform fractions of cloud liquid and cloud ice over the
-    quadrature (`sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`, in
+    nodes (`sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`, in
     `[0, 1]`); `0` is the excess reconstruction, see `sgs_local_condensate`.
   - `dt`: Timestep [s].
   - `nsubs`: Number of substeps for tendency averaging.
   - `λ`: Liquid fraction [-]; defaults to `TD.liquid_fraction` at the mean state.
   - `mu_S`: Linearized SGS mean saturation excess [kg/kg]; defaults to
-    `q_tot_nonneg − q_sat(T, ρ)`. Both are quadrature invariants and may be
-    precomputed by the caller to avoid recomputing them at every point.
+    `q_tot_nonneg − q_sat(T, ρ)`. Both are cell constants and may be
+    precomputed by the caller.
+  - `precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow confined
+    to the precipitation shaft of the PDF; `0` disables the placement [-].
+  - `precip_frac`: Overlap precipitation fraction `a_p` of the cell [-].
+  - `sigma_S`: SGS saturation-excess standard deviation (`ᶜsgs_moments.sigma_S`),
+    which sets the nodes and the shaft threshold; positive (`_compute_sgs_moments`
+    and the default, the linearized width `_sgs_linear_sigma_S` of the given
+    (co)variances, are floored at `ϵ_numerics`) [kg/kg].
+  - `precip_frac_floor`: the shaft is never taken narrower than this fraction of
+    the cell, which bounds the factor on the shaft nodes' rain and snow,
+    `φ_p ≤ (1 − β_p) + β_p / precip_frac_floor`; it must be positive when
+    `precip_incloud_fraction > 0` (`sgs_microphysics_options` checks the model
+    parameters). Defaults to `0`, with the placement off [-].
+  - `λ_eq`: Equilibrium Lagrange multiplier from `ᶜsgs_moments`, with `α = 1`,
+    so that `E[max(0, λ_eq + S′)] = q_c_eq` [kg/kg].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -419,39 +609,240 @@ positive when a source of the corresponding tracer.
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
+    mode = BMT.LinearizedAverage(),
 )
-    local_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), cmp, thp, ρ, T, w,
-        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
+    FT = typeof(ρ)
+    # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
+    # return zero without running the substepped 4x4 linear solver.
+    if no_1m_condensate(q_lcl, q_icl, q_rai, q_sno)
+        tps = _unwrapped(thp)
+        q_smin = ifelse(
+            T >= TD.Parameters.T_freeze(tps),
+            TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
+            TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
+        )
+        if q_tot_nonneg < q_smin * (one(FT) - 2 * eps(FT))
+            return zero_1m_tendency(FT)
+        end
+    end
+    return _call_bmt_1m(
+        mode, BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp),
+        ρ, T, w,
+        q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs, (),
     )
-    return local_tendency
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs,
     # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
-    # invariant across the quadrature. They default to being computed here from the
-    # mean state; a caller evaluating this broadcast over many quadrature points can
-    # precompute them once and pass them in to avoid recomputing them per point.
-    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    # cell constants. They default to being computed here from the mean state; a
+    # caller may precompute them once and pass them in.
+    λ = TD.liquid_fraction(
+        _unwrapped(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
+    ),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(_unwrapped(thp), T, ρ),
+    precip_incloud_fraction = zero(ρ),
+    precip_frac = one(ρ),
+    sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq),
+    precip_frac_floor = zero(ρ),
+    λ_eq = max(zero(ρ), mu_S - (max(zero(ρ), q_rai) + max(zero(ρ), q_sno))),
+    mode = BMT.LinearizedAverage(),
     args...,
 )
     FT = typeof(ρ)
-    # Clamp specific humidities to non-negative.
-    q_rai_nonneg = max(FT(0), q_rai)
-    q_sno_nonneg = max(FT(0), q_sno)
-
-    evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ, w,
-        q_rai_nonneg, q_sno_nonneg, λ,
-        FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
-        λ_lagrange, mu_S, α, dt, nsubs, args,
+    not_quadrature(sgs_quad) && return microphysics_tendencies_1m(
+        ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
+        mode,
     )
-    return integrate_over_sgs(
-        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+    # Shaft threshold on the centred excess: the moistest `a_p` of the PDF. The
+    # shaft is never taken narrower than `precip_frac_floor` of the cell
+    # (`sgs_precip_fraction_floor`).
+    a_p = max(FT(precip_frac), FT(precip_frac_floor))
+    σ_S = FT(sigma_S)
+    S_star = sgs_precip_shaft_threshold(a_p, σ_S)
+    return _sum_1m_over_sgs(
+        mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
+        max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
+        max(zero(ρ), q_rai), max(zero(ρ), q_sno),
+        T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(ξ_liq), FT(ξ_ice), dt, nsubs, λ,
+        mu_S, FT(precip_incloud_fraction), σ_S, S_star, FT(λ_eq), args,
+    )
+end
+
+"""
+    _sum_over_conditional_sgs(make_evaluator, thp, ρ, T, mu_S, σ_S,
+                              λ_lagrange, λ_eq, α, q_c,
+                              T′T′, q′q′, corr_Tq, β_precip, S_star, sgs_quad)
+
+Shared conditional-moment integration driver. Builds the `conditional_rule`
+with cloud edges `−λ_lagrange/α`, `−λ_eq` and the shaft edge
+`t_p = β_precip > 0 ? S_star : Inf`; rescales `(λ_lagrange, α)` by the common
+factor `s` that makes the node mean of `max(0, λ + α S′)` equal `q_c` to
+rounding; computes the shaft fraction (`1` when `β_precip = 0`) and the
+`TemperatureSpread` with `β_T`-regressed temperature spread at fixed `S′`;
+calls `make_evaluator(s·λ_lagrange, s·α_safe, shaft_frac)` to build the
+caller's evaluator with the scaled parameters, and returns the sum via
+`sum_over_conditional_nodes`. Used by `_sum_1m_over_sgs` (the CM BMT bulk
+tendency SGS integration).
+"""
+@inline function _sum_over_conditional_sgs(
+    make_evaluator,
+    thp, ρ, T, mu_S, σ_S,
+    λ_lagrange, λ_eq, α, q_c,
+    T′T′, q′q′, corr_Tq,
+    β_precip, S_star, sgs_quad,
+)
+    FT = typeof(ρ)
+    α_safe = max(FT(α), ϵ_numerics(FT))
+    t_a = -FT(λ_lagrange) / α_safe
+    t_e = -FT(λ_eq)
+    t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
+    β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
+    rule = conditional_rule(
+        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
+    )
+    # Scale (λ, α) together so the node mean of the actual condensate is q_c
+    # to rounding; the cloud edge −λ/α is unchanged by a common factor.
+    g = conditional_rule_mean(NodeCondensate(FT(λ_lagrange), α_safe), rule)
+    s = ifelse(
+        q_c > zero(FT),
+        ifelse(g > zero(FT), q_c / max(g, floatmin(FT)), one(FT)),
+        zero(FT),
+    )
+    shaft_frac = ifelse(
+        β_precip > zero(FT),
+        conditional_rule_shaft_fraction(rule),
+        one(FT),
+    )
+    spread = TemperatureSpread(
+        thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
+        FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
+    )
+    evaluator = make_evaluator(s * FT(λ_lagrange), s * α_safe, shaft_frac)
+    return sum_over_conditional_nodes(evaluator, rule, spread)
+end
+
+"""
+    _sum_1m_over_sgs(mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
+                     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+                     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+                     β_precip, σ_S, S_star, λ_eq, args)
+
+Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF using
+`_sum_over_conditional_sgs`. The rule integrates the piecewise-linear
+condensates exactly; the node weight of the shaft
+(`conditional_rule_shaft_fraction`) conserves the cell-mean precipitation
+exactly for any `a_p` (bounded below by `precip_frac_floor`). `mode` picks
+the BMT variant at each node (`LinearizedAverage` for the explicit
+substep-averaged tendency, `Instantaneous` for the implicit path).
+"""
+@inline function _sum_1m_over_sgs(
+    mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, λ_eq, args,
+)
+    FT = typeof(ρ)
+    # In a condensate- and precipitation-free cell with no equilibrium cloud
+    # (`λ_eq = -Inf`), every node has `q_c_eq_hat = 0` and `q_tot_node ≤ q_sat_hat`.
+    # Outside the mixed-phase temperature band (`T_icenuc < T_hat < T_freeze`),
+    # `q_smin = q_sat_hat`, so all 1M microphysics rates vanish at every node;
+    # return zero before building the 8-node conditional rule.
+    if isempty(args) &&
+       no_1m_condensate(q_lcl, q_icl, q_rai, q_sno) &
+       !isfinite(FT(λ_eq))
+        tps = _unwrapped(thp)
+        T_freeze = FT(TD.Parameters.T_freeze(tps))
+        T_icenuc = FT(TD.Parameters.T_icenuc(tps))
+        ΔT_max = 8 * sqrt(max(FT(T′T′), zero(FT)))
+        if (T - ΔT_max >= T_freeze) | (T + ΔT_max <= T_icenuc)
+            return zero_1m_tendency(FT)
+        end
+    end
+    return _sum_over_conditional_sgs(
+        (λ_scaled, α_scaled, shaft_frac) -> Microphysics1MEvaluator(
+            mode, scheme, cmp, thp, ρ, w,
+            q_rai, q_sno, λ,
+            ξ_liq, ξ_ice, q_lcl, q_icl,
+            λ_scaled, λ_eq, mu_S, α_scaled,
+            β_precip, shaft_frac, dt, nsubs, args,
+        ),
+        thp, ρ, T, mu_S, σ_S, λ_lagrange, λ_eq, α, q_lcl + q_icl,
+        T′T′, q′q′, corr_Tq, β_precip, S_star, sgs_quad,
+    )
+end
+
+"""
+    SGSMicrophysicsOptions{FT}
+
+Scalar options of the 1M quadrature microphysics, built by
+`sgs_microphysics_options` and broadcast as a scalar (see that function).
+"""
+Base.@kwdef struct SGSMicrophysicsOptions{FT}
+    ξ_liq::FT
+    ξ_ice::FT
+    precip_incloud_fraction::FT
+    precip_frac_floor::FT
+end
+Base.broadcastable(o::SGSMicrophysicsOptions) = tuple(o)
+
+"""
+    sgs_microphysics_options(params)
+
+The per-run scalar options of the 1M quadrature microphysics as one
+`SGSMicrophysicsOptions` (`ξ_liq`, `ξ_ice`, and the
+precipitation-placement keys), so the tendency broadcast passes one argument
+instead of four: a broadcast with more than ~30 arguments falls off Julia's
+specialized `Broadcast._getindex` path and allocates inside the GPU kernel.
+Errors if the placement is on (`sgs_precip_incloud_fraction > 0`) with a
+non-positive `sgs_precip_fraction_floor`, which would leave the concentration
+of the precipitation on the shaft nodes unbounded.
+"""
+function sgs_microphysics_options(params)
+    β_p = CAP.sgs_precip_incloud_fraction(params)
+    floor = CAP.sgs_precip_fraction_floor(params)
+    # The floor bounds the factor on the shaft nodes' precipitation,
+    # φ_p ≤ (1 − β_p) + β_p / floor (`sgs_placement_factor`).
+    β_p > 0 && !(floor > 0) &&
+        error(
+            "sgs_precip_fraction_floor must be positive when \
+            sgs_precip_incloud_fraction > 0 (got $(floor)): it bounds the \
+            concentration of the precipitation on the shaft nodes.",
+        )
+    return SGSMicrophysicsOptions(;
+        ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
+        ξ_ice = CAP.sgs_ice_uniform_fraction(params),
+        precip_incloud_fraction = β_p,
+        precip_frac_floor = floor,
+    )
+end
+
+"""
+    microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, sgs_moments, α, dt, nsubs, λ, mu_S, precip_frac,
+        opts::SGSMicrophysicsOptions,
+    )
+
+Packed form of the quadrature driver: the scalar options come as the
+`SGSMicrophysicsOptions` of `sgs_microphysics_options`, the per-cell fields
+(`sgs_moments`, `α`, `precip_frac`) and the precomputed `λ`, `mu_S` positionally. Forwards to the positional
+form, so the two are identical.
+"""
+@inline function microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    sgs_moments, α, dt, nsubs, λ, mu_S, precip_frac,
+    opts::SGSMicrophysicsOptions,
+    mode = BMT.LinearizedAverage(),
+)
+    return microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        sgs_moments.λ_lagrange, α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
+        opts.precip_incloud_fraction, precip_frac, sgs_moments.sigma_S,
+        opts.precip_frac_floor, sgs_moments.λ_eq, mode,
     )
 end
 

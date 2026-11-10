@@ -64,6 +64,7 @@ makedocs(;
         "Getting Started" => [
             "Installation" => "installation.md",
             "Your First Simulation" => "first_simulation.md",
+            "Example: Moist Baroclinic Wave" => "moist_baroclinic_wave.md",
             "Script vs Config Interface" => "interfaces.md",
         ],
         "How-to Guides" => [
@@ -120,6 +121,7 @@ makedocs(;
             "API" => "api.md",
             "Configuration Options" => "configuration_options.md",
             "Setups (Initial Conditions & Cases)" => "setups.md",
+            "Atmospheric Profiles Library" => "atmospheric_profiles_library.md",
             "Column Datasets" => "column_datasets_reference.md",
             "Grids" => "grids.md",
             "Surface Conditions" => "surface_conditions.md",

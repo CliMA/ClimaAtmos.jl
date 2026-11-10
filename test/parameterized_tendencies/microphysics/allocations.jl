@@ -84,28 +84,18 @@ end
 
 # --- Function barrier helpers ---
 
-_test_floor_params(::Type{FT}) where {FT} = (;
-    ε_rel = FT(0.02),
-    σ_abs = FT(1e-7),
-    margin = FT(1),
-    abs_margin = FT(1),
-    sharpness = FT(1),
-    residual = FT(0),
-)
-
 function _allocs_cloud_fraction_simple()
     FT = Float64
-    floor = _test_floor_params(FT)
+    σ_abs = FT(1e-7)
     CA._compute_cloud_fraction(
-        FT(1e-3), FT(-1e-4), FT(3.16e-4), FT(5e-5), FT(1), floor,
+        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), σ_abs,
     )
     return @allocated CA._compute_cloud_fraction(
-        FT(1e-3),
+        FT(5e-5),
         FT(-1e-4),
         FT(3.16e-4),
-        FT(5e-5),
         FT(1),
-        floor,
+        σ_abs,
     )
 end
 
@@ -120,7 +110,8 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0)
     α = FT(1)
-    floor = _test_floor_params(FT)
+    σ_abs = FT(1e-7)
+    c = FT(3)
     CA._compute_cloud_fraction(
         thp,
         T,
@@ -133,7 +124,8 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        floor,
+        σ_abs,
+        c,
     )
     return @allocated CA._compute_cloud_fraction(
         thp,
@@ -147,7 +139,8 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        floor,
+        σ_abs,
+        c,
     )
 end
 
@@ -208,6 +201,49 @@ function _allocs_sgs_sat_adj(thp, quad)
     return @allocated ClimaAtmos.compute_sgs_saturation_adjustment(
         thp, quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
     )
+end
+
+function _allocs_displacement_condensate(::Type{FT}) where {FT}
+    σ = FT(1e-3)
+    args = (FT(-1.4e-3), σ, FT(0.8) * σ, FT(-0.5) * σ)
+    ClimaAtmos.displacement_condensate(args...)
+    return @allocated ClimaAtmos.displacement_condensate(args...)
+end
+
+function _allocs_sgs_moments_curvature(thp, quad, ::Type{FT}) where {FT}
+    ρ, T = FT(1.1), FT(288)
+    q_tot = TD.q_vap_saturation(thp, T, ρ) - FT(3e-4)
+    args = (thp, ρ, T, q_tot, FT(5e-5), quad, FT(0.25), FT(2.5e-7), FT(0.6), FT(1))
+    ClimaAtmos._compute_sgs_moments(args..., q_tot, FT(4e-4), FT(-3e-4))
+    return @allocated ClimaAtmos._compute_sgs_moments(
+        args..., q_tot, FT(4e-4), FT(-3e-4),
+    )
+end
+
+function _allocs_conditional_1m(thp, cmp, quad, ::Type{FT}, T = FT(285)) where {FT}
+    ρ = FT(1.1)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    mu_S = FT(-1.5) * FT(4e-4)
+    q_tot = q_sat + mu_S
+    q_lcl = FT(3e-5)
+    q_rai = FT(1e-5)
+    mom = ClimaAtmos._compute_sgs_moments(
+        thp, ρ, T, q_tot, q_lcl, quad, FT(0.25), FT(2.5e-7), FT(0.5), FT(0.7),
+        q_tot - q_rai,
+    )
+    args = (
+        BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, FT(0.1), q_tot, q_lcl,
+        FT(0), q_rai, FT(0), FT(0.25), FT(2.5e-7), FT(0.5), mom.λ_lagrange,
+        FT(0.7), FT(0.1), FT(0.1), FT(180), 2, FT(1), mu_S, FT(0.5), FT(0.4),
+        mom.sigma_S, FT(0.1), mom.λ_eq,
+    )
+    ClimaAtmos.microphysics_tendencies_1m(args...)
+    a_mom = @allocated ClimaAtmos._compute_sgs_moments(
+        thp, ρ, T, q_tot, q_lcl, quad, FT(0.25), FT(2.5e-7), FT(0.5), FT(0.7),
+        q_tot - q_rai,
+    )
+    a_tend = @allocated ClimaAtmos.microphysics_tendencies_1m(args...)
+    return a_mom + a_tend
 end
 
 # NOTE: closure-based tests are omitted here because Julia closures inherently
@@ -275,6 +311,39 @@ end
             @test _allocs_sgs_sat_adj(thp, quad) == 0
         end
 
+        @testset "displacement_condensate and curvature moments" begin
+            for FTi in (Float32, Float64)
+                @testset "FT = $FTi" begin
+                    @test _allocs_displacement_condensate(FTi) == 0
+                    qi = ClimaAtmos.SGSQuadrature(FTi; quadrature_order = 3)
+                    thpi = TD.Parameters.ThermodynamicsParameters(
+                        CP.create_toml_dict(FTi),
+                    )
+                    @test _allocs_sgs_moments_curvature(thpi, qi, FTi) == 0
+                end
+            end
+        end
+
+        @testset "GaussianSGS moments and 1M tendencies (node rule)" begin
+            for FTi in (Float32, Float64)
+                @testset "FT = $FTi" begin
+                    tomli = CP.create_toml_dict(FTi)
+                    thpi = TD.Parameters.ThermodynamicsParameters(tomli)
+                    cmpi = CMP.Microphysics1MParams(tomli)
+                    qi = ClimaAtmos.SGSQuadrature(
+                        FTi;
+                        quadrature_order = 3,
+                        distribution = ClimaAtmos.GaussianSGS(),
+                    )
+                    # 285 K: no temperature split; 273.4 K: the spread straddles freezing
+                    for Ti in FTi.((285, 273.4))
+                        _allocs_conditional_1m(thpi, cmpi, qi, FTi, Ti)
+                        @test _allocs_conditional_1m(thpi, cmpi, qi, FTi, Ti) == 0
+                    end
+                end
+            end
+        end
+
         @testset "integrate_over_sgs (functor)" begin
             for FTi in (Float32, Float64)
                 @testset "FT = $FTi" begin
@@ -298,6 +367,7 @@ end
                     "initial_condition" => "DYCOMS_RF02",
                     "microphysics_model" => "0M",
                     "config" => "column",
+                    "z_stretch" => false,
                     "output_default_diagnostics" => false,
                 ),
                 job_id = "alloc_0M",
@@ -322,6 +392,7 @@ end
                     "initial_condition" => "PrecipitatingColumn",
                     "microphysics_model" => "1M",
                     "config" => "column",
+                    "z_stretch" => false,
                     "output_default_diagnostics" => false,
                 ),
                 job_id = "alloc_1M",
@@ -378,6 +449,7 @@ end
                     "initial_condition" => "PrecipitatingColumn",
                     "microphysics_model" => "1M",
                     "config" => "column",
+                    "z_stretch" => false,
                     "use_sgs_quadrature" => true,
                     "sgs_distribution" => "gaussian",
                     "quadrature_order" => 2,

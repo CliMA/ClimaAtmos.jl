@@ -49,6 +49,8 @@ function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_e
         config.parsed_args["h_elem"] = h_elem
         config.parsed_args["orographic_gravity_wave"] = ogw_mode
         config.parsed_args["topography"] = "Earth"
+        # This grid lies outside the range the two-scale stretching admits.
+        config.parsed_args["z_stretch"] = false
         CA.get_simulation(config), config
     end
     p = simulation.integrator.p

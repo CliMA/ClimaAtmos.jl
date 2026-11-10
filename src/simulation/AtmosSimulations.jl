@@ -37,7 +37,7 @@ ClimaComms.context(sim::AtmosSimulation) =
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
 """
-    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, dt, t_start, t_end,
+    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, t_start, t_end,
                                   start_date, output_dir; verbose = false)
 
 Build the scheduled diagnostics and the writers they output to.
@@ -60,7 +60,6 @@ function setup_diagnostics_and_writers(
     model,
     Y,
     p,
-    dt,
     t_start,
     t_end,
     start_date,
@@ -94,14 +93,13 @@ function setup_diagnostics_and_writers(
         z_sampling_method,
         horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
-        init_time = t_start,
         start_date,
     )
     writers = (CAD.DictWriter(), CAD.HDF5Writer(output_dir), netcdf_writer)
 
     # Add default diagnostics if enabled
     if default
-        sim_duration = t_end - dt
+        sim_duration = t_end
         default_diag_list = CAD.default_diagnostics(
             model,
             sim_duration,
@@ -117,7 +115,7 @@ function setup_diagnostics_and_writers(
 
     # Add debug tendency diagnostics if enabled
     if debug_tendency
-        sim_duration = t_end - dt
+        sim_duration = t_end
         tendency_diag_list = CAD.tendency_debug_default_diagnostics(
             netcdf_writer,
             sim_duration,
@@ -158,7 +156,6 @@ function setup_diagnostics_and_writers(
                     z_sampling_method = pressure_z_sampling,
                     horizontal_method,
                     sync_schedule = CAD.EveryStepSchedule(),
-                    init_time = t_start,
                     start_date,
                 )
                 writers = (writers..., pressure_netcdf_writer)
@@ -407,7 +404,9 @@ function AtmosSimulation(
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, resolved_steady_state_velocity,
+        Y, model, params, dt, start_date, resolved_steady_state_velocity;
+        ode_algo = ode_config,
+        update_cache_every,
     )
 
     # Combine all callbacks
@@ -448,7 +447,7 @@ function AtmosSimulation(
     all_diagnostics, writers, periods_reductions =
         @timed_log verbose "Set up diagnostics" setup_diagnostics_and_writers(
             diagnostics, model,
-            Y, p, dt,
+            Y, p,
             t_start, t_end, start_date,
             output_dir;
             verbose,

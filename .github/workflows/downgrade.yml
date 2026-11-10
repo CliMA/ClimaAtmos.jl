@@ -6,7 +6,6 @@ on:
       - main
     tags: '*'
 
-# Needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
   actions: write
   contents: read
@@ -31,7 +30,13 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v3
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: downgrade-julia${{ matrix.version }}-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml') }}
+      # The cached depot's registry can predate the newest compat bounds of Project.toml.
+      - run: julia --color=yes -e 'using Pkg; Pkg.Registry.update()'
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica
@@ -44,3 +49,8 @@ jobs:
           coverage: false
         env:
           TEST_GROUP: infrastructure
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}

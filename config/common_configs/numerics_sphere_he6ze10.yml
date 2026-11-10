@@ -4,6 +4,7 @@ nh_poly: 3
 z_elem: 10
 z_max: 30000.0
 dz_bottom: 500.0
+dz_top: 6500.0
 dt: 400secs
 ode_algo: ARS343
 hyperdiff: Hyperdiffusion

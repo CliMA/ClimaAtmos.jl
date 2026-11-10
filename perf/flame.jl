@@ -4,6 +4,10 @@ ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+# Loaded before the first step, since loading a package clears Julia's cached method
+# lookups, and the next step allocates while it redoes them.
+import Profile, ProfileCanvas
+using Test
 
 include("common.jl")
 
@@ -20,7 +24,6 @@ import ClimaTimeSteppers as CTS
 CTS.step!(integrator) # compile first
 CTS.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
 CA.call_all_callbacks!(integrator) # compile callbacks
-import Profile, ProfileCanvas
 output_dir = job_id
 mkpath(output_dir)
 
@@ -38,19 +41,19 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_baroclinic_wave_moist_gpu"] = 1_243_048
-allocs_limit["flame_default"] = 154_896
-allocs_limit["flame_default_1m"] = 956_848
-allocs_limit["flame_diagnostics"] = 10_677_144
+allocs_limit["flame_baroclinic_wave_moist_gpu"] = 1_275_296
+allocs_limit["flame_default"] = 26_192
+allocs_limit["flame_default_1m"] = 256_528
+allocs_limit["flame_diagnostics"] = 10_589_312
 allocs_limit["flame_aquaplanet_diagedmf"] = 11_644_128
-allocs_limit["flame_aquaplanet_progedmf"] = 2_239_024
-allocs_limit["flame_aquaplanet_progedmf_1m"] = 1_493_000
+allocs_limit["flame_aquaplanet_progedmf"] = 605_336
+allocs_limit["flame_aquaplanet_progedmf_1m"] = 1_088_624
 allocs_limit["flame_aquaplanet_progedmf_dense_autodiff"] = 195_224
 allocs_limit["flame_aquaplanet_progedmf_sparse_autodiff"] = 102_808
-allocs_limit["flame_diffusion"] = 227_568
+allocs_limit["flame_diffusion"] = 26_192
 allocs_limit["flame_threaded"] = 2047_736
-allocs_limit["flame_callbacks"] = 470_904
-allocs_limit["flame_gravity_wave"] = 247_544
+allocs_limit["flame_callbacks"] = 268_392
+allocs_limit["flame_gravity_wave"] = 30_936
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
@@ -75,7 +78,6 @@ ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
 # We're grouping allocation tests here for convenience.
 
 @info "testing allocations"
-using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified

@@ -128,8 +128,8 @@ solve is handed an extrapolated `a⁰` outside `[0, 1]`.
 
 Shared by the implicit updraft momentum solve
 (`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
-(`edmfx_pressure_drag_tke_source!`), so the kinetic energy the drag removes from
-the updraft is the energy the TKE budget receives.
+(the pressure-drag term of `edmfx_tke_sources!`), so the kinetic energy the drag
+removes from the updraft is the energy the TKE budget receives.
 """
 pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
     α_d / (2 * scale_height) * (

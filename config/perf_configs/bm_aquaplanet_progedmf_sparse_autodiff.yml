@@ -1,5 +1,4 @@
 h_elem: 12
-z_elem: 25
 dt: 10secs
 t_end: 31mins
 dt_save_state_to_disk: "Inf"

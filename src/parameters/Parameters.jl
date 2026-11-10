@@ -182,6 +182,9 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     surface mass-flux closure [m].
   - `sfc_mass_flux_cap_fraction`: Fraction `α` of the surface scalar flux that
     the updraft may transport, so the environment retains at least `1 - α` [-].
+  - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
+    eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
+    horizontal scalar diffusion (`1` by default) [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -226,6 +229,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
+    edmfx_updraft_kh_diffusion_factor::FT
 end
 
 """
@@ -238,68 +242,146 @@ covariances, with or without an EDMF scheme.
 
 Most values come from ClimaParams; see the `SGSQuadratureParameters`
 constructor in `create_parameters.jl` for the mapping from ClimaParams names to
-the fields below, and for the defaults of the few fields that ClimaParams does
-not yet define.
+the fields below, and for the defaults of the provisional fields that
+ClimaParams does not yet define or whose ClimaParams default it supersedes.
 
 # Fields
 
-  - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
-    the diagnostic covariance closure [-].
+  - `diagnostic_covariance_coeff`: Coefficient `c_σ` of the vertical
+    displacement variance of the SGS covariance closure, `ℓ_v² = 2 c_σ l_d²`
+    with `l_d` the displacement length (`displacement_length`),
+    the production–dissipation balance of the turbulent variance [-].
   - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the horizontal
-    resolved-gradient SGS variance term, `variance += c_g (c_Δx Δx_h)^2 |∇_h ψ|^2`,
-    added to the diagnostic `θ′θ′` and `q′q′` that feed the SGS quadrature.
-    `1/12` is the variance of a linear field over a uniform cell [-].
-  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
-    scale `Δx_h` in the geometric variance term; the effective horizontal
-    coefficient is `c_g c_Δx^2`. `0` disables the term [-].
+    displacement variance, `ℓ_h² = c_g (c_Δx Δx_h)²`. `1/12` is the variance of
+    a linear field over a uniform cell [-].
+  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal
+    grid scale in `ℓ_h`. `0` turns the horizontal displacement off [-].
+  - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_ref` of the
+    unresolved vertical motions that displace air where the TKE vanishes, at
+    the horizontal grid scale `sgs_variance_floor_reference_resolution`. The
+    floor displacement
+    `w_min min(1/N_disp, l_disp/√(c_b κ_iso / (2 c_σ)), τ_0) / √(2 c_σ)`,
+    with `l_disp` the buoyancy-bounded mixing length,
+    capped by the wall distance and the cell depth, is combined via `max` with the
+    buoyancy-bounded mixing length (`displacement_length`), so the vertical displacement in
+    stably stratified air without TKE is `w_min / N_disp`. Enters the variance
+    only, not the diffusivity [m/s].
+  - `sgs_variance_floor_reference_resolution`: Horizontal grid scale `Δx_ref`
+    at which the velocity floor equals `sgs_variance_vertical_velocity_floor`;
+    single columns use it in place of their undefined grid scale [m].
+  - `sgs_variance_floor_resolution_exponent`: Exponent `p` of the velocity
+    floor `w_min = w_ref (Δx_h / Δx_ref)^p`, equal to `(s − 1)/2` for a
+    sub-grid spectrum `k^(−s)` of the displaced fields (`floor_velocity`) [-].
+  - `sgs_variance_floor_time_scale`: Upper bound `τ_0` on the time over which
+    the displacement of the unresolved vertical motions persists in weakly
+    stratified quiescent air, before buoyancy or turbulence decorrelates it [s].
+  - `sgs_variance_theta_horizontal_scale_ratio`: Ratio `r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,0}`
+    of the horizontal displacement scale of `θ_li` to the horizontal
+    displacement scale `ℓ_{h,0} = √c_g c_Δx Δx_h` of `q_tot` [-].
+  - `sgs_variance_theta_vertical_scale_ratio`: Ratio `r_{v,θ} = ℓ_{v,θ} / ℓ_{v,0}`
+    of the vertical displacement scale of `θ_li` to the vertical
+    displacement scale `ℓ_{v,0} = √(2 c_σ) l_d` of `q_tot` [-].
+  - `sgs_variance_horizontal_cross_correlation`: Cross-correlation factor
+    `r_{h,θq} ∈ [-1, 1]` between the horizontal subgrid displacements of `θ_li`
+    and `q_tot` in the `θ_li`–`q_tot` covariance; the vertical displacements
+    are taken perfectly correlated [-].
+  - `sgs_displacement_truncation`: Number of standard deviations `c` at which
+    the Gaussian subgrid displacement is truncated in the equilibrium
+    condensate (`truncated_displacement_condensate`); the truncated
+    distribution is rescaled to keep the variance of the covariance closure, so
+    its support is `±s c σ` with `s ≥ 1`, and `Inf` restores the untruncated
+    Gaussian. Must be at least 1 [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
-    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
-    applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
-    at negative total water; `0.5` keeps all nodes non-negative [-].
-  - `sgs_variance_geometric_Ri_factor`: Factor `k` in `Ri₀ = k Ri_crit`, the scale of the
-    Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
-    (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
-    on the saturated moist buoyancy gradient. `0` makes the weight exactly 1 [-].
+    deviation relative to the subdomain-mean total water,
+    `σ_q ≤ sgs_variance_max_rel_std * q_mean`, applied to the diagnosed `q′q′`
+    whatever closure produced it. A wider variance puts a quadrature node at
+    negative total water; `0.5` keeps all nodes non-negative [-].
   - `sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`: Fractions `ξ` of
     cloud liquid and cloud ice that are uniform over the SGS quadrature nodes in
     the 1-moment microphysics, in `[0, 1]`: at each node a species is
     `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
     excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
     is the excess reconstruction; `1` treats the species uniform at every node [-].
-  - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
-    in the SGS quadrature, in `[-1, 1]` [-].
+  - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
+    that is confined to the precipitation shaft of the SGS PDF
+    (`sgs_precip_shaft_threshold`) instead of being
+    spread over all nodes, in `[0, 1]`; default `1`; `0` is the uniform placement [-].
+  - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
+    maximum-random overlap recursion that diagnoses the precipitation fraction
+    `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`
+    is maximum overlap, `0` re-seeds the shaft from each level's own cover [-].
+  - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
+    placement uses, in `(0, 1]`; the default `0.1` keeps the shaft at least
+    a tenth of the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
+    SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
+    `tq_correlation_model: diagnosed` [-].
   - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
-    cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
-    distributions [-].
-  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
-  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
-    saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck; 1 (default) disables the release [-].
+    cloud-fraction/condensate relationship; 1 for an exact Gaussian SGS
+    distribution [-].
+  - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
+    Relaxation timescales `τ_cond`, `τ_sub` shared with ClimaParams and
+    CloudMicrophysics. The SGS variance fidelity
+    (`sgs_microphysics_relaxation_time`) uses them with every scheme except 1M;
+    with 1M, it and the cloud-species flux blend
+    (`add_cloud_species_diffusionᵥ!`) use them where
+    `sgs_cloud_species_constant_timescales > 0` [s].
+  - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ [0, 1]` on the
+    equilibrium prediction in the SGS variance-fidelity modulator; default
+    `0.5` (see `sgs_variance_fidelity`) [-].
+  - `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min`: Coefficient `c_u`
+    and lower bound `α_min` of the updraft rule of the variance fidelity
+    (`sgs_variance_fidelity_model: updraft`),
+    `α = clamp(c_u q_c,up / σ_S, α_min, 1 / (1 − w_eq))`, blended in by the
+    cloud cover and area-limiter factor of the updrafts
+    (`updraft_variance_fidelity`). `α_min` is a provisional floor that keeps
+    the environment condensate from spreading uniformly over the cell [-].
+  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
+    width (`_sgs_augmented_sigma`) and on the updraft cover width
+    (`_updraft_cloud_fraction`) [kg/kg].
+  - `sgs_cloud_species_constant_timescales`: Switch for the 1M scheme. A
+    positive value makes the Damköhler factor of the variance fidelity
+    (`sgs_microphysics_relaxation_time`) and the cloud-species flux blend
+    (`add_cloud_species_diffusionᵥ!`) use the constant
+    `condensation_evaporation_timescale` and
+    `sublimation_deposition_timescale`; `0` (default) uses the per-cell
+    relaxation times of the 1M processes (`cloud_species_relaxation_time`) [-].
+  - `cloud_condensate_relative_variance_floor`: Relative variance of an
+    unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
+    truncated-Gaussian in-cloud distribution in the radiative
+    effective-thickness factor (`cloud_condensate_relative_variance`), `≥ 0`;
+    `0` keeps the truncated-Gaussian variance. Applies to all cloud types; the
+    default `0.25` is set from overcast stratocumulus and is likely low for ice
+    and convective clouds at coarse resolution [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
+    sgs_variance_vertical_velocity_floor::FT
+    sgs_variance_floor_reference_resolution::FT
+    sgs_variance_floor_resolution_exponent::FT
+    sgs_variance_floor_time_scale::FT
+    sgs_variance_theta_horizontal_scale_ratio::FT
+    sgs_variance_theta_vertical_scale_ratio::FT
+    sgs_variance_horizontal_cross_correlation::FT
     sgs_variance_max_rel_std::FT
-    sgs_variance_geometric_Ri_factor::FT
+    sgs_displacement_truncation::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
+    sgs_precip_incloud_fraction::FT
+    sgs_precip_overlap_decay::FT
+    sgs_precip_fraction_floor::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
-    cloud_fraction_eps_rel::FT
+    condensation_evaporation_timescale::FT
+    sublimation_deposition_timescale::FT
+    sgs_fidelity_equilibrium_weight::FT
+    sgs_fidelity_updraft_coeff::FT
+    sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
-    cloud_fraction_floor_release_margin::FT
-    cloud_fraction_floor_release_abs_margin::FT
-    cloud_fraction_floor_release_sharpness::FT
-    cloud_fraction_floor_residual::FT
+    sgs_cloud_species_constant_timescales::FT
+    cloud_condensate_relative_variance_floor::FT
 end
 
 """
@@ -502,8 +584,14 @@ accessors generated at the bottom of this module, e.g.
     activation, and the aerosol-ML coefficients.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
-  - `microphysics_1m_params`: `CloudMicrophysics` 1-moment parameters, or
-    `nothing`.
+  - `microphysics_1m_params`: Full 1-moment process set used by CM BMT bulk;
+    `cloud_liquid_formation` and `cloud_ice_formation` are nulled when
+    `implicit_microphysics: true`. `nothing` outside 1M configurations.
+  - `microphysics_1m_implicit_params`: 1-moment parameters with only
+    `cloud_liquid_formation` and `cloud_ice_formation` enabled (everything
+    else `nothing`), consumed by a second CM BMT call to isolate the
+    implicit condensation / sublimation tendency. `nothing` outside 1M
+    configurations.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
     or `nothing`.
   - `microphysics_2mp3_params`: `CloudMicrophysics` 2-moment plus P3-ice
@@ -551,6 +639,8 @@ accessors generated at the bottom of this module, e.g.
   - `idealized_ocean_albedo`: Ocean surface albedo for idealized simulations [-].
   - `water_refractive_index`: Refractive index of water relative to air, for the
     broadband ocean-albedo model [-].
+  - `ocean_subsurface_reflectance`: Subsurface volume reflectance of the ocean,
+    added to the broadband ocean-albedo model [-].
   - `constant_horizontal_diffusion_D`: Constant horizontal diffusivity [m²/s].
   - `T_min_sgs`: Lower temperature bound of the SGS quadrature [K].
   - `q_max_sgs`: Upper specific-humidity bound of the SGS quadrature [kg/kg].
@@ -577,6 +667,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MPC,
     MP0M,
     MP1M,
+    MP1MI,
     MP2M,
     MP2MP3,
     SFP,
@@ -597,6 +688,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
+    microphysics_1m_implicit_params::MP1MI
     microphysics_2m_params::MP2M
     microphysics_2mp3_params::MP2MP3
     surface_fluxes_params::SFP
@@ -633,6 +725,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
+    ocean_subsurface_reflectance::FT
     # Constant horizontal diffusion
     constant_horizontal_diffusion_D::FT
     # SGS quadrature bounds
@@ -646,6 +739,7 @@ Base.@kwdef struct ClimaAtmosParameters{
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
+Base.eltype(::TurbulenceConvectionParameters{FT}) where {FT} = FT
 
 #####
 ##### Generated accessors
@@ -731,6 +825,28 @@ end
 # the sub-parameter sets, which the loops above delegate through.
 for var in fieldnames(ClimaAtmosParameters)
     @eval $var(ps::ACAP) = ps.$var
+end
+
+"""
+    cloud_formation_1m_params(ps)
+
+Return whichever of the two 1M parameter sets carries CM's
+`CloudLiquidFormation` or `CloudIceFormation` (the two cond/subl process
+variants), so consumers that need either `τ_vap_to_q_lcl` or
+`τ_vap_to_q_icl` can dispatch uniformly regardless of which stage integrates
+the process. Prefers `microphysics_1m_implicit_params` when it carries at
+least one of the formations (`implicit_microphysics: true`), otherwise falls
+back to `microphysics_1m_params`.
+"""
+function cloud_formation_1m_params(ps::ACAP)
+    imp = microphysics_1m_implicit_params(ps)
+    if !isnothing(imp) && (
+        !isnothing(imp.processes.cloud_liquid_formation) ||
+        !isnothing(imp.processes.cloud_ice_formation)
+    )
+        return imp
+    end
+    return microphysics_1m_params(ps)
 end
 
 end

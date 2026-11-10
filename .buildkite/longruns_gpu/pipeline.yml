@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: climacommon/2025_03_18 nsight-systems/2024.6.1
+  modules: climacommon/2026_11_06-1.13.3 nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
@@ -42,7 +42,7 @@ steps:
       - label: ":computer: hydrostatic balance"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze79.yml
           --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
@@ -84,7 +84,7 @@ steps:
       - label: ":computer: dry held-suarez"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze79.yml
           --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
@@ -98,7 +98,7 @@ steps:
       - label: ":computer: held-suarez, equilmoist"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze63.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he30ze79.yml
           --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
@@ -115,7 +115,7 @@ steps:
       - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -128,7 +128,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 0M microphysics"
         command: >
           srun julia --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -141,7 +141,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 1M microphysics"
         command: >
           srun julia --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -154,7 +154,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
@@ -171,7 +171,7 @@ steps:
       - label: ":computer: amip target"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze79.yml --config_file $CONFIG_PATH/$$JOB_NAME.yml
           --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:

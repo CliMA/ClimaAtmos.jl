@@ -214,6 +214,14 @@ i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
+    symmetric_part(G)
+
+Return the symmetric part `(G + Gᵀ) / 2` of a `UVW × UVW` tensor `G`, the strain
+rate of a velocity gradient.
+"""
+symmetric_part(G) = (G + adjoint(G)) / 2
+
+"""
     compute_strain_rate_center_vertical(ᶠu)
 
 Compute the strain rate at cell centers from the face velocity `ᶠu`, keeping
@@ -224,15 +232,38 @@ vertical gradients only.
 A lazy center `Field` with the symmetric `UVW × UVW` strain-rate tensor
 `(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
-function compute_strain_rate_center_vertical(ᶠu)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))))
-        ) / 2,
-    )
+@inline function compute_strain_rate_center_vertical(ᶠu)
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))))
 end
+
+"""
+    vertical_shear_norm_sqr(S)
+
+Return `2 (S₁₃² + S₂₃²) = |∂uₕ/∂z|² / 2` [1/s²] for a vertical-gradient strain
+rate `S` (`compute_strain_rate_center_vertical`): the squared Frobenius norm
+`SᵢⱼSᵢⱼ` without the `S₃₃² = (∂w/∂z)²` term.
+
+This is the part of `S` on which the vertical SGS momentum flux acts: the flux
+is applied to the horizontal wind only (`w'w'` is represented by the TKE, the
+mass flux, and the pressure closure), so `2 K_u` times this norm is the
+resolved kinetic energy the flux removes. The two components are summed
+directly; the difference `SᵢⱼSᵢⱼ - S₃₃²` cancels catastrophically where
+`|∂w/∂z| ≫ |∂uₕ/∂z|`.
+"""
+function vertical_shear_norm_sqr(S)
+    c = parent(S)
+    return 2 * (abs2(c[1, 3]) + abs2(c[2, 3]))
+end
+
+"""
+    strain_rate_inner(S₁, S₂)
+
+Return the Frobenius inner product `S₁ : S₂ = Σᵢⱼ S₁ᵢⱼ S₂ᵢⱼ` [1/s²] of two
+`UVW × UVW` strain-rate tensors.
+"""
+strain_rate_inner(S₁, S₂) =
+    LinearAlgebra.dot(parent(S₁), parent(S₂))
 
 """
     compute_strain_rate_face_vertical(ᶜu)
@@ -252,13 +283,8 @@ function compute_strain_rate_face_vertical(ᶜu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))))
 end
 
 """
@@ -272,31 +298,8 @@ DG gradient that the SIPG horizontal diffusion is built on; the element-local
 strong gradient alone misses the velocity jumps at element faces.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
-    axis_uvw = Geometry.UVWAxis()
-    if is_dg_horizontal(axes(ᶜu))
-        FT = Spaces.undertype(axes(ᶜu))
-        ᶜuvw = @. UVW(ᶜu)
-        lift(ᶜχ) = Operators.lifting_correction(
-            Operators.central_gradient_lift,
-            Geometry.UVVector{FT},
-            ᶜχ,
-        )
-        ᶜL₁ = lift(ᶜuvw.components.data.:1)
-        ᶜL₂ = lift(ᶜuvw.components.data.:2)
-        ᶜL₃ = lift(ᶜuvw.components.data.:3)
-        # rows: gradient direction, columns: velocity component
-        ᶜ∇u = @. Geometry.project((axis_uvw,), gradₕ(ᶜuvw)) +
-           Geometry.outer(UVW(ᶜL₁), UVW(FT(1), FT(0), FT(0))) +
-           Geometry.outer(UVW(ᶜL₂), UVW(FT(0), FT(1), FT(0))) +
-           Geometry.outer(UVW(ᶜL₃), UVW(FT(0), FT(0), FT(1)))
-        return @. lazy((ᶜ∇u + adjoint(ᶜ∇u)) / 2)
-    end
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))))
 end
 
 """
@@ -332,7 +335,7 @@ function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
     @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
-    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    @. ᶜε = symmetric_part(ᶜε)
     return ᶜε
 end
 
@@ -374,7 +377,7 @@ function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶠε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
     @. ᶠε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
-    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
+    @. ᶠε = symmetric_part(ᶠε)
     return ᶠε
 end
 
@@ -419,24 +422,35 @@ function g³³_field(space)
 end
 
 """
+    ColumnSpace
+
+A space of one or more independent columns with no horizontal discretization: a
+single column (`Spaces.FiniteDifferenceSpace`) or multiple columns
+(`Spaces.MultiColumnFiniteDifferenceSpace`).
+"""
+const ColumnSpace = Union{
+    Spaces.FiniteDifferenceSpace,
+    Spaces.MultiColumnFiniteDifferenceSpace,
+}
+
+"""
     horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace)
-    horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace)
+    horizontal_filter_scale(space::ColumnSpace)
 
 Return the horizontal filter length scale `Δx_h` of `space` [m].
 
 For extruded 2D/3D spaces this is the per-node spectral-element length scale
-`Spaces.node_horizontal_length_scale`. For single columns it is `Inf`: a column
-has no horizontal discretization, and its filter scale is set by the forcing or
-the ensemble it represents, not by a grid length.
+`Spaces.node_horizontal_length_scale`. For columns it is `Inf`: a column has no
+horizontal discretization, and its filter scale is set by the forcing or the
+ensemble it represents, not by a grid length.
 """
 horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace) =
     Spaces.undertype(space)(
         Spaces.node_horizontal_length_scale(Spaces.horizontal_space(space)),
     )
-# Do not route single columns through node_horizontal_length_scale: its
-# PointSpace method returns the placeholder 1 [m].
-horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace) =
-    Spaces.undertype(space)(Inf)
+# Do not route columns through node_horizontal_length_scale: it returns the
+# placeholder 1 [m] for them.
+horizontal_filter_scale(space::ColumnSpace) = Spaces.undertype(space)(Inf)
 
 """
     resolvability_filter_scale(Δx_h, Δz)
@@ -518,9 +532,9 @@ end
     has_topography(space)
 
 Return `true` if `space` has a non-flat hypsography, i.e. if the model has
-terrain. Single columns never do.
+terrain. Columns never do.
 """
-has_topography(space::Spaces.FiniteDifferenceSpace) = false
+has_topography(space::ColumnSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Grids.Flat()
 
 """
@@ -548,6 +562,24 @@ to physical units.
 """
 projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
     V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
+
+"""
+    projected_c3_data(vector, local_geometry)
+
+`projected_vector_data(C3, vector, local_geometry)`, for broadcasts in column loop
+bodies: a broadcast wraps a type argument in a `Ref`, which is allocated once per column
+on CPUs when the broadcast is passed to a function that is not inlined.
+"""
+projected_c3_data(vector, local_geometry) =
+    projected_vector_data(C3, vector, local_geometry)
+
+"""
+    unit_c3_data(local_geometry)
+
+`unit_basis_vector_data(C3, local_geometry)`, for broadcasts in column loop bodies (see
+`projected_c3_data`).
+"""
+unit_c3_data(local_geometry) = unit_basis_vector_data(C3, local_geometry)
 
 """
     get_physical_w(u, local_geometry)
@@ -633,7 +665,7 @@ end
 Return whether the horizontal space of `space` requires direct stiffness
 summation, i.e. whether its quadrature is Gauss-Lobatto-Legendre.
 
-Single columns have no horizontal space and always return `false`.
+Columns have no horizontal discretization and always return `false`.
 """
 function do_dss(space::Spaces.AbstractSpace)
     h_space = Spaces.horizontal_space(space)
@@ -643,7 +675,7 @@ function do_dss(space::Spaces.AbstractSpace)
     return Spaces.quadrature_style(h_space) isa Quadratures.GLL
 end
 
-function do_dss(::Spaces.FiniteDifferenceSpace)
+function do_dss(::ColumnSpace)
     return false
 end
 
@@ -950,20 +982,21 @@ parse_date(dt::DateTime) = dt
 """
     iscolumn(space)
 
-Return whether `space` is a single column, i.e. a `FiniteDifferenceSpace`.
+Return whether `space` consists of independent columns with no horizontal
+discretization, i.e. whether it is a `ColumnSpace`.
 """
-iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space::ColumnSpace) = true
 iscolumn(space) = false
 
 """
     issphere(space)
 
-Return whether the horizontal domain of `space` is a sphere.
+Return whether `space` has a spherical global geometry except for column spaces
+and their levels which always return `false`.
 """
-function issphere(space)
-    return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-           Domains.SphereDomain
-end
+issphere(space::Union{ColumnSpace, Spaces.PointSpace, Spaces.MultiPointSpace}) = false
+issphere(space) =
+    Spaces.global_geometry(space) isa Geometry.AbstractSphericalGlobalGeometry
 
 """
     clima_to_era5_name_dict()
@@ -1069,6 +1102,6 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
                 )
             )
         )
-    q = inv_sqrt2pi * exp(-z_abs * z_abs / 2) * poly
+    q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end

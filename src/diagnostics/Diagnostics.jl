@@ -92,7 +92,6 @@ import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
-import ..correlation_Tq
 
 # DG horizontal discretization helpers (used by the vorticity diagnostic)
 import ..is_dg_horizontal

@@ -16,6 +16,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
+        implicit_microphysics = get(pa, "implicit_microphysics", true),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
@@ -245,8 +246,9 @@ function get_setup_type(parsed_args, thermo_params)
         # Read the cfsite group into steady in-memory profiles, then drive it
         # through the generic ForcingFromFile path. Defaults give an interactive
         # Monin-Obukhov surface with the file's `ts` and the constant insolation
-        # carried in the data (matching the former GCMDrivenInsolation).
-        data = ColumnDatasets.GCMColumnData.read_cfsite(
+        # carried in the data (matching the former GCMDrivenInsolation). Lists
+        # of files or cfsites give one group per column.
+        data = ColumnDatasets.GCMColumnData.read_cfsite.(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"];
             thermo_params,
@@ -257,6 +259,10 @@ function get_setup_type(parsed_args, thermo_params)
         isnothing(varanal_file) && error(
             "initial_condition `ARMVARANAL` requires `external_forcing_file` \
              to point at an ARM VARANAL file",
+        )
+        varanal_file isa AbstractVector && error(
+            "`external_forcing_file` must be one path for ARMVARANAL. Only \
+             ForcingFromFile and GCM read one file per column",
         )
         start_date = parsed_args["start_date"]
         FT = eltype(thermo_params)
@@ -301,7 +307,7 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         return Setups.ForcingFromFile(
-            era5_dataset(parsed_args, FT),
+            era5_datasets(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
@@ -311,7 +317,7 @@ function get_setup_type(parsed_args, thermo_params)
              to point at a column forcing file",
         )
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            ColumnDatasets.ColumnDataset.(external_forcing_file),
             parsed_args["start_date"],
         )
     elseif ic_name == "WeatherModel"
@@ -420,7 +426,7 @@ mesh warping; any other combination raises an error. Called through
 """
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-        mesh_warp_type == "Linear" ||
+    mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
@@ -565,15 +571,17 @@ end
     get_grid(parsed_args, params, context)
 
 Build the computational grid selected by the `config` key: `"sphere"` gives a
-`SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
+`SphereGrid`, `"column"` a `ColumnGrid` (or a `MultiColumnGrid` of `n_columns`
+columns when `n_columns` is not 1), `"box"` a `BoxGrid`, and `"plane"` a
 `PlaneGrid`.
 
-All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
-`dz_bottom`. Every grid except the column also reads the topography keys `topography`,
-`topography_damping_factor`, `mesh_warp_type`, and `topo_smoothing`. The sphere reads
-`h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
-`params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
-and are periodic in the horizontal. When `horizontal_discretization` is `"DG"`, the
+All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`,
+`dz_bottom`, `dz_top`, and `z_pbl`. Every grid except the column also reads the
+topography keys `topography`, `topography_damping_factor`, `mesh_warp_type`, and
+`topo_smoothing`. The sphere reads `h_elem`, `nh_poly`, `bubble`, and
+`deep_atmosphere`, with the planet radius taken from `params`; the box and plane read
+`x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`) and are periodic in the
+horizontal. When `horizontal_discretization` is `"DG"`, the
 horizontal spectral-element grid is discontinuous and interface coupling moves from
 DSS to the tendencies' numerical-flux completions.
 """
@@ -590,6 +598,8 @@ function get_grid(parsed_args, params, context)
         z_max = parsed_args["z_max"],
         z_stretch = parsed_args["z_stretch"],
         dz_bottom = parsed_args["dz_bottom"],
+        dz_top = parsed_args["dz_top"],
+        z_pbl = parsed_args["z_pbl"],
     )
 
     # Add topography parameters for non-column grids
@@ -617,7 +627,9 @@ function get_grid(parsed_args, params, context)
             kwargs...,
         )
     elseif config == "column"
-        ColumnGrid(FT; context, kwargs...)
+        n_columns = parsed_args["n_columns"]
+        n_columns == 1 ? ColumnGrid(FT; context, kwargs...) :
+        MultiColumnGrid(FT; context, n_columns, kwargs...)
     elseif config == "box"
         BoxGrid(
             FT;
