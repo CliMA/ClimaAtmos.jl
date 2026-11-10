@@ -127,10 +127,10 @@ reference_values = [
     (:ARM_SGP_shf, (4 * 3600,), 90),
     (:ARM_SGP_lhf, (7 * 3600,), (450 + 500) / 2),
     (:ARM_SGP_lhf, (20 * 3600,), 0),
-    (:ARM_SGP_dTdt, (9 * 3600, 500), -0.08 / 3600),
-    (:ARM_SGP_dTdt, (9 * 3600, 1500), -0.04 / 3600),
-    (:ARM_SGP_dTdt, (9 * 3600, 2500), 0),
-    (:ARM_SGP_dqtdt, (0.9, 3 * 3600, 500), 0.9 * 0.02e-3 / 3600),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 500), 0.9 * -0.08 / 3600),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 1500), 0.9 * -0.04 / 3600),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 2500), 0),
+    (:ARM_SGP_dqtdt, (3 * 3600, 500), 0.02e-3 / 3600),
     # BOMEX
     (:Bomex_θ_liq_ice, (520,), 298.7),
     (:Bomex_θ_liq_ice, (1000,), 298.7 + 480 * 3.7 / 960),
@@ -241,7 +241,7 @@ reference_values = [
     # TRMM-LBA
     (:TRMM_LBA_p, (334,), 954.2 * 100),
     (:TRMM_LBA_T, (334,), 23.3 + 273.15),
-    (:TRMM_LBA_RH, (334,), 86),
+    (:TRMM_LBA_RH, (334,), 0.86),
     (:TRMM_LBA_u, (30000,), -15.32),
     (:TRMM_LBA_v, (334,), -3.51),
     (:TRMM_LBA_tke_prescribed, (100,), 0.77933),
@@ -259,9 +259,10 @@ reference_values = [
                 @test @inferred(prof(call_args(prof, FT(1))...)) isa FT
             end
         end
+        profs = Dict(profiles(FT))
         for (name, args, expected) in reference_values
             @testset "$name$args" begin
-                prof = getfield(APL, name)(FT)
+                prof = profs[name]
                 @test prof(FT.(args)...) ≈ expected rtol = 100 * eps(FT)
             end
         end

@@ -57,6 +57,8 @@ main
   GATE III mixing ratio forcing to a specific humidity tendency with
   `dq/dt = (dr/dt) / (1 + r)²`, using the mixing ratio of the initial profile.
   The tendency is up to 3.3% smaller. No ClimaAtmos setup uses this profile.
+  `GATE_III_dqtdt` and `GATE_III_dTdt` also return the float type they are
+  built with instead of always returning Float64.
 - ![][badge-🐛bugfix] `AtmosphericProfilesLibrary.Bomex_dTdt` returns the float type
   it is built with. Float32 BOMEX runs no longer promote the large-scale cooling
   to Float64, which changes their output at the rounding level.
