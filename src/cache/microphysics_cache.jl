@@ -133,6 +133,14 @@ function set_precipitation_velocities!(
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
+    # Carried into the terminal-velocity kernels in the type, so the Chen 2022
+    # coefficients fold to literals instead of being read from a struct per point.
+    # Only the velocity members: `aml` and `activation` are not needed here and
+    # a type parameter has to be isbits.
+    vcmc, vcmp = let dev = ClimaComms.device(Y.c)
+        tv = (; cmc.liquid, cmc.ice, cmc.stokes, cmc.Ch2022)
+        _fold(dev, tv), _fold(dev, cmp)
+    end
 
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
@@ -143,8 +151,8 @@ function set_precipitation_velocities!(
         velocity_mode(atmos, name),
         name,
         params,
-        cmc,
-        cmp,
+        vcmc,
+        vcmp,
         ρ,
         q,
     )
@@ -190,6 +198,14 @@ function set_precipitation_velocities!(
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
+    # Carried into the terminal-velocity kernels in the type, so the Chen 2022
+    # coefficients fold to literals instead of being read from a struct per point.
+    # Only the velocity members: `aml` and `activation` are not needed here and
+    # a type parameter has to be isbits.
+    vcmc, vcmp = let dev = ClimaComms.device(Y.c)
+        tv = (; cmc.liquid, cmc.ice, cmc.stokes, cmc.Ch2022)
+        _fold(dev, tv), _fold(dev, cmp)
+    end
     draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
@@ -197,8 +213,8 @@ function set_precipitation_velocities!(
         velocity_mode(water, name),
         name,
         params,
-        cmc,
-        cmp,
+        vcmc,
+        vcmp,
         ρ,
         q,
     )
@@ -785,16 +801,19 @@ end
 """
     has_implicit_1m_microphysics(p)
 
-Whether the implicit 1M condensation / sublimation tendency is active: 1M
-microphysics with `cloud_liquid_formation` or `cloud_ice_formation` assigned to
-`microphysics_1m_implicit_params` (`implicit_microphysics: true`). When it is
-not, `ᶜmp_tendency_implicit*` keep their zero initialization.
+Whether the implicit 1M tendency is active: 1M microphysics with at least one
+of `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+or `snow_deposition_sublimation` assigned to `microphysics_1m_implicit_params`
+(`implicit_microphysics: true`). When it is not, `ᶜmp_tendency_implicit*` keep
+their zero initialization.
 """
 function has_implicit_1m_microphysics(p)
     p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return false
     procs = CAP.microphysics_1m_implicit_params(p.params).processes
     return !isnothing(procs.cloud_liquid_formation) ||
-           !isnothing(procs.cloud_ice_formation)
+           !isnothing(procs.cloud_ice_formation) ||
+           !isnothing(procs.rain_condensation_evaporation) ||
+           !isnothing(procs.snow_deposition_sublimation)
 end
 
 """

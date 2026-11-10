@@ -160,8 +160,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     (; ᶜmp_tendency, ᶜmp_tendency_implicit) = p.precomputed
     @. Yₜ.c.ρq_lcl += Y.c.ρ * (ᶜmp_tendency.dq_lcl_dt + ᶜmp_tendency_implicit.dq_lcl_dt)
     @. Yₜ.c.ρq_icl += Y.c.ρ * (ᶜmp_tendency.dq_icl_dt + ᶜmp_tendency_implicit.dq_icl_dt)
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
-    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜmp_tendency.dq_sno_dt
+    @. Yₜ.c.ρq_rai += Y.c.ρ * (ᶜmp_tendency.dq_rai_dt + ᶜmp_tendency_implicit.dq_rai_dt)
+    @. Yₜ.c.ρq_sno += Y.c.ρ * (ᶜmp_tendency.dq_sno_dt + ᶜmp_tendency_implicit.dq_sno_dt)
     return nothing
 end
 
@@ -197,11 +197,15 @@ function microphysics_tendency!(
         @. Yₜc.ρq_icl = add_sgs_tendencies(Yₜc.ρq_icl, sgs_args..., @name(dq_icl_dt))
         @. Yₜc.ρq_rai = add_sgs_tendencies(Yₜc.ρq_rai, sgs_args..., @name(dq_rai_dt))
         @. Yₜc.ρq_sno = add_sgs_tendencies(Yₜc.ρq_sno, sgs_args..., @name(dq_sno_dt))
-        # Implicit cond/subl accumulation (only q_lcl, q_icl).
+        # Implicit cond/evap/subl accumulation (q_lcl, q_icl, q_rai, q_sno).
         @. Yₜc.ρq_lcl =
             add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args_imp..., @name(dq_lcl_dt))
         @. Yₜc.ρq_icl =
             add_sgs_tendencies(Yₜc.ρq_icl, sgs_args_imp..., @name(dq_icl_dt))
+        @. Yₜc.ρq_rai =
+            add_sgs_tendencies(Yₜc.ρq_rai, sgs_args_imp..., @name(dq_rai_dt))
+        @. Yₜc.ρq_sno =
+            add_sgs_tendencies(Yₜc.ρq_sno, sgs_args_imp..., @name(dq_sno_dt))
 
         unrolled_foreach(draft_indices) do j
             @inline
@@ -210,8 +214,8 @@ function microphysics_tendency!(
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
             @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt + ᶜmp_impʲ.dq_lcl_dt
             @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt + ᶜmp_impʲ.dq_icl_dt
-            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
-            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt
+            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt + ᶜmp_impʲ.dq_rai_dt
+            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt + ᶜmp_impʲ.dq_sno_dt
             return nothing
         end
         return nothing

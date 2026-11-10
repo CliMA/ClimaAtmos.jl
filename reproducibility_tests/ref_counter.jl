@@ -1,4 +1,4 @@
-463
+465
 
 # **README**
 #
@@ -32,6 +32,17 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+465
+- The `TRMM_LBA` radiation takes the height profile at the current time and interpolates
+  it in height on every device. This changes SCM TRMM results at the level of Float32
+  rounding.
+
+464
+- Implicit Jacobian for 1M rain evaporation (`ρq_rai` diagonal: `tend/q_rai`)
+  and snow sublimation/deposition (`ρq_sno` diagonal: `tend/q_sno` for
+  sublimation; ventilation-integral prefactor `C = 4πn₀G/(ρλ²)·vent` for
+  deposition, computed without dividing by S).
+
 463
 - `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
   results at the level of Float32 rounding.

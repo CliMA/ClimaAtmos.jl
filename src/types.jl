@@ -101,10 +101,11 @@ and one built from an unmodified configuration file agree (see
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
-    `cloud_liquid_formation` and `cloud_ice_formation` are routed to either
-    `microphysics_1m_params` (bulk CM BMT) or `microphysics_1m_implicit_params`
-    (SGS-integrated implicit source) by `create_parameters.jl`, driven by the
-    `implicit_microphysics` config toggle.
+    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+    and `snow_deposition_sublimation` are routed to either `microphysics_1m_params`
+    (bulk CM BMT) or `microphysics_1m_implicit_params` (SGS-integrated implicit
+    source) by `create_parameters.jl`, driven by the `implicit_microphysics` config
+    toggle.
 
 # Examples
 
@@ -131,9 +132,11 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
     )
         # Override CM's `ConstantTimescale` ice formation default to match
         # `default_config.yml`. `create_parameters.jl` splits
-        # `cloud_liquid_formation` and `cloud_ice_formation` between
-        # `microphysics_1m_params` (bulk) and `microphysics_1m_implicit_params`
-        # (implicit) based on `implicit_microphysics`.
+        # `cloud_liquid_formation`, `cloud_ice_formation`,
+        # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
+        # between `microphysics_1m_params` (bulk) and
+        # `microphysics_1m_implicit_params` (implicit) based on
+        # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
@@ -1670,26 +1673,17 @@ by `rad: "ISDAC"`.
 end
 
 """
-    RadiationTRMM_LBA(::Type{FT})
+    RadiationTRMM_LBA()
 
-Prescribed radiative heating profile for the TRMM-LBA deep-convection case,
-taken from AtmosphericProfilesLibrary.
+Prescribed radiative heating of the TRMM-LBA deep-convection case.
 
-The stored profile is evaluated as `rad_profile(t, z)` to give a temperature
-tendency [K/s], which is converted to an energy tendency. Selected by
-`rad: "TRMM_LBA"`.
+Selected by `rad: "TRMM_LBA"`.
 
-# Fields
-
-  - `rad_profile`: Callable `(t, z)` returning the radiative heating rate [K/s].
+The time-height profile `APL.TRMM_LBA_radiation(FT)` from AtmosphericProfilesLibrary
+is stored in the radiation cache and evaluated as `rad_profile(t, z)` to give
+a temperature tendency [K/s], which is converted to an energy tendency.
 """
-struct RadiationTRMM_LBA{R}
-    rad_profile::R
-    function RadiationTRMM_LBA(::Type{FT}) where {FT}
-        rad_profile = APL.TRMM_LBA_radiation(FT)
-        return new{typeof(rad_profile)}(rad_profile)
-    end
-end
+struct RadiationTRMM_LBA end
 
 """
     PrescribedFlow{FT}
