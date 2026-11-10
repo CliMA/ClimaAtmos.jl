@@ -1673,26 +1673,17 @@ by `rad: "ISDAC"`.
 end
 
 """
-    RadiationTRMM_LBA(::Type{FT})
+    RadiationTRMM_LBA()
 
-Prescribed radiative heating profile for the TRMM-LBA deep-convection case,
-taken from AtmosphericProfilesLibrary.
+Prescribed radiative heating of the TRMM-LBA deep-convection case.
 
-The stored profile is evaluated as `rad_profile(t, z)` to give a temperature
-tendency [K/s], which is converted to an energy tendency. Selected by
-`rad: "TRMM_LBA"`.
+Selected by `rad: "TRMM_LBA"`.
 
-# Fields
-
-  - `rad_profile`: Callable `(t, z)` returning the radiative heating rate [K/s].
+The time-height profile `APL.TRMM_LBA_radiation(FT)` from AtmosphericProfilesLibrary
+is stored in the radiation cache and evaluated as `rad_profile(t, z)` to give
+a temperature tendency [K/s], which is converted to an energy tendency.
 """
-struct RadiationTRMM_LBA{R}
-    rad_profile::R
-    function RadiationTRMM_LBA(::Type{FT}) where {FT}
-        rad_profile = APL.TRMM_LBA_radiation(FT)
-        return new{typeof(rad_profile)}(rad_profile)
-    end
-end
+struct RadiationTRMM_LBA end
 
 """
     PrescribedFlow{FT}
