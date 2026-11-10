@@ -231,15 +231,14 @@ parameters `evaporation` (only called when evaporation is on).
 `state = (F_r, F_s, G_r, G_s, ρE_r, ρE_s, ρe_r, ρe_s)` holds the rain and
 snow fluxes [kg m⁻² s⁻¹] entering the cell from above (on output: leaving it at
 the bottom), the downward energy fluxes [W m⁻²] they carry (the energy the
-precipitation was removed from the air with, minus what returned with the
-water that evaporated above), and
-the evaporation rates [kg m⁻³ s⁻¹] and their energies [W m⁻³] of the cell
-above. `input` is the tuple
+precipitation was removed from the air with, minus what returned with the water
+that evaporated above), and the evaporation rates [kg m⁻³ s⁻¹] and their
+energies [W m⁻³] of the cell above. `input` is the tuple
 `(S_r, S_s, Se_r, Se_s, Δz, ρ_env, ρa_env, T, p_over_ps, q_vap)`: the rain and
 snow produced in the cell [kg m⁻³ s⁻¹] and the energy removed from the air with
 them [W m⁻³], the column-integration layer depth, and the density, mass per
-unit volume of the grid box, temperature and vapor specific humidity of the air
-into which precipitation evaporates.
+unit volume of the grid box, temperature, pressure divided by surface pressure
+and vapor specific humidity of the air into which precipitation evaporates.
 
 The incoming fluxes evaporate at `ρa_env` times
 `CloudMicrophysics.Microphysics0M.evaporate_precipitation`, rain against

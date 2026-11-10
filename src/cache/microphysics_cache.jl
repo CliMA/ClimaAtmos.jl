@@ -1867,12 +1867,8 @@ Dispatch on `microphysics_model`:
     energy alike, is rescaled by `precip_evap_scale_rai` (`_sno`), the factor
     that limits it to the rain (snow) produced in the column, so the surface
     fluxes are never upward (non-positive); the microphysics tendency applies
-    the same factors. The factors fall below 1 mainly when the production is
-    refreshed from a Newton iterate while the evaporation stays frozen; the
-    energy tendency without surface water is then not exactly zero but the
-    refreshed production times the difference between its mean specific
-    energy and that of the evaporated water (small when the production
-    changes little within the Newton iterations).
+    the same factors (they fall below 1 mainly when the production is
+    refreshed in Newton iterations while the evaporation stays frozen).
   - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: when all
     implicit stages of the current step have been accumulated
     (`precip_stage_idx[] == n_imp_stages` and `!reproducible_restart`;
