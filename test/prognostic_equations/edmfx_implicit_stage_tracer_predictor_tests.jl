@@ -302,6 +302,7 @@ column(f) = vec(Array(parent(f)))
         # state-dependent `-dtγ / τ_vap_to_q_lcl` / `-dtγ / τ_vap_to_q_icl`
         # evaluated at the matching (grid-mean or updraft) state.
         import CloudMicrophysics.MicrophysicsNonEq as CMNe
+        import Thermodynamics as TD
         alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
         cache = CA.jacobian_cache(alg, Y, p.atmos)
         matrix = cache.matrix.matrix
@@ -325,14 +326,41 @@ column(f) = vec(Array(parent(f)))
         mp_i = CAP.microphysics_1m_implicit_params(p.params)
         function state_cols(j)
             if j == 0
-                return (
-                    column(Y.c.ρ), column(p.precomputed.ᶜT),
-                    column(p.precomputed.ᶜq_tot_nonneg),
-                    column(Y.c.ρq_lcl) ./ column(Y.c.ρ),
-                    column(Y.c.ρq_icl) ./ column(Y.c.ρ),
-                    column(Y.c.ρq_rai) ./ column(Y.c.ρ),
-                    column(Y.c.ρq_sno) ./ column(Y.c.ρ),
-                )
+                # With PrognosticEDMFX the Jacobian uses environment state for
+                # the grid-mean blocks (ᶜmp_tendency_implicit is never populated).
+                if p.atmos.turbconv_model isa CA.PrognosticEDMFX
+                    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
+                        p.precomputed
+                    ρ⁰ = [
+                        TD.air_density(thp, T, pp, q_tot, q_liq, q_ice)
+                        for (T, pp, q_tot, q_liq, q_ice) in zip(
+                            column(ᶜT⁰), column(ᶜp), column(ᶜq_tot_nonneg⁰),
+                            column(ᶜq_liq⁰), column(ᶜq_ice⁰))
+                    ]
+                    # ᶜspecific_env_value returns a lazy broadcast; materialize
+                    # into a concrete field before calling column().
+                    _lcl = similar(Y.c.ρ)
+                    _lcl .= CA.ᶜspecific_env_value(@name(q_lcl), Y, p)
+                    _icl = similar(Y.c.ρ)
+                    _icl .= CA.ᶜspecific_env_value(@name(q_icl), Y, p)
+                    _rai = similar(Y.c.ρ)
+                    _rai .= CA.ᶜspecific_env_value(@name(q_rai), Y, p)
+                    _sno = similar(Y.c.ρ)
+                    _sno .= CA.ᶜspecific_env_value(@name(q_sno), Y, p)
+                    return (
+                        ρ⁰, column(ᶜT⁰), column(ᶜq_tot_nonneg⁰),
+                        column(_lcl), column(_icl), column(_rai), column(_sno),
+                    )
+                else
+                    return (
+                        column(Y.c.ρ), column(p.precomputed.ᶜT),
+                        column(p.precomputed.ᶜq_tot_nonneg),
+                        column(Y.c.ρq_lcl) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_icl) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_rai) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_sno) ./ column(Y.c.ρ),
+                    )
+                end
             else
                 sgs = Y.c.sgsʲs.:($j)
                 return (
@@ -374,6 +402,79 @@ column(f) = vec(Array(parent(f)))
         # one Newton step leaves the environment cloud liquid unchanged.
         @test vec(sum(parent(liq_blocks[1][1]); dims = 4)) ==
               vec(sum(parent(liq_blocks[2][1]); dims = 4))
+    end
+
+    @testset "Jacobian diagonals for q_rai / q_sno (evaporation and sublimation/deposition)" begin
+        import CloudMicrophysics.Microphysics1M as CM1
+        import Thermodynamics as TD
+        alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
+        cache = CA.jacobian_cache(alg, Y, p.atmos)
+        matrix = cache.matrix.matrix
+
+        rai_blocks = Any[(matrix[@name(c.ρq_rai), @name(c.ρq_rai)], 0)]
+        sno_blocks = Any[(matrix[@name(c.ρq_sno), @name(c.ρq_sno)], 0)]
+        for j in 1:CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
+            χ_rai = @name(c.sgsʲs.:($j).q_rai)
+            χ_sno = @name(c.sgsʲs.:($j).q_sno)
+            MatrixFields.has_field(Y, χ_rai) || continue
+            push!(rai_blocks, (matrix[χ_rai, χ_rai], j))
+            push!(sno_blocks, (matrix[χ_sno, χ_sno], j))
+        end
+        for (block, _) in vcat(rai_blocks, sno_blocks)
+            parent(block) .= 0
+        end
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+
+        thp = CAP.thermodynamics_params(p.params)
+        mp_i = CAP.microphysics_1m_implicit_params(p.params)
+        function rai_sno_state_cols(j)
+            if j == 0
+                tend = p.precomputed.ᶜmp_tendency_implicit⁰
+                (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+                ρ = [
+                    TD.air_density(thp, T, pp, q_tot, q_liq, q_ice)
+                    for (T, pp, q_tot, q_liq, q_ice) in zip(
+                        column(ᶜT⁰), column(ᶜp), column(ᶜq_tot_nonneg⁰),
+                        column(ᶜq_liq⁰), column(ᶜq_ice⁰))
+                ]
+                T = column(ᶜT⁰)
+                _rai = similar(Y.c.ρ)
+                _rai .= CA.ᶜspecific_env_value(@name(q_rai), Y, p)
+                _sno = similar(Y.c.ρ)
+                _sno .= CA.ᶜspecific_env_value(@name(q_sno), Y, p)
+                return tend, ρ, T, column(_rai), column(_sno)
+            else
+                tend = p.precomputed.ᶜmp_tendency_implicitʲs.:($j)
+                ρ = column(p.precomputed.ᶜρʲs.:($j))
+                T = column(p.precomputed.ᶜTʲs.:($j))
+                sgs = Y.c.sgsʲs.:($j)
+                return tend, ρ, T, column(sgs.q_rai), column(sgs.q_sno)
+            end
+        end
+        for (block, j) in rai_blocks
+            tend, ρ, T, q_rai, _ = rai_sno_state_cols(j)
+            dq_rai_dt = column(tend.dq_rai_dt)
+            expected = [
+                dtγ * min(dq_rai_dt[i], 0) / max(q_rai[i], eps(FT))
+                for i in 1:length(T)
+            ]
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+        for (block, j) in sno_blocks
+            tend, ρ, T, _, q_sno = rai_sno_state_cols(j)
+            dq_sno_dt = column(tend.dq_sno_dt)
+            expected = map(1:length(T)) do i
+                t = dq_sno_dt[i]
+                if t <= 0
+                    dtγ * t / max(q_sno[i], eps(FT))
+                else
+                    C = CM1._snow_subl_dep_coeff(mp_i, thp, q_sno[i], ρ[i], T[i])
+                    q_sat = TD.q_vap_saturation(thp, T[i], ρ[i], TD.Ice())
+                    dtγ * (-C / max(q_sat, eps(FT)))
+                end
+            end
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
     end
 
     @testset "grid-mean cloud liquid warm start keeps q_lcl⁰" begin

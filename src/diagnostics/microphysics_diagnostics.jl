@@ -31,8 +31,8 @@ The bulk and implicit sets are process-disjoint by construction
 (`_split_formation`):
 
   - `implicit_microphysics: true` → bulk carries every process except
-    `cloud_liquid_formation` and `cloud_ice_formation`; implicit carries only
-    those two.
+    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+    and `snow_deposition_sublimation`; implicit carries only those four.
   - `implicit_microphysics: false` → bulk carries every process (including the
     two formations); implicit carries no active process, so its contribution
     for every source term is zero.
