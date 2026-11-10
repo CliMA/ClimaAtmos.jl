@@ -1906,6 +1906,10 @@ symbols or strings.
   - `dg_fddg_vertical`: `Val(:vi)` or `Val(:full_flux)`, the vertical
     momentum transport in the flux-form DG dynamics (the vector-invariant
     exchange terms, or the staggered flux form for `uₕ` and `w`).
+  - `dg_vertical_cross_term`: `Val(:gcl)` or `Val(:kpep)`, the horizontal-
+    velocity part of the vertical mass flux on DG horizontal spaces (the
+    free-stream-preserving commutator form, or the interpolated form that
+    pairs with the kinetic energy).
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -1927,6 +1931,7 @@ struct AtmosNumerics{
     DGVIF,
     DGTP,
     DGFV,
+    DGVC,
     VWB,
 }
     # Enable specific upwinding schemes for specific equations
@@ -1980,6 +1985,10 @@ struct AtmosNumerics{
     # flux times the interpolated Cartesian velocity for uₕ, and the vertical
     # velocity in flux form on the dual grid).
     dg_fddg_vertical::DGFV
+    # Horizontal-velocity part of the vertical mass flux on DG horizontal
+    # spaces: Val(:gcl) (free-stream-preserving commutator form) or Val(:kpep)
+    # (ᶠwinterp(ρJ, CT3(uₕ)), the cross term of the kinetic energy).
+    dg_vertical_cross_term::DGVC
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
     vertical_water_borrowing_species::VWB
@@ -2031,6 +2040,8 @@ types for compile-time dispatch.
     `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
   - `dg_fddg_vertical = :vi`: Vertical momentum transport in the flux-form
     DG dynamics, `:vi` or `:full_flux`.
+  - `dg_vertical_cross_term = :gcl`: Horizontal-velocity part of the vertical
+    mass flux on DG horizontal spaces, `:gcl` or `:kpep`.
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 
@@ -2063,6 +2074,7 @@ function AtmosNumerics(;
     dg_vi_interface_flux = :rusanov,
     dg_tracer_penalty = :acoustic,
     dg_fddg_vertical = :vi,
+    dg_vertical_cross_term = :gcl,
     vertical_water_borrowing_species = nothing,
     kwargs...,
 )
@@ -2089,6 +2101,7 @@ function AtmosNumerics(;
         Val(Symbol(dg_vi_interface_flux)),
         Val(Symbol(dg_tracer_penalty)),
         Val(Symbol(dg_fddg_vertical)),
+        Val(Symbol(dg_vertical_cross_term)),
         vertical_water_borrowing_species,
     )
 end

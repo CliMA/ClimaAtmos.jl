@@ -839,13 +839,20 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    if is_dg_horizontal(axes(Y.c))
+    if is_dg_horizontal(axes(Y.c)) &&
+       p.atmos.numerics.dg_vertical_cross_term === Val(:gcl)
         # GCL-consistent cross-term: free-stream preserving over terrain for
         # the DG-horizontal / FD-vertical operator pair (see
         # docs/dg_fd_gcl_crossterm.md); the chain form below does not
         # telescope against the horizontal operator's terrain metric.
         set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, Y.c.uₕ, Y.c.ρ)
     else
+        # Chain form: the face average of ρJ CT3(uₕ), the uₕ-u₃ cross term of
+        # ᶜK, so the work of the u₃ pressure and gravity force matches the
+        # potential energy the vertical mass flux moves. On DG horizontal
+        # spaces (dg_vertical_cross_term = kpep) this makes the vertical
+        # kinetic-potential energy exchange exact over terrain, but not free
+        # stream preserving.
         @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
     end
 

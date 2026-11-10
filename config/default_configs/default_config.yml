@@ -76,6 +76,9 @@ dg_tracer_penalty:
 dg_fddg_vertical:
   help: "Vertical momentum transport in the flux-form DG dynamics [`vi` (default; the vector-invariant exchange terms, exact for the three-dimensional kinetic energy), `full_flux` (staggered flux form: the horizontal velocity is transported by the face mass flux of the continuity equation, and the vertical velocity w = u₃/J_v is advected on the dual grid around the faces, horizontally with the average of the two adjacent center-level two-point mass fluxes and vertically with the center average of the face mass flux; on the deep-atmosphere grid the metric pair −w uₕ/r, +|uₕ|²/r is explicit with adjoint weights, and w gets a ρ-weighted jump penalty at element faces at the shear speed max(|u_n|, dg_vi_shear_floor c), an exact kinetic-energy sink that moves no mass)]. Ignored unless dg_equation_form is fddg."
   value: "vi"
+dg_vertical_cross_term:
+  help: "Horizontal-velocity part `uₕ³` of the vertical mass flux on DG horizontal spaces [`gcl` (default; commutator form that telescopes against the horizontal operator's terrain metric, so a divergence-free flow over terrain stays free of mass sources), `kpep` (the interpolated `ᶠwinterp(ρJ, CT3(uₕ))` of CG, the cross term through which the vertical pressure and gravity force does work in the kinetic energy, so the vertical exchange of kinetic and potential energy is exact over terrain)]. The two agree on flat grids. Ignored on CG."
+  value: "gcl"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7

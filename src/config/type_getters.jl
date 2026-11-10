@@ -179,6 +179,11 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_fddg_vertical in (:vi, :full_flux) || error(
         "dg_fddg_vertical must be vi or full_flux, got $dg_fddg_vertical",
     )
+    dg_vertical_cross_term =
+        Symbol(get(parsed_args, "dg_vertical_cross_term", "gcl"))
+    dg_vertical_cross_term in (:gcl, :kpep) || error(
+        "dg_vertical_cross_term must be gcl or kpep, got $dg_vertical_cross_term",
+    )
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -199,6 +204,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_vi_interface_flux,
         dg_tracer_penalty,
         dg_fddg_vertical,
+        dg_vertical_cross_term,
         vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"

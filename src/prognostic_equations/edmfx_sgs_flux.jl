@@ -819,19 +819,21 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
         @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * lumpedₕ(strain_rate_inner(ᶜS, ᶜS_h))
     end
+    # after the TKE production, which reads ᶜS before the stress overwrites it
+    edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
     return nothing
 end
 
 """
-    edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+    edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
 
 Momentum part of [`edmfx_sgs_horizontal_diffusive_flux_tendency!`](@ref): the
 horizontal weak divergence of the SGS stress `τ = -2 K_u S` with the full
-strain rate, for `uₕ` at centers and `u₃` at faces. Element-local, so it
-errors on DG spaces, which need the face terms of a tensor interior-penalty
-form.
+center strain rate `ᶜS` (overwritten with `τ`), for `uₕ` at centers and `u₃`
+at faces. Element-local, so it errors on DG spaces, which need the face terms
+of a tensor interior-penalty form.
 """
-function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
     is_dg_horizontal(axes(Y.c)) && error(
         "edmfx_sgs_horizontal_diffusive_flux has no DG form of the momentum \
          stress yet; the scalar fluxes are coupled across elements by SIPG, \
