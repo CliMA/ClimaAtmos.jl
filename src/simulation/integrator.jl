@@ -205,15 +205,9 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         end
         if use_ngmres
             @info "Using NGMRES (Anderson acceleration) with max_iters = $ngmres_max_iters"
-            # NGMRES uses the Jacobian as a frozen preconditioner per solve.
-            # jacobian_update_n_steps (UpdateEveryN) is not safe here: it skips
-            # the first build, leaving cache.j = 0 → ldiv! → NaN. Use
-            # update_j only when it fires at least once per timestep.
-            ngmres_update_j = if update_jacobian_every == "stage"
-                CTS.UpdateEvery(CTS.NewNewtonSolve)
-            else
-                CTS.UpdateEvery(CTS.NewTimeStep)
-            end
+            # NGMRES rebuilds the preconditioner at every implicit stage solve
+            # (NewNewtonSolve), matching 1-Newton-per-stage direct solve behavior.
+            ngmres_update_j = CTS.UpdateEvery(CTS.NewNewtonSolve)
             nl_solver = CTS.NGMRES(;
                 max_iters = ngmres_max_iters,
                 update_j = ngmres_update_j,
