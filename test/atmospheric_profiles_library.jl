@@ -114,12 +114,156 @@ profiles(::Type{FT}) where {FT} = [
     (:TRMM_LBA_v, APL.TRMM_LBA_v(FT)),
 ]
 
+# `(profile, arguments, expected value)` from the case definitions. Expected values
+# cover table knots, points between knots, the edges of piecewise definitions, flat
+# extrapolation beyond the data, and the time-height and Exner-dependent forcings.
+# Arguments follow the profile type: `(z)`, `(t)`, `(t, z)`, `(Π, z)`, or `(Π, t, z)`.
+reference_values = [
+    # ARM SGP
+    (:ARM_SGP_θ_liq_ice, (350,), 302.5),
+    (:ARM_SGP_θ_liq_ice, (675,), (303.53 + 303.7) / 2),
+    (:ARM_SGP_θ_liq_ice, (6000,), 343.2),
+    (:ARM_SGP_q_tot, (1300,), 13.5e-3 / (1 + 13.5e-3)),
+    (:ARM_SGP_shf, (4 * 3600,), 90),
+    (:ARM_SGP_lhf, (7 * 3600,), (450 + 500) / 2),
+    (:ARM_SGP_lhf, (20 * 3600,), 0),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 500), 0.9 * -0.08 / 3600),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 1500), 0.9 * -0.04 / 3600),
+    (:ARM_SGP_dTdt, (0.9, 9 * 3600, 2500), 0),
+    (:ARM_SGP_dqtdt, (3 * 3600, 500), 0.02e-3 / 3600),
+    # BOMEX
+    (:Bomex_θ_liq_ice, (520,), 298.7),
+    (:Bomex_θ_liq_ice, (1000,), 298.7 + 480 * 3.7 / 960),
+    (:Bomex_θ_liq_ice, (1480,), 302.4),
+    (:Bomex_θ_liq_ice, (2500,), 308.2 + 500 * 3.65 / 1000),
+    (:Bomex_q_tot, (0,), 17e-3),
+    (:Bomex_q_tot, (1480,), 10.7e-3),
+    (:Bomex_q_tot, (3000,), 3e-3),
+    (:Bomex_u, (700,), -8.75),
+    (:Bomex_u, (3000,), -4.61),
+    (:Bomex_geostrophic_u, (1000,), -8.2),
+    (:Bomex_subsidence, (750,), -0.325e-2),
+    (:Bomex_subsidence, (1500,), -0.65e-2),
+    (:Bomex_subsidence, (2500,), 0),
+    (:Bomex_dqtdt, (300,), -1.2e-8),
+    (:Bomex_dqtdt, (400,), -0.6e-8),
+    (:Bomex_dqtdt, (600,), 0),
+    (:Bomex_dTdt, (0.95, 1000), -0.95 * 2 / 86400),
+    (:Bomex_dTdt, (0.95, 2250), -0.95 * 1 / 86400),
+    (:Bomex_tke_prescribed, (0,), 0.3260),
+    # Dry bubble
+    (:DryBubble_θ_liq_ice, (25,), 299.9834),
+    (:DryBubble_updrafts_area, (75,), 0.04),
+    (:DryBubble_updrafts_w, (100,), (0.017 + 0.0266) / 2),
+    (:DryBubble_updrafts_T, (0,), 299.2557),
+    # DYCOMS-II RF01
+    (:Dycoms_RF01_q_tot, (840,), 9e-3),
+    (:Dycoms_RF01_q_tot, (900,), 1.5e-3),
+    (:Dycoms_RF01_θ_liq_ice, (840,), 289),
+    (:Dycoms_RF01_θ_liq_ice, (848,), 299.5),
+    (:Dycoms_RF01_u0, (500,), 7),
+    (:Dycoms_RF01_v0, (500,), -5.5),
+    (:Dycoms_RF01_tke, (400,), 0.6),
+    # DYCOMS-II RF02
+    (:Dycoms_RF02_q_tot, (795,), 9.45e-3),
+    (:Dycoms_RF02_q_tot, (1295,), (5 - 3 * (1 - exp(-1))) / 1000),
+    (:Dycoms_RF02_θ_liq_ice, (795,), 288.3),
+    (:Dycoms_RF02_θ_liq_ice, (803,), 297),
+    (:Dycoms_RF02_u, (1000,), 2.3),
+    (:Dycoms_RF02_v, (1000,), 2.1),
+    # GABLS
+    (:GABLS_θ_liq_ice, (100,), 265),
+    (:GABLS_θ_liq_ice, (300,), 267),
+    (:GABLS_tke, (125,), 0.05),
+    (:GABLS_tke, (300,), 0),
+    (:GABLS_u, (200,), 8),
+    # GATE III
+    (:GATE_III_q_tot, (1000,), 13.5e-3 / (1 + 13.5e-3)),
+    (:GATE_III_q_tot, (750,), (16.5e-3 / (1 + 16.5e-3) + 13.5e-3 / (1 + 13.5e-3)) / 2),
+    (:GATE_III_T, (492,), 294.836),
+    (:GATE_III_T, (25000,), 198.11),
+    (:GATE_III_u, (500,), -1.75),
+    (:GATE_III_dqtdt, (500,), 1.2e-3 / 86400 / (1 + 16.5e-3)^2),
+    (:GATE_III_dTdt, (500,), (-1.0 - 1.1) / 86400),
+    # ISDAC
+    (:ISDAC_q_tot, (0,), 1.8e-3),
+    (:ISDAC_q_tot, (600,), 1.5e-3),
+    (:ISDAC_q_tot, (1000,), 1.2e-3),
+    (:ISDAC_θ_liq_ice, (0,), 263.4),
+    (:ISDAC_θ_liq_ice, (600,), 265),
+    (:ISDAC_θ_liq_ice, (826,), 267),
+    (:ISDAC_v, (1000,), 1),
+    (:ISDAC_subsidence, (400,), -2e-3),
+    (:ISDAC_subsidence, (1000,), -0.4125e-2),
+    (:ISDAC_inv_τ_scalar, (1000,), 0),
+    (:ISDAC_inv_τ_scalar, (1350,), 1 / 7200),
+    (:ISDAC_inv_τ_scalar, (2000,), 1 / 3600),
+    (:ISDAC_inv_τ_wind, (412.5,), 1 / 14400),
+    (:ISDAC_inv_τ_wind, (1000,), 1 / 7200),
+    # Larcform 1
+    (:Larcform1_T, (0,), 273),
+    (:Larcform1_p, (0,), 101300),
+    (:Larcform1_RH, (0,), 0.8),
+    (:Larcform1_geostrophic_u, (1000,), 5),
+    # Life cycle
+    (:LifeCycleTan2018_θ_liq_ice, (1000,), 298.7 + 480 * 3.7 / 960),
+    (:LifeCycleTan2018_q_tot, (520,), 16.3e-3),
+    (:LifeCycleTan2018_subsidence, (750,), -0.325e-2),
+    (:LifeCycleTan2018_dTdt, (0.95, 2250), -0.95 * 1 / 86400),
+    # Nieuwstadt
+    (:Nieuwstadt_θ_liq_ice, (1350,), 300),
+    (:Nieuwstadt_θ_liq_ice, (2350,), 303),
+    (:Nieuwstadt_tke, (800,), 0.1 * 1.46^2 / 2),
+    # RICO
+    (:Rico_θ_liq_ice, (740,), 297.9),
+    (:Rico_θ_liq_ice, (4000,), 317),
+    (:Rico_q_tot, (0,), 16e-3),
+    (:Rico_q_tot, (740,), 13.8e-3),
+    (:Rico_q_tot, (3260,), 2.4e-3),
+    (:Rico_u, (1000,), -7.9),
+    (:Rico_v, (1000,), -3.8),
+    (:Rico_subsidence, (1130,), -0.0025),
+    (:Rico_subsidence, (3000,), -0.005),
+    (:Rico_dqtdt, (0,), -1 / 86400 / 1000),
+    (:Rico_dqtdt, (3500,), 0.3456 / 86400 / 1000),
+    (:Rico_dTdt, (0.95, 1000), -0.95 * 2.5 / 86400),
+    (:Rico_tke_prescribed, (40,), (0.0976 + 0.2051) / 2),
+    # SP
+    (:SP_θ_liq_ice, (974,), 300),
+    (:SP_θ_liq_ice, (1074,), 308),
+    (:SP_θ_liq_ice, (2074,), 311),
+    # Soares
+    (:Soares_q_tot, (1000,), 5e-3 - 3.7e-4),
+    (:Soares_q_tot, (2350,), 5e-3 - 3.7e-4 * 1.35 - 9.4e-4),
+    (:Soares_θ_liq_ice, (2350,), 302),
+    (:Soares_tke, (800,), 0.1 * 1.46^2 / 2),
+    (:Soares_tke, (1700,), 0),
+    # TRMM-LBA
+    (:TRMM_LBA_p, (334,), 954.2 * 100),
+    (:TRMM_LBA_T, (334,), 23.3 + 273.15),
+    (:TRMM_LBA_RH, (334,), 0.86),
+    (:TRMM_LBA_u, (30000,), -15.32),
+    (:TRMM_LBA_v, (334,), -3.51),
+    (:TRMM_LBA_tke_prescribed, (100,), 0.77933),
+    (:TRMM_LBA_radiation, (600, 42.5), -1.386 / 86400),
+    (:TRMM_LBA_radiation, (1200, 200.92), -1.824 / 86400),
+    (:TRMM_LBA_radiation, (900, 42.5), (-1.386 - 1.23) / 2 / 86400),
+    (:TRMM_LBA_radiation, (0, 42.5), -1.386 / 86400),
+]
+
 @testset "AtmosphericProfilesLibrary" begin
     @testset "$FT" for FT in (Float64, Float32)
         for (name, prof) in profiles(FT)
             @testset "$name" begin
                 prof(call_args(prof, 1)...)
-                @inferred prof(call_args(prof, Float32(1))...)
+                @test @inferred(prof(call_args(prof, FT(1))...)) isa FT
+            end
+        end
+        profs = Dict(profiles(FT))
+        for (name, args, expected) in reference_values
+            @testset "$name$args" begin
+                prof = profs[name]
+                @test prof(FT.(args)...) ≈ expected rtol = 100 * eps(FT)
             end
         end
     end

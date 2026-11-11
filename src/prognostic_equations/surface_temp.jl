@@ -17,11 +17,22 @@ sum of the surface rain and snow fluxes, so precipitation warms or cools the sla
 and adds water to it with the sign convention that fluxes are positive upward.
 
 Reads the precomputed `col_integrated_precip_energy_tendency`,
-`surface_rain_flux`, and `surface_snow_flux`; `t` is unused. Called from both
-`implicit_tendency!` (when microphysics is implicit) and `remaining_tendency!`
-(when it is explicit), so the surface deposition always uses the same cached
-microphysics sources as the atmospheric water removal, preserving conservation
-across IMEX stages.
+`surface_rain_flux`, and `surface_snow_flux` for equilibrium 0-moment
+microphysics (and under automatic differentiation). For non-equilibrium
+microphysics on plain floating-point states, evaluates the pointwise bottom-face
+sedimentation water and energy fluxes directly from `(Y, p)` (converting the
+level-1 velocity on the center space before slicing) so explicit-diagonal stages
+(`a_{11} = 0`) do not read the previous step's stage-weighted diagnostic in
+`p.precomputed`. When the stage-weighted `ManualSparseJacobian` accumulator is
+active (`has_precip_stage_accumulator(p)` — direct Newton solve without Krylov or
+line search at `update_jacobian_every = "solve"`, or `"stage"` when
+`max_newton_iters_ode == 1`), `add_post_newton_surface_precipitation_tendency!`
+adds the post-Newton Jacobian increment at each implicit stage so the slab ocean
+conserves column water and energy with the atmosphere across IMEX stages
+whenever `constrain_state!` leaves column water unchanged (`ρq_tot ≥ 0`). When
+the accumulator is disabled (Krylov, line search, `update_jacobian_every = "dt"`,
+`"stage"` with `max_newton_iters_ode > 1`, or autodiff Jacobians), `build_cache`
+warns once and the slab receives only the pointwise stage flux `F(U^g)`.
 """
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
 
@@ -42,6 +53,227 @@ function surface_precipitation_tendency!(
     P_liq = p.precomputed.surface_rain_flux
     P_snow = p.precomputed.surface_snow_flux
     @. Yₜ.sfc.water -= P_liq + P_snow
+end
+
+@inline function _slab_pointwise_precip_energy_flux(
+    thp,
+    J_ratio,
+    int_T,
+    int_Φ,
+    int_uvw,
+    int_ρq_lcl,
+    int_ρq_icl,
+    int_ρq_rai,
+    int_ρq_sno,
+    sfc_wₗ,
+    sfc_wᵢ,
+    sfc_wᵣ,
+    sfc_wₛ,
+    f_e_sgs,
+)
+    zero_FT = zero(int_T)
+    f_lcl = -sfc_wₗ * J_ratio * max(zero_FT, int_ρq_lcl)
+    f_icl = -sfc_wᵢ * J_ratio * max(zero_FT, int_ρq_icl)
+    f_rai = -sfc_wᵣ * J_ratio * max(zero_FT, int_ρq_rai)
+    f_sno = -sfc_wₛ * J_ratio * max(zero_FT, int_ρq_sno)
+    e_int_liq = TD.internal_energy_liquid(thp, int_T)
+    e_int_ice = TD.internal_energy_ice(thp, int_T)
+    e_lcl = e_int_liq + int_Φ + sedimentation_kinetic_energy(sfc_wₗ, int_uvw)
+    e_icl = e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wᵢ, int_uvw)
+    e_rai = e_int_liq + int_Φ + sedimentation_kinetic_energy(sfc_wᵣ, int_uvw)
+    e_sno = e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wₛ, int_uvw)
+    return f_e_sgs + f_rai * e_rai + f_lcl * e_lcl + f_sno * e_sno + f_icl * e_icl
+end
+
+@inline function _slab_pointwise_precip_water_flux(
+    J_ratio,
+    int_ρq_lcl,
+    int_ρq_icl,
+    int_ρq_rai,
+    int_ρq_sno,
+    sfc_wₗ,
+    sfc_wᵢ,
+    sfc_wᵣ,
+    sfc_wₛ,
+)
+    zero_FT = zero(int_ρq_rai)
+    return -J_ratio * (
+        sfc_wᵣ * max(zero_FT, int_ρq_rai) +
+        sfc_wₗ * max(zero_FT, int_ρq_lcl) +
+        sfc_wₛ * max(zero_FT, int_ρq_sno) +
+        sfc_wᵢ * max(zero_FT, int_ρq_icl)
+    )
+end
+
+function surface_precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    slab::SlabOceanTemperature,
+    ::Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
+    },
+)
+    if !(
+        eltype(Y) === eltype(p.params) &&
+        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_sno))
+    )
+        surface_heat_capacity_per_area =
+            slab.ρ_ocean * slab.cp_ocean * slab.depth_ocean
+        @. Yₜ.sfc.T -=
+            p.precomputed.col_integrated_precip_energy_tendency /
+            surface_heat_capacity_per_area
+        @. Yₜ.sfc.water -=
+            p.precomputed.surface_rain_flux + p.precomputed.surface_snow_flux
+        return nothing
+    end
+    (; params) = p
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜu, ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+    thp = CAP.thermodynamics_params(params)
+    sfc_space = axes(Yₜ.sfc.water)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    int_J = sfc_lev(ᶜJ)
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    J_ratio = @. lazy(int_J / sfc_J)
+
+    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+    int_T = sfc_lev(ᶜT)
+    int_Φ = sfc_lev(ᶜΦ)
+    int_uvw = if hasproperty(p.scratch, :c_lev1_uvw)
+        @. p.scratch.c_lev1_uvw = Geometry.UVWVector($(Fields.level(ᶜu, 1)))
+        Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw), sfc_space)
+    else
+        @. lazy(Geometry.UVWVector($(sfc_lev(ᶜu))))
+    end
+    sfc_wₗ = sfc_lev(ᶜwₗ)
+    sfc_wᵢ = sfc_lev(ᶜwᵢ)
+    sfc_wᵣ = sfc_lev(ᶜwᵣ)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
+
+    f_e_sgs = Fields.Field(p.scratch.temp_data_level, sfc_space)
+    gm = (;
+        sfc_lev, J_ratio, int_T, int_uvw,
+        int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
+        sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
+    )
+    set_sfc_sgs_precip_energy_flux!(
+        f_e_sgs,
+        Y,
+        p,
+        p.atmos.turbconv_model,
+        gm,
+    )
+
+    surface_heat_capacity_per_area =
+        slab.ρ_ocean * slab.cp_ocean * slab.depth_ocean
+    @. Yₜ.sfc.water -= _slab_pointwise_precip_water_flux(
+        J_ratio,
+        int_ρq_lcl,
+        int_ρq_icl,
+        int_ρq_rai,
+        int_ρq_sno,
+        sfc_wₗ,
+        sfc_wᵢ,
+        sfc_wᵣ,
+        sfc_wₛ,
+    )
+    @. Yₜ.sfc.T -=
+        _slab_pointwise_precip_energy_flux(
+            thp,
+            J_ratio,
+            int_T,
+            int_Φ,
+            int_uvw,
+            int_ρq_lcl,
+            int_ρq_icl,
+            int_ρq_rai,
+            int_ρq_sno,
+            sfc_wₗ,
+            sfc_wᵢ,
+            sfc_wᵣ,
+            sfc_wₛ,
+            f_e_sgs,
+        ) / surface_heat_capacity_per_area
+    return nothing
+end
+
+"""
+    add_post_newton_surface_precipitation_tendency!(Yₜ, Y, p, temperature, microphysics_model)
+
+Add to `Yₜ.sfc` the post-Newton Jacobian increment `-(w_jac (ρq* - ρq^g))` of
+the bottom-face sedimentation water and energy fluxes at `Y = U*`, using the
+linearization state cached in `p.scratch.sfc_precip_lin_state` by
+`record_stage_precipitation_linearization!`. Active only for a
+`SlabOceanTemperature` surface with non-equilibrium microphysics when the
+stage-weighted `ManualSparseJacobian` accumulator is enabled; a no-op otherwise.
+"""
+add_post_newton_surface_precipitation_tendency!(Yₜ, Y, p, _, _) = nothing
+add_post_newton_surface_precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    ::SlabOceanTemperature,
+    _,
+) = nothing
+function add_post_newton_surface_precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    slab::SlabOceanTemperature,
+    ::Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
+    },
+)
+    (
+        eltype(Y) === eltype(p.params) &&
+        has_precip_stage_accumulator(p) &&
+        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_sno))
+    ) || return nothing
+
+    lin = p.scratch.sfc_precip_lin_state
+    sfc_space = axes(lin)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+
+    Δf_lcl = @. lazy(lin.w_lcl_jac * (int_ρq_lcl - lin.ρq_lcl_guess))
+    Δf_icl = @. lazy(lin.w_icl_jac * (int_ρq_icl - lin.ρq_icl_guess))
+    Δf_rai = @. lazy(lin.w_rai_jac * (int_ρq_rai - lin.ρq_rai_guess))
+    Δf_sno = @. lazy(lin.w_sno_jac * (int_ρq_sno - lin.ρq_sno_guess))
+
+    surface_heat_capacity_per_area =
+        slab.ρ_ocean * slab.cp_ocean * slab.depth_ocean
+    @. Yₜ.sfc.water -= Δf_rai + Δf_lcl + Δf_sno + Δf_icl
+    @. Yₜ.sfc.T -=
+        (
+            Δf_rai * lin.e_rai +
+            Δf_lcl * lin.e_lcl +
+            Δf_sno * lin.e_sno +
+            Δf_icl * lin.e_icl
+        ) / surface_heat_capacity_per_area
+    return nothing
 end
 
 """

@@ -6,42 +6,87 @@ import ClimaCore
 import ClimaCore: Fields, Spaces
 
 """
+    has_precip_stage_accumulator(p)
+
+Return `true` when `p.scratch` holds an active stage-weighted surface
+precipitation accumulator (`n_imp_stages > 0`).
+"""
+@inline has_precip_stage_accumulator(p) =
+    hasproperty(p.scratch, :sfc_precip_lin_state) &&
+    hasproperty(p.scratch, :precip_stage_idx) &&
+    hasproperty(p.scratch, :n_imp_stages) &&
+    p.scratch.n_imp_stages > 0
+
+"""
+    reset_precip_stage_accumulator!(p)
+
+Reset `p.scratch.precip_stage_idx` to `0` when it has reached `n_imp_stages`,
+i.e. at the first implicit stage of a new timestep. A no-op when the
+stage-weighted precipitation accumulator is not active in `p.scratch`.
+"""
+@inline function reset_precip_stage_accumulator!(p)
+    if has_precip_stage_accumulator(p)
+        if p.scratch.precip_stage_idx[] >= p.scratch.n_imp_stages
+            p.scratch.precip_stage_idx[] = 0
+        end
+    end
+    return nothing
+end
+
+"""
     initialize_implicit_stage_problem!(Y, p, dtγ)
 
 Prepare the state `Y` for an IMEX implicit stage with step fraction `dtγ`,
-registered as the `initialize_imp!` hook of `ClimaODEFunction`. A no-op
+registered as the `initialize_imp!` hook of `ClimaODEFunction`. Resets the
+implicit-stage index for the stage-weighted precipitation surface-flux
+accumulator at the first implicit stage of a timestep, and is otherwise a no-op
 unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
 
 For `PrognosticEDMFX`:
 
- 1. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
-    the analytic `u₃` solve with the semi-implicit tracer sweep, each
-    round starting from the stage-initial `Y.(f,c).sgsʲs` (snapshotted
-    into pre-allocated scratch). The sweep transports every solved tracer
-    and, for the non-equilibrium microphysics, evaluates the draft
-    thermodynamics and `ᶜmp_tendencyʲs` at the transported state and adds
-    `dtγ` times the source to the condensate and precipitation tracers;
-    the draft thermodynamics and buoyancy are refreshed again at the full
-    iterate, and the precipitation terminal velocities are refreshed after
-    the last round.
+ 1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the stage-entering state
+    (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), refresh the
+    implicit precomputed cache (`set_implicit_precomputed_quantities_core!`)
+    when at least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to
+    `[0, a_max ρʲ]` so the Picard and Newton predictors start from a feasible
+    draft area. The grid-mean condensates are left at their stage-entering
+    values: the grid-mean, draft, and environment thermodynamics and the 1M
+    microphysics tendencies floor each condensate species at zero where they
+    read it, whereas in a single-iteration Newton solve with an inexact
+    Jacobian, raising the initial guess above `temp` enters `R(U^g)` as a source
+    that the sedimentation Jacobian drains through the surface.
 
- 2. Solve `u₃` and `ρa` analytically with the stage-initial values as
-    `*_old` and the Picard-converged buoyancy, microphysics, and
-    sedimentation inputs, then cache the implied tendencies
-    `(u₃_stage - u₃_old) / dtγ` and
+ 2. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
+    the analytic `u₃` solve, the two-pass area solve (`solve_sgs_ρa_two_pass!`),
+    and the semi-implicit tracer sweep, each round starting from the clamped
+    stage-initial `Y.(f,c).sgsʲs` (snapshotted into pre-allocated scratch).
+    The sweep diagnoses the entrained environment from `ᶜsgsʲs_picard_snapshot`,
+    transports every solved tracer, and, for the non-equilibrium microphysics,
+    evaluates the draft thermodynamics and `ᶜmp_tendencyʲs` at the transported
+    state, adds `dtγ` times the source to the condensate and precipitation
+    tracers, and floors each draft condensate at zero before proportionally
+    rescaling them so their sum does not exceed `q_totʲ`; the draft
+    thermodynamics and buoyancy are refreshed again
+    at the full iterate, and the precipitation terminal velocities are refreshed
+    after the last round.
+
+ 3. Solve `u₃` and `ρa` (in two passes via `solve_sgs_ρa_two_pass!`)
+    analytically with the stage-initial values as `*_old` and the
+    Picard-converged buoyancy, microphysics, and sedimentation inputs, then
+    complete the cached tendencies `(u₃_stage - u₃_old) / dtγ` and
     `(ρa_stage - ρa_old) / dtγ` in `p.precomputed.ᶠu₃_tendencyʲs` and
     `p.precomputed.ᶜρa_tendencyʲs`. The matching `sgs_*_implicit_tendency!`
     routines feed these to the Newton solve so it reproduces the analytic
-    values exactly. `ᶜmp_tendencyʲs` is held fixed through Newton so the
-    Jacobian — which does not include its derivatives — stays consistent.
+    values. `ᶜmp_tendencyʲs` is held fixed through Newton so the Jacobian —
+    which does not include its derivatives — stays consistent.
 
- 3. With 1M microphysics and at least one Picard round, set the grid-mean
+ 4. With 1M microphysics and at least one Picard round, set the grid-mean
     `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`, `ρq_tot`, and `ρe_tot` of the
     guess so that each environment specific content / mse keeps its
     stage-initial value (`warm_start_grid_mean_tracers!`).
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
-
+    reset_precip_stage_accumulator!(p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
     (; microphysics_model, turbconv_model, edmfx_model) = p.atmos
@@ -55,11 +100,34 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     # Cast `dtγ` to the parameter float type so broadcasts stay type-stable
     # (ClimaTimeSteppers passes `dtγ` as `Float64` even when the state is
     # `Float32`).
-    dtγ = eltype(p.params)(dtγ)
+    FT = eltype(p.params)
+    dtγ = FT(dtγ)
+    zero_FT = zero(FT)
 
+    # `-u₃_old / dtγ` and `-ρa_old / dtγ` are recorded before the area clamp so
+    # the Newton residual reproduces `u₃_stage` and `ρa_stage`. The clamp bounds
+    # the predictor that `ᶜsnapshot` and the Picard solves start from, `ρa` to
+    # `[0, a_max ρʲ]`. The implicit cache, including the draft densities
+    # `ᶜρʲs`, is refreshed at the stage-entering state only for the Picard
+    # rounds, which recompute the buoyancy from it. Without Picard rounds, the
+    # `u₃` and `ρa` solves use the buoyancy `ᶜρ_diffʲs` and densities `ᶜρʲs` of
+    # the last cache update, which the Newton iterations do not revise, so an
+    # extrapolation error in a refreshed buoyancy would persist through the
+    # stage; `ClimaTimeSteppers` refreshes `cache_imp!` before the Newton solve
+    # (combining `updraft_picard_rounds == 0` with `update_cache_every = "step"`
+    # holds `ᶜρ_diffʲs` at the step-start state while `cache_imp!` updates
+    # `ᶜρʲs` after each stage; restarts rebuild the full cache).
+    # `initialize_imp!` does not receive `t`, and `t` is unused in the call
+    # below, so `zero(FT)` is passed.
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
         @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+    end
+    n_picard > 0 && set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
+    a_max = CAP.max_area(CAP.turbconv_params(p.params))
+    for j in 1:n
+        @. Y.c.sgsʲs.:($$j).ρa =
+            clamp(Y.c.sgsʲs.:($$j).ρa, zero_FT, a_max * ᶜρʲs.:($$j))
     end
 
     if n_picard > 0
@@ -72,7 +140,13 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
         end
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
-            solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+            solve_sgs_ρa_two_pass!(Y, p, dtγ, ᶜsnapshot)
+            solve_sgs_updraft_tracers_implicit_stage_analytic!(
+                Y,
+                p,
+                dtγ,
+                ᶜsnapshot,
+            )
             # Refresh the buoyancy inputs for the next u₃ solve. For the
             # non-equilibrium schemes, the tracer sweep evaluates
             # ᶜmp_tendencyʲs at the transported state and applies it, and
@@ -100,8 +174,15 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     end
 
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
-    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
-    n_picard > 0 && warm_start_grid_mean_tracers!(Y, p)
+    solve_sgs_ρa_two_pass!(
+        Y,
+        p,
+        dtγ,
+        n_picard > 0 ? p.precomputed.ᶜsgsʲs_picard_snapshot : nothing,
+    )
+    if n_picard > 0
+        warm_start_grid_mean_tracers!(Y, p)
+    end
 
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) += Y.f.sgsʲs.:($$j).u₃ / dtγ
@@ -113,32 +194,37 @@ end
 """
     warm_start_grid_mean_tracers!(Y, p)
 
-Set the grid-mean `ρq_χ` of the Newton initial guess for each 1M water
-tracer `χ ∈ {q_lcl, q_icl, q_rai, q_sno, q_tot}` so that the environment
-specific content equals its stage-initial value, floored at zero,
+Move the grid-mean `ρq_χ` of the Newton initial guess, for each 1M condensate
+tracer `χ ∈ {q_lcl, q_icl, q_rai, q_sno}` and for `ρq_tot` and `ρe_tot`, by the
+Picard predictor's updraft increment, so that each environment specific
+content (and `mse⁰`) keeps its stage-initial value:
 
-    ρq_χ = ρa⁰ max(0, q_χ⁰_old) + Σⱼ ρaʲ q_χʲ,
+    Δρq_χ   = (ρa⁰_new − ρa⁰_old) max(0, q_χ⁰_old)
+            + Σⱼ (ρaʲ_new q_χʲ_new − ρaʲ_old q_χʲ_old),
+    Δρq_tot = (ρa⁰_new − ρa⁰_old) max(0, q_tot⁰_old)
+            + Σⱼ (ρaʲ_new q_totʲ_new − ρaʲ_old q_totʲ_old),
+    Δρe_tot = (ρa⁰_new − ρa⁰_old) mse⁰_old
+            + Σⱼ (ρaʲ_new mseʲ_new − ρaʲ_old mseʲ_old),
 
-with `ρa⁰`, `ρaʲ`, and `q_χʲ` the Picard-converged draft state and
-`q_χ⁰_old` diagnosed from `Y.c.ρq_χ` and the stage-initial draft scalars in
-`p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor moves `q_χʲ`
-(by transport, entrainment, and the explicit / implicit microphysics
-sources); without this update the environment of the guess loses
-`Σⱼ ρaʲ Δq_χʲ / ρa⁰` and goes negative where the environment is clear.
-For `q_lcl` / `q_icl` the environment source has zero derivative on that
-clipped branch; for `q_rai` / `q_sno` the same holds for the precip
-evaporation / sublimation branches; for `q_tot` the floor is a safety that
-rarely fires in practice.
+with `ρa⁰_new`, `ρaʲ_new`, and `χʲ_new` the Picard-converged draft state and the
+`*_old` values diagnosed from `Y.c` and the stage-initial draft scalars in
+`p.precomputed.ᶜsgsʲs_picard_snapshot`. The Picard predictor moves `χʲ` (by
+transport, entrainment, and the explicit / implicit microphysics sources);
+without this update the environment of the guess loses `Σⱼ ρaʲ Δχʲ / ρa⁰` and
+goes negative where the environment is clear. For `q_lcl` / `q_icl`, the
+environment source has zero derivative on that clipped branch; for `q_rai` /
+`q_sno`, the same holds for the precipitation evaporation / sublimation branches.
 
-The energy warm-start uses the EDMFX decomposition
-
-    ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
-
-(from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`) with `mse⁰`
-and `(ρK − p)` held at their stage-initial values and `ρaʲ`, `mseʲ`, `ρa⁰`
-taken from the Picard-converged state. `mse⁰_old` is recovered from the
-stage-initial draft scalars via `specific_env_mse` and the current
-precomputed `ᶜh_tot`, `ᶜK`.
+The increment is the only difference between the guess and the stage-entering
+state `temp`: where the environment value is negative, `max(0, ·)` scales the
+area change by zero and the negative value persists, scaled by
+`ρa⁰_old / ρa⁰_new`. In a single-iteration (truncated) Newton solve with an
+inexact Jacobian, raising the guess above `temp` enters `R(U^g)` as a source
+that the sedimentation Jacobian drains through the surface as an upward flux.
+When the updraft increment vanishes, the guess equals `temp`, so `T_imp`
+evaluates the vertical advection on the stage-entering profile (when the
+updraft increment is nonzero, its central grid-mean vertical advection is not
+compensated by the `1 + 2 C_γ` post-Newton dissipation weight).
 
 Applies with `PrognosticEDMFX` 1M microphysics, regardless of which
 implicit microphysics sources are on. Writes `p.scratch.ᶜtemp_scalar`.
@@ -149,20 +235,20 @@ function warm_start_grid_mean_tracers!(Y, p)
     ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
     ᶜq⁰_old = p.scratch.ᶜtemp_scalar
     FT = eltype(p.params)
+    zero_FT = zero(FT)
 
-    tracer_names = (
+    condensate_names = (
         (@name(c.ρq_lcl), @name(q_lcl)),
         (@name(c.ρq_icl), @name(q_icl)),
         (@name(c.ρq_rai), @name(q_rai)),
         (@name(c.ρq_sno), @name(q_sno)),
-        (@name(c.ρq_tot), @name(q_tot)),
     )
-    MatrixFields.unrolled_foreach(tracer_names) do (gm_name, sgs_name)
+    MatrixFields.unrolled_foreach(condensate_names) do (gm_name, sgs_name)
         MatrixFields.has_field(Y, gm_name) || return nothing
         ρq_χ = MatrixFields.get_field(Y, gm_name)
         contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
         @. ᶜq⁰_old = max(
-            zero(FT),
+            zero_FT,
             specific(
                 env_value(ρq_χ, contrib, ᶜsnapshot),
                 ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
@@ -171,10 +257,33 @@ function warm_start_grid_mean_tracers!(Y, p)
                 turbconv_model,
             ),
         )
-        @. ρq_χ =
-            ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) * ᶜq⁰_old +
-            draft_sum(contrib, Y.c.sgsʲs)
+        @. ρq_χ +=
+            (
+                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) -
+                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model)
+            ) * ᶜq⁰_old +
+            draft_sum(contrib, Y.c.sgsʲs) - draft_sum(contrib, ᶜsnapshot)
         return nothing
+    end
+
+    if MatrixFields.has_field(Y, @name(c.ρq_tot))
+        ρq_tot = Y.c.ρq_tot
+        contrib_qt(sgsʲ) = sgsʲ.ρa * sgsʲ.q_tot
+        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
+        @. ᶜq⁰_old = max(
+            zero_FT,
+            specific(
+                env_value(ρq_tot, contrib_qt, ᶜsnapshot),
+                ᶜρa⁰_old,
+                ρq_tot,
+                Y.c.ρ,
+                turbconv_model,
+            ),
+        )
+        @. ρq_tot +=
+            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜq⁰_old +
+            draft_sum(contrib_qt, Y.c.sgsʲs) -
+            draft_sum(contrib_qt, ᶜsnapshot)
     end
 
     # Energy warm-start. The EDMFX decomposition
@@ -436,7 +545,7 @@ function sgs_ρa_implicit_tendency!(
 end
 
 """
-    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sgsʲs)
 
 Solve the IMEX/ARK implicit-stage equation for the updraft area-weighted
 density `ρa` analytically, overwriting `Y.c.sgsʲs.:(j).ρa` in each EDMFX
@@ -446,11 +555,15 @@ Returns early for any `turbconv_model` other than `PrognosticEDMFX`; see
 `initialize_implicit_stage_problem!` for how the result is held fixed during
 the Newton solve.
 
-The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa` reduces
-under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
+The stage-start area `ᶜρa_old` is read from `ᶜsnapshot`: when `ᶜsnapshot` is
+`nothing`, `-dtγ * p.precomputed.ᶜρa_tendencyʲs.:(j)` clamped to
+`[0, a_max ρʲ]`; otherwise `ᶜsnapshot.:(j).ρa` (defaulting to the entering
+`Y.c.sgsʲs`). The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa`
+reduces under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward
+recurrence
 
     ρa_new[i] = (numerator[i] + α_bot[i] · ρa_new[i−1]) / denominator[i],
-    numerator[i] = ρa_old[i]/dtγ,
+    numerator[i] = max(0, ρa_old[i]) / dtγ,
     denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i] − r_mass[i]),
     α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
@@ -461,20 +574,23 @@ denominator caps the per-step growth at roughly a factor of ten.
 non-equilibrium microphysics, it is the sedimentation rate from
 `updraft_sedimentation_rate!`, `Σ_μ Δq_μ / dtγ` with `Δq_μ` the change of the
 updraft condensate by sedimentation in one linearized backward-Euler step from
-the Picard-converged updraft tracers and terminal velocities, at the
-stage-start area and grid-mean state. The Newton solve takes the same step for
-the condensate, so `r_mass ρ̂` matches the sum `S_sed` of the condensate
-sedimentation tendencies in the dilution `χ S_sed ρ̂⁻¹` that it applies, also
-at Courant numbers above one, where the condensate arriving over the stage
-differs from the stage-start flux convergence. Where the draft narrows
-downward, `S_sed` and its derivative are proportional to the local area and
-`Δq_μ` does not depend on it, so the rate also holds at the stage area. Under
-the 0-moment microphysics with implicit microphysics tendencies, `r_mass` is
-the updraft precipitation removal rate `ᶜmp_tendencyʲs.dq_tot_dt`, the rate at
-which the Newton solve removes `q_totʲ` (with explicit tendencies, the removal
-enters `ρaʲ` through the explicit tendency, and `r_mass` is zero). The stage
-source is `r_mass · ρa_new`, so `ρaʲ` receives the mass that `q_totʲ` receives,
-as the grid-mean `ρ` does.
+the current updraft tracers and terminal velocities (stage-entering values
+during the Picard rounds, and Picard-converged tracers and refreshed terminal
+velocities in the final post-Picard solve), evaluated at the current
+`Y.c.sgsʲs.:(j).ρa` (`ρa_old` in pass 1, `ρa_pass1` in pass 2) and grid-mean
+state. The Newton solve takes the same step for the condensate, so
+`r_mass ρ̂` matches the sum `S_sed` of the condensate sedimentation tendencies
+in the dilution `χ S_sed ρ̂⁻¹` that it applies, also at Courant numbers above
+one, where the condensate arriving over the stage differs from the stage-start
+flux convergence. Where the draft narrows downward, `S_sed` and its derivative
+are proportional to the local area and `Δq_μ` does not depend on it, so the
+rate also holds at the stage area. Under the 0-moment microphysics with
+implicit microphysics tendencies, `r_mass` is the updraft precipitation removal
+rate `ᶜmp_tendencyʲs.dq_tot_dt`, the rate at which the Newton solve removes
+`q_totʲ` (with explicit tendencies, the removal enters `ρaʲ` through the
+explicit tendency, and `r_mass` is zero). The stage source is
+`r_mass · ρa_new`, so `ρaʲ` receives the mass that `q_totʲ` receives, as the
+grid-mean `ρ` does.
 
 `(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
 buoyancy-driven pieces (see `detr_buoy_inv_time_scale`). The
@@ -486,17 +602,19 @@ upwind density would otherwise read an undefined ghost cell), and the capped
 surface mass-flux source `F_sfc/Δz` from `p.precomputed.sfc_mass_flux_sourceʲs`
 is added to the numerator as an area-independent constant.
 
-The area limiters in `(ε − δ)` are evaluated at the previous-iterate area
-(explicit treatment), so they cannot guarantee `a ∈ [0, a_max]` at the
-implicit stage value. The sweep therefore clamps `ρa ∈ [0, ρʲ·a_max]`
-per-cell, using the updraft density `ρʲ` so that the cap acts on the draft
-area `a = ρa/ρʲ`. Clipping from above is mass-conserving — the excess `ρa` is
-absorbed by the environment automatically, acting like instantaneous
-detrainment. Clipping from below at `ρʲ·a_min` would *not* be conservative
-because it would create updraft mass out of nothing, so the lower bound is set
-to zero instead.
+The lower and upper area-limiter factors (which gate buoyancy detrainment and
+the mass-flux-divergence detrainment prefactor) and the mass-flux convergence
+sign test are evaluated at `ρa_eff = max(ρa_old, ρa)` (so pass 2 of
+`solve_sgs_ρa_two_pass!` sees `max(ρa_old, ρa_pass1)` where an updraft advances
+into cells with `ρa_old < ρʲ a_min`), which cannot guarantee `a ∈ [0, a_max]` at
+the implicit stage value. The sweep therefore clamps `ρa ∈ [0, ρʲ·a_max]`
+per-cell, using the updraft density `ρʲ` so that the cap acts on the draft area
+`a = ρa/ρʲ`. Clipping from above returns the excess `ρa` to the environment at
+fixed grid-mean `ρ`, acting like instantaneous detrainment; clipping from below
+at `ρʲ·a_min` would draw mass from the environment into an empty draft without
+an entrainment source, so the lower bound is set to zero instead.
 """
-function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sgsʲs)
 
     p.atmos.turbconv_model isa PrognosticEDMFX || return
 
@@ -506,6 +624,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
     FT = eltype(p.params)
+    zero_FT = zero(FT)
 
     turbconv_params = CAP.turbconv_params(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -520,7 +639,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence:
-    #   ᶜnumerator            = ρa_old[i] / dtγ
+    #   ᶜnumerator            = max(0, ρa_old[i]) / dtγ
     #   ᶜdenominator          = 1/dtγ + α_top · (1 − implicit_detr_prefactor) − (ε − δ)
     #                           − r_mass
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
@@ -557,15 +676,25 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
         # entr and detr
+        ᶜρa_old =
+            isnothing(ᶜsnapshot) ?
+            (@. lazy(
+                clamp(
+                    -dtγ * p.precomputed.ᶜρa_tendencyʲs.:($$j),
+                    zero(FT),
+                    a_max * ᶜρʲs.:($$j),
+                ),
+            )) : ᶜsnapshot.:($j).ρa
+        ᶜρa_eff = @. lazy(max(ᶜρa_old, Y.c.sgsʲs.:($$j).ρa))
         ᶜlower_limiter_factor = @. lazy(
             lower_area_limiter_factor(
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                draft_area(ᶜρa_eff, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
         ᶜupper_limiter_factor = @. lazy(
             upper_area_limiter_factor(
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                draft_area(ᶜρa_eff, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
@@ -578,7 +707,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
-                ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
+                ᶜdivᵥ(ᶠbottom_bias(ᶜρa_eff) * Y.f.sgsʲs.:($$j).u₃) < 0,
                 ᶜupper_limiter_factor *
                 (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
@@ -605,7 +734,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             ᶜentr_nonvel_rateʲs.:($$j) -
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
-        @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
+        @. ᶜnumerator = max(zero_FT, ᶜρa_old) / dtγ
         # Floor at 0.1/dtγ ⇒ (ε − δ) + r_mass ≤ 0.9/dtγ
         # (≈10× per-step growth cap).
         @. ᶜdenominator =
@@ -660,7 +789,49 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 end
 
 """
-    solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+    solve_sgs_ρa_two_pass!(Y, p, dtγ, ᶜsnapshot = nothing)
+
+Run two passes of `solve_sgs_ρa_implicit_stage_analytic!` starting from the
+clamped stage-initial area (`ᶜsnapshot.:(j).ρa`, or `-dtγ * ᶜρa_tendencyʲs`
+clamped to `[0, a_max ρʲ]` when `ᶜsnapshot` is `nothing`), so that the area
+limiters and buoyancy detrainment gate in the second pass see
+`max(ρa_old, ρa_pass1)` where an updraft advances into cells with
+`ρa_old < ρʲ a_min` over the implicit stage.
+"""
+function solve_sgs_ρa_two_pass!(
+    Y,
+    p,
+    dtγ,
+    ᶜsnapshot = nothing,
+)
+    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
+    FT = eltype(p.params)
+    a_max = CAP.max_area(CAP.turbconv_params(p.params))
+    (; ᶜρʲs) = p.precomputed
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    if isnothing(ᶜsnapshot)
+        (; ᶜρa_tendencyʲs) = p.precomputed
+        for j in 1:n
+            @. Y.c.sgsʲs.:($$j).ρa = clamp(
+                -dtγ * ᶜρa_tendencyʲs.:($$j),
+                zero(FT),
+                a_max * ᶜρʲs.:($$j),
+            )
+        end
+    else
+        for j in 1:n
+            @. Y.c.sgsʲs.:($$j).ρa = ᶜsnapshot.:($$j).ρa
+        end
+    end
+    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot)
+    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot)
+    return nothing
+end
+
+"""
+    solve_sgs_updraft_tracers_implicit_stage_analytic!(
+        Y, p, dtγ, ᶜsnapshot = nothing,
+    )
 
 Advance the buoyancy-affecting SGS/updraft specific tracers over the implicit
 stage by a semi-implicit first-order upwind sweep, overwriting
@@ -692,19 +863,29 @@ is swept bottom-to-top with `Operators.column_accumulate!` as
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
 (`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
 the current Picard round, which is the velocity the Newton solve's entrainment
-tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. `χ⁰` is diagnosed
-from `Y` before the sweep overwrites the draft scalar.
+tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. The entrained
+value `χ⁰` and the stage-initial `χ` of every tracer other than `mse` enter
+the recurrence clamped at zero, so a negative diagnosed environment residual
+cannot pull the draft tracer below zero. When `ᶜsnapshot` is passed, `χ⁰` is
+diagnosed from `Y.c` and the stage-entering draft state in `ᶜsnapshot` so
+that updating `Y.c.sgsʲs.:(j).ρa` in `solve_sgs_ρa_two_pass!` stays
+consistent with the stage-entering grid-mean `Y.c.ρχ` and `Y.c.ρe_tot`; the
+`ᶜsnapshot === nothing` fallback diagnoses `χ⁰` from the current `Y.c.sgsʲs`
+for 3-argument test calls.
 
 For the non-equilibrium microphysics, the source follows the transport:
 `set_prognostic_edmf_precomputed_quantities_draft_thermo!` and
 `update_updraft_microphysics_tendency_cache!` evaluate the draft
 thermodynamics and `ᶜmp_tendencyʲs` at the transported state, and each
-condensate and precipitation tracer then receives `dtγ · S_mp`. Evaluating
-the source after the transport keeps the vapor of each cell consistent with
-the condensate that arrives with it, so water that arrives as condensate is
-not condensed a second time, and the cached source is the rate that takes
-the transported condensate to the stage condensate, as the Newton solve
-with frozen `ᶜmp_tendencyʲs` requires.
+condensate and precipitation tracer then receives `dtγ · S_mp`, is floored at
+zero, and is proportionally rescaled (`rescale_condensates_to_total!`) so their
+sum does not exceed `q_totʲ`. Evaluating the source after the transport keeps
+the vapor of each cell consistent with the condensate that arrives with it, so
+water that arrives as condensate is not condensed a second time. The post-source
+floor and proportional rescale bound the predictor and Newton initial guess (and
+the draft thermodynamics evaluated on it), while `ᶜmp_tendencyʲs` retains the
+un-clamped physical rate so the Newton solve applies `transported + dtγ · S_mp`
+consistently across both the draft and the area-weighted grid mean.
 
 Called from the Picard loop in `initialize_implicit_stage_problem!` as a
 predictor between successive `u₃` solves. The final analytic `u₃` and `ρa`
@@ -713,9 +894,16 @@ solves at the end of `initialize_implicit_stage_problem!` evaluate buoyancy and
 guess for the Newton solve. Detrainment does not enter the intensive tracer
 equation because it removes updraft mass at the updraft's own scalar value.
 """
-function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+function solve_sgs_updraft_tracers_implicit_stage_analytic!(
+    Y,
+    p,
+    dtγ,
+    ᶜsnapshot = nothing,
+)
     p.atmos.turbconv_model isa PrognosticEDMFX || return
     (; microphysics_model, turbconv_model) = p.atmos
+    FT = eltype(p.params)
+    zero_FT = zero(FT)
 
     # Names missing from the SGS schema (the condensates under 0M) are
     # skipped by the sweep.
@@ -727,7 +915,7 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
         @name(q_rai),
         @name(q_sno),
     )
-    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
+    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers, ᶜsnapshot)
 
     microphysics_model isa
     Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
@@ -766,6 +954,22 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
                 S_i = MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name)
                 @. χ += dtγ * S_i
             end
+            @. χ = max(zero_FT, χ)
+        end
+        if MatrixFields.has_field(sgsʲ, @name(q_lcl)) &&
+           MatrixFields.has_field(sgsʲ, @name(q_icl)) &&
+           MatrixFields.has_field(sgsʲ, @name(q_rai)) &&
+           MatrixFields.has_field(sgsʲ, @name(q_sno))
+            rescale_condensates_to_total!(
+                FT,
+                sgsʲ.q_lcl,
+                sgsʲ.q_icl,
+                sgsʲ.q_rai,
+                sgsʲ.q_sno,
+                sgsʲ.q_tot,
+                p.scratch.ᶜtemp_scalar,
+                p.scratch.ᶜtemp_scalar_2,
+            )
         end
     end
 
@@ -773,14 +977,22 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
 end
 
 """
-    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
+    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers, ᶜsnapshot = nothing)
 
 Run the transport sweep of `solve_sgs_updraft_tracers_implicit_stage_analytic!`
 for the tracer names in `sgs_tracers`, skipping any name missing from the SGS
 schema.
 """
-function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
+function _sweep_sgs_updraft_tracers!(
+    Y,
+    p,
+    dtγ,
+    sgs_tracers,
+    ᶜsnapshot = nothing,
+)
     FT = eltype(p.params)
+    zero_FT = zero(FT)
+    turbconv_model = p.atmos.turbconv_model
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
@@ -796,8 +1008,9 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
     den_first = Fields.field_values(Fields.level(ᶜdenominator, 1))
     advection_factor_first =
         Fields.field_values(Fields.level(ᶜadvection_factor, 1))
+    use_snapshot = !isnothing(ᶜsnapshot)
 
-    for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
         @. ᶜadvection_factor = ᶜbottom_bias(ᶠw) / ᶜdz
@@ -826,10 +1039,49 @@ function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
         MatrixFields.unrolled_foreach(sgs_tracers) do χ_name
             MatrixFields.has_field(sgsʲ, χ_name) || return
             χ = MatrixFields.get_field(sgsʲ, χ_name)
-            ᶜχ⁰ =
-                χ_name === @name(mse) ? ᶜspecific_env_mse(Y, p) :
-                ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
+            if use_snapshot
+                ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
+                if χ_name === @name(mse)
+                    (; ᶜh_tot, ᶜK) = p.precomputed
+                    ᶜχ⁰ = @. lazy(
+                        specific_env_mse(
+                            Y.c.ρ,
+                            ᶜsnapshot,
+                            ᶜh_tot,
+                            ᶜK,
+                            ᶜρa⁰_old,
+                            turbconv_model,
+                        ),
+                    )
+                    @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
+                else
+                    ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+                    ᶜχ⁰ = @. lazy(
+                        max(
+                            zero_FT,
+                            specific_env_value(
+                                χ_name,
+                                ᶜρχ,
+                                Y.c.ρ,
+                                ᶜsnapshot,
+                                ᶜρa⁰_old,
+                                turbconv_model,
+                            ),
+                        ),
+                    )
+                    @. ᶜnumerator = max(zero_FT, χ) / dtγ + ᶜentr_tot * ᶜχ⁰
+                end
+            else
+                if χ_name === @name(mse)
+                    ᶜχ⁰ = ᶜspecific_env_mse(Y, p)
+                    @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
+                else
+                    ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+                    @. ᶜnumerator =
+                        max(zero_FT, χ) / dtγ +
+                        ᶜentr_tot * max(zero_FT, ᶜχ⁰)
+                end
+            end
             # Cell 1 of `mse` and `q_tot` relaxes toward the buoyant surface
             # value; the denominator includes `r_sfc` only while one of them
             # is swept.

@@ -882,9 +882,11 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
             # a captured name inside the loop body would box it.)
             ᶜe_int_col = @. lazy(specific(Yc.ρe_tot, Yc.ρ) - ᶜK - ᶜΦ)
             @. ᶜq_liq =
-                max(0, specific(Yc.ρq_lcl, Yc.ρ) + specific(Yc.ρq_rai, Yc.ρ))
+                max(0, specific(Yc.ρq_lcl, Yc.ρ)) +
+                max(0, specific(Yc.ρq_rai, Yc.ρ))
             @. ᶜq_ice =
-                max(0, specific(Yc.ρq_icl, Yc.ρ) + specific(Yc.ρq_sno, Yc.ρ))
+                max(0, specific(Yc.ρq_icl, Yc.ρ)) +
+                max(0, specific(Yc.ρq_sno, Yc.ρ))
             @. ᶜq_tot_nonneg =
                 max(ᶜq_liq + ᶜq_ice, specific(Yc.ρq_tot, Yc.ρ))
             @. ᶜT = max(
@@ -998,9 +1000,9 @@ end
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
-The full implicit precomputed-quantities update, used by the Newton inner
-loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!` and
-then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
+Update all implicit precomputed quantities for `Y` at time `t`, used by the
+Newton inner loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!`
+and then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
 (because Newton moves `q_lcl + q_icl`, and `λ_lagrange` in `ᶜsgs_moments`
 follows that sum) and overwrites the implicit 1M condensation / sublimation
 tendency `ᶜmp_tendency_implicit*` at the Newton iterate.
