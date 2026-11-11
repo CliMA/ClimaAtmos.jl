@@ -16,7 +16,7 @@ Unit tests for the pointwise closures in eddy_diffusion_closures.jl:
    length is monotonically nondecreasing in Δ_f.
 
 3. `harmonic_mean` — the pointwise Van Leer slope limiter used by
-   `ᶜVanLeer_gradient!`: identity on equal same-sign arguments, zero on
+   `ᶜVanLeer_gradient`: identity on equal same-sign arguments, zero on
    opposite signs / exact zeros, symmetry, bounds relative to arithmetic
    mean, and (for Float32) no underflow on same-sign arguments at the
    edge of the subnormal range.

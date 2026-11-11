@@ -36,6 +36,26 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
+# Draft moist static energy at which the draft temperature, evaluated from the draft
+# state at the grid-mean pressure `p_air` (`CA.draft_thermo_state`), is `T`, found by
+# secant iterations from the current draft mse (the 0-moment scheme diagnoses the
+# temperature with a saturation adjustment).
+function draft_mse_at(mm, thp, T_min, T, sgsʲ, Φ, p_air)
+    sgs = ClimaCore.Utilities.drop_auto_broadcasters(sgsʲ)
+    T_at(mse) = CA.thermo_T(
+        CA.draft_thermo_state(mm, merge(sgs, (; mse)), Φ, p_air, thp, T_min),
+    )
+    m₀ = sgs.mse
+    T₀ = T_at(m₀)
+    m₁ = m₀ + 1004 * (T - T₀)
+    for _ in 1:30
+        T₁ = T_at(m₁)
+        (T₁ == T || T₁ == T₀) && break
+        (m₀, T₀, m₁) = (m₁, T₁, m₁ + (T - T₁) * (m₁ - m₀) / (T₁ - T₀))
+    end
+    return m₁
+end
+
 @testset "Beres convective GW forcing -- sphere full integration" begin
     comms_ctx = ClimaComms.SingletonCommsContext()
     longrun_config = joinpath(
@@ -98,19 +118,28 @@ import ClimaCore.Geometry as Geometry
     z_lo = FT(3000)                     # updraft band bottom (above z_bot_floor)
     z_hi = FT(10000)                    # updraft band top
 
-    (; ᶜρʲs, ᶜTʲs, ᶜT, ᶠu³ʲs, ᶠu³) = p.precomputed
+    (; ᶜρʲs, ᶜT, ᶠu³) = p.precomputed
     ᶜρ = Y.c.ρ
 
     # Draft density = grid-mean density (so Q_conv = a0·Q_conv_ic in-band).
     @. ᶜρʲs.:(1) = ᶜρ
 
-    # Half-sine in-band temperature anomaly (2 K peak), only in active columns.
-    @. ᶜTʲs.:(1) =
+    # Half-sine in-band temperature anomaly (2 K peak), only in active columns,
+    # set through the draft mse, from which the draft temperature is evaluated.
+    thp = CA.CAP.thermodynamics_params(p.params)
+    mse_at(T, sgsʲ, Φ, p_air) = draft_mse_at(
+        p.atmos.microphysics_model, thp, CA.CAP.T_min_sgs(p.params), T, sgsʲ, Φ, p_air,
+    )
+    @. Y.c.sgsʲs.:(1).mse = mse_at(
         ᶜT + ifelse(
             (ᶜz >= z_lo) & (ᶜz <= z_hi) & (abs(ᶜlat) < lat_active),
             FT(2) * sin(FT(π) * (ᶜz - z_lo) / (z_hi - z_lo)),
             FT(0),
-        )
+        ),
+        Y.c.sgsʲs.:(1),
+        p.core.ᶜΦ,
+        p.precomputed.ᶜp,
+    )
 
     # Uniform updraft area fraction inside the active band, zero elsewhere.
     @. Y.c.sgsʲs.:(1).ρa = ifelse(
@@ -123,7 +152,7 @@ import ClimaCore.Geometry as Geometry
     # grid-mean velocity. The DSE anomaly is band-limited, so the constant
     # in-column velocity carries flux only within the heating band.
     ᶠlg = Fields.local_geometry_field(Y.f)
-    @. ᶠu³ʲs.:(1) = Geometry.Contravariant3Vector(
+    @. Y.f.sgsʲs.:(1).u₃ = Geometry.Covariant3Vector(
         Geometry.WVector(ifelse(abs(ᶠlat) < lat_active, FT(1), FT(0))),
         ᶠlg,
     )

@@ -147,7 +147,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        (; ᶜuʲs, ᶜTʲs) = p.precomputed
+        (; ᶜTʲs) = p.precomputed
+        ᶜuʲs = set_draft_velocities!(p.scratch.ᶜtemp_C123s, Y, p)
     end
 
     # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
@@ -310,14 +311,15 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜcp = p.scratch.ᶜtemp_scalar
     ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_2
     ᶜq_water = ᶜdiffusing_water_phases(Y, p)
+    ᶜdraft_fields = is_edmf ? ᶜdraft_thermo_tuples(Y, p) : (;)
     drafts =
         is_edmf ?
         (;
             ᶜcpʲs,
             ᶜh_eff_minus_h_dʲs,
-            p.precomputed.ᶜTʲs,
-            p.precomputed.ᶜq_liqʲs,
-            p.precomputed.ᶜq_iceʲs,
+            ᶜdraft_fields.ᶜTʲs,
+            ᶜdraft_fields.ᶜq_liqʲs,
+            ᶜdraft_fields.ᶜq_iceʲs,
         ) : (;)
     DataLayouts.foreach_column(
         Yₜ.c.uₕ, ᶜcp, ᶜh_eff_plus_Φ, ᶜ∇⁴u, Y.c, ᶜT, ᶜΦ, drafts,
