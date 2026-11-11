@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Synchronize `check_nans` across MPI ranks with
+  `ClimaComms.allreduce` and log per-variable and per-updraft `NaN` counts on
+  every rank that detects a `NaN`.
 - ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
   (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
   albedos `α_s` in `RegressionFunctionAlbedo`, as `α_s + (1 - α_s) R_sub`.
