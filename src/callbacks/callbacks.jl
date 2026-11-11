@@ -8,10 +8,11 @@ import ClimaCore as CC
 import ClimaCore.Spaces
 import .Parameters as CAP
 import ClimaCore: InputOutput
+import Logging
 using Dates
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
-import UnrolledUtilities: unrolled_foreach
+import UnrolledUtilities: unrolled_foreach, unrolled_any
 
 
 include("callback_helpers.jl")
@@ -397,32 +398,74 @@ end
 """
     check_nans(integrator)
 
-Abort the simulation if any prognostic variable has gone to `NaN`.
+Abort the simulation if any prognostic variable has gone to `NaN` on any rank.
 
-On failure, walks the state and logs which `Y.<subfield>.<variable>` contain `NaN` and how
-many elements of each, then errors. Naming the affected variables is the point of the
-extra pass: it usually identifies the guilty tendency without a rerun.
+Scans each top-level field of `integrator.u` locally and logs every
+`Y.<subfield>.<variable>` (and `sgsʲs` subfield) that holds a `NaN`, with
+element counts. Non-root MPI ranks under `OnlyRootLogger` have a `NullLogger`,
+so the report falls back to `ConsoleLogger(stderr)`. The local flag is combined
+with `ClimaComms.allreduce` before the report, and every rank throws
+`error("Found NaN")` together, so no rank hangs in a later collective.
 
-Returns `nothing` when the state is clean. Installed by `nan_checking_callback`, whose
-`check_nan_every` cadence trades detection latency against the cost of scanning the whole
-state.
+Returns `nothing` when no field holds a `NaN`. Installed by
+`nan_checking_callback`, whose `check_nan_every` cadence sets how often the
+state is scanned and so how soon a `NaN` is detected.
 """
 function check_nans(integrator)
-    if any(isnan, parent(integrator.u))
-        # Identify which field(s) have NaN
-        Y = integrator.u
-        for pn in propertynames(Y)
-            sub = getproperty(Y, pn)
-            for fn in propertynames(sub)
-                field = getproperty(sub, fn)
-                if any(isnan, parent(field))
-                    n_nan = count(isnan, parent(field))
-                    n_tot = length(parent(field))
-                    @info "NaN found in Y.$pn.$fn: $n_nan / $n_tot elements"
+    Y = integrator.u
+    # Scan the top-level Fields with an unrolled loop over the FieldVector's
+    # value tuple: `parent(Y)` allocates a FieldVectorView wrapper on every
+    # call, and `getproperty(Y, ::Symbol)` with a runtime name is not inferable.
+    local_has_nan = unrolled_any(Tuple(Fields.field_vector_values(Y))) do field
+        any(isnan, parent(field))
+    end
+    # The collective comes before the local report, so an exception while
+    # logging on one rank cannot leave the other ranks waiting in it.
+    comms_ctx = ClimaComms.context(Y.c)
+    any_has_nan = ClimaComms.allreduce(comms_ctx, Int(local_has_nan), +) > 0
+    if local_has_nan
+        rank = ClimaComms.mypid(comms_ctx)
+        t = integrator.t
+        logger =
+            Logging.current_logger() isa Logging.NullLogger ?
+            Logging.ConsoleLogger(stderr) : Logging.current_logger()
+        Logging.with_logger(logger) do
+            for pn in propertynames(Y)
+                sub = getproperty(Y, pn)
+                for fn in propertynames(sub)
+                    field = getproperty(sub, fn)
+                    if any(isnan, parent(field))
+                        n_nan = count(isnan, parent(field))
+                        n_tot = length(parent(field))
+                        @error(
+                            "NaN found on rank $rank in Y.$pn.$fn: " *
+                            "$n_nan / $n_tot elements (t = $t)"
+                        )
+                        if fn == :sgsʲs
+                            for j in propertynames(field)
+                                sgsʲ = getproperty(field, j)
+                                for sfn in propertynames(sgsʲ)
+                                    subfield = getproperty(sgsʲ, sfn)
+                                    if any(isnan, parent(subfield))
+                                        n_sub_nan =
+                                            count(isnan, parent(subfield))
+                                        n_sub_tot = length(parent(subfield))
+                                        @error(
+                                            "NaN found on rank $rank in " *
+                                            "Y.$pn.sgsʲs.:($j).$sfn: " *
+                                            "$n_sub_nan / $n_sub_tot " *
+                                            "elements (t = $t)"
+                                        )
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
-        error("Found NaN")
+        flush(stderr)
     end
+    any_has_nan && error("Found NaN")
     return nothing
 end

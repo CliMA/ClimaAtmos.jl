@@ -2302,19 +2302,19 @@ function _precip_fraction_sweep!(ᶜprecip_frac, ᶜcf, ᶜq_precip, f_decay, q_
     # A negative value is the sentinel for a precipitation-free level, so the
     # seed takes the cover clamped non-negative.
     @. ᶜprecip_frac =
-        ifelse(ᶜq_precip > q_precip_min, max(ᶜcf, zero(FT)), -one(FT))
+        ifelse(ᶜq_precip > q_precip_min, max(ᶜcf, zero_FT), -one_FT)
     # Level 1 is the bottom model level, so the recursion runs from the last
     # level down. The top level has no shaft above it, so its sentinel just
     # resolves to zero.
     nz = Spaces.nlevels(axes(ᶜprecip_frac))
     ᶜa_p_above = Fields.level(ᶜprecip_frac, nz)
-    @. ᶜa_p_above = max(ᶜa_p_above, zero(FT))
+    @. ᶜa_p_above = max(ᶜa_p_above, zero_FT)
     for level in (nz - 1):-1:1
         ᶜa_p = Fields.level(ᶜprecip_frac, level)
         @. ᶜa_p = ifelse(
-            ᶜa_p < zero(FT),
-            zero(FT),
-            min(one(FT), max(ᶜa_p, f_decay * ᶜa_p_above)),
+            ᶜa_p < zero_FT,
+            zero_FT,
+            min(one_FT, max(ᶜa_p, f_decay * ᶜa_p_above)),
         )
         ᶜa_p_above = ᶜa_p
     end
@@ -2429,14 +2429,18 @@ Lazy environment air density `ᶜρ⁰` [kg/m³] for `PrognosticEDMFX`.
 """
 function _env_air_density(p, thermo_params)
     (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    eps_FT = eps(eltype(thermo_params))
     return @. lazy(
-        TD.air_density(
-            thermo_params,
-            ᶜT⁰,
-            ᶜp,
-            ᶜq_tot_nonneg⁰,
-            ᶜq_liq⁰,
-            ᶜq_ice⁰,
+        max(
+            eps_FT,
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         ),
     )
 end
@@ -2620,7 +2624,7 @@ function _updraft_cloud_condensate_and_area!(
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
-    ᶜq_draftʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
+    ᶜq_draftʲ = @. lazy(max(zero(FT), ᶜq_liqʲ) + max(zero(FT), ᶜq_iceʲ))
     @. ᶜcf_upʲ = _updraft_cloud_fraction(
         thermo_params,
         ᶜTʲs.:($$j),

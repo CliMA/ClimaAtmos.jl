@@ -33,7 +33,9 @@ with reference-`T₀` constants `L_v` and `L_s`. The 1M species tendencies are t
 two CM BMT calls — one on the bulk parameter set (every explicit process) and one on the
 isolated implicit set (`cloud_liquid_formation` / `cloud_ice_formation` only) — so the
 latent heating reflects every active 1M process regardless of which stage integrates each.
-Called from `compute_beres_convective_heating!` when `heating_latent` is enabled.
+Condensate inputs are floored at zero and `q_tot` at the condensate sum before evaluating
+`cp_m` and the tendencies. Called from `compute_beres_convective_heating!` when
+`heating_latent` is enabled.
 """
 @inline function _beres_latent_heating(
     mp_bulk,
@@ -48,6 +50,12 @@ Called from `compute_beres_convective_heating!` when `heating_latent` is enabled
     q_rai,
     q_sno,
 )
+    FT = typeof(ρ)
+    q_lcl = max(zero(FT), q_lcl)
+    q_icl = max(zero(FT), q_icl)
+    q_rai = max(zero(FT), q_rai)
+    q_sno = max(zero(FT), q_sno)
+    q_tot = max(zero(FT), q_tot, q_lcl + q_icl + q_rai + q_sno)
     src_bulk = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
         BMT.Microphysics1Moment(),
