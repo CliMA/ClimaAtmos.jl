@@ -489,8 +489,9 @@ end
         @test arr(ᶜMv)[i, 1, 1, 1, 1] != FT(0)
     end
 
-    # Updraft snow shaft: same geometry, verify (q_sno, q_sno) super-diagonal
-    # is nonzero in every empty cell below the shaft.
+    # Updraft snow and cloud-ice shafts: same geometry, verify (q_sno, q_sno)
+    # and (q_icl, q_icl) super-diagonals are nonzero in every empty cell below
+    # the shaft.
     for (name, (wʲ, w_gs)) in pairs(velocity_fields)
         fill!(getproperty(sgsʲ, name), FT(0))
         fill!(getproperty(Y.c, Symbol(:ρ, name)), FT(0))
@@ -505,21 +506,31 @@ end
     ws_vals[shaft_start:n, :, :, :, :] .= FT(1.5)
     parent(p.precomputed.ᶜwₛʲs.:(1)) .= ws_vals
     parent(p.precomputed.ᶜwₛ) .= ws_vals
+    q_icl_vals = zeros(FT, size(arr(sgsʲ.q_icl)))
+    q_icl_vals[shaft_start:n, :, :, :, :] .= FT(2e-4)
+    parent(sgsʲ.q_icl) .= q_icl_vals
+    @. Y.c.ρq_icl = Y.c.ρ * sgsʲ.q_icl
+    wi_vals = zeros(FT, size(arr(p.precomputed.ᶜwᵢʲs.:(1))))
+    wi_vals[shaft_start:n, :, :, :, :] .= FT(1.2)
+    parent(p.precomputed.ᶜwᵢʲs.:(1)) .= wi_vals
+    parent(p.precomputed.ᶜwᵢ) .= wi_vals
     CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
-    q_sno_state = CA.@name(c.sgsʲs.:(1).q_sno)
-    ∂q_sno = matrix[q_sno_state, q_sno_state]
-    for i in 1:(shaft_start - 1)
-        fill!(ᶜprobe, FT(0))
-        probe_vals = arr(ᶜprobe)
-        probe_vals[i + 1, :, :, :, :] .= FT(1)
-        parent(ᶜprobe) .= probe_vals
-        @. ᶜMv = ∂q_sno * ᶜprobe
-        @test arr(ᶜMv)[i, 1, 1, 1, 1] != FT(0)
+    for q_state in (CA.@name(c.sgsʲs.:(1).q_sno), CA.@name(c.sgsʲs.:(1).q_icl))
+        ∂q_sp = matrix[q_state, q_state]
+        for i in 1:(shaft_start - 1)
+            fill!(ᶜprobe, FT(0))
+            probe_vals = arr(ᶜprobe)
+            probe_vals[i + 1, :, :, :, :] .= FT(1)
+            parent(ᶜprobe) .= probe_vals
+            @. ᶜMv = ∂q_sp * ᶜprobe
+            @test arr(ᶜMv)[i, 1, 1, 1, 1] != FT(0)
+        end
     end
 
-    # Grid-mean rain and snow shafts: verify update_sedimentation_jacobian!
-    # gives a nonzero super-diagonal in every empty cell below the shaft.
-    # The pointwise velocity collapses to zero there; the column-max must not.
+    # Grid-mean rain, snow, and cloud-ice shafts: verify
+    # update_sedimentation_jacobian! gives a nonzero super-diagonal in every
+    # empty cell below the shaft. The pointwise velocity collapses to zero
+    # there; the column-max must not.
     for (name, (wʲ, w_gs)) in pairs(velocity_fields)
         fill!(getproperty(sgsʲ, name), FT(0))
         fill!(getproperty(Y.c, Symbol(:ρ, name)), FT(0))
@@ -538,28 +549,25 @@ end
     q_sno_gm = zeros(FT, size(arr(Y.c.ρq_sno)))
     q_sno_gm[shaft_start:n, :, :, :, :] .= FT(5e-4)
     parent(Y.c.ρq_sno) .= q_sno_gm
+    wi_gm = zeros(FT, size(arr(p.precomputed.ᶜwᵢ)))
+    wi_gm[shaft_start:n, :, :, :, :] .= FT(1.2)
+    parent(p.precomputed.ᶜwᵢ) .= wi_gm
+    q_icl_gm = zeros(FT, size(arr(Y.c.ρq_icl)))
+    q_icl_gm[shaft_start:n, :, :, :, :] .= FT(2e-4)
+    parent(Y.c.ρq_icl) .= q_icl_gm
     CA.update_sedimentation_jacobian!(matrix, Y, p, FT(1))
-    ᶜprobe_rai = similar(Y.c.ρq_rai)
-    ᶜMv_rai = similar(Y.c.ρq_rai)
-    ∂ρq_rai = matrix[CA.@name(c.ρq_rai), CA.@name(c.ρq_rai)]
-    for i in 1:(shaft_start - 1)
-        fill!(ᶜprobe_rai, FT(0))
-        probe_vals = arr(ᶜprobe_rai)
-        probe_vals[i + 1, :, :, :, :] .= FT(1)
-        parent(ᶜprobe_rai) .= probe_vals
-        @. ᶜMv_rai = ∂ρq_rai * ᶜprobe_rai
-        @test arr(ᶜMv_rai)[i, 1, 1, 1, 1] != FT(0)
-    end
-    ᶜprobe_sno = similar(Y.c.ρq_sno)
-    ᶜMv_sno = similar(Y.c.ρq_sno)
-    ∂ρq_sno = matrix[CA.@name(c.ρq_sno), CA.@name(c.ρq_sno)]
-    for i in 1:(shaft_start - 1)
-        fill!(ᶜprobe_sno, FT(0))
-        probe_vals = arr(ᶜprobe_sno)
-        probe_vals[i + 1, :, :, :, :] .= FT(1)
-        parent(ᶜprobe_sno) .= probe_vals
-        @. ᶜMv_sno = ∂ρq_sno * ᶜprobe_sno
-        @test arr(ᶜMv_sno)[i, 1, 1, 1, 1] != FT(0)
+    ᶜprobe_gm = similar(Y.c.ρq_rai)
+    ᶜMv_gm = similar(Y.c.ρq_rai)
+    for ρq_state in (CA.@name(c.ρq_rai), CA.@name(c.ρq_sno), CA.@name(c.ρq_icl))
+        ∂ρq_sp = matrix[ρq_state, ρq_state]
+        for i in 1:(shaft_start - 1)
+            fill!(ᶜprobe_gm, FT(0))
+            probe_vals = arr(ᶜprobe_gm)
+            probe_vals[i + 1, :, :, :, :] .= FT(1)
+            parent(ᶜprobe_gm) .= probe_vals
+            @. ᶜMv_gm = ∂ρq_sp * ᶜprobe_gm
+            @test arr(ᶜMv_gm)[i, 1, 1, 1, 1] != FT(0)
+        end
     end
 end
 

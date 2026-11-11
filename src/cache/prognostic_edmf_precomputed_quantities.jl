@@ -92,8 +92,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
                     specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
                 )
             end
-            @. ᶜq_liq⁰ = max(0, $(ᶜχ⁰(@name(q_lcl))) + $(ᶜχ⁰(@name(q_rai))))
-            @. ᶜq_ice⁰ = max(0, $(ᶜχ⁰(@name(q_icl))) + $(ᶜχ⁰(@name(q_sno))))
+            @. ᶜq_liq⁰ =
+                max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
+            @. ᶜq_ice⁰ =
+                max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, $(ᶜχ⁰(@name(q_tot))))
             ᶜh⁰ = @. lazy(
@@ -249,8 +251,8 @@ grid-mean pressure.
     ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
     thermo_params, T_min_sgs,
 )
-    @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
-    @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
+    @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
+    @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
     # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
     @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
     ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)

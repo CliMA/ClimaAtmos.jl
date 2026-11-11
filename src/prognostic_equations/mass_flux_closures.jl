@@ -221,15 +221,49 @@ layers (`⟨w'b'⟩_s ≤ 0`).
 end
 
 """
+    rescale_condensates_to_total!(FT, q_lcl, q_icl, q_rai, q_sno, q_tot, ᶜq_cond, ᶜratio)
+
+Multiply the four condensate fields by
+`ratio = min(1, q_tot / (q_lcl + q_icl + q_rai + q_sno))`, or by zero where the
+condensate sum or `q_tot` is below `ϵ_numerics(FT)`, so that the condensates
+cannot exceed the total water. Applies alike to specific humidities and to
+densities. `ᶜq_cond` and `ᶜratio` are scratch fields. Returns `nothing`.
+"""
+function rescale_condensates_to_total!(
+    ::Type{FT},
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+    q_tot,
+    ᶜq_cond,
+    ᶜratio,
+) where {FT}
+    ϵ = ϵ_numerics(FT)
+    one_FT = one(FT)
+    zero_FT = zero(FT)
+    @. ᶜq_cond = q_lcl + q_icl + q_rai + q_sno
+    @. ᶜratio = ifelse(
+        (ᶜq_cond > ϵ) & (q_tot > ϵ),
+        min(one_FT, q_tot / ᶜq_cond),
+        zero_FT,
+    )
+    @. q_lcl *= ᶜratio
+    @. q_icl *= ᶜratio
+    @. q_rai *= ᶜratio
+    @. q_sno *= ᶜratio
+    return nothing
+end
+
+"""
     enforce_grid_mean_microphysics_constraints!(Y, p, t)
 
 Clip the grid-mean condensate tracers to non-negative values and rescale them
 so their sum cannot exceed the available total moisture.
 
-`ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` are first floored at zero, then all
-four are multiplied by `ratio = min(1, ρq_tot / Σ ρq_cond)`; `ratio` is zero
-where either the condensate sum or `ρq_tot` is below `ϵ_numerics`, which
-removes condensate in cells with no (or negative) total water.
+`ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` are first floored at zero, then
+rescaled by `rescale_condensates_to_total!`, which removes condensate in cells
+with no (or negative) total water.
 
 Mutates `Y.c` and uses `p.scratch`; returns `nothing`. Called from
 `enforce_physical_constraints!` for the 1M and 2M non-equilibrium
@@ -237,23 +271,20 @@ microphysics models.
 """
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
-    ρq_cond = p.scratch.ᶜtemp_scalar
-    ratio = p.scratch.ᶜtemp_scalar_2
     @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
     @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
     @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
     @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
-
-    @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
-    @. ratio = ifelse(
-        (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
-        min(FT(1), Y.c.ρq_tot / ρq_cond),
-        FT(0),
+    rescale_condensates_to_total!(
+        FT,
+        Y.c.ρq_lcl,
+        Y.c.ρq_icl,
+        Y.c.ρq_rai,
+        Y.c.ρq_sno,
+        Y.c.ρq_tot,
+        p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶜtemp_scalar_2,
     )
-    @. Y.c.ρq_lcl *= ratio
-    @. Y.c.ρq_icl *= ratio
-    @. Y.c.ρq_rai *= ratio
-    @. Y.c.ρq_sno *= ratio
     return nothing
 end
 
@@ -322,9 +353,11 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
 
         # Auto-discovered SGS tracers: relax toward grid mean when ρa is
         # negligible; enforce mass conservation bound ρaχʲ < ρχ.
-        for χ_name in sgs_tracer_names(Y)
+        # Unrolled because the names have distinct types; a `for` loop over
+        # them is type-unstable and heap-allocates every broadcast.
+        MatrixFields.unrolled_foreach(sgs_tracer_names(Y)) do χ_name
             ρχ_name = get_ρχ_name(χ_name)
-            MatrixFields.has_field(Y.c, ρχ_name) || continue
+            MatrixFields.has_field(Y.c, ρχ_name) || return nothing
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             @. ᶜχʲ = ifelse(
@@ -333,6 +366,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
                 # ensure mass conservation: ρaχʲ < ρχ
                 min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
             )
+            return nothing
         end
 
         # Within-subdomain condensate rescaling: ensure
@@ -341,21 +375,17 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         # Multiplying by ratio ≤ 1 preserves the ρaχʲ ≤ ρχ bound.
         if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
             NonEquilibriumMicrophysics2M}
-            q_cond = p.scratch.ᶜtemp_scalar
-            ratio = p.scratch.ᶜtemp_scalar_2
-            @. q_cond =
-                Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
-                Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
-            @. ratio = ifelse(
-                (q_cond > ϵ_numerics(FT)) &
-                (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),
-                min(FT(1), Y.c.sgsʲs.:($$j).q_tot / q_cond),
-                FT(0),
+            sgsʲ = Y.c.sgsʲs.:($j)
+            rescale_condensates_to_total!(
+                FT,
+                sgsʲ.q_lcl,
+                sgsʲ.q_icl,
+                sgsʲ.q_rai,
+                sgsʲ.q_sno,
+                sgsʲ.q_tot,
+                p.scratch.ᶜtemp_scalar,
+                p.scratch.ᶜtemp_scalar_2,
             )
-            @. Y.c.sgsʲs.:($$j).q_lcl *= ratio
-            @. Y.c.sgsʲs.:($$j).q_icl *= ratio
-            @. Y.c.sgsʲs.:($$j).q_rai *= ratio
-            @. Y.c.sgsʲs.:($$j).q_sno *= ratio
         end
     end
     return nothing

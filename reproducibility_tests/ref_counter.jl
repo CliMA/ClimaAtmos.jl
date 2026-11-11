@@ -1,4 +1,4 @@
-463
+466
 
 # **README**
 #
@@ -32,6 +32,43 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+466
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; unified implicit vertical transport across dry and moist models
+  with central `ᶠρ u³ ᶠinterp(e_tot) + u³ ᶠinterp(p)`, `q_tot`, and sedimenting
+  microphysics tracers in the Newton residual (with central velocity Jacobian
+  blocks), first-order upwind `ρtke` in the Newton residual with tridiagonal
+  advection-diffusion-dissipation diagonal (omitting velocity blocks so `u³`
+  sign reversals preserve M-matrix positivity), and post-Newton
+  `1 + 2 C_γ`-weighted implicit first-order upwind dissipation plus
+  Courant-limited `energy_humidity_upwinding` antidiffusion (Zalesak-limited for
+  `vanleer_limiter`) on `e_tot - Φ`, `q_tot`, and sedimenting tracers at the
+  solved velocity; `dt`-independent van Leer slopes (`zero(dt)`); stage-weighted
+  surface precipitation fluxes and slab-ocean coupling; backward-Euler damping
+  of parallel-decelerating orographic gravity-wave drag and `NaN` / zero-weight
+  mask guard in `calc_nonpropagating_forcing!`; incremental implicit-stage
+  condensate predictor, two-pass updraft area predictor, Picard cache refresh,
+  per-species condensate and `q_tot` floors in 1M microphysics, Beres latent
+  heating, and non-equilibrium thermodynamics, and floor plus proportional
+  rescaling of updraft condensates to `q_totʲ` after the Picard microphysics
+  increment (`rescale_condensates_to_total!`); stabilized implicit 1M
+  microphysics Jacobian (`-Γ · C / q_sat` saturation feedback, `Float32`-safe
+  denominator floors, `SGSQuadrature` `INP_limiter` unblocking, and
+  `PrognosticEDMFX` `(c.ρq_x, c.sgsʲs.:(1).q_x)` off-diagonal coupling); and
+  non-negative clamping of grid-mean, updraft, and environment sedimentation
+  fluxes. All change results.
+
+465
+- The `TRMM_LBA` radiation takes the height profile at the current time and interpolates
+  it in height on every device. This changes SCM TRMM results at the level of Float32
+  rounding.
+
+464
+- Implicit Jacobian for 1M rain evaporation (`ρq_rai` diagonal: `tend/q_rai`)
+  and snow sublimation/deposition (`ρq_sno` diagonal: `tend/q_sno` for
+  sublimation; ventilation-integral prefactor `C = 4πn₀G/(ρλ²)·vent` for
+  deposition, computed without dividing by S).
+
 463
 - `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
   results at the level of Float32 rounding.

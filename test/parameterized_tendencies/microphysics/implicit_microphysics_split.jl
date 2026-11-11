@@ -4,11 +4,12 @@ Unit tests for the implicit-microphysics parameter split and the
 `microphysics_1m_implicit_params`.
 
 Covers:
-- `_split_formation` sends the user's `cloud_liquid_formation` /
-  `cloud_ice_formation` to the bulk or implicit parameter set based on
-  `implicit_microphysics`.
+- `_split_formation` sends the user's `cloud_liquid_formation`,
+  `cloud_ice_formation`, `rain_condensation_evaporation`, and
+  `snow_deposition_sublimation` to the bulk or implicit parameter set
+  based on `implicit_microphysics`.
 - The two 1M parameter sets `ClimaAtmosParameters` builds satisfy the
-  contract: at most one of `(bulk, implicit)` carries each formation.
+  contract: at most one of `(bulk, implicit)` carries each process.
 =#
 
 using Test
@@ -58,23 +59,33 @@ end
             if is_implicit
                 @test isnothing(bulk.processes.cloud_liquid_formation)
                 @test isnothing(bulk.processes.cloud_ice_formation)
+                @test isnothing(bulk.processes.rain_condensation_evaporation)
+                @test isnothing(bulk.processes.snow_deposition_sublimation)
                 @test !isnothing(impl.processes.cloud_liquid_formation)
                 @test !isnothing(impl.processes.cloud_ice_formation)
+                @test !isnothing(impl.processes.rain_condensation_evaporation)
+                @test !isnothing(impl.processes.snow_deposition_sublimation)
             else
                 @test !isnothing(bulk.processes.cloud_liquid_formation)
                 @test !isnothing(bulk.processes.cloud_ice_formation)
+                @test !isnothing(bulk.processes.rain_condensation_evaporation)
+                @test !isnothing(bulk.processes.snow_deposition_sublimation)
                 @test isnothing(impl.processes.cloud_liquid_formation)
                 @test isnothing(impl.processes.cloud_ice_formation)
+                @test isnothing(impl.processes.rain_condensation_evaporation)
+                @test isnothing(impl.processes.snow_deposition_sublimation)
             end
-            # The implicit set carries only the two formation processes;
-            # every other process is nulled so CM BMT returns only cond/subl.
-            # `vapor_relaxation` is a coupling mode (not a process); it cannot
-            # be `nothing` and is inert when no vapor-driven phase change
-            # process is active.
+            # The implicit set carries only the four implicit processes;
+            # every other process is nulled so CM BMT returns only their
+            # tendencies.  `vapor_relaxation` is a coupling mode (not a
+            # process); it cannot be `nothing` and is inert when no
+            # vapor-driven phase change process is active.
             for pn in propertynames(impl.processes)
                 pn in (
                     :cloud_liquid_formation,
                     :cloud_ice_formation,
+                    :rain_condensation_evaporation,
+                    :snow_deposition_sublimation,
                     :vapor_relaxation,
                 ) && continue
                 @test isnothing(getproperty(impl.processes, pn))

@@ -101,10 +101,11 @@ and one built from an unmodified configuration file agree (see
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
-    `cloud_liquid_formation` and `cloud_ice_formation` are routed to either
-    `microphysics_1m_params` (bulk CM BMT) or `microphysics_1m_implicit_params`
-    (SGS-integrated implicit source) by `create_parameters.jl`, driven by the
-    `implicit_microphysics` config toggle.
+    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+    and `snow_deposition_sublimation` are routed to either `microphysics_1m_params`
+    (bulk CM BMT) or `microphysics_1m_implicit_params` (SGS-integrated implicit
+    source) by `create_parameters.jl`, driven by the `implicit_microphysics` config
+    toggle.
 
 # Examples
 
@@ -131,9 +132,11 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
     )
         # Override CM's `ConstantTimescale` ice formation default to match
         # `default_config.yml`. `create_parameters.jl` splits
-        # `cloud_liquid_formation` and `cloud_ice_formation` between
-        # `microphysics_1m_params` (bulk) and `microphysics_1m_implicit_params`
-        # (implicit) based on `implicit_microphysics`.
+        # `cloud_liquid_formation`, `cloud_ice_formation`,
+        # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
+        # between `microphysics_1m_params` (bulk) and
+        # `microphysics_1m_implicit_params` (implicit) based on
+        # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             process_options...,
@@ -1670,26 +1673,17 @@ by `rad: "ISDAC"`.
 end
 
 """
-    RadiationTRMM_LBA(::Type{FT})
+    RadiationTRMM_LBA()
 
-Prescribed radiative heating profile for the TRMM-LBA deep-convection case,
-taken from AtmosphericProfilesLibrary.
+Prescribed radiative heating of the TRMM-LBA deep-convection case.
 
-The stored profile is evaluated as `rad_profile(t, z)` to give a temperature
-tendency [K/s], which is converted to an energy tendency. Selected by
-`rad: "TRMM_LBA"`.
+Selected by `rad: "TRMM_LBA"`.
 
-# Fields
-
-  - `rad_profile`: Callable `(t, z)` returning the radiative heating rate [K/s].
+The time-height profile `APL.TRMM_LBA_radiation(FT)` from AtmosphericProfilesLibrary
+is stored in the radiation cache and evaluated as `rad_profile(t, z)` to give
+a temperature tendency [K/s], which is converted to an energy tendency.
 """
-struct RadiationTRMM_LBA{R}
-    rad_profile::R
-    function RadiationTRMM_LBA(::Type{FT}) where {FT}
-        rad_profile = APL.TRMM_LBA_radiation(FT)
-        return new{typeof(rad_profile)}(rad_profile)
-    end
-end
+struct RadiationTRMM_LBA end
 
 """
     PrescribedFlow{FT}
@@ -1849,14 +1843,18 @@ symbols or strings.
 
 # Fields
 
-  - `energy_q_tot_upwinding`: Upwinding for the vertical advection of `ρe_tot`
-    and `ρq_tot`.
-  - `tracer_upwinding`: Upwinding for the vertical advection of the remaining
-    grid-scale tracers.
-  - `edmfx_mse_q_tot_upwinding`: Upwinding for the EDMF subdomain `mse`,
-    `q_tot`, and TKE advection.
+  - `energy_humidity_upwinding`: Upwinding for the vertical advection of
+    `ρe_tot` (`e_tot - Φ`, with central geopotential and pressure work),
+    `ρq_tot`, and the sedimenting microphysics species
+    (`sedimenting_tracer_names`).
+  - `tracer_upwinding`: Upwinding for the explicit vertical advection of passive
+    non-water grid-scale tracers (`passive_gs_tracer_names`; `ρtke` uses
+    implicit first-order upwind advection in the Newton residual).
+  - `edmfx_mse_humidity_upwinding`: Upwinding for the EDMF subdomain `mse`,
+    `q_tot`, and sedimenting microphysics species (`sedimenting_sgs_tracer_names`).
   - `edmfx_sgsflux_upwinding`: Upwinding for the EDMF subgrid-scale mass flux.
-  - `edmfx_tracer_upwinding`: Upwinding for the EDMF subdomain tracers.
+  - `edmfx_tracer_upwinding`: Upwinding for the passive EDMF subdomain tracers
+    (`passive_sgs_tracer_names`).
   - `test_dycore_consistency`: Whether to fill the cache with `NaN`s before each
     tendency evaluation, so that any quantity the dycore reads without first
     setting it shows up as a `NaN`.
@@ -1876,9 +1874,9 @@ symbols or strings.
 """
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
     # Enable specific upwinding schemes for specific equations
-    energy_q_tot_upwinding::EN_UP
+    energy_humidity_upwinding::EN_UP
     tracer_upwinding::TR_UP
-    edmfx_mse_q_tot_upwinding::ED_UP
+    edmfx_mse_humidity_upwinding::ED_UP
     edmfx_sgsflux_upwinding::SG_UP
     edmfx_tracer_upwinding::ED_TR_UP
     # Add NaNs to certain equations to track down problems
@@ -1897,30 +1895,46 @@ end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
 """
-    AtmosNumerics(; energy_q_tot_upwinding = :vanleer_limiter, tracer_upwinding = :vanleer_limiter,
-                  edmfx_mse_q_tot_upwinding = :first_order, edmfx_sgsflux_upwinding = :none,
-                  edmfx_tracer_upwinding = :first_order, test_dycore_consistency = false,
-                  reproducible_restart = false, limiter = nothing, diff_mode = Explicit(),
-                  hyperdiff = Hyperdiffusion{Float32}(...),
-                  vertical_water_borrowing_species = nothing)
+    AtmosNumerics(;
+        energy_humidity_upwinding = :vanleer_limiter,
+        tracer_upwinding = :vanleer_limiter,
+        edmfx_mse_humidity_upwinding = :first_order,
+        edmfx_sgsflux_upwinding = :none,
+        edmfx_tracer_upwinding = :first_order,
+        test_dycore_consistency = false,
+        reproducible_restart = false,
+        limiter = nothing,
+        diff_mode = Explicit(),
+        hyperdiff = Hyperdiffusion{Float32}(...),
+        vertical_water_borrowing_species = nothing,
+    )
 
 Create an `AtmosNumerics`, converting the upwinding options to `Val`
 types for compile-time dispatch.
 
 # Keyword Arguments
 
-  - `energy_q_tot_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot` and
-    `ρq_tot` vertical advection. Valid values are `:none`, `:first_order`,
-    `:third_order`, and `:vanleer_limiter`, given as a `Symbol`, a `String`, or
-    an already-wrapped `Val`.
-  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the other grid-scale
-    tracers, same valid values.
-  - `edmfx_mse_q_tot_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    `mse`, `q_tot`, and TKE.
+  - `energy_humidity_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot`,
+    `ρq_tot`, and the sedimenting microphysics species in vertical advection.
+    Valid values are `:none`, `:first_order`, `:third_order`, and
+    `:vanleer_limiter`, given as a `Symbol`, a `String`, or an already-wrapped
+    `Val`. `:first_order` gives positive first-order transport of `e_tot - Φ`,
+    `q_tot`, and the sedimenting species with the leading diffusivity of
+    backward-Euler upwind; `:third_order` is linear and unlimited (not positive
+    or monotone on discontinuities); `:none` skips their post-Newton dissipation
+    and antidiffusion, leaving their vertical advection forward-Euler central
+    under one Newton iteration with `ManualSparseJacobian` (amplifying
+    oscillatory modes unless vertical diffusion damps them).
+  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the passive non-water
+    grid-scale tracers (`ρtke` uses implicit first-order upwinding directly in
+    the Newton residual), same valid values.
+  - `edmfx_mse_humidity_upwinding = :first_order`: Upwinding for the EDMF
+    subdomain `mse`, `q_tot`, and sedimenting microphysics species; `:none` or
+    `:first_order`.
   - `edmfx_sgsflux_upwinding = :none`: Upwinding for the EDMF subgrid-scale mass
     flux.
-  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    tracers.
+  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the passive EDMF
+    subdomain tracers; `:none` or `:first_order`.
   - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
@@ -1939,9 +1953,9 @@ numerics = ClimaAtmos.AtmosNumerics(; tracer_upwinding = :third_order, hyperdiff
 ```
 """
 function AtmosNumerics(;
-    energy_q_tot_upwinding = :vanleer_limiter,
+    energy_humidity_upwinding = :vanleer_limiter,
     tracer_upwinding = :vanleer_limiter,
-    edmfx_mse_q_tot_upwinding = :first_order,
+    edmfx_mse_humidity_upwinding = :first_order,
     edmfx_sgsflux_upwinding = :none,
     edmfx_tracer_upwinding = :first_order,
     test_dycore_consistency = false,
@@ -1958,11 +1972,19 @@ function AtmosNumerics(;
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
     parse_upwinding(x::Union{Symbol, String}) = Val(Symbol(x))
     parse_upwinding(x::Val) = x
+    # The updraft advection and its Jacobian are first-order upwind or central.
+    for (name, value) in (
+        ("edmfx_mse_humidity_upwinding", edmfx_mse_humidity_upwinding),
+        ("edmfx_tracer_upwinding", edmfx_tracer_upwinding),
+    )
+        parse_upwinding(value) in (Val(:none), Val(:first_order)) ||
+            error("`$name` must be `none` or `first_order`; got `$value`.")
+    end
 
     return AtmosNumerics(
-        parse_upwinding(energy_q_tot_upwinding),
+        parse_upwinding(energy_humidity_upwinding),
         parse_upwinding(tracer_upwinding),
-        parse_upwinding(edmfx_mse_q_tot_upwinding),
+        parse_upwinding(edmfx_mse_humidity_upwinding),
         parse_upwinding(edmfx_sgsflux_upwinding),
         parse_upwinding(edmfx_tracer_upwinding),
         test_dycore_consistency,
