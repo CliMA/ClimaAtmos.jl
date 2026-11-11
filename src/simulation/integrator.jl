@@ -87,19 +87,19 @@ approximation.
 imex_b_imp_stages(_, ::Type{FT}) where {FT} = (zero(SVector{8, FT}), 0)
 function imex_b_imp_stages(alg::CTS.IMEXAlgorithm, ::Type{FT}) where {FT}
     nm = alg.newtons_method
-    if isnothing(nm) ||
-       !isnothing(nm.krylov_method) ||
-       !isnothing(nm.line_search) ||
-       isnothing(imex_gamma(alg)) ||
-       !(
-           nm.update_j == CTS.UpdateEvery(CTS.NewNewtonIteration) ||
-           (
-               nm.update_j == CTS.UpdateEvery(CTS.NewNewtonSolve) &&
-               nm.max_iters == 1
-           )
-       )
-        return (zero(SVector{8, FT}), 0)
-    end
+    #if isnothing(nm) ||
+    #   !isnothing(nm.krylov_method) ||
+    #   !isnothing(nm.line_search) ||
+    #   isnothing(imex_gamma(alg)) ||
+    #   !(
+    #       nm.update_j == CTS.UpdateEvery(CTS.NewNewtonIteration) ||
+    #       (
+    #           nm.update_j == CTS.UpdateEvery(CTS.NewNewtonSolve) &&
+    #           nm.max_iters == 1
+    #       )
+    #   )
+    #    return (zero(SVector{8, FT}), 0)
+    #end
     a = alg.tableau.a_imp.coeffs
     b = alg.tableau.b_imp.coeffs
     s = size(a, 1)
@@ -225,7 +225,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
             update_j,
-            verbose = CTS.Verbose(),
+            #verbose = CTS.Verbose(),
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
@@ -239,8 +239,8 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                     else
                         CTS.ConstantForcing(FT(krylov_rtol))
                     end,
-                    verbose = CTS.Verbose(),
-                    solve_kwargs = (; reorthogonalization = true, itmax = 5),
+                    #verbose = CTS.Verbose(),
+                    solve_kwargs = (; reorthogonalization = true, itmax = 1),
                 )
             else
                 nothing
@@ -378,23 +378,23 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                  `q_tot`, and any condensates forward-Euler central."
             )
         end
-        if atmos.numerics.energy_humidity_upwinding != Val(:none) &&
-           ode_algo isa CTS.IMEXAlgorithm &&
-           !isnothing(ode_algo.newtons_method)
-            nm = ode_algo.newtons_method
-            if (
-                jacobian isa ManualSparseJacobian &&
-                isnothing(nm.krylov_method) &&
-                nm.max_iters > 1
-            )
-                @warn(
-                    "With `ManualSparseJacobian` and `max_newton_iters_ode > 1`, \
-                     additional Newton iterations iterate the explicit central \
-                     scalar step while the `+2 C_γ` dissipation weight is \
-                     disabled (`compensate_explicit_scalar_advection = false`)."
-                )
-            end
-        end
+        #if atmos.numerics.energy_humidity_upwinding != Val(:none) &&
+        #   ode_algo isa CTS.IMEXAlgorithm &&
+        #   !isnothing(ode_algo.newtons_method)
+        #    nm = ode_algo.newtons_method
+        #    if (
+        #        jacobian isa ManualSparseJacobian &&
+        #        isnothing(nm.krylov_method) &&
+        #        nm.max_iters > 1
+        #    )
+        #        @warn(
+        #            "With `ManualSparseJacobian` and `max_newton_iters_ode > 1`, \
+        #             additional Newton iterations iterate the explicit central \
+        #             scalar step while the `+2 C_γ` dissipation weight is \
+        #             disabled (`compensate_explicit_scalar_advection = false`)."
+        #        )
+        #    end
+        #end
     end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)

@@ -304,18 +304,18 @@ function build_cache(
              applies the post-solve sedimentation increment."
         )
     end
-    compensate_explicit_scalar_advection =
-        !iszero(dtγ) &&
-        (
-            jacobian isa ManualSparseJacobian || (
-                jacobian isa AutoSparseJacobian &&
-                atmos.microphysics_model isa DryModel &&
-                atmos.diff_mode != Implicit()
-            )
-        ) &&
-        ode_algo isa CTS.IMEXAlgorithm &&
-        !isnothing(ode_algo.newtons_method) &&
-        isnothing(ode_algo.newtons_method.krylov_method)
+    compensate_explicit_scalar_advection = false
+       # !iszero(dtγ) &&
+       # (
+       #     jacobian isa ManualSparseJacobian || (
+       #         jacobian isa AutoSparseJacobian &&
+       #         atmos.microphysics_model isa DryModel &&
+       #         atmos.diff_mode != Implicit()
+       #     )
+       # ) &&
+       # ode_algo isa CTS.IMEXAlgorithm &&
+       # !isnothing(ode_algo.newtons_method) &&
+       # isnothing(ode_algo.newtons_method.krylov_method)
     scratch = temporary_quantities(
         Y,
         atmos;
