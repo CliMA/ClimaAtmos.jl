@@ -43,13 +43,13 @@ AutoSparseJacobian(sparse_jacobian_alg) =
     AutoSparseJacobian(sparse_jacobian_alg, nothing)
 
 """
-    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing)
+    AutoSparseJacobian(; approximate_solve_iters = 2, padding_bands_per_block = nothing)
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
 """
 AutoSparseJacobian(;
-    approximate_solve_iters::Int = 1,
+    approximate_solve_iters::Int = 2,
     padding_bands_per_block = nothing,
 ) = AutoSparseJacobian(
     ManualSparseJacobian(; approximate_solve_iters),

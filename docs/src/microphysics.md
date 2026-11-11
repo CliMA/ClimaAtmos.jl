@@ -236,7 +236,7 @@ the SGS-integrated residual of `update_implicit_1m_tendency!`):
 
 Additional corrections are applied through the state-constraint hook
 `constrain_state!`, which runs at the cadence set by
-`update_constrain_state_every` (every step by default). Its microphysics and
+`update_constrain_state_every` (every stage by default). Its microphysics and
 updraft part is
 
 ```julia

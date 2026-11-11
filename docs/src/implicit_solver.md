@@ -111,7 +111,7 @@ the presence of topography, the diffusion mode, and the prognostic variables in
 
 When grid-scale diffusion is implicit, the configuration is moist, or prognostic
 `ρtke` is active, the linear solve is itself approximate;
-`approximate_linear_solve_iters` sets how many iterations it
+`approximate_linear_solve_iters` (default `2`) sets how many iterations it
 takes.
 
 ### Automatic differentiation

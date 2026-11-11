@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
+  from `1` to `2` and `update_constrain_state_every` from `step` to `stage` in
+  `config/default_configs/default_config.yml` and the matching keyword defaults
+  of `AtmosSimulation`, `ManualSparseJacobian`, and `AutoSparseJacobian` (in
+  185 km coupled AMIP runs at `dt = 240 s` on one A100 GPU, `ARS222` and
+  `ARS343` run at `~2.1` and `~1.5` SYPD).
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Stabilize
   `update_implicit_microphysics_jacobian!` for 1-moment implicit phase changes:
   include the vapor-saturation and isobaric psychrometric latent-heating
