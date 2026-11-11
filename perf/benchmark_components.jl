@@ -181,22 +181,12 @@ function get_bench_items(
             () -> CA.set_implicit_precomputed_quantities!(Y, p, t),
         ),
         (
-            "  set_prognostic_edmf_precomputed_quantities_draft!",
-            () -> CA.set_prognostic_edmf_precomputed_quantities_draft!(
-                Y,
-                p,
-                ᶠuₕ³,
-                t,
-            ),
+            "  set_prognostic_edmf_nonequilibrium_quantities!",
+            () -> CA.set_prognostic_edmf_nonequilibrium_quantities!(Y, p, ᶠuₕ³),
         ),
         (
-            "  set_prognostic_edmf_precomputed_quantities_environment!",
-            () -> CA.set_prognostic_edmf_precomputed_quantities_environment!(
-                Y,
-                p,
-                ᶠuₕ³,
-                t,
-            ),
+            "  set_prognostic_edmf_precomputed_quantities_draft!",
+            () -> CA.set_prognostic_edmf_precomputed_quantities_draft!(Y, p),
         ),
         (
             "  set_precipitation_velocities!",
@@ -406,8 +396,8 @@ function compute_refs(state, jac_alg, jac_cache)
         Yₜ_corr_c,
         ᶠK_h = snap(p.precomputed.ᶠK_h),
         ᶠK_u = snap(p.precomputed.ᶠK_u),
-        ᶜgradᵥ_θ = snap(p.precomputed.ᶜgradᵥ_θ_liq_ice),
-        ᶜgradᵥ_q = snap(p.precomputed.ᶜgradᵥ_q_tot),
+        ᶠ∂θli∂z = snap(p.precomputed.ᶠ∂θli∂z),
+        ᶠ∂qt∂z = snap(p.precomputed.ᶠ∂qt∂z),
         ᶜcloud_fraction = snap(p.precomputed.ᶜcloud_fraction),
         ᶜprecip_frac = snap(p.precomputed.ᶜprecip_frac),
         ᶜsgs_moments = snap(p.precomputed.ᶜsgs_moments),
@@ -436,8 +426,8 @@ function report_equivalence(ref, new)
         ("correct_implicit Yₜ.c", ref.Yₜ_corr_c, new.Yₜ_corr_c),
         ("ᶠK_h", ref.ᶠK_h, new.ᶠK_h),
         ("ᶠK_u", ref.ᶠK_u, new.ᶠK_u),
-        ("ᶜgradᵥ_θ_liq_ice", ref.ᶜgradᵥ_θ, new.ᶜgradᵥ_θ),
-        ("ᶜgradᵥ_q_tot", ref.ᶜgradᵥ_q, new.ᶜgradᵥ_q),
+        ("ᶠ∂θli∂z", ref.ᶠ∂θli∂z, new.ᶠ∂θli∂z),
+        ("ᶠ∂qt∂z", ref.ᶠ∂qt∂z, new.ᶠ∂qt∂z),
         ("ᶜcloud_fraction", ref.ᶜcloud_fraction, new.ᶜcloud_fraction),
         ("ᶜprecip_frac", ref.ᶜprecip_frac, new.ᶜprecip_frac),
         ("ᶜsgs_moments", ref.ᶜsgs_moments, new.ᶜsgs_moments),
@@ -495,8 +485,12 @@ function print_comparison(items, res_base, res_new)
     )
     println("|---|---|---|---|")
     for (name, _) in items
-        rb = res_base[name]
         r = res_new[name]
+        if !haskey(res_base, name)
+            @printf("| %s | (not in base) | %.1f / %.1f | |\n", name, r.min_us, r.med_us)
+            continue
+        end
+        rb = res_base[name]
         @printf(
             "| %s | %.1f / %.1f | %.1f / %.1f | %.2fx / %.2fx |\n",
             name,

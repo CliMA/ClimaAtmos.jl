@@ -92,6 +92,12 @@ import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
+import ..ᶜenv_thermo_fields
+import ..ᶜbuoyancy_gradient
+import ..ᶜenv_velocity
+import ..ᶜdraft_thermo_tuples
+import ..compute_ᶠu
+import ..ᶜdraft_velocities
 
 
 # We need the abbreviations for symbols like curl, grad, and so on

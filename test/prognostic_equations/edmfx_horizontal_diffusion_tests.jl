@@ -89,9 +89,9 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
 
     # Perturb the state horizontally to activate every flux pathway. The
     # enthalpy flux reads the precomputed `ᶜT` and the momentum stress
-    # reads the precomputed `ᶜu`/`ᶠu`, which are perturbed directly.
+    # reads the precomputed `ᶜu`, which are perturbed directly (the face
+    # velocity is evaluated from `ᶜu`).
     ᶜx = Fields.coordinate_field(Y.c).x
-    ᶠx = Fields.coordinate_field(Y.f).x
     ᶜpert = @. 1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400))
     @. Y.c.ρq_tot *= ᶜpert
     @. Y.c.ρq_rai = FT(1e-5) * Y.c.ρ * ᶜpert
@@ -100,7 +100,6 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     @. p.precomputed.ᶜT *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
     @. p.precomputed.ᶜT⁰ *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
     @. p.precomputed.ᶜu *= ᶜpert
-    @. p.precomputed.ᶠu *= 1 + FT(0.1) * sin(FT(2π) * ᶠx / FT(6400))
     CA.set_horizontal_diffusivities!(Y, p)
 
     Yₜ .= zero(eltype(Yₜ))
@@ -159,14 +158,15 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     # The wind tendencies match independently assembled stress divergences.
     uvw = CA.UVW(FT(0), FT(0), FT(0))
     ᶜτ = similar(Y.c.ρ, typeof(uvw * uvw'))
-    CA.compute_strain_rate_center_full!(ᶜτ, p.precomputed.ᶜu, p.precomputed.ᶠu)
+    ᶠu = Base.materialize(CA.compute_ᶠu(Y, p))
+    CA.compute_strain_rate_center_full!(ᶜτ, p.precomputed.ᶜu, ᶠu)
     @. ᶜτ = -2 * p.precomputed.ᶜK_u_h * ᶜτ
     ᶜuₕ_ref = similar(Yₜ.c.uₕ)
     @. ᶜuₕ_ref = -CA.C12(CA.wdivₕ(Y.c.ρ * ᶜτ) / Y.c.ρ)
     Spaces.weighted_dss!(ᶜuₕ_ref)
     @test parent(Yₜ.c.uₕ) ≈ parent(ᶜuₕ_ref) rtol = FT(1e-10)
     ᶠτ = similar(Y.f.u₃, typeof(uvw * uvw'))
-    CA.compute_strain_rate_face_full!(ᶠτ, p.precomputed.ᶜu, p.precomputed.ᶠu)
+    CA.compute_strain_rate_face_full!(ᶠτ, p.precomputed.ᶜu, ᶠu)
     @. ᶠτ = -2 * CA.ᶠinterp(p.precomputed.ᶜK_u_h) * ᶠτ
     ᶠρ = similar(Y.f.u₃, FT)
     @. ᶠρ = CA.ᶠinterp(Y.c.ρ)
@@ -292,7 +292,7 @@ end
 
     thermo_params = CA.CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
-    (; ᶜT⁰) = p.precomputed
+    (; ᶜT⁰) = CA.ᶜenv_thermo_fields(Y, p)
     ᶜρa⁰ = similar(Y.c.ρ)
     @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
     ᶜq_lcl⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_lcl), Y, p)

@@ -16,7 +16,7 @@ Random.seed!(1234)
 # config starts from an initial condition, not a restart file).
 #
 # `hyperdiffusion_tendency!` reads only `p.atmos.{hyperdiff, turbconv_model}`,
-# `p.core.ᶜΦ`, `p.precomputed.ᶜT`/`ᶜTʲs`, `p.hyperdiff.*`, and `p.scratch`. It
+# `p.core.ᶜΦ`, `p.precomputed.ᶜT`, the draft temperatures, `p.hyperdiff.*`, and `p.scratch`. It
 # never reads the radiation, aerosol, trace-gas, gravity-wave, tracer, or
 # external-forcing parts of `p`. Those are also the *expensive* part of model
 # setup (RRTMGP compilation + lookup tables, ETOPO topography load + spectral

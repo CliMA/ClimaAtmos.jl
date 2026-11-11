@@ -45,8 +45,6 @@ A `NamedTuple` of fields containing, on the grid scale:
   - `ᶜu`: Velocity on cell centers, in the local covariant basis
     (`Covariant123Vector`).
   - `ᶠu³`: Third contravariant component of the velocity on cell faces [1/s].
-  - `ᶠu`: Velocity on cell faces, in the local contravariant basis
-    (`Contravariant123Vector`).
   - `ᶜK`: Specific kinetic energy on cell centers [m²/s²].
   - `ᶜT`: Air temperature on cell centers [K].
   - `ᶜh_tot`: Total specific enthalpy on cell centers [J/kg].
@@ -61,11 +59,15 @@ A `NamedTuple` of fields containing, on the grid scale:
 If the `turbconv_model` is `PrognosticEDMFX`, there are also SGS versions of the
 velocity and thermodynamic quantities (`ᶜp` is shared across all subdomains):
 
-  - `_⁰` suffix: value for the environment (`ᶠu₃⁰`, `ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`, `ᶜT⁰`,
+  - `_⁰` suffix: value for the environment (`ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`, `ᶜT⁰`,
     `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`).
-  - `ʲs` suffix: tuples of values for the mass-flux subdomains (`ᶜuʲs`, `ᶠu³ʲs`,
-    `ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`), plus the
-    subdomain air densities `ᶜρʲs` [kg/m³].
+  - `ᶜTʲs`, `ᶜρʲs`: tuples of the temperatures [K] and air densities [kg/m³] of the
+    mass-flux subdomains.
+
+The draft velocities and humidities, and the subdomain vertical
+velocities and kinetic energies are not stored: their readers evaluate them from
+`Y` (`ᶜdraft_thermo_tuples`, `ᶜdraft_velocities`, `ᶠsgs_u₃`, `compute_ᶠu³`,
+`compute_kinetic`).
 
 For implicit microphysics, Dual-compatible copies are also allocated: the
 density-weighted 0M sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`, and (for all
@@ -80,7 +82,6 @@ function implicit_precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
-        ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
         ᶜh_tot = similar(Y.c, FT),
@@ -115,7 +116,6 @@ function implicit_precomputed_quantities(Y, atmos)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
@@ -123,14 +123,7 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_tot_nonneg⁰ = similar(Y.c, FT),
             ᶜq_liq⁰ = similar(Y.c, FT),
             ᶜq_ice⁰ = similar(Y.c, FT),
-            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜTʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_tot_nonnegʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             picard_scratch...,
         ) : (;)
@@ -255,17 +248,12 @@ function precomputed_quantities(Y, atmos)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
-    cspace = axes(Y.c)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
     @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
-        ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        # Moist buoyancy gradient N² at centers; same physical quantity as the
-        # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
-        # (cloud-fraction-blended) vertical gradient instead of the two-point
-        # face gradient.
-        ᶜbuoygrad = similar(Y.c, FT),
+        # precipitation energy flux per unit mass in the bottom cell
+        sfc_wₕhₜ = similar(Fields.level(Y.c, 1), FT),
         # Pointwise chain-rule coefficients of the moist buoyancy gradient
         # and exact two-point face gradients of (θ_li, q_tot); filled once
         # per update by `set_buoyancy_gradient_inputs!` and shared by the
@@ -517,12 +505,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa EDOnlyEDMFX ?
         (; ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
 
-    # Gradient fields for covariance computation (used in cloud fraction/microphysics)
-    sgs_quantities = (;
-        ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
-        ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
-    )
-
     # Allocated here only when the vertical Smagorinsky-Lilly tendency is
     # explicit; with `diff_mode == Implicit()` these fields are written by
     # `set_implicit_precomputed_quantities!` and so are allocated alongside the
@@ -533,7 +515,6 @@ function precomputed_quantities(Y, atmos)
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
-        sgs_quantities...,
         advective_sgs_quantities...,
         edonly_quantities...,
         sedimentation_quantities...,
@@ -559,6 +540,30 @@ enters the impenetrability conditions applied by `set_velocity_at_surface!` and
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
     return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+"""
+    compute_ᶠu³(ᶜuₕ, ᶜρ, ᶠu₃)
+
+Return a lazy broadcast of the third contravariant component of the velocity at
+faces, `ᶠuₕ³ + CT3(ᶠu₃)` [1/s], where `ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)` comes from the
+grid-mean horizontal velocity and density and `ᶠu₃` is the covariant vertical
+velocity of the grid mean (`Y.f.u₃`) or of an EDMFX draft. The arguments are
+whole fields or columns of a fused loop.
+"""
+@inline compute_ᶠu³(ᶜuₕ, ᶜρ, ᶠu₃) = @. lazy($(compute_ᶠuₕ³(ᶜuₕ, ᶜρ)) + CT3(ᶠu₃))
+
+"""
+    compute_ᶠu(Y, p)
+
+Return a lazy broadcast of the velocity at faces in the local contravariant basis
+(`CT123`), the mass-weighted interpolation of the horizontal part of the
+precomputed `ᶜu` plus the precomputed contravariant vertical velocity `ᶠu³`.
+"""
+function compute_ᶠu(Y, p)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    (; ᶜu, ᶠu³) = p.precomputed
+    return @. lazy(CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³))
 end
 
 """
@@ -647,16 +652,56 @@ end
 
 Set the velocity `ᶜu` at centers, the contravariant vertical velocity `ᶠu³` at
 faces, and the specific kinetic energy `ᶜK` at centers, from the vertical
-velocity `ᶠu₃` and the horizontal velocity `ᶜuₕ`. Mutates its first three
-arguments and returns `nothing`.
-
-Used both for the grid-scale quantities (from `Y.f.u₃`) and for the EDMFX
-subdomain quantities (from `ᶠu₃⁰` and each `ᶠu₃ʲ`).
+velocity `ᶠu₃`, the horizontal velocity `ᶜuₕ`, and its contravariant vertical
+component at faces `ᶠuₕ³`. Mutates its first three arguments and returns
+`nothing`.
 """
 @inline function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
+    return nothing
+end
+
+"""
+    set_grid_mean_column!(
+        ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+        Yc, ᶠu₃, ᶠuₕ³, ᶜΦ, microphysics_model, thermo_params, T_min_sgs,
+    )
+
+Column body of the grid-mean velocities and kinetic energy and, with
+non-equilibrium microphysics, of the thermodynamic state from the prognostic water
+species, the total specific enthalpy, and the pressure.
+"""
+@inline function set_grid_mean_column!(
+    ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+    Yc, ᶠu₃, ᶠuₕ³, ᶜΦ, microphysics_model, thermo_params, T_min_sgs,
+)
+    (ᶠu₃, ᶠuₕ³) = register_copy((ᶠu₃, ᶠuₕ³))
+    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
+    microphysics_model isa NonEquilibriumMicrophysics || return nothing
+    ᶜρ = register_copy(Yc.ρ)
+    ᶜq_liq_reg = @. max(0, specific(Yc.ρq_lcl, ᶜρ) + specific(Yc.ρq_rai, ᶜρ))
+    ᶜq_ice_reg = @. max(0, specific(Yc.ρq_icl, ᶜρ) + specific(Yc.ρq_sno, ᶜρ))
+    ᶜq_tot_reg = @. max(ᶜq_liq_reg + ᶜq_ice_reg, specific(Yc.ρq_tot, ᶜρ))
+    ᶜT_reg = @. max(
+        T_min_sgs,
+        TD.air_temperature(
+            thermo_params,
+            specific(Yc.ρe_tot, ᶜρ) - ᶜK - ᶜΦ,
+            ᶜq_tot_reg,
+            ᶜq_liq_reg,
+            ᶜq_ice_reg,
+        ),
+    )
+    @. ᶜq_liq = ᶜq_liq_reg
+    @. ᶜq_ice = ᶜq_ice_reg
+    @. ᶜq_tot_nonneg = ᶜq_tot_reg
+    @. ᶜT = ᶜT_reg
+    set_enthalpy_and_pressure!(
+        ᶜh_tot, ᶜp, (; ρ = ᶜρ, Yc.ρe_tot), ᶜT_reg, ᶜq_tot_reg, ᶜq_liq_reg,
+        ᶜq_ice_reg, thermo_params,
+    )
     return nothing
 end
 
@@ -700,30 +745,28 @@ inlined.
 end
 
 """
-    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
+    ᶠsgs_u₃(w_function, Yc, Yf, turbconv_model)
 
-Set the SGS vertical velocity `ᶠu₃` at faces by applying `w_function` to the
-face-interpolated subdomain area-weighted densities, the subdomain vertical
-velocities, the face-interpolated grid-mean density, and the grid-mean vertical
-velocity. Mutates `ᶠu₃` and returns `nothing`.
+Return a lazy broadcast of an SGS vertical velocity at faces, which applies
+`w_function` to the face-interpolated subdomain area-weighted densities, the subdomain
+vertical velocities, the face-interpolated grid-mean density, and the grid-mean vertical
+velocity. `Yc` and `Yf` are `Y.c` and `Y.f`, or their column slices in a fused loop.
 
-Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
-grid mean and the drafts.
+Passing `u₃⁰` as `w_function` gives the environment vertical velocity from the grid
+mean and the drafts.
 """
-set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model) =
-    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y.c, Y.f, turbconv_model)
-# The (Yc, Yf) method also runs inside fused column loops on column slices of Y.c and Y.f.
-@inline function set_sgs_ᶠu₃!(w_function, ᶠu₃, Yc, Yf, turbconv_model)
+@inline function ᶠsgs_u₃(w_function, Yc, Yf, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
     u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
-    @. ᶠu₃ = w_function(
-        ᶠinterp(ρaʲs(Yc.sgsʲs)),
-        u₃ʲs(Yf.sgsʲs),
-        ᶠinterp(Yc.ρ),
-        Yf.u₃,
-        turbconv_model,
+    return @. lazy(
+        w_function(
+            ᶠinterp(ρaʲs(Yc.sgsʲs)),
+            u₃ʲs(Yf.sgsʲs),
+            ᶠinterp(Yc.ρ),
+            Yf.u₃,
+            turbconv_model,
+        ),
     )
-    return nothing
 end
 
 """
@@ -812,9 +855,9 @@ end
     set_implicit_precomputed_quantities_core!(Y, p, t)
 
 The subset of the implicit precomputed quantities that depends only on `Y`,
-not on the SGS covariances. Updates the velocity fields (`ᶜu`, `ᶠu³`, `ᶠu`,
-`ᶜK`) and the thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`,
-`ᶜq_ice`, `ᶜh_tot`, `ᶜp`), plus their EDMFX subdomain versions when the
+not on the SGS covariances. Updates the velocity fields (`ᶜu`, `ᶠu³`, `ᶜK`)
+and the thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`,
+`ᶜh_tot`, `ᶜp`), plus their EDMFX subdomain versions when the
 `turbconv_model` is `PrognosticEDMFX`. Refreshes the density-weighted
 microphysics sources and surface precipitation fluxes via
 `update_implicit_microphysics_cache!`. When `p.atmos.diff_mode == Implicit()`,
@@ -836,7 +879,7 @@ precomputed quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
     (; turbconv_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) =
+    (; ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) =
         p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
@@ -850,43 +893,30 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
         set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
     end
 
-    ᶜJ = Fields.local_geometry_field(Y.c).J
     T_min_sgs = CAP.T_min_sgs(p.params)
-    # Grid-mean velocities and kinetic energy in one fused column loop. With
-    # nonequilibrium microphysics, the same loop then sets the thermodynamic
-    # state from the prognostic water species, the total specific enthalpy, and
-    # the pressure.
-    DataLayouts.foreach_column(
-        ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
-        Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ, ᶜΦ,
-    ) do ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
-    Yc, ᶠu₃, ᶠuₕ³, ᶜJ, ᶜΦ
-        (ᶠu₃, ᶠuₕ³, ᶜJ) = register_copy((ᶠu₃, ᶠuₕ³, ᶜJ))
-        set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
-        @. ᶠu = CT123(ᶠwinterp(Yc.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
-        microphysics_model isa NonEquilibriumMicrophysics || return nothing
-        ᶜρ = register_copy(Yc.ρ)
-        ᶜq_liq_reg = @. max(0, specific(Yc.ρq_lcl, ᶜρ) + specific(Yc.ρq_rai, ᶜρ))
-        ᶜq_ice_reg = @. max(0, specific(Yc.ρq_icl, ᶜρ) + specific(Yc.ρq_sno, ᶜρ))
-        ᶜq_tot_reg = @. max(ᶜq_liq_reg + ᶜq_ice_reg, specific(Yc.ρq_tot, ᶜρ))
-        ᶜT_reg = @. max(
-            T_min_sgs,
-            TD.air_temperature(
-                thermo_params,
-                specific(Yc.ρe_tot, ᶜρ) - ᶜK - ᶜΦ,
-                ᶜq_tot_reg,
-                ᶜq_liq_reg,
-                ᶜq_ice_reg,
-            ),
-        )
-        @. ᶜq_liq = ᶜq_liq_reg
-        @. ᶜq_ice = ᶜq_ice_reg
-        @. ᶜq_tot_nonneg = ᶜq_tot_reg
-        @. ᶜT = ᶜT_reg
-        set_enthalpy_and_pressure!(
-            ᶜh_tot, ᶜp, (; ρ = ᶜρ, Yc.ρe_tot), ᶜT_reg, ᶜq_tot_reg, ᶜq_liq_reg,
-            ᶜq_ice_reg, thermo_params,
-        )
+    # With PrognosticEDMFX and 1M/2M microphysics, the grid mean, the drafts, and the
+    # environment share one column loop.
+    fused_edmf =
+        turbconv_model isa PrognosticEDMFX &&
+        microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    if fused_edmf
+        set_prognostic_edmf_nonequilibrium_quantities!(Y, p, ᶠuₕ³)
+    else
+        # Grid-mean velocities and kinetic energy in one fused column loop. With
+        # nonequilibrium microphysics, the same loop then sets the thermodynamic
+        # state from the prognostic water species, the total specific enthalpy, and
+        # the pressure.
+        DataLayouts.foreach_column(
+            ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+            Y.c, Y.f.u₃, ᶠuₕ³, ᶜΦ,
+        ) do ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+        Yc, ᶠu₃, ᶠuₕ³, ᶜΦ
+            set_grid_mean_column!(
+                ᶜu, ᶠu³, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+                Yc, ᶠu₃, ᶠuₕ³, ᶜΦ, microphysics_model, thermo_params, T_min_sgs,
+            )
+        end
     end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
@@ -970,9 +1000,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
         )
     end
 
-    if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
-        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+    if turbconv_model isa PrognosticEDMFX && !fused_edmf
+        set_prognostic_edmf_precomputed_quantities_draft!(Y, p)
+        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end

@@ -35,6 +35,7 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space), # ᶜq_icl (in surface conditions)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_CT123 = Fields.Field(CT123{FT}, face_space), # ᶠu of the implicit Smagorinsky strain rate
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜτ_smag in the implicit Smagorinsky tendency
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
     )
@@ -69,6 +70,7 @@ function temporary_quantities(Y, atmos)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp in the orographic gravity wave drag
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠK of the implicit-stage u₃ solve
+        ᶠtemp_CT123 = Fields.Field(CT123{FT}, face_space), # ᶠu in readers that apply horizontal operators to it
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
@@ -90,6 +92,10 @@ function temporary_quantities(Y, atmos)
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model) + 1, CT12{FT}},
             face_space,
         ), # ᶠω¹²ₕs, the curls of the grid-mean and draft u₃
+        ᶜtemp_C123s = Fields.Field(
+            NTuple{n_mass_flux_subdomains(atmos.turbconv_model), C123{FT}},
+            center_space,
+        ), # ᶜuʲs in the horizontal advection and hyperdiffusion
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # ᶜΔu, vertical velocity differences
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # ᶠΔu, vertical velocity differences
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate

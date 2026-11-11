@@ -213,7 +213,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ, ᶠ∂ξ³∂x³) = p.core
-    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶠu³) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
@@ -231,6 +232,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     DataLayouts.foreach_column(
         Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws,
     ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws
+        ᶠu³ = register_copy(ᶠu³)
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
 
         # Mass advection with zero flux through the top and bottom
@@ -342,7 +344,8 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     (; microphysics_model) = p.atmos
     (; energy_q_tot_upwinding) = p.atmos.numerics
     (; dt) = p
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
 
     vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))

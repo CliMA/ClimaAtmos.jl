@@ -104,7 +104,7 @@ end
         # Expected cache variables for 0-moment
         expected_vars = (
             :ᶜmp_tendency, :ᶜρ_dq_tot_dt, :ᶜρ_de_tot_dt,
-            :surface_rain_flux, :surface_snow_flux, :ᶜwₕhₜ,
+            :surface_rain_flux, :surface_snow_flux, :sfc_wₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -151,7 +151,8 @@ end
         (; Y, p) = generate_test_simulation(config)
         FT = eltype(Y)
         thp = CAP.thermodynamics_params(p.params)
-        (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
+        (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰, ᶜρʲs) = p.precomputed
+        (; ᶜTʲs) = CA.ᶜdraft_thermo_tuples(Y, p)
         (; ᶜΦ) = p.core
 
         # Only the updraft removes condensate, carrying liquid enthalpy at Tʲ.
@@ -222,7 +223,7 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :sfc_wₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -275,7 +276,7 @@ end
     #     expected_vars = (
     #         :ᶜmp_tendency,
     #         :surface_rain_flux, :surface_snow_flux,
-    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₕhₜ,
+    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :sfc_wₕhₜ,
     #     )
     #     test_precipitation_setup!(Y, p, expected_vars)
     #
@@ -321,7 +322,7 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :sfc_wₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 

@@ -103,12 +103,14 @@ velocities, and the precipitation energy flux they carry.
 Dispatches on `microphysics_model` (`NonEquilibriumMicrophysics1M`,
 `NonEquilibriumMicrophysics2M`, `NonEquilibriumMicrophysics2MP3`) and, for the
 1M and 2M schemes, on `turbconv_model::PrognosticEDMFX`; the default method
-zeroes `ᶜwₕhₜ`. Returns `nothing`.
+zeroes `sfc_wₕhₜ`. Returns `nothing`.
 
 Mutates in `p.precomputed`: the velocity fields available for the scheme (`ᶜwₗ`,
 `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ`, plus number-weighted `ᶜwₙₗ`/`ᶜwₙᵣ` for 2M and `ᶜwnᵢ`
-for P3 ice) and the precipitation energy flux `ᶜwₕhₜ`, whose surface value
-`set_precipitation_surface_fluxes!` uses for the 1M and 2M schemes.
+for P3 ice) and the precipitation energy flux per unit mass in the bottom cell,
+`sfc_wₕhₜ` (`set_bottom_precipitation_energy_flux!`), from which
+`set_precipitation_surface_fluxes!` computes the surface energy flux for the 1M
+and 2M schemes.
 
 For `PrognosticEDMFX`, the per-subdomain velocities (`ᶜwₗʲs`, `ᶜwᵢʲs`, `ᶜwᵣʲs`,
 `ᶜwₛʲs`, ...) are also computed, and the grid-mean velocities are mass-weighted
@@ -116,8 +118,21 @@ averages over the subdomains, so that the grid-scale flux equals the sum of the
 sub-grid-scale fluxes.
 """
 function set_precipitation_velocities!(Y, p, _, _)
-    (; ᶜwₕhₜ) = p.precomputed
-    @. ᶜwₕhₜ = WVec(0)
+    (; sfc_wₕhₜ) = p.precomputed
+    @. sfc_wₕhₜ = 0
+    return nothing
+end
+
+"""
+    set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, ᶜρ)
+
+Write the precipitation energy flux per unit mass in the bottom cell,
+`ρwₕhₜ / ρ` at level 1, into the level field `sfc_wₕhₜ`.
+"""
+@inline function set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, ᶜρ)
+    sfc_ρwₕhₜ = Fields.level(ᶜρwₕhₜ, 1)
+    sfc_ρ = Fields.level(ᶜρ, 1)
+    @. sfc_wₕhₜ = sfc_ρwₕhₜ / sfc_ρ
     return nothing
 end
 function set_precipitation_velocities!(
@@ -126,7 +141,7 @@ function set_precipitation_velocities!(
     microphysics_model::NonEquilibriumMicrophysics1M,
     _,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, sfc_wₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
     atmos = p.atmos
     params = p.params
@@ -167,8 +182,7 @@ function set_precipitation_velocities!(
         @. ᶜρwₕhₜ += ᶜw * ᶜρχ * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
     end
 
-    # compute their contribution to the precipitation energy flux
-    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
+    set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, Y.c.ρ)
     return nothing
 end
 function set_precipitation_velocities!(
@@ -179,9 +193,12 @@ function set_precipitation_velocities!(
 )
     (; ᶜΦ) = p.core
     (; ᶜp) = p.precomputed
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ) = p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs, ᶜuʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, sfc_wₕhₜ) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜρʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs) = ᶜdraft_thermo_tuples(Y, p)
+    ᶜstate⁰ = ᶜenv_thermo_state(Y, p)
+    ᶜu⁰ = ᶜenv_velocity(Y, p)
     # `velocity_mode` reads the terminal velocity modes from the water model, so
     # the loop does not capture the whole `p.atmos`, which is not a bits type.
     water = p.atmos.water
@@ -215,11 +232,22 @@ function set_precipitation_velocities!(
         (@name(q_sno), @name(ρq_sno)),
     )
     DataLayouts.foreach_column(
-        ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
-        Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
-    ) do ᶜw_pairs, ᶜwₕhₜ,
-    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰
-        ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), sfc_wₕhₜ,
+        Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜstate⁰, ᶜp, ᶜu⁰,
+    ) do ᶜw_pairs, sfc_wₕhₜ, Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜstate⁰, ᶜp, ᶜu⁰
+        # (register copies of the state evaluated from `Y`, which the species
+        # below read several times)
+        ᶜstate⁰ = register_copy(ᶜstate⁰)
+        ᶜTʲs_register = unrolled_map(j -> register_copy(ᶜTʲs.:($j)), draft_indices)
+        ᶜT⁰ = @. lazy(thermo_T(ᶜstate⁰))
+        ᶜρ⁰ = @. TD.air_density(
+            thp,
+            ᶜT⁰,
+            ᶜp,
+            thermo_q_tot_nonneg(ᶜstate⁰),
+            thermo_q_liq(ᶜstate⁰),
+            thermo_q_ice(ᶜstate⁰),
+        )
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
         ᶜρwₕhₜ = @. zero(Yc.ρ)
@@ -250,7 +278,7 @@ function set_precipitation_velocities!(
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
                 ᶜwʲ = ᶜwʲs.:($j)
                 ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
+                ᶜTʲ = ᶜTʲs_register.:($j)
                 ᶜuʲ = ᶜuvwʲs[j]
 
                 ᶜρaʲχʲ = @. max(zero(Yc.ρ), ᶜsgsʲ.ρa) * max(zero(Yc.ρ), ᶜχʲ)
@@ -278,7 +306,7 @@ function set_precipitation_velocities!(
             return nothing
         end
 
-        @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Yc.ρ
+        set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, Yc.ρ)
         return nothing
     end
     return nothing
@@ -289,7 +317,7 @@ function set_precipitation_velocities!(
     microphysics_model::NonEquilibriumMicrophysics2M,
     _,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, sfc_wₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     cmc = CAP.microphysics_cloud_params(p.params)
@@ -355,13 +383,13 @@ function set_precipitation_velocities!(
     )
 
     # compute their contribution to the precipitation energy flux
-    @. ᶜwₕhₜ =
-        WVec(
-            ᶜwₗ * Y.c.ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * Y.c.ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
-            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
-        ) / Y.c.ρ
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
+    @. ᶜρwₕhₜ =
+        ᶜwₗ * Y.c.ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+        ᶜwᵢ * Y.c.ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+        ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
+        ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu)))
+    set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, Y.c.ρ)
     return nothing
 end
 function set_precipitation_velocities!(
@@ -370,11 +398,14 @@ function set_precipitation_velocities!(
     microphysics_model::NonEquilibriumMicrophysics2M,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, sfc_wₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
-    (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) =
-        p.precomputed
+    (; ᶜp, ᶜρʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs) = ᶜdraft_thermo_tuples(Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+    ᶜu⁰ = ᶜenv_velocity(Y, p)
     cmc = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -708,7 +739,7 @@ function set_precipitation_velocities!(
                 )
         end
     end
-    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
+    set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, Y.c.ρ)
 
     return nothing
 end
@@ -716,7 +747,7 @@ function set_precipitation_velocities!(
     Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )
     ## liquid quantities (2M warm rain)
-    (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, sfc_wₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     (; ρ, ρq_lcl, ρn_lcl, ρq_rai, ρn_rai) = Y.c
@@ -771,12 +802,12 @@ function set_precipitation_velocities!(
     @. ᶜwᵢ = getindex(ᶜw_ice, 2)
 
     # compute their contribution to the precipitation energy flux
-    @. ᶜwₕhₜ =
-        WVec(
-            ᶜwₗ * ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-            ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))),
-        ) / ρ
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
+    @. ᶜρwₕhₜ =
+        ᶜwₗ * ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+        ᶜwᵢ * ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+        ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu)))
+    set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, ρ)
     return nothing
 end
 
@@ -965,8 +996,9 @@ function update_implicit_1m_tendency!(
     # Jacobian `-dtγ/τ`; the stage-averaged `LinearizedAverage` tendency would
     # not match that linearization.
     dt = p.dtγ
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs) = p.precomputed
+    (; ᶜρʲs, ᶜmp_tendency_implicit⁰, ᶜmp_tendency_implicitʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs) = ᶜdraft_thermo_tuples(Y, p)
 
     thp = CAP.thermodynamics_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
@@ -976,7 +1008,8 @@ function update_implicit_1m_tendency!(
     nsubs_quad = mp1m.n_substeps_quad
     mode = BMT.Instantaneous()
 
-    DataLayouts.foreach_point(
+    # (a column loop: the draft velocities interpolate `u₃` to centers)
+    DataLayouts.foreach_column(
         Y.c,
         ᶜuʲs,
         ᶜmp_tendency_implicitʲs,
@@ -1126,8 +1159,8 @@ For `EquilibriumMicrophysics0M` under EDMF, the grid-mean source is the
 area-weighted sum
 `ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰ + Σⱼ ᶜmp_tendencyʲs.:(j).dq_tot_dt * ρaʲ`.
 
-Reads the subdomain thermodynamic state (`ᶜρʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`,
-`ᶜT⁰`, ...) and, when quadrature is active, the SGS (co)variances `ᶜT′T′`,
+Reads the draft thermodynamic state (`ᶜρʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, ...),
+the environment state (`ᶜenv_thermo_fields`) and, when quadrature is active, the SGS (co)variances `ᶜT′T′`,
 `ᶜq′q′`, and `ᶜsgs_moments`. Uses `p.scratch` fields for the environment inputs.
 
 See also `set_precipitation_velocities!` and `set_precipitation_surface_fluxes!`.
@@ -1160,11 +1193,12 @@ function update_updraft_microphysics_tendency_cache!(
     Y, p, ::EquilibriumMicrophysics0M, tm::PrognosticEDMFX, dtγ,
 )
     (; ᶜΦ) = p.core
-    (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs,
-        ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜmp_tendencyʲs, ᶜρʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = ᶜdraft_thermo_tuples(Y, p)
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
-    DataLayouts.foreach_point(
+    # (a column loop: point loops cannot read the draft state evaluated from `Y`)
+    DataLayouts.foreach_column(
         ᶜmp_tendencyʲs,
         ᶜρʲs,
         ᶜTʲs,
@@ -1202,14 +1236,9 @@ function update_updraft_microphysics_tendency_cache!(
     # un-averaged rate. Immediately after the Picard loop and before Newton,
     # the field therefore holds a `LinearizedAverage` tendency; after any
     # Newton iterate it holds an `Instantaneous` tendency.
-    (;
-        ᶜmp_tendencyʲs,
-        ᶜmp_tendency_implicitʲs,
-        ᶜρʲs,
-        ᶜTʲs,
-        ᶜuʲs,
-        ᶜq_tot_nonnegʲs,
-    ) = p.precomputed
+    (; ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs, ᶜρʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs) = ᶜdraft_thermo_tuples(Y, p)
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
@@ -1218,7 +1247,8 @@ function update_updraft_microphysics_tendency_cache!(
     vcmp_i = _fold(dev, cmp_i)
     nsubs = mp1m.n_substeps
     refresh_implicit = has_implicit_1m_microphysics(p)
-    DataLayouts.foreach_point(
+    # (column loops: the draft velocities interpolate `u₃` to centers)
+    DataLayouts.foreach_column(
         ᶜmp_tendencyʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
     ) do ᶜmp_tendencyʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
         for j in 1:n_mass_flux_subdomains(tm)
@@ -1231,7 +1261,7 @@ function update_updraft_microphysics_tendency_cache!(
             )
         end
     end
-    refresh_implicit && DataLayouts.foreach_point(
+    refresh_implicit && DataLayouts.foreach_column(
         ᶜmp_tendency_implicitʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
     ) do ᶜmp_tendency_implicitʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
         for j in 1:n_mass_flux_subdomains(tm)
@@ -1294,13 +1324,15 @@ function set_microphysics_tendency_cache!(
     (; ᶜp) = p.precomputed
 
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = ᶜdraft_thermo_tuples(Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
 
-    DataLayouts.foreach_point(
+    # (a column loop: point loops cannot read the draft state evaluated from `Y`)
+    DataLayouts.foreach_column(
         ᶜmp_tendencyʲs,
         ᶜρʲs,
         ᶜTʲs,
@@ -1412,7 +1444,9 @@ function set_microphysics_tendency_cache!(
     # is refreshed per Newton iterate by `set_implicit_precomputed_quantities!`
     # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs) = ᶜdraft_thermo_tuples(Y, p)
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -1423,7 +1457,8 @@ function set_microphysics_tendency_cache!(
     nsubs_quad = mp1m.n_substeps_quad
 
     ### Updraft contribution
-    DataLayouts.foreach_point(
+    # (a column loop: the draft velocities interpolate `u₃` to centers)
+    DataLayouts.foreach_column(
         Y.c,
         ᶜuʲs,
         ᶜmp_tendencyʲs,
@@ -1530,8 +1565,11 @@ function set_microphysics_tendency_cache!(
     pap = p.params.prescribed_aerosol_params
 
 
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜp, ᶜρʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs) = ᶜdraft_thermo_tuples(Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+    ᶜu⁰ = ᶜenv_velocity(Y, p)
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     # Get prescribed aerosol concentrations
@@ -1735,7 +1773,7 @@ function set_precipitation_surface_fluxes!(
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -1755,7 +1793,7 @@ function set_precipitation_surface_fluxes!(
     sfc_wₛ = sfc_lev(ᶜwₛ)
     sfc_wₗ = sfc_lev(ᶜwₗ)
     sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
+    sfc_wₕhₜ = Fields.Field(Fields.field_values(p.precomputed.sfc_wₕhₜ), sfc_space)
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     @. surface_rain_flux =

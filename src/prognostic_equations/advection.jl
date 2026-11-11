@@ -57,7 +57,7 @@ Increments (with a minus sign on each flux divergence):
   - Every auto-discovered SGS tracer in `Yₜ.c.sgsʲs.:(j)` (microphysics species and
     user-defined passive tracers, from `sgs_tracer_names`), also in advective form.
 
-Reads `Y.c`, the precomputed velocities `ᶜu` (and `ᶜuʲs` for `PrognosticEDMFX`) from
+Reads `Y.c`, the precomputed velocity `ᶜu` (and the draft velocities for `PrognosticEDMFX`) from
 `p`, in the slab loop of `horizontal_advection_tendency!`. `t` is unused. Called
 from `remaining_tendency!` (through `horizontal_advection_tendency!`) with the
 limited tendency vector `Yₜ_lim`, so these tendencies pass through the tracer
@@ -83,7 +83,10 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     cp_d = thermo_params.cp_d
     # The vertical vorticity vanishes on 2D spaces.
     is_3d = Val(eltype(Fields.coordinate_field(Y.c)) <: Geometry.Abstract3DPoint)
-    ᶜuʲs = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜuʲs : ()
+    # (materialized: the slab loop below applies horizontal operators to them)
+    ᶜuʲs =
+        turbconv_model isa PrognosticEDMFX ?
+        set_draft_velocities!(p.scratch.ᶜtemp_C123s, Y, p) : ()
     # An absent tendency vector, and the inputs that only its tendencies read,
     # are empty tuples.
     Yₜc = isnothing(Yₜ) ? () : Yₜ.c
@@ -171,7 +174,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 """
-    ᶜρq_tot_vertical_transport_bc(flow, thermo_params, t, ᶠu³)
+    ᶜρq_tot_vertical_transport_bc(flow, thermo_params, t, ᶠu₃)
 
 Return the `ρq_tot` tendency from the prescribed surface moisture flux of a
 `PrescribedFlow` configuration.
@@ -185,8 +188,7 @@ surface is affected.
   - `flow`: The prescribed flow model (`PrescribedFlow`), or `nothing` for no effect.
   - `thermo_params`: Thermodynamic parameters, needed to compute surface air density.
   - `t`: Current simulation time.
-  - `ᶠu³`: Face contravariant vertical velocity field (used only for its space and
-    element type).
+  - `ᶠu₃`: Face covariant vertical velocity field (used only for its space).
 
 # Returns
 
@@ -194,10 +196,10 @@ A lazy broadcast with the surface vertical-transport tendency of `ρq_tot`, or a
 `NullBroadcasted()` when `flow` is `nothing`.
 """
 ᶜρq_tot_vertical_transport_bc(::Nothing, _, _, _) = NullBroadcasted()
-@inline function ᶜρq_tot_vertical_transport_bc(flow::PrescribedFlow, thermo_params, t, ᶠu³)
+@inline function ᶜρq_tot_vertical_transport_bc(flow::PrescribedFlow, thermo_params, t, ᶠu₃)
     ρu₃qₜ_sfc_bc = get_ρu₃qₜ_surface(flow, thermo_params, t)
     ᶜadvdivᵥ = Operators.DivergenceF2C(; bottom = Operators.SetValue(ρu₃qₜ_sfc_bc))
-    return @. lazy(-(ᶜadvdivᵥ(zero(ᶠu³))))
+    return @. lazy(-(ᶜadvdivᵥ(zero(CT3(ᶠu₃)))))
 end
 
 """
@@ -227,8 +229,9 @@ Increments:
     `p.atmos.numerics.edmfx_mse_q_tot_upwinding` scheme, when the
     turbulence-convection model carries prognostic TKE.
 
-Reads `Y`, the core field `ᶠf¹²`, the precomputed `ᶜu`, `ᶠu³`, `ᶜK` (and
-`ᶜuʲs`, `ᶜKʲs`, `ᶠKᵥʲs` for prognostic updrafts), and scratch space. Called from
+Reads `Y`, the core field `ᶠf¹²`, the precomputed `ᶜu`, `ᶠu³`, and `ᶜK`, the
+draft velocities evaluated from `Y` (`compute_ᶠu³` and `ᶜdraft_velocities`, for
+prognostic updrafts), and scratch space. Called from
 `remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
@@ -239,10 +242,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠf¹²) = p.core
-    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
+    (; ᶜu, ᶜK) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; edmfx_mse_q_tot_upwinding) =
         n > 0 || use_prognostic_tke(turbconv_model) ? p.atmos.numerics : all_nothing
-    (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
     (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
@@ -264,7 +268,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
-            ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
+            ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, Y.f.u₃)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
@@ -278,7 +282,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     )
     drafts = ntuple(
         j -> (
-            getproperty(ᶠω¹²ₕs, j + 1), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j),
+            getproperty(ᶠω¹²ₕs, j + 1), ᶜuʲs.:($j), Y.f.sgsʲs.:($j).u₃,
             Yₜ.f.sgsʲs.:($j).u₃,
         ),
         n_val,
@@ -314,8 +318,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜu¹² = @. CT12(ᶜu)
         @. Yₜc.uₕ -= ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ)
         @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
-        for (ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ) in drafts
-            (ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ) = register_copy((ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ))
+        for (ᶠω¹²ₕʲ, ᶜuʲ, ᶠu₃ʲ, ᶠu₃ʲₜ) in drafts
+            (ᶠω¹²ₕʲ, ᶜuʲ, ᶠu₃ʲ) = register_copy((ᶠω¹²ₕʲ, ᶜuʲ, ᶠu₃ʲ))
+            # The draft kinetic energy and its vertical part at faces.
+            ᶜKʲ = compute_kinetic(Yc.uₕ, ᶠu₃ʲ)
+            ᶠKᵥʲ = @inline @. lazy((adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2)
             ᶠω¹²ʲ = @inline @. lazy(ᶠcurlᵥuₕ + ᶠω¹²ₕʲ)
             ᶠω¹²ʲ_tot = ᶠf¹² === () ? ᶠω¹²ʲ : (@inline @. lazy(ᶠf¹² + ᶠω¹²ʲ))
             @. ᶠu₃ʲₜ -=
@@ -358,7 +365,8 @@ The fallback method is a no-op for turbulence-convection models other than
     every SGS tracer also receive the dilution `-χ Σ_μ vtt_μ / ρaʲ` by the
     sedimented mass. This path supports a single updraft.
 
-Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, `ᶜTʲs`, `ᶜT⁰`, and
+Reads `Y`, the precomputed `ᶜρʲs` and `ᶜρ_diffʲs`, the draft and environment
+temperatures (`ᶜdraft_thermo_tuples`, `ᶜenv_thermo_fields`), and
 sedimentation velocities, and the core fields `ᶜgradᵥ_ᶠΦ` and `ᶜΦ`, in one
 column loop for every updraft. `t` is unused. See the "PROPHET: Overview and
 Equations" page (`docs/src/prophet.md`) for the continuous equations. Returns
@@ -375,7 +383,9 @@ function edmfx_sgs_vertical_advection_tendency!(
 )
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
+    (; ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
+    (; ᶜTʲs) = ᶜdraft_thermo_tuples(Y, p)
+    (; ᶜT⁰) = ᶜenv_thermo_fields(Y, p)
     (; ᶜgradᵥ_ᶠΦ, ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; microphysics_model) = p.atmos
 
@@ -429,8 +439,9 @@ function edmfx_sgs_vertical_advection_tendency!(
     drafts = unrolled_map(StaticOneTo(n)) do j
         @inline
         (
-            Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶠu³ʲs.:($j),
-            ᶜρ_diffʲs.:($j), ᶜρʲs.:($j), ᶜTʲs.:($j),
+            Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃,
+            compute_ᶠu³(Y.c.uₕ, Y.c.ρ, Y.f.sgsʲs.:($j).u₃), ᶜρ_diffʲs.:($j),
+            ᶜρʲs.:($j), ᶜTʲs.:($j),
         )
     end
     # One fused column loop for every updraft: buoyancy, vertical advection of
@@ -440,7 +451,12 @@ function edmfx_sgs_vertical_advection_tendency!(
         drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c,
         ᶜw_pairs(mass_sedimentation), ᶜw_pairs(number_sedimentation),
     ) do drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Yc, ᶜw_mass, ᶜw_number
-        for (ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜρʲ, ᶜTʲ) in drafts
+        ᶜT⁰ = register_copy(ᶜT⁰)
+        for (ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ_lazy, ᶜρ_diffʲ, ᶜρʲ, ᶜTʲ_lazy) in drafts
+            # Register copies of the values evaluated from `Y` that the species
+            # below read
+            ᶠu³ʲ = register_copy(ᶠu³ʲ_lazy)
+            ᶜTʲ = register_copy(ᶜTʲ_lazy)
             @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
 
             va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_q_tot_upwinding)
@@ -460,7 +476,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             isempty(ᶜw_mass) && continue
 
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
-            ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
+            ᶠJ = Fields.local_geometry_field(axes(ᶠu₃ʲ)).J
             ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
             ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))

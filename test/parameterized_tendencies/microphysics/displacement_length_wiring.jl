@@ -43,8 +43,7 @@ bomex_column_config(job_id, tomls) = CA.AtmosConfig(
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
     CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
 
-    (; ᶜq′q′, ᶜl_mix, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_q_tot, ᶜq_tot_nonneg) =
-        p.precomputed
+    (; ᶜq′q′, ᶜl_mix, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜq_tot_nonneg) = p.precomputed
     (; ᶜq_tot_nonneg⁰) = p.precomputed
     q′q′ = copy(ᶜq′q′)
     l_mix = copy(ᶜl_mix)
@@ -71,9 +70,8 @@ bomex_column_config(job_id, tomls) = CA.AtmosConfig(
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
-    ᶜlg = Fields.local_geometry_field(Y.c)
     ∂q∂z = similar(l_mix)
-    @. ∂q∂z = CA.projected_vector_data(CA.C3, ᶜgradᵥ_q_tot, ᶜlg)
+    ∂q∂z .= CA.ᶜVanLeer_gradient(ᶠ∂qt∂z)
 
     # Expected `q′q′` for a given `κ_b / tke`, through `l_mix_disp` and `l_d`.
     function expected_q′q′(κ_b_per_tke)

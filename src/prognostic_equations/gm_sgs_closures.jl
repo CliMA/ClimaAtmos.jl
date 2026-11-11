@@ -51,16 +51,16 @@ in `p.scratch.ᶜtemp_scalar`).
 
 Used when no EDMFX model with prognostic TKE is active. Steps:
 
- 1. Fill `p.precomputed.ᶜbuoygrad` with the cloud-fraction-blended moist
-    buoyancy gradient (`blended_N²`, using the chain-rule coefficients
-    and face gradients materialized by `set_buoyancy_gradient_inputs!`).
+ 1. Evaluate the cloud-fraction-blended moist buoyancy gradient
+    (`ᶜbuoyancy_gradient`, from the chain-rule coefficients and face gradients
+    materialized by `set_buoyancy_gradient_inputs!`).
  2. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared norm of the
     vertical shear of the horizontal wind, `|∂uₕ/∂z|² / 2`
     (`set_strain_rate_norm!`).
  3. Evaluate the turbulent Prandtl number and
     `smagorinsky_lilly_length` with the vertical grid scale `ᶜdz`.
 
-Mutates `ᶜbuoygrad` and `ᶜstrain_rate_norm` in `p.precomputed`,
+Mutates `ᶜstrain_rate_norm` in `p.precomputed`,
 and uses `p.scratch` fields (including the returned `ᶜtemp_scalar`) for
 intermediates.
 """
@@ -68,19 +68,11 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     (; params) = p
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜbuoygrad, ᶜstrain_rate_norm, ᶜcloud_fraction) = p.precomputed
-
-    # Chain-rule coefficients and face gradients are materialized once per
-    # update by `set_buoyancy_gradient_inputs!` (called before the
-    # cloud-fraction Picard iteration); see `blended_N²`.
-    (; ᶜbg_coeffs) = p.precomputed
-    @. ᶜbuoygrad = blended_N²(
-        ᶜbg_coeffs,
-        ᶜcloud_fraction,
-        projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg),
-        projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg),
-    )
+    (; ᶜstrain_rate_norm) = p.precomputed
+    # (chain-rule coefficients and face gradients materialized once per update
+    # by `set_buoyancy_gradient_inputs!`, before the cloud-fraction Picard
+    # iteration)
+    ᶜbuoygrad = ᶜbuoyancy_gradient(p)
 
     set_strain_rate_norm!(Y, p)
 

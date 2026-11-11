@@ -149,9 +149,9 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρʲ = cache.precomputed.ᶜρʲs.:1
-    ᶜTʲ = cache.precomputed.ᶜTʲs.:1
-    ᶜwʲ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
-    ᶜq_totʲ = cache.precomputed.ᶜq_tot_nonnegʲs.:1
+    ᶜTʲ = ᶜdraft_thermo_tuples(state, cache).ᶜTʲs.:1
+    ᶜwʲ = @. lazy(w_component(Geometry.WVector($(ᶜdraft_velocities(state, cache)[1]))))
+    ᶜq_totʲ = ᶜdraft_thermo_tuples(state, cache).ᶜq_tot_nonnegʲs.:1
     ᶜq_lclʲ = (state.c.sgsʲs.:1).q_lcl
     ᶜq_iclʲ = (state.c.sgsʲs.:1).q_icl
     ᶜq_raiʲ = (state.c.sgsʲs.:1).q_rai
@@ -196,11 +196,12 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     cmp = CAP.microphysics_1m_params(cache.params)
     cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
-    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    (; ᶜp) = cache.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(state, cache)
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
-    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector($(ᶜenv_velocity(state, cache)))))
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state, cache)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)

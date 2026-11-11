@@ -827,7 +827,7 @@ Singleton whose every property is `nothing`.
 
 The instance `all_nothing` stands in for a cache or configuration section that
 is absent, so that a destructuring assignment such as
-`(; ᶜuʲs) = n > 0 ? p.precomputed : all_nothing` stays type-stable and binds
+`(; ᶜρʲs) = n > 0 ? p.precomputed : all_nothing` stays type-stable and binds
 `nothing` when the section does not exist.
 """
 struct AllNothing end

@@ -445,11 +445,8 @@ share:
     `buoyancy_gradient_coefficients` (all of the expensive
     saturation thermodynamics lives here);
   - `p.precomputed.ᶠ∂θli∂z`, `p.precomputed.ᶠ∂qt∂z`: exact two-point face
-    gradients of `θ_li` and `q_tot`, projected to physical scalars;
-  - `p.precomputed.ᶜgradᵥ_θ_liq_ice`, `p.precomputed.ᶜgradᵥ_q_tot`: the
-    corresponding centered gradients, obtained by applying the Van Leer
-    harmonic-mean limiter (`ᶜVanLeer_gradient!`) to the physical face
-    gradients and stored as `Covariant3Vector`s.
+    gradients of `θ_li` and `q_tot`, projected to physical scalars. Readers
+    evaluate the centered gradients from them (`ᶜVanLeer_gradient`).
 
 The centered and face-native (`set_face_diffusivities!`) buoyancy gradients
 then reduce to
@@ -462,13 +459,13 @@ Mutates `p.precomputed`, and also writes `θ_li` to `p.scratch.ᶜtemp_scalar` i
 `store_θ_li`; returns `nothing`.
 """
 NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params, store_θ_li)
-    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) = p.precomputed
+    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶠlg = Fields.local_geometry_field(Y.f)
     DataLayouts.foreach_column(
-        ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, p.scratch.ᶜtemp_scalar,
+        ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, p.scratch.ᶜtemp_scalar,
         Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠlg,
-    ) do ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜθ_li,
+    ) do ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜθ_li,
     ᶜρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶠlg
         (ᶜρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) =
             register_copy((ᶜρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
@@ -484,31 +481,26 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params, store
         store_θ_li && @. ᶜθ_li = ᶜθ_li_reg
         @. ᶠ∂θli∂z = projected_c3_data(ᶠgradᵥ(ᶜθ_li_reg), ᶠlg)
         @. ᶠ∂qt∂z = projected_c3_data(ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
-        ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z)
-        ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
         return nothing
     end
     return nothing
 end
 
 """
-    ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+    ᶜVanLeer_gradient(ᶠ∂ψ∂z)
 
-Write the Van Leer-limited vertical gradient of a center scalar field,
-derived from the already-materialized physical face gradient `ᶠ∂ψ∂z`, into
-the `Covariant3Vector` center field `ᶜout`. At each center the two adjacent
-*physical* face gradients are combined using the harmonic-mean limiter
-`2ab/(a+b)` (zero when they differ in sign), and the result is converted
-back into the covariant basis.
+Return a lazy center field of the Van Leer-limited vertical gradient of a
+center scalar field, in physical units, from its physical face gradient
+`ᶠ∂ψ∂z`. At each center the two adjacent face gradients are combined using the
+harmonic-mean limiter `2ab/(a+b)` (zero when they differ in sign).
 
 For the bottom and top cells, the center gradient is taken from the adjacent
 interior face gradient rather than blending the gradients at the two bounding
 faces, since the boundary face gradients are imposed by the zero-gradient BC
 and do not represent the physical slope.
 """
-function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
-    ᶜlg = Fields.local_geometry_field(axes(ᶜout))
-    nc = Spaces.nlevels(axes(ᶜout))
+function ᶜVanLeer_gradient(ᶠ∂ψ∂z)
+    nc = Spaces.nlevels(axes(ᶠ∂ψ∂z)) - 1
     # At the domain boundaries, `ᶠ∂ψ∂z` carries `ᶠgradᵥ`'s zero-gradient BC
     # (it is not the physical slope). Override via `SetValue` so the
     # bottom (top) center's bias returns the first (last) *interior* face
@@ -523,10 +515,22 @@ function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
             Fields.level(ᶠ∂ψ∂z, nc - Fields.half),
         ),
     )
-    @. ᶜout = Geometry.Covariant3Vector(
-        harmonic_mean(ᶜbias_below(ᶠ∂ψ∂z), ᶜbias_above(ᶠ∂ψ∂z)) * unit_c3_data(ᶜlg),
-    )
-    return nothing
+    return @. lazy(harmonic_mean(ᶜbias_below(ᶠ∂ψ∂z), ᶜbias_above(ᶠ∂ψ∂z)))
+end
+
+"""
+    ᶜbuoyancy_gradient(p)
+
+Return a lazy center field of the moist buoyancy gradient `N²` [1/s²]
+(`blended_N²`), from the precomputed chain-rule coefficients `ᶜbg_coeffs`, the
+cloud fraction, and the centered gradients of `θ_li` and `q_tot`
+(`ᶜVanLeer_gradient`). It is the centered counterpart of the face `ᶠbuoygrad`.
+"""
+function ᶜbuoyancy_gradient(p)
+    (; ᶜbg_coeffs, ᶜcloud_fraction, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
+    ᶜ∂θ∂z = ᶜVanLeer_gradient(ᶠ∂θli∂z)
+    ᶜ∂q∂z = ᶜVanLeer_gradient(ᶠ∂qt∂z)
+    return @. lazy(blended_N²(ᶜbg_coeffs, ᶜcloud_fraction, ᶜ∂θ∂z, ᶜ∂q∂z))
 end
 
 """
@@ -561,7 +565,7 @@ nearly neutral and the other carries the inversion jump), while using the dry
 coefficients keeps the moist latent-heat reduction (`cf ΔCθ < 0`) at cloud base
 from weakening the stratification barrier. At the domain boundaries, where
 `ᶠgradᵥ` imposes a zero-gradient BC, the adjacent interior face gradient is used
-via `SetValue`, matching `ᶜVanLeer_gradient!`.
+via `SetValue`, matching `ᶜVanLeer_gradient`.
 """
 function set_displacement_buoyancy_gradient!(
     ᶜN²_disp,
@@ -601,7 +605,8 @@ and the mixing lengths for both the EDMF and the grid-mean closures.
 Reads `ᶠu³` from `p.precomputed`; returns `nothing`.
 """
 function set_strain_rate_norm!(Y, p)
-    (; ᶠu³, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜstrain_rate_norm) = p.precomputed
+    (; ᶠu³) = p.precomputed
     DataLayouts.foreach_column(
         ᶜstrain_rate_norm, Y.c.uₕ, ᶠu³,
     ) do ᶜstrain_rate_norm, ᶜuₕ, ᶠu³
@@ -755,7 +760,8 @@ function ᶜmixing_length(
     # Centered buoyancy gradient feeds both `l_N` and Pr_t(Ri), and the TKE
     # production-dissipation balance for `l_TKE` (consistent with the actual
     # TKE budget).
-    (; ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜstrain_rate_norm) = p.precomputed
+    ᶜbuoygrad = ᶜbuoyancy_gradient(p)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔ_f = grid_scale
@@ -804,7 +810,8 @@ horizontal node spacing, `l_h = min(l_phys, Δx_h)`.
 """
 function set_horizontal_diffusivities!(Y, p)
     (; params) = p
-    (; ᶜK_u_h, ᶜK_h_h, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜK_u_h, ᶜK_h_h, ᶜstrain_rate_norm) = p.precomputed
+    ᶜbuoygrad = ᶜbuoyancy_gradient(p)
     turbconv_params = CAP.turbconv_params(params)
     Δx_h = horizontal_filter_scale(axes(Y.c))
     ᶜl_h = ᶜmixing_length(Y, p; grid_scale = Δx_h)

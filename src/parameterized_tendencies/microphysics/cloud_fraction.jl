@@ -25,15 +25,15 @@ computed iterates. Otherwise, the second Picard iterate is retained.
 For reproducible restart, the initial cloud fraction is first recomputed using
 `GridScaleCloud()` so that the starting iterate is deterministic.
 
-Note: Vertical gradients (`ᶜgradᵥ_q_tot`, `ᶜgradᵥ_θ_liq_ice`) are always computed
+Note: Vertical gradients (`ᶠ∂qt∂z`, `ᶠ∂θli∂z`) are always computed
 from grid-mean variables. Ideally PrognosticEDMFX would use environmental
 gradients since the covariances represent sub-grid fluctuations within the
 environment, but this is a current approximation.
 """
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model, turbconv_model) = p.atmos
-    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbuoygrad, ᶜbg_coeffs, ᶜq_tot_nonneg) = p.precomputed
+    (; ᶜcloud_fraction) = p.precomputed
+    (; ᶜq_tot_nonneg) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
 
     # Materialize the pointwise buoyancy-gradient chain-rule coefficients,
@@ -109,17 +109,6 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     end
     picard_step!(Val(false))
     picard_step!(Val(true))
-
-    # TODO: Under `AbstractEDMF`, write `ᶜbuoygrad` and `ᶜl_mix` in one column loop.
-    if !uses_covariances(p.atmos)
-        ᶜlg = Fields.local_geometry_field(Y.c)
-        @. ᶜbuoygrad = blended_N²(
-            ᶜbg_coeffs,
-            ᶜcloud_fraction,
-            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
-        )
-    end
 
     # Final post-Aitken covariance, then, for the 1M and 2M schemes, the SGS
     # moments, the cloud fraction consistent with them, and the precipitation
@@ -508,7 +497,7 @@ enforces.
 Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
 
  1. The mixing length: under `AbstractEDMF`, `ᶜl_mix` is refreshed in the loop
-    (with `ᶜbuoygrad` first); otherwise the grid-mean mixing length is passed
+    (from the moist buoyancy gradient, a loop temporary); otherwise the grid-mean mixing length is passed
     in.
  2. The displacement length `l_d` (`displacement_length`) of the buoyancy-bounded
     mixing length (`buoyancy_bounded_mixing_length`; `l_mix` without TKE) and the
@@ -583,11 +572,8 @@ function set_covariance_cache!(
         ᶜT′T′,
         ᶜq′q′,
         ᶜcorr_Tq,
-        ᶜgradᵥ_q_tot,
-        ᶜgradᵥ_θ_liq_ice,
         ᶠ∂θli∂z,
         ᶠ∂qt∂z,
-        ᶜbuoygrad,
         ᶜbg_coeffs,
         ᶜcloud_fraction,
     ) = p.precomputed
@@ -622,7 +608,6 @@ function set_covariance_cache!(
     turbconv_model = p.atmos.turbconv_model
     is_edmf = turbconv_model isa AbstractEDMF
     if !is_edmf
-        # Refreshes `ᶜbuoygrad` (`blended_N²`) from the current cloud fraction.
         ᶜl_mix = compute_gm_mixing_length(Y, p)
     else
         ᶜl_mix = p.precomputed.ᶜl_mix
@@ -693,9 +678,8 @@ function set_covariance_cache!(
 
     _set_covariance_cache_loop!(
         Y, thermo_params,
-        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
-        ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
-        ᶠ∂θli∂z, ᶠ∂qt∂z,
+        ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+        ᶜbg_coeffs, ᶜcloud_fraction, ᶠ∂θli∂z, ᶠ∂qt∂z,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
@@ -716,9 +700,8 @@ end
 
 function _set_covariance_cache_loop!(
     Y, thermo_params,
-    ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
-    ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
-    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    ᶜbg_coeffs, ᶜcloud_fraction, ᶠ∂θli∂z, ᶠ∂qt∂z,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm,
@@ -744,15 +727,13 @@ function _set_covariance_cache_loop!(
     val_master = Val{:master}()
     # (outputs in one container: a loop over more than 31 arguments would not infer)
     DataLayouts.foreach_column(
-        (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
-        Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
-        ᶠ∂θli∂z, ᶠ∂qt∂z,
+        (; ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+        Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶠ∂θli∂z, ᶠ∂qt∂z,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
-    ) do (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
-    Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
-    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ) do (; ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+    Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶠ∂θli∂z, ᶠ∂qt∂z,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm
@@ -762,15 +743,26 @@ function _set_covariance_cache_loop!(
             has_tke ?
             (lazy.(specific.(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
             zero_FT
+        # Biased face-to-center operators that take the adjacent interior face
+        # gradient at the bottom and top cells (as in `ᶜVanLeer_gradient`).
+        nc = Spaces.nlevels(axes(ᶜcloud_fraction))
+        ᶜθ_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+        )
+        ᶜθ_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+        )
+        ᶜq_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+        )
+        ᶜq_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+        )
+        # Van Leer centered gradients
+        ᶜ∂θ∂z = @. harmonic_mean(ᶜθ_below(ᶠ∂θli∂z), ᶜθ_above(ᶠ∂θli∂z))
+        ᶜ∂q∂z = @. harmonic_mean(ᶜq_below(ᶠ∂qt∂z), ᶜq_above(ᶠ∂qt∂z))
         if is_edmf
-            @. ᶜbuoygrad = blended_N²(
-                ᶜbg_coeffs,
-                ᶜcloud_fraction,
-                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
-            )
-        end
-        if is_edmf
+            ᶜbuoygrad = @. blended_N²(ᶜbg_coeffs, ᶜcloud_fraction, ᶜ∂θ∂z, ᶜ∂q∂z)
             ᶜprandtl_nvec = @inline @. lazy(
                 turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm),
             )
@@ -795,19 +787,6 @@ function _set_covariance_cache_loop!(
             @. ᶜl_mix = get_mixing_length_field(ᶜml, val_master)
         end
 
-        nc = Spaces.nlevels(axes(ᶜbuoygrad))
-        ᶜθ_below = Operators.BottomBiasedF2C(
-            bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
-        )
-        ᶜθ_above = Operators.TopBiasedF2C(
-            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
-        )
-        ᶜq_below = Operators.BottomBiasedF2C(
-            bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
-        )
-        ᶜq_above = Operators.TopBiasedF2C(
-            top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
-        )
         ᶜN²_disp = @. max(
             dry_N²(ᶜbg_coeffs, ᶜθ_below(ᶠ∂θli∂z), ᶜq_below(ᶠ∂qt∂z)),
             dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
@@ -844,8 +823,6 @@ function _set_covariance_cache_loop!(
         ᶜℓ_v_q² = @inline @. lazy(2 * c_σ * ᶜl_d^2)
         ᶜℓ_v_θ² = @inline @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
         ᶜℓ_v_θq = @inline @. lazy(r_v_θ * ᶜℓ_v_q²)
-        ᶜ∂q∂z = @inline @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
-        ᶜ∂θ∂z = @inline @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
 
         # The Jacobian at the mean state of the domain that carries the SGS
         # closure, with its total water and cloud condensate.
@@ -1995,7 +1972,7 @@ updraft, `draft_area(ρaʲ, ρʲ)` times its cover `_updraft_cloud_fraction`. Th
 cover is binary under equilibrium microphysics. Under non-equilibrium
 microphysics it is the truncated-Gaussian cover against the updraft vapor
 subsaturation deficit, floored by `σ_abs`, of the prognostic cloud condensate
-`q_lclʲ + q_iclʲ` (the cached `ᶜq_liqʲs` and `ᶜq_iceʲs` include
+`q_lclʲ + q_iclʲ` (the condensate of the draft state includes
 precipitation). No-op without `PrognosticEDMFX`. The draft fields come from
 `_edmf_weighting_fields`.
 """
@@ -2009,26 +1986,14 @@ precipitation). No-op without `PrognosticEDMFX`. The draft fields come from
 )
     ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
     @. ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ_env)
-    is_noneq = microphysics_model isa NonEquilibriumMicrophysics
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜsgsʲ = Yc.sgsʲs.:($j)
-        ᶜq_lclʲ, ᶜq_iclʲ =
-            is_noneq ? (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl) :
-            (drafts.ᶜq_liqʲs.:($j), drafts.ᶜq_iceʲs.:($j))
+        ᶜρʲ = drafts.ᶜρʲs.:($j)
+        ᶜstateʲ = drafts.ᶜstateʲs.:($j)
         @. ᶜcloud_fraction +=
-            draft_area(ᶜsgsʲ.ρa, drafts.ᶜρʲs.:($$j)) * _updraft_cloud_fraction(
-                thermo_params,
-                drafts.ᶜTʲs.:($$j),
-                drafts.ᶜρʲs.:($$j),
-                drafts.ᶜq_tot_nonnegʲs.:($$j),
-                drafts.ᶜq_liqʲs.:($$j),
-                drafts.ᶜq_iceʲs.:($$j),
-                ᶜq_lclʲ,
-                ᶜq_iclʲ,
-                σ_abs,
-                microphysics_model,
+            draft_area(ᶜsgsʲ.ρa, ᶜρʲ) * _updraft_state_cloud_fraction(
+                thermo_params, ᶜstateʲ, ᶜρʲ, ᶜsgsʲ, σ_abs, microphysics_model,
             )
-        return nothing
     end
     return nothing
 end
@@ -2110,13 +2075,42 @@ end
     )
 end
 
-# The draft densities, temperatures, total water and condensate that the EDMF
-# cloud weighting reads in fused loops.
+# The draft densities and thermodynamic states (`ᶜdraft_thermo_state`) that the
+# EDMF cloud weighting reads in fused loops.
 function _edmf_weighting_fields(Y, p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return (;)
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-    return (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs)
+    n_val = Val(n_mass_flux_subdomains(p.atmos.turbconv_model))
+    return (;
+        p.precomputed.ᶜρʲs,
+        ᶜstateʲs = ntuple(j -> ᶜdraft_thermo_state(Y, p, j), n_val),
+    )
 end
+
+"""
+    _updraft_state_cloud_fraction(
+        thermo_params, stateʲ, ρʲ, sgsʲ, σ_abs, microphysics_model,
+    )
+
+`_updraft_cloud_fraction` of an updraft at one point, from its thermodynamic state
+`stateʲ` (`draft_thermo_state`), density `ρʲ`, and prognostic variables `sgsʲ`. The
+cloud condensate is the prognostic `q_lclʲ` and `q_iclʲ` with non-equilibrium
+microphysics, and the condensate of `stateʲ` otherwise. Each point evaluates the
+state once.
+"""
+@inline function _updraft_state_cloud_fraction(
+    thermo_params, stateʲ, ρʲ, sgsʲ, σ_abs, microphysics_model,
+)
+    (q_lclʲ, q_iclʲ) = _updraft_point_condensate(sgsʲ, stateʲ, microphysics_model)
+    return _updraft_cloud_fraction(
+        thermo_params, thermo_T(stateʲ), ρʲ, thermo_q_tot_nonneg(stateʲ),
+        thermo_q_liq(stateʲ), thermo_q_ice(stateʲ), q_lclʲ, q_iclʲ, σ_abs,
+        microphysics_model,
+    )
+end
+@inline _updraft_point_condensate(sgsʲ, _, ::NonEquilibriumMicrophysics) =
+    (sgsʲ.q_lcl, sgsʲ.q_icl)
+@inline _updraft_point_condensate(_, stateʲ, _) =
+    (thermo_q_liq(stateʲ), thermo_q_ice(stateʲ))
 
 """
     set_precip_fraction!(Y, p)
@@ -2332,12 +2326,13 @@ end
 # ============================================================================
 
 """
-    _env_air_density(p, thermo_params)
+    _env_air_density(Y, p, thermo_params)
 
 Lazy environment air density `ᶜρ⁰` [kg/m³] for `PrognosticEDMFX`.
 """
-function _env_air_density(p, thermo_params)
-    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+function _env_air_density(Y, p, thermo_params)
+    (; ᶜp) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
     return @. lazy(
         TD.air_density(
             thermo_params,
@@ -2357,7 +2352,7 @@ Environment area fraction `ᶜa⁰` [-] for `PrognosticEDMFX`, or `1` otherwise.
 """
 function _env_area_fraction(Y, p, thermo_params, turbconv_model::PrognosticEDMFX)
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    ᶜρ⁰ = _env_air_density(p, thermo_params)
+    ᶜρ⁰ = _env_air_density(Y, p, thermo_params)
     return @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
 end
 _env_area_fraction(Y, p, thermo_params, turbconv_model) = one(eltype(p.params))
@@ -2375,8 +2370,8 @@ Jacobian are all evaluated at this state (`cloud_env_state`).
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰) = p.precomputed
-        ᶜρ_env = _env_air_density(p, thermo_params)
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰) = ᶜenv_thermo_fields(Y, p)
+        ᶜρ_env = _env_air_density(Y, p, thermo_params)
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
         return Y.c.ρ, ᶜT, ᶜq_tot_nonneg
@@ -2398,8 +2393,8 @@ function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = _env_air_density(p, thermo_params)
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+        ᶜρ_env = _env_air_density(Y, p, thermo_params)
         ᶜT_mean = ᶜT⁰
         ᶜq_mean = ᶜq_tot_nonneg⁰
         ᶜθ_mean = @. lazy(
@@ -2456,15 +2451,17 @@ _get_condensate_means(Y, p, turbconv_model, microphysics_model) =
 
 Environment cloud condensate `(ᶜq_lcl⁰, ᶜq_icl⁰)` for PrognosticEDMFX. With
 non-equilibrium microphysics, uses the environment cloud condensate only; the
-precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q_sno⁰`),
+environment `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q_sno⁰`),
 which should not count as cloud.
 """
 _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
     (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
     (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
 )
-_env_cloud_condensate(Y, p, microphysics_model) =
-    (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
+function _env_cloud_condensate(Y, p, microphysics_model)
+    (; ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+    return (ᶜq_liq⁰, ᶜq_ice⁰)
+end
 
 """
     _get_precip_mean(Y, p, turbconv_model, microphysics_model)
@@ -2500,13 +2497,13 @@ _env_precipitation(Y, p, microphysics_model) = zero(eltype(p.params))
 
 Cloud condensate of updraft `j`, used by `_updraft_cloud_fraction`.
 With non-equilibrium microphysics, uses the prognostic cloud condensate
-(`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
+(`q_lclʲ`, `q_iclʲ`) only; the draft `ᶜq_liqʲs` / `ᶜq_iceʲs` include
 precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
 """
 _updraft_cloud_condensate(Y, p, j, microphysics_model) =
     microphysics_model isa NonEquilibriumMicrophysics ?
     (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl) :
-    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
+    (ᶜdraft_thermo_tuples(Y, p).ᶜq_liqʲs.:($j), ᶜdraft_thermo_tuples(Y, p).ᶜq_iceʲs.:($j))
 
 """
     _updraft_cloud_condensate_and_area!(
@@ -2526,19 +2523,16 @@ function _updraft_cloud_condensate_and_area!(
     ᶜcf_upʲ, Y, p, j, thermo_params, microphysics_model,
 )
     FT = eltype(p.params)
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    ᶜstateʲ = ᶜdraft_thermo_state(Y, p, j)
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
     ᶜq_draftʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
-    @. ᶜcf_upʲ = _updraft_cloud_fraction(
+    @. ᶜcf_upʲ = _updraft_state_cloud_fraction(
         thermo_params,
-        ᶜTʲs.:($$j),
+        ᶜstateʲ,
         ᶜρʲs.:($$j),
-        ᶜq_tot_nonnegʲs.:($$j),
-        ᶜq_liqʲs.:($$j),
-        ᶜq_iceʲs.:($$j),
-        ᶜq_liqʲ,
-        ᶜq_iceʲ,
+        Y.c.sgsʲs.:($$j),
         σ_abs,
         microphysics_model,
     )
@@ -2575,8 +2569,9 @@ not applied in machine learning cloud fracrtion.
 # Arguments
 
   - `Y`: State vector.
-  - `p`: Cache; reads `p.precomputed.ᶜgradᵥ_q_tot` and `ᶜgradᵥ_θ_liq_ice`, and uses
-    `p.scratch.ᶜtemp_scalar_2` and `ᶜtemp_scalar_3` for the projected gradients.
+  - `p`: Cache; reads the face gradients `p.precomputed.ᶠ∂qt∂z` and `ᶠ∂θli∂z`, and
+    uses `p.scratch.ᶜtemp_scalar_2` and `ᶜtemp_scalar_3` for their centered
+    gradients (`ᶜVanLeer_gradient`).
   - `ml_cloud`: `MLCloud` configuration holding the trained network.
   - `thermo_params`: Thermodynamics parameters.
   - `turbconv_model`: Turbulence-convection model.
@@ -2602,13 +2597,11 @@ function set_ml_cloud_fraction!(
 )
     ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
-    ᶜlg = Fields.local_geometry_field(Y.c)
-
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2
-    @. ᶜ∇q = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg)
+    ᶜ∇q .= ᶜVanLeer_gradient(p.precomputed.ᶠ∂qt∂z)
     ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
-    @. ᶜ∇θ = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg)
+    ᶜ∇θ .= ᶜVanLeer_gradient(p.precomputed.ᶠ∂θli∂z)
 
     ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
     ᶜcloud_fraction_ml = lazy.(

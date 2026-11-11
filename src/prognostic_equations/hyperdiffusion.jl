@@ -145,8 +145,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             p.hyperdiff.ᶜ∇²uʲs,
             p.hyperdiff.ᶜ∇²Tʲs,
             p.hyperdiff.ᶜ∇²q_tot_effʲs,
-            p.precomputed.ᶜuʲs,
-            p.precomputed.ᶜTʲs,
+            set_draft_velocities!(p.scratch.ᶜtemp_C123s, Y, p),
+            ᶜdraft_thermo_tuples(Y, p).ᶜTʲs,
         ) : ()
 
     # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
@@ -301,9 +301,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             p.hyperdiff.ᶜ∇²uʲs,
             p.hyperdiff.ᶜ∇²Tʲs,
             p.hyperdiff.ᶜ∇²q_tot_effʲs,
-            p.precomputed.ᶜTʲs,
-            p.precomputed.ᶜq_liqʲs,
-            p.precomputed.ᶜq_iceʲs,
+            values(ᶜdraft_thermo_tuples(Y, p)[(:ᶜTʲs, :ᶜq_liqʲs, :ᶜq_iceʲs)])...,
         ) : ()
 
     # Every horizontal derivative of the grid mean and of the updrafts, in one slab

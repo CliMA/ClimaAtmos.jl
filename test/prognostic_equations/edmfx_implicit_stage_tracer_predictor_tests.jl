@@ -335,10 +335,11 @@ column(f) = vec(Array(parent(f)))
                 )
             else
                 sgs = Y.c.sgsʲs.:($j)
+                (; ᶜTʲs, ᶜq_tot_nonnegʲs) = CA.ᶜdraft_thermo_tuples(Y, p)
                 return (
                     column(p.precomputed.ᶜρʲs.:($j)),
-                    column(p.precomputed.ᶜTʲs.:($j)),
-                    column(p.precomputed.ᶜq_tot_nonnegʲs.:($j)),
+                    column(Base.materialize(ᶜTʲs.:($j))),
+                    column(Base.materialize(ᶜq_tot_nonnegʲs.:($j))),
                     column(sgs.q_lcl), column(sgs.q_icl),
                     column(sgs.q_rai), column(sgs.q_sno),
                 )

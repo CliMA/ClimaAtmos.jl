@@ -53,7 +53,7 @@ and the purely vertical part
 \kappa_v^j = \tfrac{1}{2} \, \boldsymbol{u}_v^j \cdot \boldsymbol{u}_v^j
 ```
 
-is kept separately at faces (`ᶠKᵥʲs`), because the vertical advection it
+is evaluated separately at faces, because the vertical advection it
 generates is treated implicitly and must be excluded from the explicit
 kinetic-energy gradient.
 
@@ -536,11 +536,15 @@ The precomputed quantities the tendencies read are set in two passes, and the
 order matters because the closures depend on each other:
 
  1. `set_implicit_precomputed_quantities!`: grid-mean velocities, thermodynamics
-    and pressure, then the draft diagnosed quantities
-    (`set_prognostic_edmf_precomputed_quantities_draft!`: draft velocities,
-    kinetic energies, temperatures, densities) and the environment residuals
-    (`..._environment!`). Called before every implicit tendency evaluation, so
-    these are consistent with the current Newton iterate.
+    and pressure, then the draft densities
+    (`set_prognostic_edmf_precomputed_quantities_draft!`) and the environment
+    residuals (`..._environment!`); with non-equilibrium 1M/2M microphysics, all of
+    these are evaluated in one column loop
+    (`set_prognostic_edmf_nonequilibrium_quantities!`). Called before every
+    implicit tendency evaluation, so these are consistent with the current Newton
+    iterate. The draft velocities, temperatures, and humidities are not stored:
+    their readers evaluate them from the state (`ᶜdraft_velocities`,
+    `ᶜdraft_thermo_tuples`).
  2. `set_explicit_precomputed_quantities!`: surface conditions, then the
     PROPHET explicit closures (the entrainment rates and the signed
     area-bounding rate, the surface mass-source terms; detrainment itself is

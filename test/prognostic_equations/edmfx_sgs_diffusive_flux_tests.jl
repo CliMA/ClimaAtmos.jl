@@ -70,7 +70,8 @@ include("../test_helpers.jl")
     # coefficients `CA.equilibrium_condensate_sensitivities` and
     # `CA.cloud_species_flux_blend`.
     function expected_env_cloud_species!(ᶜout, Y, p, χ_name, phase, ᶠw⁰)
-        (; ᶜT⁰, ᶜp, ᶜl_mix, ᶜsgs_moments) = p.precomputed
+        (; ᶜp, ᶜl_mix, ᶜsgs_moments) = p.precomputed
+        (; ᶜT⁰) = CA.ᶜenv_thermo_fields(Y, p)
         ᶜq_water⁰_lazy = CA.ᶜenv_diffusing_water(Y, p)
         ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰ = map(ᶜq_water⁰_lazy) do ᶜq
             ᶜout_q = similar(Y.c.ρ)
@@ -632,7 +633,8 @@ include("../test_helpers.jl")
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜh_d_plus_Φ = similar(Y.c.ρ)
     @. ᶜh_d_plus_Φ =
-        TD.enthalpy_dry(thermo_params, p.precomputed.ᶜTʲs.:(1)) + p.core.ᶜΦ
+        TD.enthalpy_dry(thermo_params, $(CA.ᶜdraft_thermo_tuples(Y, p).ᶜTʲs.:(1))) +
+        p.core.ᶜΦ
     ᶜq_tot_eff¹ = similar(Y.c.ρ)
     @. ᶜq_tot_eff¹ =
         Y.c.sgsʲs.:(1).q_tot - Y.c.sgsʲs.:(1).q_rai - Y.c.sgsʲs.:(1).q_sno

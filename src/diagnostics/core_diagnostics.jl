@@ -81,7 +81,7 @@ add_diagnostic_variable!(short_name = "wa", units = "m s^-1",
     long_name = "Upward Air Velocity",
     standard_name = "upward_air_velocity",
     comments = "Vertical wind component",
-    compute = (_, cache, _) -> @.(lazy(w_component(WVec(cache.precomputed.ᶠu)))),
+    compute = (state, cache, _) -> @.(lazy(w_component(WVec($(compute_ᶠu(state, cache)))))),
 )
 
 ###
@@ -223,7 +223,8 @@ function compute_lmix(state, cache, _)
         return cache.precomputed.ᶜl_mix
     end
     (; params) = cache
-    (; ᶜbuoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜstrain_rate_norm) = cache.precomputed
+    ᶜbuoygrad = ᶜbuoyancy_gradient(cache)
     ᶜdz = Fields.Δz_field(axes(state.c))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(
         params, ᶜbuoygrad, ᶜstrain_rate_norm,
@@ -252,7 +253,7 @@ add_diagnostic_variable!(short_name = "lmix", units = "m",
 ###
 add_diagnostic_variable!(short_name = "bgrad", units = "s^-2",
     long_name = "Vertical Moist Buoyancy Gradient",
-    compute = (_, cache, _) -> cache.precomputed.ᶜbuoygrad,
+    compute = (_, cache, _) -> ᶜbuoyancy_gradient(cache),
 )
 
 ###
@@ -1005,15 +1006,15 @@ add_diagnostic_variable!(short_name = "vaerror", units = "m s^-1",
     compute = (_, cache, _) -> compute_vaerror(cache),
 )
 
-compute_waerror(cache) = @. lazy(
-    w_component(UVW(cache.precomputed.ᶠu)) -
+compute_waerror(state, cache) = @. lazy(
+    w_component(UVW($(compute_ᶠu(state, cache)))) -
     w_component(cache.steady_state_velocity.ᶠu),
 )
 
 add_diagnostic_variable!(short_name = "waerror", units = "m s^-1",
     long_name = "Error of Upward Air Velocity",
     comments = "Error of steady-state vertical wind component",
-    compute = (_, cache, _) -> compute_waerror(cache),
+    compute = (state, cache, _) -> compute_waerror(state, cache),
 )
 
 ###

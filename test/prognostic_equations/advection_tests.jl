@@ -59,7 +59,6 @@ include("../test_helpers.jl")
     # process in edmfx_sgs_vertical_advection_tendency! and in the analytic
     # ρa solve.
     fill!(Y.f.sgsʲs.:(1).u₃, Geometry.Covariant3Vector(FT(0)))
-    fill!(p.precomputed.ᶠu³ʲs.:(1), Geometry.Contravariant3Vector(FT(0)))
     for name in (
         :ᶜρ_diffʲs,
         :ᶜentr_vel_scaleʲs,
@@ -115,25 +114,6 @@ include("../test_helpers.jl")
         end
         return S
     end
-    # Tʲ from mse and the water partition, as
-    # `set_prognostic_edmf_precomputed_quantities_draft_thermo!` diagnoses it,
-    # with ρʲ held fixed.
-    function diagnose_draft_temperature!()
-        (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-        @. ᶜq_liqʲs.:(1) = max(0, sgsʲ.q_lcl + sgsʲ.q_rai)
-        @. ᶜq_iceʲs.:(1) = max(0, sgsʲ.q_icl + sgsʲ.q_sno)
-        @. ᶜq_tot_nonnegʲs.:(1) =
-            max(ᶜq_liqʲs.:(1) + ᶜq_iceʲs.:(1), sgsʲ.q_tot)
-        @. ᶜTʲs.:(1) = TD.air_temperature(
-            thp,
-            TD.ph(),
-            sgsʲ.mse - p.core.ᶜΦ,
-            ᶜq_tot_nonnegʲs.:(1),
-            ᶜq_liqʲs.:(1),
-            ᶜq_iceʲs.:(1),
-        )
-        return nothing
-    end
     function mse_and_q_tot_tendencies()
         fill!(Yₜ, FT(0))
         CA.edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, FT(0), turbconv_model)
@@ -176,8 +156,10 @@ include("../test_helpers.jl")
         sedimentation_mass_source!(S)
 
         fill!(S_h, FT(0))
-        ᶜh_condʲ = @. h_cond(thp, p.precomputed.ᶜTʲs.:(1)) + p.core.ᶜΦ
-        ᶜh_cond⁰ = @. h_cond(thp, p.precomputed.ᶜT⁰) + p.core.ᶜΦ
+        ᶜTʲ = CA.ᶜdraft_thermo_tuples(Y, p).ᶜTʲs.:(1)
+        ᶜh_condʲ = @. h_cond(thp, ᶜTʲ) + p.core.ᶜΦ
+        ᶜT⁰ = CA.ᶜenv_thermo_fields(Y, p).ᶜT⁰
+        ᶜh_cond⁰ = @. h_cond(thp, ᶜT⁰) + p.core.ᶜΦ
         CA.foreach_updraft_sedimentation(
             Y,
             p,
@@ -265,10 +247,9 @@ include("../test_helpers.jl")
 
         # The (mse, mse), (mse, q_μ), and (q_tot, q_μ) blocks match central
         # differences of the tendencies in a smooth direction, with Tʲ
-        # rediagnosed and ρʲ held fixed. The blocks contain dtγ ∂T/∂Y - I for
+        # evaluated from the perturbed state and ρʲ held fixed. The blocks contain dtγ ∂T/∂Y - I for
         # dtγ = 1 and omit the dilution diagonal -ρ̂⁻¹ S of the (mse, mse)
         # block.
-        diagnose_draft_temperature!()
         CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
         ᶜv = @. sin(ᶜz / FT(700)) + FT(0.5)
         mse_state = CA.@name(c.sgsʲs.:(1).mse)
@@ -279,13 +260,10 @@ include("../test_helpers.jl")
             χ_old = copy(χ)
             δ = FT(1e-6) * maximum(abs, arr(χ_old))
             @. χ = χ_old + δ * ᶜv
-            diagnose_draft_temperature!()
             (mse_plus, q_tot_plus) = mse_and_q_tot_tendencies()
             @. χ = χ_old - δ * ᶜv
-            diagnose_draft_temperature!()
             (mse_minus, q_tot_minus) = mse_and_q_tot_tendencies()
             @. χ = χ_old
-            diagnose_draft_temperature!()
             ∂mse = matrix[mse_state, state]
             Jv = arr(@. ∂mse * ᶜv)
             if state == mse_state
@@ -346,10 +324,11 @@ include("../test_helpers.jl")
     @. Y.c.ρ = ρ_orig
     @. p.precomputed.ᶜρʲs.:(1) = ρʲ_orig
     @. sgsʲ.ρa = (FT(0.25) - FT(0.15) * (ᶜz / FT(3000))) * p.precomputed.ᶜρʲs.:(1)
-    @. p.precomputed.ᶜT⁰ = p.precomputed.ᶜTʲs.:(1) - FT(5)
+    ᶜTʲ = CA.ᶜdraft_thermo_tuples(Y, p).ᶜTʲs.:(1)
+    @. p.precomputed.ᶜT⁰ = ᶜTʲ - FT(5)
     check_sedimentation_budgets(liquid, TD.enthalpy_liquid)
     mse_tend_cold_env = copy(arr(Yₜ.c.sgsʲs.:(1).mse))
-    @. p.precomputed.ᶜT⁰ = p.precomputed.ᶜTʲs.:(1) + FT(5)
+    @. p.precomputed.ᶜT⁰ = ᶜTʲ + FT(5)
     check_sedimentation_budgets(liquid, TD.enthalpy_liquid)
     @test !(arr(Yₜ.c.sgsʲs.:(1).mse) ≈ mse_tend_cold_env)
     ᶜinv_ρ̂ = check_sedimentation_budgets(ice, TD.enthalpy_ice)
@@ -428,7 +407,6 @@ end
     # Zero updraft velocity and entrainment/detrainment so only sedimentation
     # contributes to the (q_rai, q_rai) super-diagonal; set ρaʲ to 10% of ρʲ.
     fill!(Y.f.sgsʲs.:(1).u₃, Geometry.Covariant3Vector(FT(0)))
-    fill!(p.precomputed.ᶠu³ʲs.:(1), Geometry.Contravariant3Vector(FT(0)))
     for name in (
         :ᶜρ_diffʲs,
         :ᶜentr_vel_scaleʲs,

@@ -50,7 +50,7 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 
     (; microphysics_model, turbconv_model, edmfx_model) = p.atmos
     (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs) = p.precomputed
-    (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs, ᶜTʲs) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
     n_picard = edmfx_model.updraft_picard_rounds
     # Cast `dtγ` to the parameter float type so broadcasts stay type-stable
@@ -81,7 +81,7 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                 @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
             end
         end
-        (; ᶜmp_tendencyʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜmp_tendencyʲs) = p.precomputed
         thermo_params = CAP.thermodynamics_params(p.params)
         T_min_sgs = CAP.T_min_sgs(p.params)
         implicit_mp = microphysics_model isa NonEquilibriumMicrophysics1M
@@ -91,10 +91,12 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             _sweep_sgs_updraft_tracers!(Y, p, dtγ)
-            # The draft thermodynamics and `ᶜmp_tendencyʲs` at the transported
-            # state. The 0-moment scheme has no prognostic condensate tracers,
-            # so this is its full iterate, at which it evaluates the source.
-            set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+            # The draft temperatures and densities and `ᶜmp_tendencyʲs` at the
+            # transported state (the other draft thermodynamic quantities are
+            # evaluated from `Y`).
+            # The 0-moment scheme has no prognostic condensate tracers, so this
+            # is its full iterate, at which it evaluates the source.
+            set_draft_temperatures_and_densities!(Y, p)
             update_updraft_microphysics_tendency_cache!(
                 Y, p, microphysics_model, turbconv_model, dtγ,
             )
@@ -102,7 +104,7 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             # microphysics, add the explicit and, for the 1M scheme, the implicit
             # sources to the condensate and precipitation tracers
             # (`add_updraft_microphysics_sources!`) and refresh the draft
-            # thermodynamics at the full iterate. Then refresh `ᶜρ_diffʲs`, the
+            # temperature and density at the full iterate. Then refresh `ᶜρ_diffʲs`, the
             # buoyancy input of the next `u₃` solve, and, between rounds, restore
             # the snapshot of the stage-initial draft scalars; the last round
             # leaves the Picard-converged draft scalars as a warm start for the
@@ -113,31 +115,29 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                 round_drafts = unrolled_map(StaticOneTo(n)) do j
                     @inline
                     (
-                        Y.c.sgsʲs.:($j), ᶜρʲs.:($j), ᶜρ_diffʲs.:($j), ᶜsnapshot.:($j),
+                        Y.c.sgsʲs.:($j), ᶜTʲs.:($j), ᶜρʲs.:($j), ᶜρ_diffʲs.:($j),
+                        ᶜsnapshot.:($j),
                         nonequilibrium_mp ?
                         (
                             ᶜmp_tendencyʲs.:($j),
                             implicit_mp ? p.precomputed.ᶜmp_tendency_implicitʲs.:($j) : (),
-                            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j),
-                            ᶜq_iceʲs.:($j),
                         ) : (),
                     )
                 end
                 DataLayouts.foreach_column(
                     round_drafts, Y.c.ρ, p.core.ᶜΦ, p.precomputed.ᶜp,
                 ) do round_drafts, ᶜρ, ᶜΦ, ᶜp
-                    for (ᶜsgsʲ, ᶜρʲ, ᶜρ_diffʲ, ᶜsnapshotʲ, sources_args) in round_drafts
+                    for (ᶜsgsʲ, ᶜTʲ, ᶜρʲ, ᶜρ_diffʲ, ᶜsnapshotʲ, sources_args) in
+                        round_drafts
+
                         if !isempty(sources_args)
-                            (
-                                ᶜmp_tendencyʲ, ᶜmp_tendency_implicitʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                                ᶜq_liqʲ, ᶜq_iceʲ,
-                            ) = sources_args
+                            (ᶜmp_tendencyʲ, ᶜmp_tendency_implicitʲ) = sources_args
                             add_updraft_microphysics_sources!(
                                 ᶜsgsʲ, ᶜmp_tendencyʲ, ᶜmp_tendency_implicitʲ, dtγ,
                             )
-                            set_draft_thermo_column!(
-                                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ,
-                                ᶜp, microphysics_model, thermo_params, T_min_sgs,
+                            set_draft_temperature_and_density!(
+                                ᶜTʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp, microphysics_model,
+                                thermo_params, T_min_sgs,
                             )
                         end
                         @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
@@ -748,10 +748,10 @@ end
 Advance the buoyancy-affecting SGS/updraft specific tracers over the implicit
 stage by a semi-implicit first-order upwind sweep, overwriting
 `Y.c.sgsʲs.:(j).χ` in each EDMFX mass-flux subdomain `j`. For the
-non-equilibrium microphysics, also refresh the draft thermodynamics
-(`ᶜTʲs`, `ᶜρʲs`, and the draft condensate fields) and `ᶜmp_tendencyʲs` in
-`p.precomputed`. Uses `p.scratch`. A no-op for any `turbconv_model` other
-than `PrognosticEDMFX`; returns `nothing`.
+non-equilibrium microphysics, also refresh the draft temperatures and densities
+(`ᶜTʲs`, `ᶜρʲs`) and
+`ᶜmp_tendencyʲs` in `p.precomputed`. Uses `p.scratch`. A no-op for any
+`turbconv_model` other than `PrognosticEDMFX`; returns `nothing`.
 
 Solved: `mse`, `q_tot`, and, for the non-equilibrium microphysics, `q_lcl`,
 `q_icl`, `q_rai`, `q_sno`. The advective form with lateral and turbulent
@@ -775,14 +775,14 @@ is swept bottom-to-top with `Operators.column_accumulate!` as
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
 (`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
 the current Picard round, which is the velocity the Newton solve's entrainment
-tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. `χ⁰` is diagnosed
+tendency sees once the draft velocity is evaluated from the stage `u₃`. `χ⁰` is diagnosed
 from `Y` before the sweep overwrites the draft scalar.
 
 For the non-equilibrium microphysics, the source follows the transport:
-`set_prognostic_edmf_precomputed_quantities_draft_thermo!` and
-`update_updraft_microphysics_tendency_cache!` evaluate the draft
-thermodynamics and `ᶜmp_tendencyʲs` at the transported state, and each
-condensate and precipitation tracer then receives `dtγ · S_mp`. Evaluating
+`set_draft_temperatures_and_densities!` and `update_updraft_microphysics_tendency_cache!`
+evaluate the draft temperatures, densities, and `ᶜmp_tendencyʲs` at the
+transported state, and
+each condensate and precipitation tracer then receives `dtγ · S_mp`. Evaluating
 the source after the transport keeps the vapor of each cell consistent with
 the condensate that arrives with it, so water that arrives as condensate is
 not condensed a second time, and the cached source is the rate that takes
@@ -805,7 +805,7 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     microphysics_model isa
     Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
         return nothing
-    set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+    set_draft_temperatures_and_densities!(Y, p)
     update_updraft_microphysics_tendency_cache!(
         Y, p, microphysics_model, turbconv_model, dtγ,
     )

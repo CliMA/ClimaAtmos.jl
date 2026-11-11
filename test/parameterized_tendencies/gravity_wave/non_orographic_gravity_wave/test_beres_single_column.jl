@@ -65,6 +65,26 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
 #      Q_conv_ic (centroid z_c + spread σ → half-sine of depth h); the legacy
 #      grid-mean area-threshold detection is deprecated and gated off.
 # ============================================================================
+# Draft moist static energy at which the draft temperature, evaluated from the draft
+# state at the grid-mean pressure `p_air` (`CA.draft_thermo_state`), is `T`, found by
+# secant iterations from the current draft mse (the 0-moment scheme diagnoses the
+# temperature with a saturation adjustment).
+function draft_mse_at(mm, thp, T_min, T, sgsʲ, Φ, p_air)
+    sgs = ClimaCore.Utilities.drop_auto_broadcasters(sgsʲ)
+    T_at(mse) = CA.thermo_T(
+        CA.draft_thermo_state(mm, merge(sgs, (; mse)), Φ, p_air, thp, T_min),
+    )
+    m₀ = sgs.mse
+    T₀ = T_at(m₀)
+    m₁ = m₀ + 1004 * (T - T₀)
+    for _ in 1:30
+        T₁ = T_at(m₁)
+        (T₁ == T || T₁ == T₀) && break
+        (m₀, T₀, m₁) = (m₁, T₁, m₁ + (T - T₁) * (m₁ - m₀) / (T₁ - T₀))
+    end
+    return m₁
+end
+
 # Outer testset so Phase A failures do not abort Phase B: a *top-level*
 # @testset throws at its `end` when it contains failures, which would stop the
 # script before Phase B. Nesting both phases inside one outer testset keeps
@@ -93,20 +113,30 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         z_lo = FT(3000)                     # updraft band bottom (above z_bot_floor)
         z_hi = FT(10000)                    # updraft band top
 
-        (; ᶜρʲs, ᶜTʲs, ᶜT, ᶠu³ʲs, ᶠu³) = p.precomputed
+        (; ᶜρʲs, ᶜT, ᶠu³) = p.precomputed
         ᶜρ = Y.c.ρ
 
         # Draft density = grid-mean density ⇒ Q_conv = a0·Q_conv_ic exactly
         # (the two constructions then differ only by the area factor).
         parent(ᶜρʲs.:(1)) .= parent(ᶜρ)
 
-        # Half-sine in-band temperature anomaly, 2 K peak
-        @. ᶜTʲs.:(1) =
+        # Half-sine in-band temperature anomaly, 2 K peak (the draft temperature
+        # is evaluated from the draft state, so it is set through the draft mse)
+        thp = CA.CAP.thermodynamics_params(p.params)
+        mse_at(T, sgsʲ, Φ, p_air) = draft_mse_at(
+            p.atmos.microphysics_model, thp, CA.CAP.T_min_sgs(p.params), T, sgsʲ, Φ,
+            p_air,
+        )
+        @. Y.c.sgsʲs.:(1).mse = mse_at(
             ᶜT + ifelse(
                 (ᶜz >= z_lo) & (ᶜz <= z_hi),
                 FT(2) * sin(FT(π) * (ᶜz - z_lo) / (z_hi - z_lo)),
                 FT(0),
-            )
+            ),
+            Y.c.sgsʲs.:(1),
+            p.core.ᶜΦ,
+            p.precomputed.ᶜp,
+        )
 
         # Uniform updraft area fraction inside the band, zero outside
         @. Y.c.sgsʲs.:(1).ρa =
@@ -114,10 +144,11 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
 
         # Updraft vertical velocity 1 m/s (physical), zero grid-mean velocity.
         # The DSE anomaly is band-limited, so the constant out-of-band velocity
-        # carries no flux.
+        # carries no flux. (The draft's contravariant velocity is evaluated from
+        # its covariant component; the column has no sloped coordinate surfaces.)
         ᶠlg = Fields.local_geometry_field(Y.f)
-        @. ᶠu³ʲs.:(1) =
-            Geometry.Contravariant3Vector(Geometry.WVector(FT(1)), ᶠlg)
+        @. Y.f.sgsʲs.:(1).u₃ =
+            Geometry.Covariant3Vector(Geometry.WVector(FT(1)), ᶠlg)
         @. ᶠu³ = Geometry.Contravariant3Vector(Geometry.WVector(FT(0)), ᶠlg)
 
         fill!(ᶜbuoyancy_frequency, FT(0.012))
@@ -571,7 +602,7 @@ end
     @test p_l.non_orographic_gravity_wave.gw_beres_source.heating_latent
 
     thp_l = CA.CAP.thermodynamics_params(p_l.params)
-    (; ᶜρʲs, ᶜTʲs, ᶜT, ᶜq_tot_nonnegʲs) = p_l.precomputed
+    (; ᶜρʲs, ᶜT) = p_l.precomputed
     ᶜz_l = Fields.coordinate_field(Y_l.c).z
     ᶜρ_l = Y_l.c.ρ
     a0 = FT_l(0.05)
@@ -581,15 +612,22 @@ end
 
     # Saturated, cloudy, slightly supersaturated draft in the band; the draft
     # density and temperature follow the grid mean.
+    # (the draft temperature and total water are evaluated from the draft state,
+    # so they are set through the draft tracers and mse)
     parent(ᶜρʲs.:(1)) .= parent(ᶜρ_l)
-    @. ᶜTʲs.:(1) = ᶜT
-    @. ᶜq_tot_nonnegʲs.:(1) =
-        CA.TD.q_vap_saturation(thp_l, ᶜT, ᶜρ_l) + FT_l(1e-3) + FT_l(2e-4)
     @. Y_l.c.sgsʲs.:(1).ρa = ifelse(in_band, a0 * ᶜρ_l, FT_l(0))
     @. Y_l.c.sgsʲs.:(1).q_lcl = ifelse(in_band, FT_l(1e-3), FT_l(0))
     @. Y_l.c.sgsʲs.:(1).q_icl = FT_l(0)
     @. Y_l.c.sgsʲs.:(1).q_rai = FT_l(0)
     @. Y_l.c.sgsʲs.:(1).q_sno = FT_l(0)
+    @. Y_l.c.sgsʲs.:(1).q_tot =
+        CA.TD.q_vap_saturation(thp_l, ᶜT, ᶜρ_l) + FT_l(1e-3) + FT_l(2e-4)
+    mse_at_l(T, sgsʲ, Φ, p_air) = draft_mse_at(
+        p_l.atmos.microphysics_model, thp_l, CA.CAP.T_min_sgs(p_l.params), T, sgsʲ, Φ,
+        p_air,
+    )
+    @. Y_l.c.sgsʲs.:(1).mse =
+        mse_at_l(ᶜT, Y_l.c.sgsʲs.:(1), p_l.core.ᶜΦ, p_l.precomputed.ᶜp)
 
     ᶜN_l = p_l.non_orographic_gravity_wave.ᶜbuoyancy_frequency
     fill!(ᶜN_l, FT_l(0.012))

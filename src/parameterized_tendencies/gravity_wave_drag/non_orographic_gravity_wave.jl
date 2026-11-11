@@ -550,7 +550,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     n_updrafts = n_mass_flux_subdomains(turbconv_model)
     draft_indices = StaticOneTo(n_updrafts)
 
-    (; ᶠu³ʲs, ᶜρʲs, ᶜuʲs, ᶜTʲs, ᶜT) = p.precomputed
+    (; ᶜρʲs, ᶜT) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
+    (; ᶜTʲs) = ᶜdraft_thermo_tuples(Y, p)
     (; ᶠu³) = p.precomputed
     (;
         gw_Q0,
@@ -592,8 +594,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 
     # Compute Q_conv (grid-mean) and Q_conv_ic (in-cloud) in one fused column loop.
     DataLayouts.foreach_column(
-        gw_Q_conv, gw_Q_conv_ic, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶠu³ʲs, ᶜρʲs, ᶜTʲs, ᶜT,
-    ) do ᶜQ_conv, ᶜQ_conv_ic, Yc, ᶜJ, ᶠJ, ᶠu³, ᶠu³ʲs, ᶜρʲs, ᶜTʲs, ᶜT
+        gw_Q_conv, gw_Q_conv_ic, Y.c, Y.f, ᶜJ, ᶠJ, ᶠu³, ᶜρʲs, ᶜTʲs, ᶜT,
+    ) do ᶜQ_conv, ᶜQ_conv_ic, Yc, Yf, ᶜJ, ᶠJ, ᶠu³, ᶜρʲs, ᶜTʲs, ᶜT
         @inline
         ᶜQ_conv_sum = @. zero(Yc.ρ)
         ᶜQ_conv_ic_sum = @. zero(Yc.ρ)
@@ -602,7 +604,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             ᶜρaʲ = Yc.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
-            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            ᶠu³ʲ = compute_ᶠu³(Yc.uₕ, Yc.ρ, Yf.sgsʲs.:($j).u₃)
 
             # In-cloud DSE anomaly: cp_d·(Tʲ − T̄), no area factor
             # ᶜρʲs is a physical air density (~1 kg/m³), so this guard almost never
@@ -656,7 +658,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         mp_bulk = CAP.microphysics_1m_params(p.params)
         mp_imp = CAP.microphysics_1m_implicit_params(p.params)
         thp = CAP.thermodynamics_params(p.params)
-        ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
+        (; ᶜq_tot_nonnegʲs) = ᶜdraft_thermo_tuples(Y, p)
         gw_Q_conv_ic .= FT(0)
         for j in 1:n_updrafts
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa

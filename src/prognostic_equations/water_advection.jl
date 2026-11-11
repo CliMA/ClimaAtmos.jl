@@ -84,7 +84,8 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # TODO the corrections work for only one updraft
     ᶜsubdomain_inputs =
         p.atmos.turbconv_model isa PrognosticEDMFX ?
-        let (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed,
+        let ᶜρʲs = p.precomputed.ᶜρʲs, ᶜTʲs = ᶜdraft_thermo_tuples(Y, p).ᶜTʲs,
+            ᶜuʲs = ᶜdraft_velocities(Y, p),
             (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
             # The updraft velocity of each species, or an empty container for a
             # species that the updraft does not carry

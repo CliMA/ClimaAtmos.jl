@@ -35,23 +35,129 @@ function saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+    env_thermo_state(
+        microphysics_model, c, h_tot, K, Φ, p, turbconv_model, thermo_params, T_min_sgs,
+    )
 
-Update the EDMFX environment precomputed quantities in `p` for `PrognosticEDMFX`.
-Returns `nothing`.
+Return the thermodynamic state of the EDMFX environment at one point,
+`(; T, q_tot_nonneg, q_liq, q_ice)`, from the grid-mean state `c` (a point of
+`Y.c`, including the drafts `c.sgsʲs`), the grid-mean total specific enthalpy
+`h_tot` and kinetic energy `K`, and the geopotential `Φ`. The environment values
+are the grid mean minus the drafts (`specific_env_value`, `specific_env_mse`).
 
-Mutates in `p.precomputed`: the environment velocities and kinetic energy
-(`ᶠu₃⁰`, `ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`) and the environment thermodynamic state (`ᶜT⁰`,
-`ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`); for `EquilibriumMicrophysics0M` it also
-reuses the shared `ᶜsa_result` field as a saturation-adjustment workspace.
+  - `NonEquilibriumMicrophysics1M`/`2M`: the condensate is the environment cloud
+    plus precipitating species, `q_tot` is clamped to at least the condensate, and
+    `T` follows from the environment enthalpy, floored at `T_min_sgs`; `p` is unused.
+  - `EquilibriumMicrophysics0M`: `q_tot` is clamped to be non-negative, and `T` and
+    the phase partition come from a pressure-enthalpy saturation adjustment at the
+    grid-mean pressure `p`.
+"""
+@inline function env_thermo_state(
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    c, h_tot, K, Φ, p, turbconv_model, thermo_params, T_min_sgs,
+)
+    ρa⁰_val = ρa⁰(c.ρ, c.sgsʲs, turbconv_model)
+    χ⁰(name) = specific_env_value(
+        name, MatrixFields.get_field(c, get_ρχ_name(name)), c.ρ, c.sgsʲs, ρa⁰_val,
+        turbconv_model,
+    )
+    q_liq = max(0, χ⁰(@name(q_lcl)) + χ⁰(@name(q_rai)))
+    q_ice = max(0, χ⁰(@name(q_icl)) + χ⁰(@name(q_sno)))
+    # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+    q_tot_nonneg = max(q_liq + q_ice, χ⁰(@name(q_tot)))
+    h = specific_env_mse(c.ρ, c.sgsʲs, h_tot, K, ρa⁰_val, turbconv_model) - Φ
+    T = max(
+        T_min_sgs,
+        TD.air_temperature(thermo_params, TD.ph(), h, q_tot_nonneg, q_liq, q_ice),
+    )
+    return (; T, q_tot_nonneg, q_liq, q_ice)
+end
+@inline function env_thermo_state(
+    ::EquilibriumMicrophysics0M,
+    c, h_tot, K, Φ, p, turbconv_model, thermo_params, T_min_sgs,
+)
+    ρa⁰_val = ρa⁰(c.ρ, c.sgsʲs, turbconv_model)
+    q_tot = specific_env_value(
+        @name(q_tot), c.ρq_tot, c.ρ, c.sgsʲs, ρa⁰_val, turbconv_model,
+    )
+    q_tot_nonneg = max(0, q_tot)
+    h = specific_env_mse(c.ρ, c.sgsʲs, h_tot, K, ρa⁰_val, turbconv_model) - Φ
+    (; T, q_liq, q_ice) =
+        saturation_adjustment_tuple(thermo_params, TD.ph(), p, h, q_tot_nonneg)
+    return (; T, q_tot_nonneg, q_liq, q_ice)
+end
 
-The environment values are reconstructed as the grid mean minus the updrafts
-(`ᶜspecific_env_value`, `ᶜspecific_env_mse`). For
-`NonEquilibriumMicrophysics1M`/`2M`, the condensate is taken directly from the
-prognostic tracers and `ᶜT⁰` is obtained from the enthalpy, floored at
-`T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜT⁰` and the phase partition come
-from a pressure-enthalpy saturation adjustment. Reads `ᶜΦ` from `p.core` and
-`ᶜp` from `p.precomputed`.
+@inline thermo_T(state) = state.T
+@inline thermo_q_tot_nonneg(state) = state.q_tot_nonneg
+@inline thermo_q_liq(state) = state.q_liq
+@inline thermo_q_ice(state) = state.q_ice
+
+@inline thermo_state(T, q_tot_nonneg, q_liq, q_ice) = (; T, q_tot_nonneg, q_liq, q_ice)
+
+"""
+    ᶜenv_thermo_state(Y, p)
+
+Return a lazy center field of the EDMFX environment thermodynamic state,
+`(; T, q_tot_nonneg, q_liq, q_ice)` at each point, from the precomputed
+environment fields (`ᶜenv_thermo_fields`). A column loop that reads several
+components copies it into registers once (`register_copy`). Requires
+`PrognosticEDMFX`.
+"""
+function ᶜenv_thermo_state(Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+    return @. lazy(thermo_state(ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰))
+end
+
+"""
+    ᶜenv_thermo_fields(Y, p)
+
+Return the precomputed EDMFX environment temperature and specific humidities,
+`(; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)`, which `set_environment_column!` sets
+from `Y` and the grid-mean `ᶜh_tot`, `ᶜK`, and `ᶜp` (`env_thermo_state`).
+Requires `PrognosticEDMFX`.
+"""
+function ᶜenv_thermo_fields(Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    return (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+end
+
+"""
+    set_environment_column!(
+        environment, Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot, ᶜp,
+        microphysics_model, turbconv_model, thermo_params, T_min_sgs,
+    )
+
+Column body of the EDMFX environment quantities, which writes into the column
+fields `environment = (ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)`:
+the environment velocity, contravariant vertical velocity, and kinetic energy,
+from its vertical velocity (a loop temporary) and `ᶠuₕ³`, and the environment
+thermodynamic state (`env_thermo_state`), from the grid-mean `ᶜh_tot`, `ᶜK`, and
+`ᶜp`. Runs inside fused column loops, so it is inlined.
+"""
+@inline function set_environment_column!(
+    environment, Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot, ᶜp,
+    microphysics_model, turbconv_model, thermo_params, T_min_sgs,
+)
+    (ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = environment
+    ᶠu₃⁰ = Base.materialize(ᶠsgs_u₃(u₃⁰, Yc, Yf, turbconv_model))
+    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
+    ᶜstate⁰ = @. env_thermo_state(
+        microphysics_model, Yc, ᶜh_tot, ᶜK, ᶜΦ, ᶜp, turbconv_model, thermo_params,
+        T_min_sgs,
+    )
+    @. ᶜT⁰ = thermo_T(ᶜstate⁰)
+    @. ᶜq_tot_nonneg⁰ = thermo_q_tot_nonneg(ᶜstate⁰)
+    @. ᶜq_liq⁰ = thermo_q_liq(ᶜstate⁰)
+    @. ᶜq_ice⁰ = thermo_q_ice(ᶜstate⁰)
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³)
+
+Update the EDMFX environment velocities and kinetic energy (`ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`)
+and thermodynamic state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`) in one
+column loop (`set_environment_column!`). Returns `nothing`.
 
 # Arguments
 
@@ -62,264 +168,294 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     Y,
     p,
     ᶠuₕ³,
-    t,
 )
-
+    pc = p.precomputed
+    (; microphysics_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
+    T_min_sgs = CAP.T_min_sgs(p.params)
+    environment =
+        (pc.ᶜu⁰, pc.ᶠu³⁰, pc.ᶜK⁰, pc.ᶜT⁰, pc.ᶜq_tot_nonneg⁰, pc.ᶜq_liq⁰, pc.ᶜq_ice⁰)
+    DataLayouts.foreach_column(
+        environment, Y.c, Y.f, ᶠuₕ³, p.core.ᶜΦ, pc.ᶜK, pc.ᶜh_tot, pc.ᶜp,
+    ) do environment, Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot, ᶜp
+        set_environment_column!(
+            environment, Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot, ᶜp,
+            microphysics_model, turbconv_model, thermo_params, T_min_sgs,
+        )
+    end
+    return nothing
+end
+
+"""
+    draft_thermo_state(microphysics_model, sgsʲ, Φ, p, thermo_params, T_min_sgs)
+
+Return the thermodynamic state of an EDMFX draft at one point,
+`(; T, q_tot_nonneg, q_liq, q_ice, ρ)`, from its prognostic variables `sgsʲ` (a
+point of `Y.c.sgsʲs.:(j)`), the geopotential `Φ`, and the grid-mean pressure `p`,
+at which the draft density is diagnosed.
+
+  - `NonEquilibriumMicrophysics1M`/`2M`: the condensate is the draft cloud plus
+    precipitating species, `q_tot` is clamped to at least the condensate, and `T`
+    follows from the enthalpy `mse - Φ`, floored at `T_min_sgs`.
+  - `EquilibriumMicrophysics0M`: `q_tot` is clamped to be non-negative, and `T` and
+    the phase partition come from a pressure-enthalpy saturation adjustment.
+"""
+@inline function draft_thermo_state(
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    sgsʲ, Φ, p, thermo_params, T_min_sgs,
+)
+    q_liq = max(0, sgsʲ.q_lcl + sgsʲ.q_rai)
+    q_ice = max(0, sgsʲ.q_icl + sgsʲ.q_sno)
+    # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
+    q_tot_nonneg = max(q_liq + q_ice, sgsʲ.q_tot)
+    T = max(
+        T_min_sgs,
+        TD.air_temperature(
+            thermo_params, TD.ph(), sgsʲ.mse - Φ, q_tot_nonneg, q_liq, q_ice,
+        ),
+    )
+    ρ = TD.air_density(thermo_params, T, p, q_tot_nonneg, q_liq, q_ice)
+    return (; T, q_tot_nonneg, q_liq, q_ice, ρ)
+end
+@inline function draft_thermo_state(
+    ::EquilibriumMicrophysics0M, sgsʲ, Φ, p, thermo_params, T_min_sgs,
+)
+    q_tot_nonneg = max(0, sgsʲ.q_tot)
+    (; T, q_liq, q_ice) = saturation_adjustment_tuple(
+        thermo_params, TD.ph(), p, sgsʲ.mse - Φ, q_tot_nonneg,
+    )
+    ρ = TD.air_density(thermo_params, T, p, q_tot_nonneg, q_liq, q_ice)
+    return (; T, q_tot_nonneg, q_liq, q_ice, ρ)
+end
+
+@inline thermo_ρ(state) = state.ρ
+
+"""
+    draft_density(microphysics_model, sgsʲ, Φ, p, thermo_params, T_min_sgs)
+
+Density of an EDMFX draft at one point, at the grid-mean pressure `p`
+(`draft_thermo_state`).
+"""
+@inline draft_density(microphysics_model, sgsʲ, Φ, p, thermo_params, T_min_sgs) =
+    thermo_ρ(
+        draft_thermo_state(microphysics_model, sgsʲ, Φ, p, thermo_params, T_min_sgs),
+    )
+
+"""
+    set_draft_temperature_and_density!(
+        ᶜTʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp, microphysics_model, thermo_params, T_min_sgs,
+    )
+
+Column body that writes the temperature and density of an EDMFX draft
+(`draft_thermo_state`), evaluated once per point.
+"""
+@inline function set_draft_temperature_and_density!(
+    ᶜTʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp, microphysics_model, thermo_params, T_min_sgs,
+)
+    ᶜstateʲ = @. draft_thermo_state(
+        microphysics_model, ᶜsgsʲ, ᶜΦ, ᶜp, thermo_params, T_min_sgs,
+    )
+    @. ᶜTʲ = thermo_T(ᶜstateʲ)
+    @. ᶜρʲ = thermo_ρ(ᶜstateʲ)
+    return nothing
+end
+
+"""
+    ᶜdraft_thermo_state(Y, p, j)
+
+Return a lazy center field of the thermodynamic state of EDMFX draft `j`
+(`draft_thermo_state`), from `Y.c.sgsʲs.:(j)` and the precomputed grid-mean `ᶜp`.
+A column loop that reads several components copies it into registers once
+(`register_copy`).
+"""
+function ᶜdraft_thermo_state(Y, p, j)
+    f = DraftThermoState(
+        p.atmos.microphysics_model,
+        CAP.thermodynamics_params(p.params),
+        CAP.T_min_sgs(p.params),
+    )
+    ᶜsgsʲ = Y.c.sgsʲs.:($j)
+    return @. lazy(f(ᶜsgsʲ, p.core.ᶜΦ, p.precomputed.ᶜp))
+end
+
+"""
+    DraftThermoState(microphysics_model, thermo_params, T_min_sgs)
+
+`draft_thermo_state` as a function of the draft prognostic variables, the
+geopotential, and the grid-mean pressure, with the microphysics model and the
+parameters stored in the function, so that the arguments of its lazy broadcast
+(`ᶜdraft_thermo_state`) are all fields.
+"""
+struct DraftThermoState{M, P, FT}
+    microphysics_model::M
+    thermo_params::P
+    T_min_sgs::FT
+end
+@inline (f::DraftThermoState)(sgsʲ, Φ, p) =
+    draft_thermo_state(f.microphysics_model, sgsʲ, Φ, p, f.thermo_params, f.T_min_sgs)
+
+"""
+    ᶜdraft_thermo_fields(Y, p, j)
+
+Return the temperature and specific humidities of EDMFX draft `j`,
+`(; ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)`: the cached `ᶜTʲs`, and lazy center
+fields of the humidities, evaluated pointwise (`ᶜdraft_thermo_state`). The draft
+temperature and density stay cached (`ᶜTʲs`, `ᶜρʲs`): their readers run in the
+heaviest kernels, and `initialize_implicit_stage_problem!` keeps them at the Picard
+iterate while it restores the draft scalars.
+"""
+function ᶜdraft_thermo_fields(Y, p, j)
+    ᶜstateʲ = ᶜdraft_thermo_state(Y, p, j)
+    return (;
+        ᶜTʲ = p.precomputed.ᶜTʲs.:($j),
+        ᶜq_tot_nonnegʲ = (@. lazy(thermo_q_tot_nonneg(ᶜstateʲ))),
+        ᶜq_liqʲ = (@. lazy(thermo_q_liq(ᶜstateʲ))),
+        ᶜq_iceʲ = (@. lazy(thermo_q_ice(ᶜstateʲ))),
+    )
+end
+
+"""
+    ᶜdraft_thermo_tuples(Y, p)
+
+Return `(; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs)`, each a tuple over the
+EDMFX drafts of the lazy fields of `ᶜdraft_thermo_fields`, so that `ᶜTʲs.:(j)`
+selects draft `j` as for a field of tuples.
+"""
+function ᶜdraft_thermo_tuples(Y, p)
+    n_val = Val(n_mass_flux_subdomains(p.atmos.turbconv_model))
+    drafts = ntuple(j -> ᶜdraft_thermo_fields(Y, p, j), n_val)
+    return (;
+        ᶜTʲs = map(draft -> draft.ᶜTʲ, drafts),
+        ᶜq_tot_nonnegʲs = map(draft -> draft.ᶜq_tot_nonnegʲ, drafts),
+        ᶜq_liqʲs = map(draft -> draft.ᶜq_liqʲ, drafts),
+        ᶜq_iceʲs = map(draft -> draft.ᶜq_iceʲ, drafts),
+    )
+end
+
+"""
+    ᶜdraft_velocities(Y, p)
+
+Return a tuple over the EDMFX drafts of lazy center fields of their velocities,
+the horizontal velocity plus the interpolated draft vertical velocity, so that
+`ᶜuʲs.:(j)` selects draft `j` as for a field of tuples. The horizontal operators of
+`horizontal_advection_tendency!` and `prep_hyperdiffusion_tendency!` read them
+from `p.scratch.ᶜtemp_C123s` (`set_draft_velocities!`).
+"""
+function ᶜdraft_velocities(Y, p)
+    n_val = Val(n_mass_flux_subdomains(p.atmos.turbconv_model))
+    return ntuple(n_val) do j
+        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+        @. lazy(C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu₃ʲ)))
+    end
+end
+
+"""
+    set_draft_velocities!(ᶜuʲs, Y, p)
+
+Evaluate the draft velocities (`ᶜdraft_velocities`) into the field of tuples
+`ᶜuʲs`, for readers that apply horizontal operators to them. Returns `ᶜuʲs`.
+"""
+function set_draft_velocities!(ᶜuʲs, Y, p)
+    MatrixFields.unrolled_foreach(
+        StaticOneTo(n_mass_flux_subdomains(p.atmos.turbconv_model)),
+    ) do j
+        @. ᶜuʲs.:($$j) = C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.sgsʲs.:($$j).u₃))
+    end
+    return ᶜuʲs
+end
+
+"""
+    ᶜenv_velocity(Y, p)
+
+Return the precomputed EDMFX environment velocity `ᶜu⁰`, the horizontal velocity
+plus the interpolated environment vertical velocity (`set_environment_column!`).
+Requires `PrognosticEDMFX`.
+"""
+ᶜenv_velocity(Y, p) = p.precomputed.ᶜu⁰
+
+"""
+    set_prognostic_edmf_nonequilibrium_quantities!(Y, p, ᶠuₕ³)
+
+Update, for `PrognosticEDMFX` with `NonEquilibriumMicrophysics1M`/`2M`, the
+grid-mean velocity and thermodynamic quantities, the draft densities `ᶜρʲs`, and
+the environment quantities in one column loop. Writes the same `p.precomputed`
+fields, with the same values, as the grid-mean loop of
+`set_implicit_precomputed_quantities_core!`,
+`set_prognostic_edmf_precomputed_quantities_draft!`, and
+`set_prognostic_edmf_precomputed_quantities_environment!`. Returns `nothing`.
+"""
+NVTX.@annotate function set_prognostic_edmf_nonequilibrium_quantities!(Y, p, ᶠuₕ³)
     (; turbconv_model) = p.atmos
-    (; ᶜΦ) = p.core
-    (; ᶜp, ᶜK, ᶜh_tot) = p.precomputed
-    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
-        p.precomputed
-
-    T_min_sgs = CAP.T_min_sgs(p.params)
-
-    if p.atmos.microphysics_model isa
-       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        # One fused column loop: environment velocities and kinetic energy,
-        # then the environment thermodynamic state from primitives.
-        DataLayouts.foreach_column(
-            ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-            Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot,
-        ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-        Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
-            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
-            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
-            @inline function ᶜχ⁰(name) # the environment value of a specific tracer
-                ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(name))
-                return @inline @. lazy(
-                    specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
-                )
-            end
-            @. ᶜq_liq⁰ = max(0, $(ᶜχ⁰(@name(q_lcl))) + $(ᶜχ⁰(@name(q_rai))))
-            @. ᶜq_ice⁰ = max(0, $(ᶜχ⁰(@name(q_icl))) + $(ᶜχ⁰(@name(q_sno))))
-            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, $(ᶜχ⁰(@name(q_tot))))
-            ᶜh⁰ = @inline @. lazy(
-                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model) - ᶜΦ,
-            )
-            @. ᶜT⁰ = max(
-                T_min_sgs,
-                TD.air_temperature(
-                    thermo_params,
-                    TD.ph(),
-                    ᶜh⁰,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_liq⁰,
-                    ᶜq_ice⁰,
-                ),
-            )
-            return nothing
-        end
-    else
-        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
-        DataLayouts.foreach_column(
-            ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜq_tot_nonneg⁰, Y.c, Y.f, ᶠuₕ³, ᶜq_tot⁰,
-        ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜq_tot_nonneg⁰, Yc, Yf, ᶠuₕ³, ᶜq_tot⁰
-            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
-            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            @. ᶜq_tot_nonneg⁰ = max(0, ᶜq_tot⁰)
-            return nothing
-        end
-        (; ᶜsa_result) = p.precomputed
-        h⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)
-        @. ᶜsa_result =
-            saturation_adjustment_tuple(thermo_params, TD.ph(), ᶜp, h⁰, ᶜq_tot_nonneg⁰)
-        @. ᶜT⁰ = ᶜsa_result.T
-        @. ᶜq_liq⁰ = ᶜsa_result.q_liq
-        @. ᶜq_ice⁰ = ᶜsa_result.q_ice
-    end
-    return nothing
-end
-
-"""
-    set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
-
-Update the velocity and thermodynamic quantities of each SGS draft (updraft) for
-`PrognosticEDMFX`. Returns `nothing`.
-
-Mutates in `p.precomputed`, for every mass-flux subdomain `j`: `ᶜuʲs`, `ᶠu³ʲs`,
-`ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`, and `ᶜρʲs`.
-
-For `NonEquilibriumMicrophysics1M`/`2M`, the draft condensate is taken from the
-prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
-floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
-partition come from a pressure-enthalpy saturation adjustment. The draft density
-`ᶜρʲ` is diagnosed at the grid-mean pressure `ᶜp`, which is shared across all
-subdomains.
-
-# Arguments
-
-  - `ᶠuₕ³`: Third contravariant component of the horizontal velocity, interpolated
-    to faces [1/s].
-"""
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
-    Y,
-    p,
-    ᶠuₕ³,
-    t,
-)
-    (; microphysics_model, turbconv_model) = p.atmos
-    n = n_mass_flux_subdomains(turbconv_model)
+    n_val = Val(n_mass_flux_subdomains(turbconv_model))
     thermo_params = CAP.thermodynamics_params(p.params)
-
-    (; ᶜΦ) = p.core
-    (;
-        ᶜp,
-        ᶜuʲs,
-        ᶠu³ʲs,
-        ᶜKʲs,
-        ᶠKᵥʲs,
-        ᶜTʲs,
-        ᶜq_tot_nonnegʲs,
-        ᶜq_liqʲs,
-        ᶜq_iceʲs,
-        ᶜρʲs,
-    ) = p.precomputed
-
     T_min_sgs = CAP.T_min_sgs(p.params)
-    drafts = unrolled_map(StaticOneTo(n)) do j
-        @inline
-        (
-            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), ᶜTʲs.:($j),
-            ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), ᶜρʲs.:($j),
-            Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
+    pc = p.precomputed
+    # (outputs in containers: a loop over more than 31 arguments would not infer)
+    grid_mean = (
+        pc.ᶜu, pc.ᶠu³, pc.ᶜK, pc.ᶜT, pc.ᶜq_tot_nonneg, pc.ᶜq_liq, pc.ᶜq_ice,
+        pc.ᶜh_tot, pc.ᶜp,
+    )
+    drafts = ntuple(
+        j -> (pc.ᶜTʲs.:($j), pc.ᶜρʲs.:($j), Y.c.sgsʲs.:($j)),
+        n_val,
+    )
+    environment =
+        (pc.ᶜu⁰, pc.ᶠu³⁰, pc.ᶜK⁰, pc.ᶜT⁰, pc.ᶜq_tot_nonneg⁰, pc.ᶜq_liq⁰, pc.ᶜq_ice⁰)
+    mm = p.atmos.microphysics_model
+    DataLayouts.foreach_column(
+        grid_mean, drafts, environment, Y.c, Y.f, ᶠuₕ³, p.core.ᶜΦ,
+    ) do grid_mean, drafts, environment, Yc, Yf, ᶠuₕ³, ᶜΦ
+        set_grid_mean_column!(
+            grid_mean..., Yc, Yf.u₃, ᶠuₕ³, ᶜΦ, mm, thermo_params, T_min_sgs,
         )
-    end
-    # One fused column loop for every draft: velocities and kinetic energies,
-    # then the draft thermodynamic state.
-    DataLayouts.foreach_column(drafts) do drafts
-        for (
-                ᶜuʲ,
-                ᶠu³ʲ,
-                ᶜKʲ,
-                ᶠKᵥʲ,
-                ᶜTʲ,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
-                ᶜρʲ,
-                ᶜsgsʲ,
-                ᶠu₃ʲ,
-                ᶜuₕ,
-                ᶠuₕ³,
-                ᶜΦ,
-                ᶜp,
-            ) in drafts
-
-            (ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp) =
-                register_copy((ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp))
-            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
-            @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-            set_draft_thermo_column!(
-                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-                microphysics_model, thermo_params, T_min_sgs,
+        (_, _, ᶜK, _, _, _, _, ᶜh_tot, ᶜp) = grid_mean
+        for (ᶜTʲ, ᶜρʲ, ᶜsgsʲ) in drafts
+            set_draft_temperature_and_density!(
+                ᶜTʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp, mm, thermo_params, T_min_sgs,
             )
         end
+        set_environment_column!(
+            environment, Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot, ᶜp,
+            mm, turbconv_model, thermo_params, T_min_sgs,
+        )
     end
     return nothing
 end
 
 """
-    set_draft_thermo_column!(
-        ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-        microphysics_model, thermo_params, T_min_sgs,
-    )
+    set_prognostic_edmf_precomputed_quantities_draft!(Y, p)
 
-Column body of the draft thermodynamic state. For `NonEquilibriumMicrophysics1M`/`2M`,
-the condensate comes from the prognostic draft tracers, `q_tot` is clamped to at least
-the condensate, and `T` follows from the enthalpy `mse - Φ`, floored at `T_min_sgs`;
-otherwise, `T` and the phase partition come from a pressure-enthalpy saturation
-adjustment. The density is diagnosed at the grid-mean pressure.
+Update the temperature `ᶜTʲs` and density `ᶜρʲs` of each SGS draft (updraft) for
+`PrognosticEDMFX` (`set_draft_temperatures_and_densities!`). The other draft
+quantities are not stored: their readers evaluate them from `Y`
+(`ᶜdraft_thermo_fields`, `ᶜdraft_velocities`).
+Returns `nothing`.
 """
-@inline function set_draft_thermo_column!(
-    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-    microphysics_model, thermo_params, T_min_sgs,
-)
-    if microphysics_model isa
-       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
-        @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
-        # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-        @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-        ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-        @. ᶜTʲ = max(
-            T_min_sgs,
-            TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜhʲ,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
-            ),
-        )
-    else
-        @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
-        ᶜsa_resultʲ = @. saturation_adjustment_tuple(
-            thermo_params,
-            TD.ph(),
-            ᶜp,
-            ᶜsgsʲ.mse - ᶜΦ,
-            ᶜq_tot_nonnegʲ,
-        )
-        @. ᶜTʲ = ᶜsa_resultʲ.T
-        @. ᶜq_liqʲ = ᶜsa_resultʲ.q_liq
-        @. ᶜq_iceʲ = ᶜsa_resultʲ.q_ice
-    end
-    @. ᶜρʲ = TD.air_density(
-        thermo_params,
-        ᶜTʲ,
-        ᶜp,
-        ᶜq_tot_nonnegʲ,
-        ᶜq_liqʲ,
-        ᶜq_iceʲ,
-    )
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(Y, p)
+    set_draft_temperatures_and_densities!(Y, p)
     return nothing
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+    set_draft_temperatures_and_densities!(Y, p)
 
-Update the per-updraft thermodynamic precomputed quantities — for every
-subdomain `j`, `ᶜq_tot_nonnegʲs.:(j)`, `ᶜq_liqʲs.:(j)`, `ᶜq_iceʲs.:(j)`,
-`ᶜTʲs.:(j)`, `ᶜρʲs.:(j)` — from `Y`, the cached pressure `ᶜp`, and the
-geopotential `ᶜΦ`. Does not touch velocity, kinetic energy, or the
-subdomain-density difference `ᶜρ_diffʲs`.
-
-For `NonEquilibriumMicrophysics1M`/`2M`, draft condensate is taken from the
-prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
-floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
-partition come from a pressure-enthalpy saturation adjustment. `ᶜρʲ` is
-diagnosed at the shared `ᶜp`.
-
-Called from the Picard loop of `initialize_implicit_stage_problem!` after each
-tracer sweep, and from `solve_sgs_updraft_tracers_implicit_stage_analytic!`
-after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
-computes the same thermodynamics (`set_draft_thermo_column!`) in its fused
-column loop.
+Set the temperature `ᶜTʲs` and density `ᶜρʲs` of each EDMFX draft from its
+prognostic variables and the grid-mean pressure `ᶜp`
+(`set_draft_temperature_and_density!`). Returns `nothing`.
 """
-function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
-    (; microphysics_model, turbconv_model) = p.atmos
+function set_draft_temperatures_and_densities!(Y, p)
+    (; ᶜTʲs, ᶜρʲs, ᶜp) = p.precomputed
+    mm = p.atmos.microphysics_model
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
-    (; ᶜp, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρʲs) = p.precomputed
     T_min_sgs = CAP.T_min_sgs(p.params)
-    drafts = unrolled_map(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
+    drafts = unrolled_map(StaticOneTo(n_mass_flux_subdomains(p.atmos.turbconv_model))) do j
         @inline
-        (
-            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
-            ᶜρʲs.:($j), Y.c.sgsʲs.:($j),
-        )
+        (ᶜTʲs.:($j), ᶜρʲs.:($j), Y.c.sgsʲs.:($j))
     end
-    DataLayouts.foreach_column(drafts, ᶜΦ, ᶜp) do drafts, ᶜΦ, ᶜp
-        for (ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ) in drafts
-            set_draft_thermo_column!(
-                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-                microphysics_model, thermo_params, T_min_sgs,
+    DataLayouts.foreach_column(drafts, p.core.ᶜΦ, ᶜp) do drafts, ᶜΦ, ᶜp
+        for (ᶜTʲ, ᶜρʲ, ᶜsgsʲ) in drafts
+            set_draft_temperature_and_density!(
+                ᶜTʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp, mm, thermo_params, T_min_sgs,
             )
         end
     end
@@ -348,11 +484,10 @@ site by `compute_entrainment` from `ᶜentr_vel_scaleʲs` and the then-current
 updraft velocity. The environment velocity is passed to the coefficient model as
 `w⁰ = 0`; see the comment at the call site for why.
 
-Reads `ᶜp`, `ᶠu³`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`,
-`ᶜq_ice⁰`), the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`), and `ustar` from
+Reads `ᶜp`, `ᶠu³`, the environment and draft states (`ᶜenv_thermo_fields`,
+`ᶜdraft_thermo_tuples`, `ᶜdraft_velocities`), and `ustar` from
 `p.precomputed.sfc_conditions`, so it must run after
-`set_prognostic_edmf_precomputed_quantities_draft!` and
-`..._environment!`.
+`set_prognostic_edmf_precomputed_quantities_draft!`.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
@@ -371,14 +506,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜp, ᶠu³, ᶜstrain_rate_norm) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
     (; ρtke_flux) = p.precomputed
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = ᶜdraft_thermo_tuples(Y, p)
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
     (;
-        ᶜuʲs,
-        ᶜTʲs,
-        ᶜq_tot_nonnegʲs,
-        ᶜq_liqʲs,
-        ᶜq_iceʲs,
         ᶜρʲs,
         ᶜentr_vel_scaleʲs,
         ᶜentr_nonvel_rateʲs,
