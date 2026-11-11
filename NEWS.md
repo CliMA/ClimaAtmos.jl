@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Stabilize
+  `update_implicit_microphysics_jacobian!` for 1-moment implicit phase changes:
+  include the vapor-saturation and isobaric psychrometric latent-heating
+  derivative `−Γ · C / q_sat` alongside pool depletion `tend / q` in rain
+  evaporation and snow sublimation/deposition (and `−Γ_ice · C_sno / q_sat_ice`
+  in snow deposition), floor denominators at `ϵ_numerics(FT)` (`q`) and
+  `√floatmin(FT)` (`q_sat`) so cold `Float32` states (`q_sat_ice < eps(Float32)`
+  below ~183 K) and trace condensates retain full damping without `Float32`
+  overflow, fall back to the unblocked ice relaxation timescale `CMNe.τ_relax`
+  when `SGSQuadrature` produces a nonzero ice tendency (`tend_icl ≠ 0`) on a
+  cell-mean `INP_limiter`-blocked state, and accumulate the `PrognosticEDMFX`
+  off-diagonal coupling `∂Yₜ_ρq / ∂qʲ = ρaʲ (rʲ − r⁰)` into
+  `(c.ρq_x, c.sgsʲs.:(1).q_x)` so stiff updraft phase changes do not perturb
+  inactive environment condensates.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
   `set_implicit_precomputed_quantities_core!` at the explicit predictor state
   entering `initialize_implicit_stage_problem!` when Picard rounds follow,

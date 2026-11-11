@@ -4,8 +4,11 @@ using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
 import UnrolledUtilities:
     unrolled_any, unrolled_filter, unrolled_flatmap, unrolled_map, unrolled_reduce
+import CloudMicrophysics.Common as CMC
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.Parameters as CMP
+import CloudMicrophysics.Utilities as CMU
 import Thermodynamics as TD
 
 """
@@ -343,7 +346,9 @@ end
 
 Allocate the diagonal Jacobian blocks of the advected updraft scalars, plus the
 couplings of the sedimenting SGS condensate masses to the updraft `q_tot` and
-`mse`.
+`mse` and, for `NonEquilibriumMicrophysics1M`, the zero-initialized
+`(grid-mean condensate, updraft condensate)` blocks coupled by
+`update_implicit_microphysics_jacobian!`.
 
 These diagonals are shared by all of the implicit SGS processes: vertical
 advection and sedimentation (`update_sgs_advection_jacobian!`), diffusion
@@ -364,6 +369,17 @@ function sgs_advection_jacobian_blocks(Y, atmos)
         unrolled_map(sgs_state_name, advected_sgs_scalar_names(Y))
     sgs_mass_names =
         unrolled_map(sgs_state_name, sedimenting_sgs_mass_names(Y))
+    mp1m_mass_names =
+        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
+        unrolled_filter(
+            n -> MatrixFields.has_field(Y, get_χʲ_name_from_ρχ_name(n)),
+            unrolled_map(center_state_name, sedimenting_mass_names(Y)),
+        ) : ()
+    zero_tridiag(Yc) = begin
+        f = similar(Yc, TridiagonalRow)
+        fill!(parent(f), zero(FT))
+        f
+    end
     return (
         map(
             name -> (name, name) => similar(Y.c, TridiagonalRow),
@@ -380,6 +396,11 @@ function sgs_advection_jacobian_blocks(Y, atmos)
                 (@name(c.sgsʲs.:(1).mse), name) =>
                     similar(Y.c, TridiagonalRow),
             sgs_mass_names,
+        )...,
+        map(
+            name ->
+                (name, get_χʲ_name_from_ρχ_name(name)) => zero_tridiag(Y.c),
+            mp1m_mass_names,
         )...,
     )
 end
@@ -2278,44 +2299,55 @@ end
 """
     update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
 
-Add diagonal Jacobian contributions for implicit 1M condensation, sublimation,
-rain evaporation, and snow sublimation/deposition.
+Add Jacobian contributions for implicit 1M condensation, sublimation, rain
+evaporation, and snow sublimation/deposition.
 
 For cloud liquid/ice, adds `−dtγ / τ` to the `(ρq_lcl, ρq_lcl)` and
 `(ρq_icl, ρq_icl)` diagonals (and the matching `sgsʲs.:(j).q_lcl` / `q_icl`
-diagonals) using `τ` from CM's `τ_vap_to_q_lcl` / `τ_vap_to_q_icl`.
+diagonals), using `τ` from CM's `τ_vap_to_q_lcl` / `τ_vap_to_q_icl` (unblocking
+cell-mean `INP_limiter` / deposition timescales to `CMNe.τ_relax` when SGS
+quadrature produces a nonzero ice tendency `tend_icl ≠ 0`).
 
-For rain evaporation and snow sublimation/deposition, adds `dtγ · ∂rate/∂q`
-to the `(ρq_rai, ρq_rai)` and `(ρq_sno, ρq_sno)` diagonals (and the matching
-updraft diagonals) using a piecewise analytical approximation:
+For rain evaporation and snow sublimation/deposition, adds `dtγ · r` to the
+`(ρq_rai, ρq_rai)` and `(ρq_sno, ρq_sno)` diagonals (and the matching updraft
+diagonals) using the piecewise analytical linearization of
+`rate = C(q, T, ρ) · S_rel` with `S_rel = (q_vap − q_sat) / q_sat` and the
+isobaric psychrometric approximation `∂(q_vap − q_sat) / ∂q ≈ −Γ`
+(`Γ = 1 + (L / cp_d) ∂q_sat / ∂T` from `CMNe.gamma_helper`, which bounds the
+single-step phase change to `(q_sat − q_vap) / Γ`, within `Γ_ρ / Γ − 1 ≈ 15–20%`
+of the fixed-`(ρ, ρe_tot, ρq_tot)` saturation point):
 
-  - Rain (CM has no condensation, only evaporation): `∂rate/∂q_rai ≈ tend/q_rai`
-    when `tend < 0`; zero otherwise.  Implemented by `_implicit_mp_evap_cond_rai`.
+  - Rain (evaporation only, `tend < 0`; zero otherwise):
+    `r = tend / max(q_rai, ϵ_numerics(FT)) − Γ_liq · C_rai / max(q_sat_liq, √floatmin(FT))`,
+    combining pool depletion with vapor saturation and latent-cooling feedback
+    (`_implicit_mp_evap_cond_rai`).
 
-  - Snow: `∂rate/∂q_sno ≈ tend/q_sno` when `tend < 0` (sublimation depletion
-    timescale).  When `tend > 0` (deposition), the rate is `C(q_sno,T,ρ)·S_rel`
-    where `S_rel = (q_vap − q_sat_ice)/q_sat_ice` is the relative supersaturation
-    over ice, so `∂rate/∂q_vap = C/q_sat_ice`.  With mass conservation
-    (`∂q_vap/∂q_sno = −1`) the diagonal contribution is `−C/q_sat_ice`.  `C` is
-    the ventilation integral prefactor, computed without dividing by `S_rel` so it
-    is well-defined even when grid-mean `S_rel ≤ 0`.  Implemented by
-    `_implicit_mp_subl_dep_sno`.
+  - Snow (`_implicit_mp_subl_dep_sno`): when `tend < 0` (sublimation),
+    `r = tend / max(q_sno, ϵ_numerics(FT)) − Γ_ice · C_sno / max(q_sat_ice, √floatmin(FT))`;
+    when `tend > 0` (deposition), `r = −Γ_ice · C_sno / max(q_sat_ice, √floatmin(FT))`;
+    zero when `tend == 0`. Denominators floor at `ϵ_numerics(FT)` (`q`) and
+    `√floatmin(FT)` (`q_sat`) so cold `Float32` states (`q_sat_ice < eps(Float32)`
+    below ~183 K) and trace condensates retain full damping without `Float32`
+    overflow.
 
-Both branches produce negative diagonal contributions (tending to stabilize the
-Newton iteration). The tendency values come from `ᶜmp_tendency_implicit` (and
-EDMF variants), which `update_implicit_1m_tendency!` refreshes each iterate.
+Under `PrognosticEDMFX`, the grid-mean tendency `ρa⁰ S⁰(q⁰) + Σⱼ ρaʲ Sʲ(qʲ)`
+with `q⁰ = (ρq − Σⱼ ρaʲ qʲ) / ρa⁰` also couples each grid-mean condensate row
+to the updraft column via `∂Yₜ_ρq / ∂qʲ = ρaʲ (rʲ − r⁰)`, accumulated into
+`(c.ρq_x, c.sgsʲs.:(1).q_x)` so a stiff updraft rate `rʲ` with inactive
+environment `r⁰ = 0` maps `Δρq_x = ρa¹ Δq_x¹` without perturbing `q_x⁰`.
 
 Preconditioner caveats, intentional:
 
- 1. The cloud liquid/ice `τ` and the rain/snow `∂rate/∂q` are evaluated on
-    the cell-mean state without integrating over the SGS quadrature
-    distribution. The residual uses the full SGS-integrated rate.
+ 1. Cell-mean state inputs are used for `τ`, `C`, and `Γ` without integrating
+    their derivatives over the SGS quadrature nodes; the residual uses the full
+    SGS-integrated rate from `update_implicit_1m_tendency!` (under
+    `max_newton_iters_ode == 1`, evaluating `-Γ · C / q_sat` at the cell mean
+    when only a fraction `f` of quadrature nodes evaporates or sublimates scales
+    the stiff single-step increment by `~f`).
 
- 2. No `ρe_tot` cross-term is included; under 1M the latent-heat adjustment
-    to the state is second-order in the residual.
-
-Only the Newton direction is affected; residuals use the full SGS-integrated
-BMT rate from `update_implicit_1m_tendency!`, so correctness is unaffected.
+ 2. Cross-terms with `ρe_tot` and `ρq_tot` are omitted (1M phase changes leave
+    `ρ`, `ρq_tot`, and `ρe_tot` unchanged, while `Γ` uses the isobaric
+    psychrometric approximation along the phase-change direction).
 """
 function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
@@ -2331,16 +2363,47 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     has_subl_sno =
         !isnothing(procs.snow_deposition_sublimation) &&
         MatrixFields.has_field(Y, @name(c.ρq_sno))
+    FT = Spaces.undertype(axes(Y.c))
+    is_edmf = p.atmos.turbconv_model isa PrognosticEDMFX
+    has_sgs_mf = is_edmf && p.atmos.edmfx_model.sgs_mass_flux
+    if is_edmf && !has_sgs_mf
+        z = zero(FT)
+        MatrixFields.unrolled_foreach((
+            (has_cond, @name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+            (has_subl, @name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+            (has_evap, @name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+            (has_subl_sno, @name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+        )) do (active, gs_n, sgs_n)
+            if !active &&
+               MatrixFields.has_field(Y, gs_n) &&
+               MatrixFields.has_field(Y, sgs_n)
+                off_b = matrix[gs_n, sgs_n]
+                @. off_b = TridiagonalMatrixRow(z, z, z)
+            end
+            return nothing
+        end
+    end
     (has_cond || has_subl || has_evap || has_subl_sno) || return nothing
     thp = CAP.thermodynamics_params(p.params)
+    # TODO: Fuse the per-species scratch evaluations with the matrix block
+    # updates and fold `mp_i` / `thp` via `_fold` to reduce kernel launches and
+    # GPU parameter footprint.
+    ᶜr⁰ = p.scratch.ᶜtemp_scalar
+    ᶜrʲ = p.scratch.ᶜtemp_scalar_2
 
-    # State inputs for the grid-mean Jacobian blocks.  Under PrognosticEDMFX the
+    # State inputs for the grid-mean Jacobian blocks. Under PrognosticEDMFX the
     # grid-mean implicit tendency cache is never populated; use environment state
     # and the environment tendency instead.
-    if p.atmos.turbconv_model isa PrognosticEDMFX
+    if is_edmf
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
         ᶜT = ᶜT⁰
-        ᶜρ = @. lazy(TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰))
+        eps_FT = eps(FT)
+        ᶜρ = @. lazy(
+            max(
+                eps_FT,
+                TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+            ),
+        )
         ᶜq_tot_nonneg = ᶜq_tot_nonneg⁰
         ᶜq_lcl = ᶜspecific_env_value(@name(q_lcl), Y, p)
         ᶜq_icl = ᶜspecific_env_value(@name(q_icl), Y, p)
@@ -2358,119 +2421,174 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     end
 
     if has_cond
+        @. ᶜr⁰ =
+            -inv(
+                _implicit_mp_τ_lcl(
+                    mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
+                    ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+                ),
+            )
         ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
-        @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(
-            -dtγ / _implicit_mp_τ_lcl(
-                mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
-                ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ),
-        )
-    end
-    if has_subl
-        ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
-        @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(
-            -dtγ / _implicit_mp_τ_icl(
-                mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
-                ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ),
-        )
-    end
-    if has_evap
-        ∂ᶜρq_rai_err_∂ᶜρq_rai = matrix[@name(c.ρq_rai), @name(c.ρq_rai)]
-        @. ∂ᶜρq_rai_err_∂ᶜρq_rai += DiagonalMatrixRow(
-            dtγ * _implicit_mp_evap_cond_rai(ᶜmp_tend.dq_rai_dt, ᶜq_rai),
-        )
-    end
-    if has_subl_sno
-        ∂ᶜρq_sno_err_∂ᶜρq_sno = matrix[@name(c.ρq_sno), @name(c.ρq_sno)]
-        @. ∂ᶜρq_sno_err_∂ᶜρq_sno += DiagonalMatrixRow(
-            dtγ * _implicit_mp_subl_dep_sno(
-                mp_i, ᶜmp_tend.dq_sno_dt, ᶜq_sno, thp, ᶜρ, ᶜT,
-            ),
-        )
-    end
-
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
-        for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-            sgsʲ = Y.c.sgsʲs.:($j)
-            ᶜTʲ = ᶜTʲs.:($j)
-            ᶜρʲ = ᶜρʲs.:($j)
-            ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
-            if has_cond
+        @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(dtγ * ᶜr⁰)
+        if is_edmf
+            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_lcl)
                 MatrixFields.has_field(Y, χ) || continue
+                sgsʲ = Y.c.sgsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜTʲ = ᶜTʲs.:($j)
+                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+                @. ᶜrʲ =
+                    -inv(
+                        _implicit_mp_τ_lcl(
+                            mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
+                            sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
+                        ),
+                    )
                 ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ = matrix[χ, χ]
-                @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(
-                    -dtγ / _implicit_mp_τ_lcl(
-                        mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                    ),
-                )
+                @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
+                if j == 1
+                    _add_edmf_mp_offdiag!(
+                        matrix[@name(c.ρq_lcl), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
+                        dtγ, FT, has_sgs_mf,
+                    )
+                end
             end
-            if has_subl
+        end
+    end
+    if has_subl
+        @. ᶜr⁰ =
+            -inv(
+                _implicit_mp_τ_icl(
+                    mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
+                    ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜmp_tend.dq_icl_dt,
+                ),
+            )
+        ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
+        @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(dtγ * ᶜr⁰)
+        if is_edmf
+            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendency_implicitʲs) =
+                p.precomputed
+            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_icl)
                 MatrixFields.has_field(Y, χ) || continue
+                sgsʲ = Y.c.sgsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜTʲ = ᶜTʲs.:($j)
+                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+                ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
+                @. ᶜrʲ =
+                    -inv(
+                        _implicit_mp_τ_icl(
+                            mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
+                            sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
+                            ᶜtendʲ.dq_icl_dt,
+                        ),
+                    )
                 ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ = matrix[χ, χ]
-                @. ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ += DiagonalMatrixRow(
-                    -dtγ / _implicit_mp_τ_icl(
-                        mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                        sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                    ),
-                )
+                @. ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
+                if j == 1
+                    _add_edmf_mp_offdiag!(
+                        matrix[@name(c.ρq_icl), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
+                        dtγ, FT, has_sgs_mf,
+                    )
+                end
             end
-            if has_evap
+        end
+    end
+    if has_evap
+        @. ᶜr⁰ = _implicit_mp_evap_cond_rai(
+            mp_i, ᶜmp_tend.dq_rai_dt, ᶜq_rai, thp, ᶜρ, ᶜT,
+        )
+        ∂ᶜρq_rai_err_∂ᶜρq_rai = matrix[@name(c.ρq_rai), @name(c.ρq_rai)]
+        @. ∂ᶜρq_rai_err_∂ᶜρq_rai += DiagonalMatrixRow(dtγ * ᶜr⁰)
+        if is_edmf
+            (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
+            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_rai)
                 MatrixFields.has_field(Y, χ) || continue
+                sgsʲ = Y.c.sgsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜTʲ = ᶜTʲs.:($j)
                 ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
-                ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ = matrix[χ, χ]
-                @. ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ += DiagonalMatrixRow(
-                    dtγ * _implicit_mp_evap_cond_rai(ᶜtendʲ.dq_rai_dt, sgsʲ.q_rai),
+                @. ᶜrʲ = _implicit_mp_evap_cond_rai(
+                    mp_i, ᶜtendʲ.dq_rai_dt, sgsʲ.q_rai,
+                    thp, ᶜρʲ, ᶜTʲ,
                 )
+                ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ = matrix[χ, χ]
+                @. ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
+                if j == 1
+                    _add_edmf_mp_offdiag!(
+                        matrix[@name(c.ρq_rai), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
+                        dtγ, FT, has_sgs_mf,
+                    )
+                end
             end
-            if has_subl_sno
+        end
+    end
+    if has_subl_sno
+        @. ᶜr⁰ = _implicit_mp_subl_dep_sno(
+            mp_i, ᶜmp_tend.dq_sno_dt, ᶜq_sno, thp, ᶜρ, ᶜT,
+        )
+        ∂ᶜρq_sno_err_∂ᶜρq_sno = matrix[@name(c.ρq_sno), @name(c.ρq_sno)]
+        @. ∂ᶜρq_sno_err_∂ᶜρq_sno += DiagonalMatrixRow(dtγ * ᶜr⁰)
+        if is_edmf
+            (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
+            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_sno)
                 MatrixFields.has_field(Y, χ) || continue
+                sgsʲ = Y.c.sgsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜTʲ = ᶜTʲs.:($j)
                 ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
-                ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ = matrix[χ, χ]
-                @. ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ += DiagonalMatrixRow(
-                    dtγ * _implicit_mp_subl_dep_sno(
-                        mp_i, ᶜtendʲ.dq_sno_dt, sgsʲ.q_sno, thp, ᶜρʲ, ᶜTʲ,
-                    ),
+                @. ᶜrʲ = _implicit_mp_subl_dep_sno(
+                    mp_i, ᶜtendʲ.dq_sno_dt, sgsʲ.q_sno,
+                    thp, ᶜρʲ, ᶜTʲ,
                 )
+                ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ = matrix[χ, χ]
+                @. ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
+                if j == 1
+                    _add_edmf_mp_offdiag!(
+                        matrix[@name(c.ρq_sno), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
+                        dtγ, FT, has_sgs_mf,
+                    )
+                end
             end
         end
     end
     return nothing
 end
 
+@inline function _add_edmf_mp_offdiag!(
+    off_block, ᶜρaʲ, ᶜr⁰, ᶜrʲ, dtγ, ::Type{FT}, has_sgs_mf::Bool,
+) where {FT}
+    z = zero(FT)
+    if has_sgs_mf
+        @. off_block += DiagonalMatrixRow(dtγ * ᶜρaʲ * (ᶜrʲ - ᶜr⁰))
+    else
+        @. off_block = TridiagonalMatrixRow(z, dtγ * ᶜρaʲ * (ᶜrʲ - ᶜr⁰), z)
+    end
+    return nothing
+end
+
 """
     _implicit_mp_τ_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
-    _implicit_mp_τ_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _implicit_mp_τ_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend_icl = zero(ρ))
 
 Pack the microphysics / thermodynamic state into CM's `(micro, thermo)`
 tuples and dispatch to the state-dependent relaxation timescale
 `τ_vap_to_q_lcl` / `τ_vap_to_q_icl` on `mp.processes.cloud_liquid_formation` /
 `mp.processes.cloud_ice_formation`. Returns `Inf` when the process is off.
 
-Preconditioner caveats, intentional:
-
- 1. `τ` is evaluated on the cell-mean state. For variants where `τ` is a
-    local function of local ice content (e.g.
-    `TemperatureDependentIceNumber`'s `r_ice(q_icl, n_ice)`-dependent
-    growth time), the correct per-node τ at an SGS quadrature point can
-    differ from this cell-mean value. We don't integrate `τ` over the SGS
-    distribution for the preconditioner diagonal.
-
- 2. The diagonal is `−dtγ / τ`; the term `−dtγ · (∂(1/τ)/∂q) · S` from the
-    state dependence of `τ` is dropped. Including it would require CM to
-    expose `∂τ/∂q` for every ice-formation variant. The dropped term is
-    second order in the sublimation residual (`O(S · Δq/τ²)`) and shrinks
-    as Newton converges `S → 0`.
-
-Only the Newton direction is affected; the residual uses the
-SGS-integrated BMT rate from `update_implicit_1m_tendency!`, so
-correctness is unaffected.
+When SGS quadrature produces a nonzero ice tendency (`tend_icl ≠ 0`) while the
+cell-mean state is blocked by `TemperatureDependentIceNumber`'s `INP_limiter`
+(`τ == Inf`) — either net deposition `tend_icl > 0` from colder quadrature nodes
+or net sublimation `tend_icl < 0` from subsaturated nodes while the cell mean is
+ice-supersaturated — or uses the sublimation branch of `TemperatureDependent`
+during net deposition (`tend_icl > 0`), falls back to the unblocked relaxation
+timescale `CMNe.τ_relax` (and conversely caps `TemperatureDependent` at
+`τ_relax` during net sublimation `tend_icl < 0`).
 """
 @inline function _implicit_mp_τ_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
     FT = typeof(ρ)
@@ -2486,46 +2604,122 @@ correctness is unaffected.
         mp.processes.cloud_liquid_formation, mp, thp, micro, thermo,
     )
 end
-@inline function _implicit_mp_τ_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+@inline function _implicit_mp_τ_icl(
+    mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend_icl = zero(ρ),
+)
     FT = typeof(ρ)
+    q_icl_pos = max(zero(FT), q_icl)
+    ρ_safe = max(ρ, CMU.ϵ_numerics(FT))
     micro = (;
         q_tot,
         q_lcl = max(zero(FT), q_lcl),
-        q_icl = max(zero(FT), q_icl),
+        q_icl = q_icl_pos,
         q_rai = max(zero(FT), q_rai),
         q_sno = max(zero(FT), q_sno),
     )
-    thermo = (; ρ, T)
-    return CMNe.τ_vap_to_q_icl(
-        mp.processes.cloud_ice_formation, mp, thp, micro, thermo,
-    )
+    thermo = (; ρ = ρ_safe, T)
+    opt = mp.processes.cloud_ice_formation
+    τ = CMNe.τ_vap_to_q_icl(opt, mp, thp, micro, thermo)
+    if opt isa CMP.TemperatureDependentIceNumber && isinf(τ) && !iszero(tend_icl)
+        return CMNe.τ_relax(
+            mp.cloud.ice,
+            mp.air_properties,
+            CMP.process_params(mp, opt),
+            q_icl_pos,
+            T,
+            ρ_safe,
+        )
+    elseif opt isa CMP.TemperatureDependent && tend_icl > zero(FT)
+        pp = CMP.process_params(mp, opt)
+        τ_dep = CMNe.τ_relax(
+            mp.cloud.ice, mp.air_properties, pp.frostenberg, q_icl_pos, T, ρ_safe,
+        )
+        return min(τ, τ_dep)
+    elseif opt isa CMP.TemperatureDependent && tend_icl < zero(FT)
+        pp = CMP.process_params(mp, opt)
+        return min(τ, oftype(τ, pp.τ_relax))
+    end
+    return τ
+end
+
+# Ventilation-integral prefactor `C` for 1M rain evaporation (`rate = C · S_rel`
+# when `S_rel < 0`), mirroring `CM1._snow_subl_dep_coeff`.
+@inline function _rain_evap_coeff(mp, thp, q_rai, ρ, T)
+    FT = typeof(ρ)
+    q_rai > CMU.ϵ_numerics(FT) || return zero(FT)
+    ρ_safe = max(ρ, CMU.ϵ_numerics(FT))
+    (; pdf, mass, vent) = mp.precip.rain
+    vel = mp.terminal_velocity.rain
+    aps = mp.air_properties
+    (; ν_air, D_vapor) = aps
+    G = CMC.G_func_liquid(aps, thp, T)
+    n0 = CM1.get_n0(pdf, q_rai, ρ_safe)
+    v0 = CM1.get_v0(vel, ρ_safe)
+    λ_inv = CM1.lambda_inverse(pdf, mass, q_rai, ρ_safe)
+    (; r0) = mass
+    (; χv, ve, Δv, gamma_vent) = vel
+    Sc = ν_air / max(D_vapor, CMU.ϵ_numerics(FT))
+    return 4 * FT(π) * n0 / ρ_safe * G * λ_inv^2 *
+           (
+               vent.a +
+               vent.b *
+               cbrt(Sc) /
+               (r0 / λ_inv)^((ve + Δv) / 2) *
+               sqrt(2 * v0 * χv / ν_air * λ_inv) *
+               gamma_vent
+           )
+end
+
+# TODO: Replace the isobaric factor `Γ = 1 + (L / cp_d) ∂q_sat/∂T` with the
+# fixed-`(ρ, ρe_tot, ρq_tot)` factor `Γ_ρ = 1 + ((L - R_v T) / c_vm) ∂q_sat/∂T`
+# on the grid-mean block (keeping isobaric `Γ` on the `mse`-based updraft
+# block), and weight `-Γ · C / q_sat` by the subsaturated SGS quadrature
+# fraction so single-iteration evaporation is unattenuated under partial cloud.
+@inline function _psychrometric_gamma_liq(thp, T, q_sat_liq)
+    R_v = TD.Parameters.R_v(thp)
+    cp_d = TD.Parameters.cp_d(thp)
+    L_v = TD.latent_heat_vapor(thp, T)
+    return CMNe.gamma_helper(L_v, cp_d, CMNe.dqcld_dT(q_sat_liq, L_v, R_v, T))
+end
+
+@inline function _psychrometric_gamma_ice(thp, T, q_sat_ice)
+    R_v = TD.Parameters.R_v(thp)
+    cp_d = TD.Parameters.cp_d(thp)
+    L_s = TD.latent_heat_sublim(thp, T)
+    return CMNe.gamma_helper(L_s, cp_d, CMNe.dqcld_dT(q_sat_ice, L_s, R_v, T))
 end
 
 # Piecewise analytical Jacobian approximations for rain evaporation and snow
-# sublimation/deposition. Both functions return a value ≤ 0, so `dtγ * result`
-# is a negative diagonal contribution that stabilises the Newton iteration.
+# sublimation/deposition. Both functions return a value ≤ 0, combining pool
+# depletion (`tend / q`) with the vapor-saturation and isobaric psychrometric
+# latent-heating derivative `−Γ · C / q_sat`.
 
-# Rain: CM only models evaporation (tend < 0); no condensation branch.
-@inline function _implicit_mp_evap_cond_rai(tend, q)
+# Rain: CM models evaporation (`tend < 0`) with no condensation branch.
+@inline function _implicit_mp_evap_cond_rai(mp, tend, q_rai, thp, ρ, T)
     FT = typeof(tend)
-    return min(tend, zero(FT)) / max(q, eps(FT))
+    tend < zero(FT) || return zero(FT)
+    ρ_safe = max(ρ, CMU.ϵ_numerics(FT))
+    C = _rain_evap_coeff(mp, thp, q_rai, ρ_safe, T)
+    q_sat_liq = TD.q_vap_saturation(thp, T, ρ_safe, TD.Liquid())
+    Γ_liq = _psychrometric_gamma_liq(thp, T, q_sat_liq)
+    return tend / max(q_rai, CMU.ϵ_numerics(FT)) -
+           Γ_liq * C / max(q_sat_liq, sqrt(floatmin(FT)))
 end
 
-# Snow: sublimation (tend < 0) uses the depletion timescale tend/q_sno.
-# Deposition (tend > 0): rate = C · S_rel where S_rel = (q_vap - q_sat_ice)/q_sat_ice
-# (relative supersaturation over ice), so ∂rate/∂q_vap = C/q_sat_ice.  The diagonal
-# contribution is −C/q_sat_ice via mass conservation (∂q_vap/∂q_sno = −1).  C is
-# computed from the ventilation integral without dividing by S_rel so it is
-# well-defined even when grid-mean S_rel ≤ 0.
+# Snow: sublimation (`tend < 0`) combines depletion `tend / q_sno` with
+# `−Γ_ice · C / q_sat_ice`; deposition (`tend > 0`) uses the saturation term.
 @inline function _implicit_mp_subl_dep_sno(mp, tend, q_sno, thp, ρ, T)
     FT = typeof(tend)
-    if tend <= zero(FT)
-        return tend / max(q_sno, eps(FT))
-    else
-        C = CM1._snow_subl_dep_coeff(mp, thp, q_sno, ρ, T)
-        q_sat_ice = TD.q_vap_saturation(thp, T, ρ, TD.Ice())
-        return -C / max(q_sat_ice, eps(FT))
-    end
+    iszero(tend) && return zero(FT)
+    ρ_safe = max(ρ, CMU.ϵ_numerics(FT))
+    C =
+        q_sno > CMU.ϵ_numerics(FT) ?
+        CM1._snow_subl_dep_coeff(mp, thp, q_sno, ρ_safe, T) : zero(FT)
+    q_sat_ice = TD.q_vap_saturation(thp, T, ρ_safe, TD.Ice())
+    Γ_ice = _psychrometric_gamma_ice(thp, T, q_sat_ice)
+    sat_term = -Γ_ice * C / max(q_sat_ice, sqrt(floatmin(FT)))
+    return tend < zero(FT) ? tend / max(q_sno, CMU.ϵ_numerics(FT)) + sat_term :
+           sat_term
 end
 
 """
@@ -2842,6 +3036,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     #   - The updraft mse and q_tot diagonal blocks are set by
     #     update_sgs_advection_jacobian! and accumulated into by the SGS
     #     diffusion, entrainment, and boundary condition updates.
+    #   - The `(ρq_x, sgsʲs.:(1).q_x)` off-diagonal blocks are initialized by
+    #     update_sgs_massflux_jacobian! when `sgs_mass_flux` is active and
+    #     accumulated into by update_implicit_microphysics_jacobian! (which
+    #     assigns them directly when `sgs_mass_flux` is inactive).
     #   - The eddy diffusivities are computed once and shared between the
     #     grid-scale and SGS diffusion updates.
     update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)

@@ -199,25 +199,38 @@ fully-coupled implicit microphysics solver.
 
 #### Preconditioner notes
 
-Two simplifications in the Jacobian diagonal
-`update_implicit_microphysics_jacobian!`:
+`update_implicit_microphysics_jacobian!` builds piecewise analytical Jacobian
+entries for cloud condensation/sublimation, rain evaporation, and snow
+sublimation/deposition, plus their `PrognosticEDMFX` off-diagonal couplings.
+With the default `max_newton_iters_ode = 1`, these entries set the single-step
+Newton increment directly (whereas multi-iteration or Krylov solves converge to
+the SGS-integrated residual of `update_implicit_1m_tendency!`):
 
-  - **`τ` evaluated on the cell-mean state.** For variants where `τ` is a
-    local function of the local ice content — e.g.
-    `TemperatureDependentIceNumber`, whose growth time goes through the
-    inferred ice-crystal radius `r_ice(q_icl, n_ice)` — the per-node τ at
-    an SGS quadrature point can differ from the cell-mean value we use.
-    We don't integrate `τ` over the SGS distribution for the
-    preconditioner diagonal.
-  - **State dependence of `τ` dropped from the diagonal.** The diagonal is
-    `−Δtγ / τ`; the term `−Δtγ · (∂(1/τ)/∂q) · S` is not included. Adding
-    it would require CM to expose `∂τ/∂q` for every ice-formation
-    variant. The dropped term is second order in the sublimation residual
-    (`O(S · Δq/τ²)`) and shrinks as Newton converges `S → 0`.
-
-Only the Newton direction is affected; the residual uses the
-SGS-integrated BMT rate from `update_implicit_1m_tendency!`, so
-correctness is unaffected.
+  - **Cell-mean evaluation of `τ`, `C`, and `Γ`.** `τ`, the ventilation
+    prefactor `C`, and `Γ` are evaluated at the cell-mean (or environment /
+    updraft) state without integrating their derivatives over the SGS quadrature
+    nodes. When `TemperatureDependentIceNumber` blocks the cell mean via
+    `INP_limiter` (`τ = Inf`) while SGS quadrature produces a nonzero `tend_icl`
+    (either net deposition from colder nodes or net sublimation from
+    subsaturated nodes), `_implicit_mp_τ_icl` falls back to `CMNe.τ_relax`. When
+    only a fraction `f` of quadrature nodes evaporates or sublimates, evaluating
+    `-Γ C / q_sat` on the cell mean scales the stiff single-iteration increment
+    by `~f`.
+  - **State dependence of `τ` dropped from the cloud diagonal.** The cloud
+    diagonal is `−Δtγ / τ`; the term `−Δtγ · (∂(1/τ)/∂q) · S` is omitted.
+  - **Rain and snow depletion and isobaric psychrometric saturation.** Rain
+    evaporation (`tend < 0`) and snow sublimation (`tend < 0`) combine pool
+    depletion `tend / max(q, ϵ_numerics(FT))` (which over-estimates the
+    power-law derivative `p · tend / q` by `1 / p` so a single step cannot
+    evaporate more than `q`) with `−Γ · C / max(q_sat, √floatmin(FT))` (also
+    used for snow deposition `tend > 0`). Here `Γ = 1 + (L / c_{p,d}) ∂q_{sat}/∂T`
+    is CM's isobaric psychrometric factor, which bounds single-step evaporation
+    to `(q_{sat} - q_v) / Γ` (within `Γ_ρ / Γ - 1 ≈ 15–20%` of the fixed-`ρ`
+    saturation point on the grid mean).
+  - **`PrognosticEDMFX` off-diagonal coupling.** Under `PrognosticEDMFX`,
+    `(c.ρq_x, c.sgsʲs.:(1).q_x)` accumulates `Δtγ · ρa¹ (r¹ − r⁰)` so stiff
+    updraft phase changes map `Δρq_x = ρa¹ Δq_x¹` without perturbing an
+    inactive environment condensate `q_x⁰`.
 
 ### Enforcing physical constraints
 
