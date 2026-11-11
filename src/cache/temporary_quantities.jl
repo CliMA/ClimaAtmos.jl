@@ -73,7 +73,7 @@ function cloud_species_diffusion_temporary_quantities(Y, atmos)
 end
 
 """
-    temporary_quantities(Y, atmos)
+    temporary_quantities(Y, atmos; compensate_explicit_scalar_advection = true)
 
 Allocate the scratch fields stored in `p.scratch`.
 
@@ -89,16 +89,26 @@ implicit solver). Entries whose names end in `_data` or `_level` are
 `Fields.field_values` or single levels rather than full fields. The trailing
 comment on each entry records a representative use.
 
+# Keyword Arguments
+
+  - `compensate_explicit_scalar_advection = true`: Whether post-Newton implicit
+    dissipation weights by `1 + 2 |u³| dtγ` (`_dissipation_weight`).
+
 # Returns
 
 A `NamedTuple` of scratch fields keyed by name.
 """
-function temporary_quantities(Y, atmos)
+function temporary_quantities(
+    Y,
+    atmos;
+    compensate_explicit_scalar_advection::Bool = true,
+)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
+        compensate_explicit_scalar_advection,
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h; ᶠκ in set_face_diffusivities!
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u; ᶠstrain in set_face_diffusivities!
         ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠPr in set_face_diffusivities!
@@ -174,6 +184,15 @@ function temporary_quantities(Y, atmos)
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
+        # Post-Newton implicit upwind dissipation
+        # (`add_vertical_advection_corrections!`): the operator, the system
+        # `I - dtγ 𝒟`, and the tridiagonal solver cache.
+        ᶜupwind_dissipation_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜupwind_dissipation_system = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜupwind_dissipation_solver_cache = MatrixFields.single_field_solver_cache(
+            similar(Y.c, TridiagonalMatrixRow{FT}),
+            Fields.Field(FT, center_space),
+        ),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
         (!isnothing(atmos.prescribed_flow) ? (; temp_Yₜ_imp = similar(Y)) : (;))...,
     )

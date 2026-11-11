@@ -58,6 +58,22 @@ directly by default; setting `use_krylov_method` solves it instead with a
 Jacobian-free Krylov method, which forms Jacobian-vector products by finite
 differences and uses the Jacobian below as a left preconditioner.
 
+Two stage hooks surround the Newton solve on each implicit stage:
+
+  - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
+    runs the closed-form updraft predictor for prognostic PROPHET
+    (`PrognosticEDMFX`); see
+    [PROPHET Discretization and Time Stepping](prophet_numerics.md).
+  - After the solve, `correct_implicit_advection_tendency!` (`T_post_imp!`)
+    performs the implicit
+    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
+    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
+    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
+    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
+    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
+    microphysics tracers at the solved velocity; see
+    [Discretization and Operators](discretization.md).
+
 ## Jacobian algorithms
 
 The matrix ``\partial R / \partial Y`` is held in a
@@ -89,8 +105,10 @@ treated implicitly. Which blocks are nonzero follows from the `AtmosModel` —
 the presence of topography, the diffusion mode, and the prognostic variables in
 ``Y`` — and is fixed when the cache is built, not configured by the user.
 
-When grid-scale diffusion is implicit, the linear solve is itself approximate;
-`approximate_linear_solve_iters` sets how many iterations it takes.
+When grid-scale diffusion is implicit, the configuration is moist, or prognostic
+`ρtke` is active, the linear solve is itself approximate;
+`approximate_linear_solve_iters` sets how many iterations it
+takes.
 
 ### Automatic differentiation
 

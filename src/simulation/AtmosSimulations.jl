@@ -394,6 +394,7 @@ function AtmosSimulation(
     p = @timed_log verbose "Built cache" build_cache(
         Y, model, params, dt, start_date, resolved_steady_state_velocity;
         ode_algo = ode_config,
+        jacobian,
         update_cache_every,
     )
 

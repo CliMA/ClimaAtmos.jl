@@ -63,7 +63,7 @@ functions; see the implicit Jacobian section of [Implicit Solver](@ref).
 
   - `approximate_solve_iters = 1`: Number of iterations to take for the
     approximate linear solve required when grid-scale diffusion is treated
-    implicitly [-].
+    implicitly, the configuration is moist, or prognostic `ρtke` is active [-].
 
 # Fields
 
@@ -138,11 +138,14 @@ end
 
 Allocate the Jacobian blocks for implicit vertical advection of the active
 scalars (`ρ`, `ρe_tot`, and `ρq_tot`) and for the vertical momentum equation
-(pressure gradient, buoyancy, and Rayleigh sponge).
+(pressure gradient, buoyancy, and Rayleigh sponge), and the central velocity
+blocks `(scalar, f.u₃)` (and `(scalar, c.uₕ)`) of the sedimenting microphysics
+tracers (`ρtke` omits velocity blocks so sign reversals of `u³` cannot turn a
+frozen-donor upwind flux downwind and break M-matrix positivity).
 
 The `(f.u₃, condensate mass)` blocks hold the derivatives of the pressure
 gradient with respect to the sedimenting condensate masses. The
-`(active scalar, c.uₕ)` blocks are allocated only when `topography_flag` is
+`(scalar, c.uₕ)` blocks are allocated only when `topography_flag` is
 `UseDerivative()`, since the horizontal velocity enters the vertical mass flux
 only through the terrain-following metric terms.
 
@@ -163,6 +166,10 @@ function advection_jacobian_blocks(Y, atmos, topography_flag)
     active_scalar_names =
         unrolled_map(center_state_name, advected_gs_scalar_names(Y))
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
+    transported_names = (
+        active_scalar_names...,
+        unrolled_map(center_state_name, sedimenting_tracer_names(Y))...,
+    )
     return (
         (
             use_derivative(topography_flag) ?
@@ -170,12 +177,12 @@ function advection_jacobian_blocks(Y, atmos, topography_flag)
                 name ->
                     (name, @name(c.uₕ)) =>
                         similar(Y.c, TridiagonalRow_ACT12),
-                active_scalar_names,
+                transported_names,
             ) : ()
         )...,
         map(
             name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-            active_scalar_names,
+            transported_names,
         )...,
         map(
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
@@ -278,27 +285,34 @@ end
 """
     sedimentation_jacobian_blocks(Y, atmos)
 
-Allocate the Jacobian blocks for implicit sedimentation of the condensate
-tracers, including the couplings of the sedimenting condensate masses to
-`ρq_tot`, `ρe_tot`, and `ρ`.
+Allocate the Jacobian blocks for implicit sedimentation and grid-mean vertical
+advection of the condensate tracers (including the couplings of the sedimenting
+condensate masses to `ρq_tot`, `ρe_tot`, and `ρ`) and the tridiagonal diagonal
+block of `ρtke` (initialized to its first-order upwind vertical advection
+operator minus `I` by `update_sedimentation_jacobian!`).
 
-Also allocates the `ρe_tot` and `ρq_tot` diagonal blocks and their mutual
-coupling, which `update_sedimentation_jacobian!` initializes (to `-I` and to
-zero, respectively) and which diffusion and SGS mass flux accumulate into.
-Returns `()` for `DryModel`.
+Also allocates the `ρe_tot` and `ρq_tot` diagonal blocks and the
+`(ρe_tot, ρq_tot)` coupling in moist configurations, which
+`update_sedimentation_jacobian!` initializes and which diffusion and SGS mass
+flux accumulate into. For `DryModel`, returns the `(ρtke, ρtke)` block when
+`c.ρtke` is present and `()` otherwise.
 
 # Returns
 
 `Tuple` of `(row_name, col_name) => block` pairs.
 """
 function sedimentation_jacobian_blocks(Y, atmos)
-    atmos.microphysics_model isa DryModel && return ()
     FT = Spaces.undertype(axes(Y.c))
     (; TridiagonalRow) = jacobian_row_types(FT)
+    ρtke_block =
+        MatrixFields.has_field(Y, @name(c.ρtke)) ?
+        ((@name(c.ρtke), @name(c.ρtke)) => similar(Y.c, TridiagonalRow),) : ()
+    atmos.microphysics_model isa DryModel && return ρtke_block
     sedimenting_names =
         unrolled_map(center_state_name, sedimenting_tracer_names(Y))
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
     return (
+        ρtke_block...,
         (@name(c.ρe_tot), @name(c.ρe_tot)) => similar(Y.c, TridiagonalRow),
         (@name(c.ρq_tot), @name(c.ρq_tot)) => similar(Y.c, TridiagonalRow),
         (@name(c.ρe_tot), @name(c.ρq_tot)) => similar(Y.c, TridiagonalRow),
@@ -376,9 +390,10 @@ end
 Allocate the Jacobian blocks for the contributions of the SGS mass flux to the
 grid-mean scalars.
 
-These are the `(grid-mean tracer, updraft tracer)` blocks, the
-`(sedimenting tracer, f.u₃)` blocks, and the `ρe_tot` couplings to the updraft
-`mse` and to `ρ`. Returns `()` unless `atmos.turbconv_model` is a
+These are the `(grid-mean tracer, updraft tracer)` blocks and the `ρe_tot`
+couplings to the updraft `mse` and to `ρ`; the SGS velocity derivatives
+accumulate into the `(sedimenting tracer, f.u₃)` blocks of
+`advection_jacobian_blocks`. Returns `()` unless `atmos.turbconv_model` is a
 `PrognosticEDMFX` with `edmfx_model.sgs_mass_flux` enabled.
 
 # Returns
@@ -391,21 +406,15 @@ function sgs_massflux_jacobian_blocks(Y, atmos)
         atmos.edmfx_model.sgs_mass_flux
     ) || return ()
     FT = Spaces.undertype(axes(Y.c))
-    (; TridiagonalRow, BidiagonalRow_ACT3) = jacobian_row_types(FT)
+    (; TridiagonalRow) = jacobian_row_types(FT)
     tracer_names =
         unrolled_map(center_state_name, microphysics_tracer_names(Y))
-    sedimenting_names =
-        unrolled_map(center_state_name, sedimenting_tracer_names(Y))
     return (
         map(
             name ->
                 (name, get_χʲ_name_from_ρχ_name(name)) =>
                     similar(Y.c, TridiagonalRow),
             tracer_names,
-        )...,
-        map(
-            name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-            sedimenting_names,
         )...,
         (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
             similar(Y.c, TridiagonalRow),
@@ -503,14 +512,14 @@ sequence of nested `BlockLowerTriangularSolve`s whose ordering is dictated by
 the nonzero blocks: sedimenting SGS tracers, then the updraft `q_tot` and
 `mse`, then the grid-scale condensate masses, then `ρ` and `sfc`, then
 `ρq_tot`, and finally the remaining scalars including `ρe_tot`. The
-condensate-mass rows carry no `(·, ρ)` blocks while the `ρ` row carries their
-sedimentation derivatives, which is what makes this ordering block lower
-triangular.
+condensate-mass rows have no `(·, ρ)` blocks while the `ρ` row holds their
+sedimentation derivatives, making this ordering block lower triangular.
 
-When diffusion is implicit or the configuration is moist, the two groups are
-combined with an `ApproximateBlockArrowheadIterativeSolve` that takes
-`approximate_solve_iters` iterations with a main-diagonal preconditioner;
-otherwise the exact `BlockArrowheadSolve` is used.
+When diffusion is implicit, the configuration is moist, or prognostic `ρtke` is
+active, the two groups are combined with an
+`ApproximateBlockArrowheadIterativeSolve` that takes `approximate_solve_iters`
+iterations with a main-diagonal preconditioner; otherwise the exact
+`BlockArrowheadSolve` is used.
 """
 function jacobian_solver_algorithm(
     Y,
@@ -547,13 +556,20 @@ function jacobian_solver_algorithm(
         sgs_u³_if_available...,
     )
     if use_derivative(diffusion_flag) ||
-       !(atmos.microphysics_model isa DryModel)
+       !(atmos.microphysics_model isa DryModel) ||
+       !isempty(ρtke_if_available)
         # Scalar solve order: gs condensate masses precede ρ because the ρ row
         # carries their sedimentation derivatives ∂(ρ tendency)/∂ρq_x; ρ
         # precedes ρq_tot and ρe_tot, whose rows depend on the ρ column (SGS
-        # mass flux). The condensate-mass rows carry no (·, ρ) blocks (see
-        # `diffusion_jacobian_blocks`), so this order is block lower
-        # triangular.
+        # mass flux); ρq_tot precedes ρe_tot, whose row depends on the ρq_tot
+        # and condensate columns (diffusion, SGS mass flux). The condensate-mass
+        # rows have no (·, ρ) blocks, so this order is block lower triangular.
+        # The grid-mean advection of ρe_tot, ρq_tot, and the condensates is
+        # central and advanced explicitly by the Newton step (while ρtke uses a
+        # tridiagonal first-order upwind advection block), so in 0-moment moist
+        # runs without prognostic ρtke the scalar advection diagonals are `-I`
+        # and the main-diagonal preconditioner of the Schur complement is exact
+        # when neither diffusion nor the SGS mass flux is implicit.
         gs_scalar_subalg = if !(atmos.microphysics_model isa DryModel)
             MatrixFields.BlockLowerTriangularSolve(
                 mass_names...,
@@ -588,6 +604,13 @@ function jacobian_solver_algorithm(
             n_iters = approximate_solve_iters,
         )
     else
+        # `BlockArrowheadSolve` needs every scalar diagonal block to be `-I` so
+        # the Schur complement onto `f.u₃` is exact and tridiagonal. The
+        # central `ρe_tot` residual keeps that block at `-I`; the Newton step
+        # is forward-Euler-central in `e_tot - Φ`, and
+        # `correct_implicit_advection_tendency!` applies the implicit upwind
+        # dissipation and the Courant-limited high-order correction afterwards
+        # at the solved velocity.
         return MatrixFields.BlockArrowheadSolve(
             available_scalar_names...;
             alg₂ = velocity_alg,
@@ -658,14 +681,22 @@ end
     update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
 
 Update the Jacobian blocks for implicit vertical advection of the active
-scalars and for the vertical momentum equation (pressure gradient, buoyancy,
-and Rayleigh sponge).
+scalars and sedimenting tracers with respect to velocity, and for the vertical
+momentum equation (pressure gradient, buoyancy, and Rayleigh sponge).
 
 All of these blocks are assigned, not accumulated, so this update must run
-first. The `(ρ, uₕ)` and `(active scalar, uₕ)` blocks are written only when
-`topography_flag` is `UseDerivative()`. The `(f.u₃, f.u₃)` block includes the
-`-I` term of the residual, and the Rayleigh sponge damping when
-`p.atmos.rayleigh_sponge` is a `RayleighSponge`.
+first. The velocity derivatives of `ρe_tot`, `ρq_tot`, and the sedimenting
+tracers use central face values (`ᶠinterp`, with face energy flux per unit
+contravariant velocity `ᶠρ ᶠinterp(ᶜe_tot) + ᶠinterp(ᶜp)` and `ᶜp` frozen,
+omitting the `O(w²)` kinetic-energy derivative `∂p/∂u₃`), keeping their
+velocity blocks independent of `sign(u³)` while preserving affine relations
+among material scalars at fixed pressure and geopotential (`ρtke` omits velocity
+blocks, as freezing the `ᶠupwind1` donor at the guess velocity turns downwind
+when `u³` reverses sign). The `(ρ, uₕ)` and `(scalar, uₕ)` blocks are written
+in a separate column loop when `topography_flag` is `UseDerivative()`, keeping
+each GPU kernel within the 4 KiB parameter limit on multi-moment microphysics.
+The `(f.u₃, f.u₃)` block includes the `-I` term of the residual, and the
+Rayleigh sponge damping when `p.atmos.rayleigh_sponge` is a `RayleighSponge`.
 
 The linearization of the Exner-form pressure gradient is exact: the reference
 profile terms cancel identically, and the thermal and pressure buoyancy
@@ -674,13 +705,13 @@ density derivative, which is nonzero only in the `ρ` column. Sound and gravity
 waves are therefore both treated fully implicitly. See the comment in the body
 for the algebra.
 
-Runs in two column loops (the scalar rows, then the `u₃` row), mutates `matrix`,
-and returns `nothing`.
+Runs in two column loops without topography (three with topography), mutates
+`matrix`, and returns `nothing`.
 """
 function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜK, ᶜp, ᶜT) = p.precomputed
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     rs = p.atmos.rayleigh_sponge
 
@@ -705,53 +736,113 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     zmax = Spaces.z_max(axes(Y.f))
     has_q_tot = MatrixFields.has_field(Y, @name(c.ρq_tot))
 
-    # Loop 1: the ρ, ρe_tot, and ρq_tot rows of the mass and energy fluxes, with
-    # respect to u₃ and, with topography, to uₕ (through the terrain-following
-    # contravariant velocity).
-    χ_names = has_q_tot ? (@name(c.ρe_tot), @name(c.ρq_tot)) : (@name(c.ρe_tot),)
-    ∂ᶜχ_err_∂ᶠu₃s = unrolled_map(n -> matrix[n, @name(f.u₃)], χ_names)
-    ∂ᶜuₕ_blocks =
-        use_derivative(topography_flag) ?
-        unrolled_map(n -> matrix[n, @name(c.uₕ)], (@name(c.ρ), χ_names...)) :
-        ()
+    # Scalar rows with respect to u₃ and, in a second loop when terrain is
+    # active, to uₕ (through the terrain-following contravariant velocity).
+    sedimenting_names = sedimenting_tracer_names(Y)
+    central_tracer_names = (
+        (has_q_tot ? (@name(c.ρq_tot),) : ())...,
+        unrolled_map(center_state_name, sedimenting_names)...,
+    )
+    ∂ᶜρχ_err_∂ᶠu₃s =
+        unrolled_map(n -> matrix[n, @name(f.u₃)], central_tracer_names)
     DataLayouts.foreach_column(
         matrix[@name(c.ρ), @name(f.u₃)],
+        matrix[@name(c.ρe_tot), @name(f.u₃)],
         Y.c,
-        ᶜh_tot,
+        ᶜp,
         ᶜJ,
         ᶠJ,
-        ᶜgⁱʲ,
         ᶠgⁱʲ,
-        ∂ᶜχ_err_∂ᶠu₃s,
-        ∂ᶜuₕ_blocks,
-    ) do ∂ᶜρ_err_∂ᶠu₃, Yc, ᶜh_tot, ᶜJ, ᶠJ, ᶜgⁱʲ, ᶠgⁱʲ, u₃_blocks, uₕ_blocks
-        ᶜχs =
-            MatrixFields.has_field(Yc, @name(ρq_tot)) ?
-            (ᶜh_tot, (@. lazy(specific(Yc.ρq_tot, Yc.ρ)))) : (ᶜh_tot,)
-        ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) *
-                      DiagonalMatrixRow(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
+        ∂ᶜρχ_err_∂ᶠu₃s,
+    ) do ∂ᶜρ_err_∂ᶠu₃,
+    ∂ᶜρe_tot_err_∂ᶠu₃,
+    Yc,
+    ᶜp,
+    ᶜJ,
+    ᶠJ,
+    ᶠgⁱʲ,
+    u₃_blocks
+        ᶜχs = (
+            (
+                MatrixFields.has_field(Yc, @name(ρq_tot)) ?
+                ((@. lazy(specific(Yc.ρq_tot, Yc.ρ))),) : ()
+            )...,
+            unrolled_map(sedimenting_names) do n
+                @inline
+                return @. lazy(specific(MatrixFields.get_field(Yc, n), Yc.ρ))
+            end...,
+        )
+        ᶠρ = @. lazy(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
+        ᶜe_tot = @. lazy(specific(Yc.ρe_tot, Yc.ρ))
+        ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠρ)
         @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadv_mat * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+        @. ∂ᶜρe_tot_err_∂ᶠu₃ =
+            dtγ *
+            (-(ᶜadvdivᵥ_matrix())) *
+            DiagonalMatrixRow((ᶠρ * ᶠinterp(ᶜe_tot) + ᶠinterp(ᶜp)) * g³³(ᶠgⁱʲ))
         MatrixFields.unrolled_foreach(u₃_blocks, ᶜχs) do ∂ᶜρχ_err_∂ᶠu₃, ᶜχ
             @inline
             @. ∂ᶜρχ_err_∂ᶠu₃ =
                 dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
             return nothing
         end
-        if !isempty(uₕ_blocks)
-            ᶠwinterp_g³ʰ = @. ᶠwinterp_matrix(ᶜJ * Yc.ρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
-            ∂ᶜρ_err_∂ᶜuₕ = first(uₕ_blocks)
+        return nothing
+    end
+
+    if use_derivative(topography_flag)
+        ∂ᶜρχ_err_∂ᶜuₕs =
+            unrolled_map(n -> matrix[n, @name(c.uₕ)], central_tracer_names)
+        DataLayouts.foreach_column(
+            matrix[@name(c.ρ), @name(c.uₕ)],
+            matrix[@name(c.ρe_tot), @name(c.uₕ)],
+            Y.c,
+            ᶜp,
+            ᶜJ,
+            ᶠJ,
+            ᶜgⁱʲ,
+            ∂ᶜρχ_err_∂ᶜuₕs,
+        ) do ∂ᶜρ_err_∂ᶜuₕ,
+        ∂ᶜρe_tot_err_∂ᶜuₕ,
+        Yc,
+        ᶜp,
+        ᶜJ,
+        ᶠJ,
+        ᶜgⁱʲ,
+        uₕ_blocks
+            ᶜχs = (
+                (
+                    MatrixFields.has_field(Yc, @name(ρq_tot)) ?
+                    ((@. lazy(specific(Yc.ρq_tot, Yc.ρ))),) : ()
+                )...,
+                unrolled_map(sedimenting_names) do n
+                    @inline
+                    return @. lazy(
+                        specific(MatrixFields.get_field(Yc, n), Yc.ρ),
+                    )
+                end...,
+            )
+            ᶠρ = @. lazy(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
+            ᶜe_tot = @. lazy(specific(Yc.ρe_tot, Yc.ρ))
+            ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠρ)
+            ᶠwinterp_g³ʰ =
+                @. ᶠwinterp_matrix(ᶜJ * Yc.ρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
             @. ∂ᶜρ_err_∂ᶜuₕ = dtγ * ᶜadv_mat * ᶠwinterp_g³ʰ
-            MatrixFields.unrolled_foreach(
-                Base.tail(uₕ_blocks),
-                ᶜχs,
-            ) do ∂ᶜρχ_err_∂ᶜuₕ, ᶜχ
+            @. ∂ᶜρe_tot_err_∂ᶜuₕ =
+                dtγ *
+                (-(ᶜadvdivᵥ_matrix())) *
+                DiagonalMatrixRow(ᶠρ * ᶠinterp(ᶜe_tot) + ᶠinterp(ᶜp)) *
+                ᶠwinterp_g³ʰ
+            MatrixFields.unrolled_foreach(uₕ_blocks, ᶜχs) do ∂ᶜρχ_err_∂ᶜuₕ, ᶜχ
                 @inline
                 @. ∂ᶜρχ_err_∂ᶜuₕ =
-                    dtγ * ᶜadv_mat * DiagonalMatrixRow(ᶠinterp(ᶜχ)) * ᶠwinterp_g³ʰ
+                    dtγ *
+                    ᶜadv_mat *
+                    DiagonalMatrixRow(ᶠinterp(ᶜχ)) *
+                    ᶠwinterp_g³ʰ
                 return nothing
             end
+            return nothing
         end
-        return nothing
     end
 
     # Loop 2: the u₃ row. Exner-form PGF tendency: grad(Φ) - grad(Φ_r) + cp_d
@@ -918,45 +1009,92 @@ Update the Jacobian blocks for implicit sedimentation of the condensate
 tracers, including the couplings of the sedimenting condensate masses to
 `ρq_tot`, `ρe_tot`, and `ρ`.
 
-Each sedimenting tracer's diagonal is set from the downward-biased
-`ᶜprecipdivᵥ` sedimentation operator (with the `-I` residual term), and each
-condensate mass additionally contributes the same operator to the `ρq_tot` and
-`ρ` rows — sedimentation moves moist-air mass — and, weighted by the specific
-energy `e_int + Φ + K`, to the `ρe_tot` row. The EDMFX subdomain corrections to
-the sedimentation energy flux are treated explicitly and have no Jacobian
-counterpart.
+Each sedimenting tracer's diagonal is initialized to its downward-biased
+`ᶜprecipdivᵥ` sedimentation operator minus `I`; the central grid-mean advection
+of the tracer is advanced explicitly by the Newton step (its velocity
+derivative lives in `update_advection_jacobian!`), and the implicit upwind
+dissipation is applied post-Newton by `correct_implicit_advection_tendency!`.
+Each condensate mass additionally contributes the sedimentation operator to the
+`ρq_tot` and `ρ` rows — sedimentation moves moist-air mass — and, weighted by
+the specific energy `e_int + Φ + K`, to the `ρe_tot` row. The EDMFX subdomain
+corrections to the sedimentation energy flux are treated explicitly and have no
+Jacobian counterpart.
 
-Also initializes the `ρe_tot` and `ρq_tot` diagonal blocks (to `-I`) and their
-mutual coupling (to zero), which diffusion and SGS mass flux accumulate into.
-No-op for `DryModel`. Runs in one column loop over the tracers of
-`sedimenting_tracer_names`, mutates `matrix`, and returns `nothing`.
+Also initializes the `ρtke` diagonal (when `c.ρtke` is present, in both dry
+and moist configurations) to its first-order upwind vertical advection operator
+minus `I`, and in moist configurations initializes the `ρe_tot` and `ρq_tot`
+diagonal blocks to `-I` and the `(ρe_tot, ρq_tot)` block to zero (diffusion and
+SGS mass flux accumulate into these). Mutates `matrix` and returns `nothing`.
 """
 function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
-    p.atmos.microphysics_model isa DryModel && return nothing
-    (; params) = p
-    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
-    (; ᶜu, ᶜT) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(params)
-
     ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
+
+    if MatrixFields.has_field(Y, @name(c.ρtke))
+        # Advection derivative with respect to `ρtke` at fixed `ρ`; the
+        # `ρ`-dependence of `ᶠρ` and `tke = ρtke / ρ` is omitted from
+        # `(ρtke, ρ)`, matching the frozen-`ρ` diffusion blocks.
+        FT = Spaces.undertype(axes(Y.c))
+        ᶠset_upwind1_bcs = Operators.SetBoundaryOperator(;
+            top = Operators.SetValue(zero(BidiagonalMatrixRow{CT3{FT}})),
+            bottom = Operators.SetValue(zero(BidiagonalMatrixRow{CT3{FT}})),
+        )
+        (; ᶠu³) = p.precomputed
+        DataLayouts.foreach_column(
+            matrix[@name(c.ρtke), @name(c.ρtke)],
+            ᶜρ,
+            ᶜJ,
+            ᶠJ,
+            ᶠu³,
+        ) do ∂ᶜρtke_diag, ᶜρ_col, ᶜJ_col, ᶠJ_col, ᶠu³_col
+            ᶠρ_col = @. ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col
+            @. ∂ᶜρtke_diag =
+                dtγ *
+                (-(ᶜadvdivᵥ_matrix())) *
+                (
+                    DiagonalMatrixRow(ᶠρ_col) *
+                    ᶠset_upwind1_bcs(ᶠupwind1_matrix(ᶠu³_col))
+                ) *
+                DiagonalMatrixRow(1 / ᶜρ_col) - (I,)
+            return nothing
+        end
+    end
+
+    p.atmos.microphysics_model isa DryModel && return nothing
 
     ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
     ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
     ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
     zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρe_tot))
+    DataLayouts.foreach_column(
+        ∂ᶜρe_tot_err_∂ᶜρe_tot,
+        ∂ᶜρe_tot_err_∂ᶜρq_tot,
+        ∂ᶜρq_tot_err_∂ᶜρq_tot,
+    ) do ∂ᶜρe_tot_err_∂ᶜρe_tot, ∂ᶜρe_tot_err_∂ᶜρq_tot, ∂ᶜρq_tot_err_∂ᶜρq_tot
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot = (zero_row,) - (I,)
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot = (zero_row,)
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot = (zero_row,) - (I,)
+        return nothing
+    end
+
+    ρχ_names = sedimenting_tracer_names(Y)
+    isempty(ρχ_names) && return nothing
+
+    (; params) = p
+    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
+    (; ᶜu, ᶜT) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
 
     # Condensate masses carry their diagonal and their ρq_tot, ρ, and ρe_tot
     # columns into the loop; the other sedimenting tracers only their diagonal.
     # `ᶜwₚ_jac` is the running column max of `ᶜwₚ` for rain and snow mass and
     # for rain number (so the super-diagonal does not collapse where the
-    # species is empty), and the pointwise `ᶜwₚ` for cloud liquid, cloud ice,
-    # cloud-liquid number, ice number, and the P3 rime quantities, which fall
-    # slowly enough that the pointwise stencil is stable. The pointwise `ᶜwₚ`
-    # is still passed for the sedimentation kinetic energy carried into
-    # `ρe_tot`.
-    ρχ_names = sedimenting_tracer_names(Y)
+    # species is empty), and the pointwise `ᶜwₚ` for cloud liquid,
+    # cloud ice, cloud-liquid number, ice number, and the P3 rime quantities,
+    # which fall slowly enough that the pointwise stencil is stable. The
+    # pointwise `ᶜwₚ` is passed separately for the sedimentation kinetic energy
+    # carried into `ρe_tot`.
     mass_names = unrolled_filter(n -> !isnothing(condensate_phase(n)), ρχ_names)
     other_names = unrolled_filter(n -> isnothing(condensate_phase(n)), ρχ_names)
     ᶜw(ρχ_name) =
@@ -997,9 +1135,6 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     end
 
     DataLayouts.foreach_column(
-        ∂ᶜρe_tot_err_∂ᶜρe_tot,
-        ∂ᶜρe_tot_err_∂ᶜρq_tot,
-        ∂ᶜρq_tot_err_∂ᶜρq_tot,
         ᶜρ,
         ᶜJ,
         ᶠJ,
@@ -1009,10 +1144,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶠ∂ξ³∂x³,
         mass_args,
         other_args,
-    ) do ∂ᶜρe_tot_err_∂ᶜρe_tot,
-    ∂ᶜρe_tot_err_∂ᶜρq_tot,
-    ∂ᶜρq_tot_err_∂ᶜρq_tot,
-    ᶜρ_col,
+    ) do ᶜρ_col,
     ᶜJ_col,
     ᶠJ_col,
     ᶜT_col,
@@ -1021,13 +1153,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     ᶠ∂ξ³∂x³_col,
     mass_groups,
     other_groups
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot = (zero_row,) - (I,)
-        @. ∂ᶜρe_tot_err_∂ᶜρq_tot = (zero_row,)
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot = (zero_row,) - (I,)
-
-        ᶜbidiag = @. dtγ *
-           (-(ᶜprecipdivᵥ_matrix())) *
-           DiagonalMatrixRow(ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col)
+        ᶠρ_col = @. ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col
+        ᶜbidiag = @. dtγ * (-(ᶜprecipdivᵥ_matrix())) * DiagonalMatrixRow(ᶠρ_col)
         @inline ᶠband(ᶜwₚ_jac) = @. lazy(
             DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
             (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ_jac) / ᶜρ_col)),
@@ -1040,8 +1167,10 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜuvw = @. Geometry.UVWVector(ᶜu_col) # converted once for every species
         MatrixFields.unrolled_foreach(
             map(tuple, mass_names, mass_groups),
-        ) do (ρχ_name,
-            (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ, ᶜwₚ_jac))
+        ) do (
+            ρχ_name,
+            (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ, ᶜwₚ_jac),
+        )
             @inline
             e_int_func = internal_energy_function(condensate_phase(ρχ_name))
             ᶜsed_op = @. ᶜbidiag * $(ᶠband(ᶜwₚ_jac))
@@ -1051,7 +1180,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             @. ∂ᶜρq_tot_col = ᶜsed_op
             @. ∂ᶜρ_col = ᶜsed_op
             # Only the grid-mean sedimentation energy flux (specific energy
-            # e_int + Φ + Kin). The EDMFX subdomain corrections to it in
+            # e_int + Φ + Kin) is included here. The EDMFX subdomain corrections
+            # to the sedimentation energy flux in
             # `vertical_advection_of_water_tendency!`, which replace the
             # grid-mean thermodynamic state with updraft/environment states, are
             # treated explicitly — a convergence-rate approximation in EDMF
@@ -1130,10 +1260,11 @@ case (harmonic mean for `VerticalDiffusion` and `DecayWithHeightDiffusion`,
 arithmetic for Smagorinsky, face-native for EDMF).
 
 The blocks accumulate into the diagonals initialized by
-`update_sedimentation_jacobian!`, except for the passive tracer diagonals, the
-`(ρe_tot, ρ)` and `(ρq_tot, ρ)` columns, the `ρtke` blocks, the `(uₕ, uₕ)`
-block, and — in dry configurations — the `ρe_tot` diagonal, which are assigned
-here. The diffusive enthalpy flux
+`update_sedimentation_jacobian!` (including `(ρtke, ρtke)`), except for the
+`(·, ρ)` columns (`(ρe_tot, ρ)` and `(ρq_tot, ρ)` are zeroed here for
+`update_sgs_massflux_jacobian!`, while `(ρtke, ρ)` is assigned here), the
+passive tracer diagonals, the `(uₕ, uₕ)` block, and — in dry configurations —
+the `ρe_tot` diagonal, which are assigned here. The diffusive enthalpy flux
 `F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
 (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`) is
 differentiated with its heat-capacity and enthalpy coefficients frozen, holding
@@ -1181,6 +1312,7 @@ function update_diffusion_jacobian!(
 
     # In dry configurations, the ρe_tot diagonal is initialized here (moist
     # configurations initialize it in update_sedimentation_jacobian!).
+    ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
     if p.atmos.microphysics_model isa DryModel
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
@@ -1273,13 +1405,12 @@ function update_diffusion_jacobian!(
     e_int_v0 = FT(CAP.e_int_v0(params))
     ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 
-    # The (ρe_tot, ρ) and (ρq_tot, ρ) columns are zeroed here and later
-    # accumulate only the SGS mass-flux terms (update_sgs_massflux_jacobian!):
-    # the diffusive fluxes' ρ-dependence — through χ = ρχ/ρ and the ρ factor
-    # in ρ K ∇χ, and through the Yₜ.c.ρ counterpart of the ρq_tot diffusion —
-    # is neglected, like the other frozen-coefficient approximations in this
+    # The (ρe_tot, ρ) and (ρq_tot, ρ) columns are zeroed here so that
+    # update_sgs_massflux_jacobian! can accumulate into them; the diffusive
+    # fluxes' own ρ-dependence — through χ = ρχ/ρ and the ρ factor in
+    # ρ K ∇χ, and through the Yₜ.c.ρ counterpart of the ρq_tot diffusion — is
+    # neglected, like the other frozen-coefficient approximations in this
     # Jacobian (convergence-rate impact only; the tendencies are exact).
-    ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
     @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
         dtγ * ᶜdiffusion_T_matrix * DiagonalMatrixRow(1 / (ᶜcv_m * ᶜρ))
@@ -1288,6 +1419,7 @@ function update_diffusion_jacobian!(
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
         # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
         # and the vapor-gradient term carries h_tot,v = h_v + Φ.
         ᶜh_vap_plus_Φ = p.scratch.ᶜtemp_scalar_4
@@ -1299,7 +1431,6 @@ function update_diffusion_jacobian!(
                     (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
                 )
             )
-        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
             dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
     end
@@ -1393,7 +1524,7 @@ function update_diffusion_jacobian!(
             dtγ *
             (DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)) *
             DiagonalMatrixRow(ᶜtke / Y.c.ρ)
-        @. ∂ᶜρtke_err_∂ᶜρtke =
+        @. ∂ᶜρtke_err_∂ᶜρtke +=
             dtγ * (
                 (
                     ᶜdiffusion_u_matrix -
@@ -1401,7 +1532,7 @@ function update_diffusion_jacobian!(
                 ) * DiagonalMatrixRow(1 / Y.c.ρ) - DiagonalMatrixRow(
                     _tke_diss_rate(ᶜtke, ᶜmixing_length_field, c_d, dt),
                 )
-            ) - (I,)
+            )
     end
 
     if (
@@ -1434,7 +1565,6 @@ function update_edmf_diffusion_jacobian!(matrix, Y, p, dtγ)
     microphysics_model = p.atmos.microphysics_model
     thermo_params = CAP.thermodynamics_params(params)
     c_d = tke_dissipation_coefficient(CAP.turbconv_params(params))
-    zero_row = zero(eltype(matrix[@name(c.ρe_tot), @name(c.ρ)]))
     has_tke = MatrixFields.has_field(Y, @name(c.ρtke))
 
     # The cloud condensates enter ρe_tot through the temperature and the water
@@ -1532,7 +1662,8 @@ function update_edmf_diffusion_jacobian!(matrix, Y, p, dtγ)
             TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
         )
 
-        @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
+        @. ∂ᶜρe_tot_err_∂ᶜρ = zero(∂ᶜρe_tot_err_∂ᶜρ)
+        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(∂ᶜρq_tot_err_∂ᶜρ)
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
             dtγ * ᶜdif_T_mat * DiagonalMatrixRow(1 / (ᶜcv_m * Yc.ρ))
         ᶜh_vap = @. lazy(TD.enthalpy_vapor(thermo_params, ᶜT))
@@ -1543,7 +1674,6 @@ function update_edmf_diffusion_jacobian!(matrix, Y, p, dtγ)
                     (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * Yc.ρ),
                 )
             )
-        @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
         ᶜdif_q_diag = @. dtγ * ᶜdif_h_mat * DiagonalMatrixRow(1 / Yc.ρ)
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot += ᶜdif_q_diag
         MatrixFields.unrolled_foreach(species_group) do ∂ᶜρχ_err_∂ᶜρχ
@@ -1579,13 +1709,13 @@ function update_edmf_diffusion_jacobian!(matrix, Y, p, dtγ)
                 dtγ *
                 DiagonalMatrixRow(ᶜdiss_diag) *
                 DiagonalMatrixRow(ᶜtke / Yc.ρ)
-            @. ∂ᶜρtke_err_∂ᶜρtke =
+            @. ∂ᶜρtke_err_∂ᶜρtke +=
                 dtγ * (
                     (ᶜdif_u_mat - DiagonalMatrixRow(ᶜdiss_diag)) *
                     DiagonalMatrixRow(1 / Yc.ρ) - DiagonalMatrixRow(
                         _tke_diss_rate(ᶜtke, ᶜl_mix, c_d, dt),
                     )
-                ) - (I,)
+                )
         end
         @. ∂ᶜuₕ_err_∂ᶜuₕ =
             dtγ * DiagonalMatrixRow(1 / Yc.ρ) * ᶜdif_u_mat - (I,)
@@ -1597,33 +1727,30 @@ end
 """
     sgs_upwinding_operators(FT, upwinding)
 
-Return the upwinding operators and their matrix counterparts for implicit SGS
-vertical advection, as a `NamedTuple`
+Return the first-order upwinding operator and its matrix counterpart for
+implicit SGS vertical advection, as a `NamedTuple`
 `(; ᶠupwind, ᶠset_upwind_bcs, ᶠupwind_matrix, ᶠset_upwind_matrix_bcs)`.
 
-`upwinding` is `Val(:third_order)`, which selects `ᶠupwind3` and a
-quaddiagonal matrix row, or any other value (in practice
-`Val(:first_order)`), which selects `ᶠupwind1` and a bidiagonal row. The
-`ᶠset_*_bcs` operators wrap the upwind operator and its matrix to give them
-well-defined zero boundary values.
+`upwinding` is `Val(:first_order)` or `Val(:none)`; the Jacobian uses
+`ᶠupwind1` and a bidiagonal row for both, since the central reconstruction has
+no monotone Jacobian counterpart in the updraft solve. The `ᶠset_*_bcs`
+operators wrap the upwind operator and its matrix to give them well-defined
+zero boundary values.
 
-The `upwinding` argument comes from the `edmfx_mse_q_tot_upwinding` and
-`edmfx_tracer_upwinding` numerics options, so that the Jacobian matches the
-reconstruction used in `edmfx_sgs_vertical_advection_tendency!`.
+The `upwinding` argument comes from the `edmfx_mse_humidity_upwinding` and
+`edmfx_tracer_upwinding` numerics options, which
+`edmfx_sgs_vertical_advection_tendency!` uses for the reconstruction.
 """
 function sgs_upwinding_operators(FT, upwinding)
-    is_third_order = upwinding == Val(:third_order)
-    ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+    ᶠupwind = ᶠupwind1
     ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
         top = Operators.SetValue(zero(CT3{FT})),
         bottom = Operators.SetValue(zero(CT3{FT})),
     ) # Need to wrap ᶠupwind in this for well-defined boundaries.
-    UpwindMatrixRowType =
-        is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
-    ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+    ᶠupwind_matrix = ᶠupwind1_matrix
     ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
-        top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
-        bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
+        top = Operators.SetValue(zero(BidiagonalMatrixRow{CT3{FT}})),
+        bottom = Operators.SetValue(zero(BidiagonalMatrixRow{CT3{FT}})),
     ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
     return (; ᶠupwind, ᶠset_upwind_bcs, ᶠupwind_matrix, ᶠset_upwind_matrix_bcs)
 end
@@ -1636,10 +1763,12 @@ scalars with the updraft velocity, and for implicit sedimentation of the SGS
 condensate tracers (including their couplings to the updraft `q_tot` and `mse`).
 
 The advective-form derivative `∂ᵥ(u³ʲ) - ∂ᵥ(upwind(u³ʲ, ⋅))` uses the upwind
-matrix from `sgs_upwinding_operators`, with `edmfx_mse_q_tot_upwinding` for
-`q_tot` and `mse` and `edmfx_tracer_upwinding` for all other SGS scalars. These
-diagonals are assigned (including the `-I` residual term), so this update must
-run before the other SGS updates, which accumulate into them.
+matrix from `sgs_upwinding_operators`, with `edmfx_mse_humidity_upwinding` for
+`q_tot`, `mse`, and the sedimenting microphysics species, and
+`edmfx_tracer_upwinding` for the passive SGS tracers, matching
+`edmfx_sgs_vertical_advection_tendency!`. These diagonals are assigned
+(including the `-I` residual term), so this update must run before the other
+SGS updates, which accumulate into them.
 
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
@@ -1687,7 +1816,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     # upwinding options for q_tot and mse
     (; ᶠupwind_matrix, ᶠset_upwind_matrix_bcs) = sgs_upwinding_operators(
         FT,
-        p.atmos.numerics.edmfx_mse_q_tot_upwinding,
+        p.atmos.numerics.edmfx_mse_humidity_upwinding,
     )
     # upwinding options for other tracers
     tracer_upwinding_operators = sgs_upwinding_operators(
@@ -1715,21 +1844,27 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         sgs_diag(@name(mse)),
         sgs_diag(@name(q_tot)),
         ᶠu³ʲs.:(1),
-        unrolled_map(sgs_diag, (passive_sgs_tracer_names(Y)..., sed_names...)),
+        unrolled_map(sgs_diag, sed_names),
+        unrolled_map(sgs_diag, passive_sgs_tracer_names(Y)),
         mse_cols,
-    ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, ᶠu³ʲ, tracer_diags, zeroed_cols
+    ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, ᶠu³ʲ, water_diags, passive_diags, zeroed_cols
         @. ∂ᶜmseʲ_diag =
             dtγ * (
                 DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲ)) -
                 ᶜadvdivᵥ_matrix() * ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲ))
             ) - (I,)
         @. ∂ᶜq_totʲ_diag = ∂ᶜmseʲ_diag
+        MatrixFields.unrolled_foreach(water_diags) do ∂ᶜχʲ_diag
+            @inline
+            @. ∂ᶜχʲ_diag = ∂ᶜmseʲ_diag
+            return nothing
+        end
         ᶜadv_tr = @. dtγ * (
             DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲ)) -
             ᶜadvdivᵥ_matrix() *
             ᶠset_tracer_upwind_matrix_bcs(ᶠtracer_upwind_matrix(ᶠu³ʲ))
         ) - (I,)
-        MatrixFields.unrolled_foreach(tracer_diags) do ∂ᶜχʲ_diag
+        MatrixFields.unrolled_foreach(passive_diags) do ∂ᶜχʲ_diag
             @inline
             @. ∂ᶜχʲ_diag = ᶜadv_tr
             return nothing
@@ -1873,7 +2008,8 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # Through h_μ(Tʲ), the within-updraft flux (the operator without the
             # lateral diagonal) also depends on mse, with ∂Tʲ/∂mse = 1/cp_m, and
             # on each condensate q_ν at fixed mse and q_tot, with
-            # ∂Tʲ/∂q_ν = L_ν(Tʲ)/cp_m.
+            # ∂Tʲ/∂q_ν = L_ν(Tʲ)/cp_m (`(mse, q_tot)` is not allocated in
+            # `sgs_advection_jacobian_blocks`, so ∂Tʲ/∂q_tot is omitted).
             c_μ = condensate_heat_capacity(phase, thermo_params)
             ᶜinv_cp_mʲ =
                 @. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
@@ -2377,9 +2513,9 @@ to `f.u₃` are all accumulated here. The derivatives are linearized with the
 central interpolant, and the environment contributions are neglected because
 they are `O(aʲ²)` while the updraft contributions are `O(aʲ)`.
 
-`diffusion_flag` selects whether the `(ρe_tot, ρ)` and `(ρq_tot, ρ)` blocks
-were already zeroed by `update_diffusion_jacobian!`; when diffusion is
-explicit they are zeroed here so that both can safely use `+=`.
+The `(ρe_tot, ρ)` and `(ρq_tot, ρ)` blocks are zeroed by
+`update_diffusion_jacobian!` when `diffusion_flag` is `UseDerivative()`, and
+are zeroed here before accumulating otherwise.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX` with
 `edmfx_model.sgs_mass_flux` enabled. Writes `ᶜtridiagonal_matrix_scalar` in
@@ -2418,6 +2554,10 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
     ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
     ∂ᶜρq_tot_err_∂ᶜq_totʲ = matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
+    if !use_derivative(diffusion_flag)
+        @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
+        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
+    end
 
     # The grid-mean tracers transported by the updraft flux: the sedimenting
     # tracers of the 1M and 2M schemes that the updraft also carries.
@@ -2443,7 +2583,6 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     phase_consts = unrolled_map((TD.Liquid(), TD.Ice())) do phase
         (condensate_e_int_offset(phase, params), condensate_cv_difference(phase, params))
     end
-    zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρ))
 
     # Loop 1: scalar tridiagonal blocks for ρe_tot and ρq_tot
     DataLayouts.foreach_column(
@@ -2491,10 +2630,6 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     ᶜJ,
     ᶠJ,
     phase_cols
-        if !use_derivative(diffusion_flag)
-            @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
-            @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
-        end
         ᶠmf = @. lazy(
             DiagonalMatrixRow((ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ) * (ᶠu³ʲ - ᶠu³)) *
             ᶠinterp_matrix() *
@@ -2551,8 +2686,10 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     end
 
     # Loop 2: ∂/∂u₃ blocks and the grid-mean tracer blocks. The implicit SGS
-    # tracer fluxes are difference-form corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) (the
-    # grid-mean advection -∇·(ρ u³ χ) is handled explicitly). As for mse and
+    # tracer fluxes are difference-form corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ),
+    # whose u₃ derivatives are added to the (ρχ, u₃) blocks that
+    # update_advection_jacobian! sets to the derivative of the grid-mean
+    # advection -∇·(ρ u³ χ). As for mse and
     # q_tot, the derivatives are linearized with the central interpolant (exact
     # for the default :none upwinding), and the environment contributions are
     # neglected: (χ⁰ - χ) and (u³⁰ - u³) are each O(aʲ), so every environment
@@ -2629,17 +2766,13 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
             @. ∂ᶜρχ_sgs_col = -(ᶜtridiag)
             @. ∂ᶜρχ_diag += ᶜtridiag * ᶜinv_ρ
-            @. ∂ᶜρχ_u₃_col =
+            @. ∂ᶜρχ_u₃_col +=
                 dtγ *
                 ᶜadvdivᵥ_matrix() *
                 DiagonalMatrixRow(
                     ᶠinterp(
-                        (ᶜχʲ - specific(ᶜρχ, Yc.ρ)) *
-                        ᶜρʲ *
-                        ᶜJ_col *
-                        ᶜaʲ,
-                    ) /
-                    ᶠJ_col * g³³(ᶠgⁱʲ_col),
+                        (ᶜχʲ - specific(ᶜρχ, Yc.ρ)) * ᶜρʲ * ᶜJ_col * ᶜaʲ,
+                    ) / ᶠJ_col * g³³(ᶠgⁱʲ_col),
                 )
             return nothing
         end
@@ -2665,11 +2798,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
 
     # Ordering contract between the process updates:
-    #   - The ρe_tot and ρq_tot diagonal blocks and their couplings to ρ and
-    #     to each other are initialized by update_sedimentation_jacobian!
-    #     (moist), update_diffusion_jacobian! (dry, and couplings to ρ), or
-    #     update_sgs_massflux_jacobian! (couplings to ρ with explicit
-    #     diffusion), and accumulated into by the updates that follow.
+    #   - The ρe_tot and ρq_tot diagonal blocks and their couplings to each
+    #     other (moist) are initialized by update_sedimentation_jacobian!, and
+    #     their couplings to ρ (both moist and dry) and the ρe_tot diagonal of
+    #     dry configurations by update_diffusion_jacobian! (or by
+    #     update_sgs_massflux_jacobian! when diffusion is explicit); all are
+    #     accumulated into by the updates that follow.
+    #   - The ρtke diagonal block is initialized to its first-order upwind
+    #     advection operator minus `I` by update_sedimentation_jacobian! (and
+    #     accumulated into, while `(ρtke, ρ)` is assigned, by
+    #     update_diffusion_jacobian! and update_edmf_diffusion_jacobian! when
+    #     diffusion is implicit); velocity blocks are omitted to preserve
+    #     M-matrix positivity when `u³` reverses sign.
     #   - The updraft mse and q_tot diagonal blocks are set by
     #     update_sgs_advection_jacobian! and accumulated into by the SGS
     #     diffusion, entrainment, and boundary condition updates.

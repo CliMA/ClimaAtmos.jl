@@ -3,6 +3,78 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] Rename the numerics keys `energy_q_tot_upwinding` to
+  `energy_humidity_upwinding` and `edmfx_mse_q_tot_upwinding` to
+  `edmfx_mse_humidity_upwinding` (YAML keys and `AtmosNumerics` keywords), since
+  they govern the transport of energy, total water, and the sedimenting
+  condensates and number concentrations (`edmfx_mse_humidity_upwinding` governs
+  updraft scalars only; prognostic `ρtke` uses implicit first-order upwinding).
+  `edmfx_mse_humidity_upwinding` and `edmfx_tracer_upwinding` accept `none` and
+  `first_order` only; the updraft advection Jacobian and the stage predictor use
+  first-order upwinding.
+- ![][badge-🔥behavioralΔ] Unify the implicit vertical transport of specific
+  internal-plus-kinetic energy `e_tot - Φ`, `q_tot`, and the sedimenting
+  microphysics tracers, and move prognostic `ρtke` vertical advection to the
+  implicit stage with first-order upwinding. The Newton residual evaluates
+  `-∂ᵥ(ᶠρ u³ ᶠinterp(e_tot) + u³ ᶠinterp(p))` together with central transport
+  of `q_tot` and the sedimenting tracers, using `-I` scalar advection blocks and
+  central `ᶠinterp` `(·, u₃)` and `(·, uₕ)` velocity blocks, so the velocity
+  Jacobian advances every flux to the solved velocity; prognostic `ρtke`
+  evaluates `-∂ᵥ(ᶠρ ᶠupwind1(u³, tke))` directly in the residual, initializing
+  its tridiagonal `(ρtke, ρtke)` block with `ᶠupwind1_matrix` (accumulated into
+  by eddy diffusion and TKE dissipation when diffusion is implicit, omitting
+  velocity blocks so `u³` sign reversals preserve M-matrix positivity) and using
+  `ApproximateBlockArrowheadIterativeSolve` whenever `c.ρtke` is active
+  (including dry explicit-diffusion runs). After the Newton solve, `T_post_imp!`
+  (`correct_implicit_advection_tendency!`) applies to `e_tot - Φ`, `q_tot`, and
+  the sedimenting tracers an implicit first-order upwind dissipation at the
+  solved velocity, weighted by `1 + 2 C_γ` when the linear solve omits the
+  scalar advection derivative (`ManualSparseJacobian`, or `AutoSparseJacobian`
+  in dry explicit-diffusion runs, without `use_krylov_method`) and by `1`
+  otherwise (avoiding `1 + 2 C_γ` over-damping under Krylov or autodiff scalar
+  blocks, at the cost of `O(10⁻²)` undershoots on sharp spikes), followed by the
+  Courant-limited (`min(1, 1 / C_γ)`) `energy_humidity_upwinding` antidiffusion
+  relative to first-order upwind (`third_order` is linear and unlimited, so it
+  is not positive on discontinuities). For `vanleer_limiter`, Zalesak
+  flux-corrected transport bounds the antidiffusive flux against the local
+  extrema of the dissipated profile `χ*`, preserving the bounds and monotonicity
+  of `χ*` per implicit stage at every `C_γ > 0` (keeping the stage positive and
+  monotone wherever the low-order stage `χ*` is, such as in nondivergent
+  interior flow with uniform or decelerating Courant numbers, while diverging
+  flow, face Courant jumps, or spikes next to a closed boundary can introduce
+  `O(10⁻²)` extrema in `χ*`).
+  Evaluating `u³ ᶠinterp(p)` centrally avoids pairing central `ᶠρ` with an
+  upwind `p / ρ = R_m T` across moisture or temperature jumps at continuous `p`
+  and gives `ρ (e_tot - Φ)` unit derivative with respect to `ρe_tot` in the
+  shared `I - dtγ 𝒟` dissipation solve at fixed `ρ`; once `p / ρ` is split off
+  centrally, excluding `Φ` keeps the hydrostatic pair `(p, Φ)` together on the
+  central stencil (since `e_tot` without `p / ρ` lacks `+R_m T` to cancel `+g z`
+  along an adiabat) and leaves `e_tot - Φ = e_int(T, q_tot, q_liq, q_ice) + K`
+  affine in `(1, q_tot, q_liq, q_ice)` at uniform `(T, u)`. Linear
+  reconstructions preserve arbitrary affine relations at any stage Courant
+  number, and `vanleer_limiter` (with Zalesak limiting, both scale- and
+  shift-equivariant) preserves uniform `(T, u)` across single-profile moisture
+  or condensate variations and on smooth profiles free of limiter clipping
+  (while active first-order upwind dissipation damps `e_int + K` rather than
+  `h_tot`), matching the `energy_humidity_upwinding` flux at the solved velocity
+  to leading order in `dtγ` for `C_γ ≤ 1` away from Zalesak-clamped faces;
+  `energy_humidity_upwinding = first_order` gives positive first-order transport
+  with the leading diffusivity of backward-Euler upwind, and `none` skips both
+  post-Newton steps on `e_tot - Φ`, `q_tot`, and the condensates, leaving their
+  vertical advection forward-Euler central (amplifying oscillatory modes without
+  vertical diffusion). Dry and moist configurations share this path, and
+  `tracer_upwinding` applies to the explicitly advected passive tracers. Under
+  `PrognosticEDMFX`, the updraft water species follow
+  `edmfx_mse_humidity_upwinding` and `edmfx_tracer_upwinding` covers the passive
+  updraft tracers; a one-time log message reports when the two keys differ. With
+  `prescribed_flow`, the fully explicit tendency applies the same corrections
+  with `dtγ = 0`.
+- ![][badge-🔥behavioralΔ] Evaluate `ᶠlin_vanleer` with `zero(dt)` across all
+  `vanleer_limiter` vertical transports (passive tracers, EDMFX SGS mass flux,
+  non-orographic gravity-wave heating, and the post-Newton corrections), making
+  the spatial MUSCL reconstruction independent of `dt` (avoiding slope sign
+  reversal for `C > 1` while narrowing single-step forward-Euler monotonicity on
+  explicit paths from `C ≤ 1` to `C ≤ 1 / 2`).
 - ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
   explicit `OrographicGravityWave` drag with backward-Euler damping
   (`D_⊥ - û d s / (s + dt d)` in the orthogonal `(û, n̂)` basis,

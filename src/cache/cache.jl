@@ -169,6 +169,16 @@ gravity waves, radiation, tracers).
   - `steady_state_velocity`: Predicted steady-state velocity for the
     `check_steady_state` diagnostic, or `nothing`.
 
+# Keyword Arguments
+
+  - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
+    explicit), used to extract `dtγ` and the
+    `compensate_explicit_scalar_advection` flag.
+  - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
+    scalar advection dissipation weight.
+  - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
+    or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
+
 # Returns
 
 A fully initialized `AtmosCache`.
@@ -181,11 +191,18 @@ function build_cache(
     start_date,
     steady_state_velocity;
     ode_algo = nothing,
+    jacobian = ManualSparseJacobian(),
     update_cache_every = "step",
 )
     FT = eltype(params)
     dt = FT(dt)
     γ = imex_gamma(ode_algo)
+    if ode_algo isa CTS.IMEXAlgorithm &&
+       any(!iszero, LinearAlgebra.diag(ode_algo.tableau.a_imp))
+        !isnothing(γ) || error(
+            "IMEX tableau must have a single non-zero diagonal γ for p.dtγ",
+        )
+    end
     dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
     mp_averaging =
         (update_cache_every == "stage" && !isnothing(γ)) ?
@@ -266,7 +283,23 @@ function build_cache(
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = atmos.surface.boundary_overrides
-    scratch = temporary_quantities(Y, atmos)
+    compensate_explicit_scalar_advection =
+        !iszero(dtγ) &&
+        (
+            jacobian isa ManualSparseJacobian || (
+                jacobian isa AutoSparseJacobian &&
+                atmos.microphysics_model isa DryModel &&
+                atmos.diff_mode != Implicit()
+            )
+        ) &&
+        ode_algo isa CTS.IMEXAlgorithm &&
+        !isnothing(ode_algo.newtons_method) &&
+        isnothing(ode_algo.newtons_method.krylov_method)
+    scratch = temporary_quantities(
+        Y,
+        atmos;
+        compensate_explicit_scalar_advection,
+    )
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments = (;

@@ -50,9 +50,10 @@ Return the dt the 1M bulk-tendency averager should use at `cache!` time. The
 """
     imex_gamma(ode_algo)
 
-Return the single-γ DIRK diagonal of `ode_algo`'s implicit Butcher tableau, or
-`nothing` when the scheme isn't a single-γ IMEX ARK (fully explicit, or
-variable-γ ESDIRK). The explicit first-stage zero on the `a_imp` diagonal is
+Return the single-`γ` DIRK diagonal of `ode_algo`'s implicit Butcher tableau, or
+`nothing` when `ode_algo` is not a single-`γ` `IMEXAlgorithm` with at least one
+implicit stage (`build_cache` rejects an `IMEXAlgorithm` that has a non-zero
+implicit diagonal with non-uniform `γ`). Explicit zero-diagonal stages are
 skipped. Used by `build_cache` to resolve `dtγ` and the microphysics averaging
 window.
 """
@@ -226,13 +227,16 @@ end
 
 Assemble the positional arguments and keyword arguments for `ClimaTimeSteppers.init`.
 
-Wires the tendency functions into a `ClimaODEFunction`: the explicit and limited
-tendencies, the implicit tendency with its Jacobian (both replaced by a single fully
-explicit tendency when `prescribed_flow` is set, so that sound waves are not treated
-implicitly), the post-implicit upwinding correction (skipped when energy and total water
-are not upwinded), the cache and implicit-cache updates, the limiter, the DSS, and the
-state constraints. The cache and constraint update frequencies come from
-`update_cache_signal_handler` and `update_constrain_state_signal_handler`.
+Passes the tendency and stage hooks to a `ClimaODEFunction`: the explicit and
+limited tendencies, the implicit tendency with its Jacobian (both replaced by
+`fully_explicit_tendency!` when `prescribed_flow` is set, so sound waves are not
+treated implicitly), the implicit-stage initializer
+(`initialize_implicit_stage_problem!`), the post-Newton stage hook
+(`correct_implicit_advection_tendency!`, skipped when `T_imp!` is absent or
+`p.dtγ == 0`), the cache and
+implicit-cache updates, the limiter, DSS, and the state constraints. The cache
+and constraint update frequencies come from `update_cache_signal_handler` and
+`update_constrain_state_signal_handler`.
 
 # Returns
 
@@ -245,6 +249,56 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
     verbose = false,
 )
     (; atmos) = p
+    if !(atmos.microphysics_model isa DryModel)
+        (; energy_humidity_upwinding, tracer_upwinding) = atmos.numerics
+        if !isempty(sedimenting_tracer_names(Y)) &&
+           energy_humidity_upwinding != tracer_upwinding
+            @info(
+                "Sedimenting microphysics species follow \
+                 `energy_humidity_upwinding` ($(energy_humidity_upwinding)); \
+                 `tracer_upwinding` ($(tracer_upwinding)) applies to the \
+                 passive tracers."
+            )
+        end
+        (; edmfx_mse_humidity_upwinding, edmfx_tracer_upwinding) = atmos.numerics
+        if atmos.turbconv_model isa PrognosticEDMFX &&
+           !isempty(sedimenting_sgs_tracer_names(Y)) &&
+           edmfx_mse_humidity_upwinding != edmfx_tracer_upwinding
+            @info(
+                "Updraft microphysics species follow \
+                 `edmfx_mse_humidity_upwinding` ($(edmfx_mse_humidity_upwinding)); \
+                 `edmfx_tracer_upwinding` ($(edmfx_tracer_upwinding)) applies \
+                 to the passive updraft tracers."
+            )
+        end
+    end
+    if isnothing(prescribed_flow) && !iszero(p.dtγ)
+        if atmos.numerics.energy_humidity_upwinding == Val(:none) &&
+           atmos.diff_mode != Implicit()
+            @warn(
+                "`energy_humidity_upwinding = none` skips the post-Newton \
+                 dissipation, leaving vertical advection of `e_tot - Φ`, \
+                 `q_tot`, and any condensates forward-Euler central."
+            )
+        end
+        if atmos.numerics.energy_humidity_upwinding != Val(:none) &&
+           ode_algo isa CTS.IMEXAlgorithm &&
+           !isnothing(ode_algo.newtons_method)
+            nm = ode_algo.newtons_method
+            if (
+                jacobian isa ManualSparseJacobian &&
+                isnothing(nm.krylov_method) &&
+                nm.max_iters > 1
+            )
+                @warn(
+                    "With `ManualSparseJacobian` and `max_newton_iters_ode > 1`, \
+                     additional Newton iterations iterate the explicit central \
+                     scalar step while the `+2 C_γ` dissipation weight is \
+                     disabled (`compensate_explicit_scalar_advection = false`)."
+                )
+            end
+        end
+    end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
@@ -265,12 +319,16 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # Only wire `T_post_imp!` when the upwind correction is nontrivial;
-        # otherwise `nothing` so CTS skips the post-Newton path (including
-        # its `cache_imp!` refresh) at every implicit stage.
+        # `T_post_imp!` applies the implicit upwind dissipation and the
+        # high-order correction of the vertical transport at the solved
+        # velocity, provided `T_imp!` is active and the tableau has a single-γ
+        # implicit stage (`p.dtγ > 0`); otherwise `nothing`, so CTS skips the
+        # post-Newton path (and its `cache_imp!` refresh) at every stage. Fully
+        # explicit tableaus such as `SSP33ShuOsher` have no implicit stage to
+        # correct.
         T_post_imp! =
-            (isnothing(T_imp!) || atmos.numerics.energy_q_tot_upwinding == Val(:none)) ?
-            nothing : correct_implicit_advection_tendency!
+            (isnothing(T_imp!) || iszero(p.dtγ)) ? nothing :
+            correct_implicit_advection_tendency!
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
