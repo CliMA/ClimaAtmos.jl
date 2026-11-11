@@ -71,6 +71,15 @@ newton_rtol:
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false
+use_ngmres:
+  help: "Whether to replace Newton's method with Nonlinear GMRES (Anderson acceleration) using the Jacobian as preconditioner (only for ClimaTimeSteppers.jl; mutually exclusive with use_krylov_method)"
+  value: false
+ngmres_max_iters:
+  help: "Maximum number of NGMRES iterations per solve (only used when use_ngmres is true)"
+  value: 10
+jacobian_update_n_steps:
+  help: "Refresh the preconditioner Jacobian every N timesteps (0 = every timestep). Used by NGMRES; ignored by NewtonsMethod."
+  value: 0
 use_dynamic_krylov_rtol:
   help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
   value: false

@@ -151,7 +151,8 @@ end
     ode_configuration(::Type{FT}, ode_name, update_jacobian_every, max_newton_iters_ode,
                       use_krylov_method, use_dynamic_krylov_rtol,
                       eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol,
-                      newton_rtol, jvp_step_adjustment) where {FT}
+                      newton_rtol, jvp_step_adjustment,
+                      use_ngmres, ngmres_max_iters, jacobian_update_n_steps) where {FT}
 
 Build the ClimaTimeSteppers algorithm named by `ode_name`.
 
@@ -175,7 +176,7 @@ configured here:
 function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
     eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
-    jvp_step_adjustment,
+    jvp_step_adjustment, use_ngmres, ngmres_max_iters, jacobian_update_n_steps,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
@@ -189,18 +190,33 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
         CTS.ExplicitAlgorithm(ode_algo_name())
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
-        newtons_method = CTS.NewtonsMethod(;
-            max_iters = max_newton_iters_ode,
-            update_j = if update_jacobian_every == "dt"
-                CTS.UpdateEvery(CTS.NewTimeStep)
-            elseif update_jacobian_every == "stage"
-                CTS.UpdateEvery(CTS.NewNewtonSolve)
-            elseif update_jacobian_every == "solve"
-                CTS.UpdateEvery(CTS.NewNewtonIteration)
+        update_j = if update_jacobian_every == "dt"
+            if jacobian_update_n_steps > 0
+                CTS.UpdateEveryN(jacobian_update_n_steps, CTS.NewTimeStep)
             else
-                error("Unknown value of `update_jacobian_every`: \
-                        $(update_jacobian_every)")
-            end,
+                CTS.UpdateEvery(CTS.NewTimeStep)
+            end
+        elseif update_jacobian_every == "stage"
+            CTS.UpdateEvery(CTS.NewNewtonSolve)
+        elseif update_jacobian_every == "solve"
+            CTS.UpdateEvery(CTS.NewNewtonIteration)
+        else
+            error("Unknown value of `update_jacobian_every`: $(update_jacobian_every)")
+        end
+        if use_ngmres
+            @info "Using NGMRES (Anderson acceleration) with max_iters = $ngmres_max_iters"
+            nl_solver = CTS.NGMRES(;
+                max_iters = ngmres_max_iters,
+                update_j,
+                rtol = use_newton_rtol ? FT(newton_rtol) : FT(0),
+                verbose = CTS.Verbose(),
+            )
+            return CTS.IMEXAlgorithm(ode_algo_name(), nl_solver)
+        end
+        newtons_method = CTS.NewtonsMethod(;
+            verbose = CTS.Verbose(),
+            max_iters = max_newton_iters_ode,
+            update_j,
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
@@ -214,6 +230,8 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                     else
                         CTS.ConstantForcing(FT(krylov_rtol))
                     end,
+                    verbose = CTS.Verbose(),
+                    solve_kwargs = (; reorthogonalization = true, itmax = 5),
                 )
             else
                 nothing

@@ -1,8 +1,8 @@
 initial_condition: TRMM_LBA
 turbconv: prognostic_edmfx
-reproducibility_test: true
+reproducibility_test: false
 implicit_diffusion: true
-approximate_linear_solve_iters: 2
+approximate_linear_solve_iters: 1
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
@@ -26,4 +26,12 @@ dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 64]
 ode_algo: "ARS222"
-debug_tendency_diagnostics: true
+# debug_tendency_diagnostics: false
+use_krylov_method: true
+krylov_rtol: 1e-3
+max_newton_iters_ode: 3
+update_jacobian_every: "dt"
+# use_dynamic_krylov_rtol: false
+use_ngmres: true
+ngmres_max_iters: 5
+jacobian_update_n_steps: 15

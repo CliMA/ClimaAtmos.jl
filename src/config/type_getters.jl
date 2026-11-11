@@ -408,6 +408,9 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["use_newton_rtol"],
         args["newton_rtol"],
         args["jvp_step_adjustment"],
+        args["use_ngmres"],
+        args["ngmres_max_iters"],
+        args["jacobian_update_n_steps"],
     )
 end
 
