@@ -124,10 +124,11 @@ if TEST_GROUP in ("parameterizations", "all")
     # Full-physics sphere simulation
     @safetestset "Checkbounds sphere simulation" begin @time include("checkbounds_sphere_simulation.jl") end
 
-    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
-    # build). The simulation-based Beres tests (test_beres_single_column.jl,
-    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
+    # Gravity wave: Beres convective NOGW and orographic OGW pure-function unit
+    # tests (no simulation build). Simulation-based gravity-wave tests run as
+    # standalone Buildkite steps.
     @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
+    @safetestset "OGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_unit.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included

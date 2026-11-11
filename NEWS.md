@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Bound the parallel-decelerating component of
+  explicit `OrographicGravityWave` drag with backward-Euler damping
+  (`D_⊥ - û d s / (s + dt d)` in the orthogonal `(û, n̂)` basis,
+  `d = max(0, -D ⋅ û)`), so in exact arithmetic a forward-Euler evaluation of
+  size `dt` cannot reverse the horizontal wind at any wind speed while leaving
+  the perpendicular turning component undamped, and guard
+  `calc_nonpropagating_forcing!` against `NaN` reference pressures and zero
+  weight sums.
 - ![][badge-🐛bugfix] Synchronize `check_nans` across MPI ranks with
   `ClimaComms.allreduce` and log per-variable and per-updraft `NaN` counts on
   every rank that detects a `NaN`.
