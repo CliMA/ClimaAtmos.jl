@@ -386,7 +386,7 @@ share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction
 end
 
 # `@noinline` here is the SGS node function barrier. The functor body
-# below (saturation, shape-function partition, plus the heavy
+# below (the shape-function partition, plus the heavy
 # `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
 # substep loop and 4×4 linearized operator) gets invoked at every node and
 # temperature point of `sum_over_conditional_nodes`. Without the barrier those copies inline
@@ -396,12 +396,16 @@ end
 # give LLVM/NVPTX not to re-inline this — the body is multi-statement and
 # meaningfully sized, so the late inliner won't undo it.
 """
+    (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p, q_sat_hat)
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
 
 Evaluate the 1-moment tendencies at one node `(T_hat, q_tot_hat)` [K, kg/kg]
 with the node's shaft flag `flag_p` (`1` inside the precipitation shaft, `0`
 outside; the intervals of the conditional-moment rule lie entirely on one
-side of the shaft edge).
+side of the shaft edge) and the saturation specific humidity `q_sat_hat` at
+`(T_hat, ρ)`, which `_point_value` set the node's total water from and so has
+to hand; the three-argument form evaluates it instead, for callers that reach
+the evaluator from outside the node traversal.
 
 The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
@@ -429,7 +433,13 @@ local vapor.
 NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
+@inline (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p) = eval(
+    T_hat, q_tot_hat, flag_p,
+    TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ),
+)
+@noinline function (eval::Microphysics1MEvaluator)(
+    T_hat, q_tot_hat, flag_p, q_sat_hat,
+)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
@@ -442,7 +452,6 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # by cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     αS′_hat = eval.α * S′_hat
     shifted_excess = max(FT(0), eval.λ_lagrange + αS′_hat)
@@ -716,9 +725,7 @@ tendency SGS integration).
     t_e = -FT(λ_eq)
     t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
-    rule = conditional_rule(
-        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
-    )
+    rule = conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min)
     # Scale (λ, α) together so the node mean of the actual condensate is q_c
     # to rounding; the cloud edge −λ/α is unchanged by a common factor.
     g = conditional_rule_mean(NodeCondensate(FT(λ_lagrange), α_safe), rule)
