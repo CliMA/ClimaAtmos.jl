@@ -3,6 +3,26 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Refresh
+  `set_implicit_precomputed_quantities_core!` at the explicit predictor state
+  entering `initialize_implicit_stage_problem!` when Picard rounds follow,
+  clamp the stage-entering predictor updraft `ρa` to `[0, a_max ρʲ]` before
+  snapshotting, diagnose the entrained environment in the Picard tracer sweep
+  from the stage-start draft snapshot, evaluate the analytic updraft area
+  predictor with a two-pass `solve_sgs_ρa_two_pass!` sweep inside and after the
+  Picard loop, and apply `warm_start_grid_mean_tracers!` incrementally to the
+  condensates, `ρq_tot`, and `ρe_tot`, so the Newton initial guess differs from
+  the stage-entering state only by the updraft increment. In a single-iteration
+  Newton solve with an inexact Jacobian, raising the guess above the
+  stage-entering state enters `R(U^g)` as a source that the sedimentation
+  Jacobian drains through the surface, which the incremental form and unclamped
+  grid-mean guess avoid. Floor each condensate species at zero in
+  `microphysics_tendencies_1m`, `_mp1m_source_term`, `_beres_latent_heating`,
+  `_updraft_cloud_condensate_and_area!`, and the non-equilibrium grid-mean,
+  draft, and environment thermodynamics (raising `q_tot` to at least their sum
+  in the non-quadrature evaluations), and floor each updraft condensate at zero
+  and proportionally rescale them so their sum does not exceed `q_totʲ` after
+  the Picard microphysics increment (`rescale_condensates_to_total!`).
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Accumulate `surface_rain_flux`,
   `surface_snow_flux`, and `col_integrated_precip_energy_tendency` across IMEX
   stages weighted by the tableau `b_imp` coefficients (and apply the matching

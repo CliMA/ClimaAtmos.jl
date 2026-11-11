@@ -324,6 +324,24 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             )
         end
     end
+    # With "dss", `constrain_state!` runs both before `temp .= U` and after
+    # `initialize_imp!`; when `warm_start_grid_mean_tracers!` moves the
+    # grid-mean condensates of the guess (`PrognosticEDMFX`, 1M, Picard rounds
+    # > 0), the second pass moves `temp + Δ` when negative, altering `R(U^g)`
+    # relative to `temp` so a single-iteration Newton solve drains the excess.
+    if update_constrain_state_every == "dss" &&
+       isnothing(prescribed_flow) &&
+       !iszero(p.dtγ) &&
+       atmos.turbconv_model isa PrognosticEDMFX &&
+       atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+       atmos.edmfx_model.updraft_picard_rounds > 0
+        @warn(
+            "`update_constrain_state_every = dss` re-clamps the warm-started \
+             grid-mean condensates of the Newton guess after the \
+             stage-entering state is copied, which can produce an upward \
+             surface precipitation flux; use `stage` or `step`."
+        )
+    end
     if isnothing(prescribed_flow) && !iszero(p.dtγ)
         if atmos.numerics.energy_humidity_upwinding == Val(:none) &&
            atmos.diff_mode != Implicit()

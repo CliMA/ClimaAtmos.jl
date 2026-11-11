@@ -73,7 +73,8 @@ column(f) = vec(Array(parent(f)))
     z_max = FT(3000)
 
     # Grid-mean cloud species and a rising draft with structure in every
-    # solved scalar, so that every environment value is positive.
+    # solved scalar. The draft condensate exceeds the grid mean in parts of
+    # the column, so the diagnosed environment condensate is negative there.
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
     @. Y.c.ρq_lcl = Y.c.ρ * FT(2e-4) * (1 + sin(FT(2π) * ᶜz / z_max))
     @. Y.c.ρq_icl = Y.c.ρ * FT(1e-4) * (1 + sin(FT(2π) * ᶜz / z_max + 1))
@@ -161,21 +162,26 @@ column(f) = vec(Array(parent(f)))
             χ_name === @name(mse) ? CA.ᶜspecific_env_mse(Y, p) :
             CA.ᶜspecific_env_value(χ_name, Y, p)
         @. ᶜtmp = ᶜχ⁰
-        χ⁰[χ_name] = column(ᶜtmp)
+        # The sweep entrains the non-negative part of the diagnosed
+        # environment value of every tracer other than `mse`.
+        χ⁰[χ_name] =
+            χ_name === @name(mse) ? column(ᶜtmp) : max.(FT(0), column(ᶜtmp))
         S[χ_name] = zeros(FT, nz)
     end
     ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:(1)
     ᶜmp_tendency_implicitʲ = p.precomputed.ᶜmp_tendency_implicitʲs.:(1)
     S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
 
-    # `implicit_microphysics: true` moves `cloud_liquid_formation` and
-    # `cloud_ice_formation` to `microphysics_1m_implicit_params`, so the
-    # second CM BMT call `update_updraft_microphysics_tendency_cache!`
-    # issues inside the predictor fills `ᶜmp_tendency_implicitʲs` with the
-    # SGS-integrated cond/subl rates at the transported state.
+    # `implicit_microphysics: true` moves the four phase-change processes
+    # (`cloud_liquid_formation`, `cloud_ice_formation`,
+    # `rain_condensation_evaporation`, and `snow_deposition_sublimation`) to
+    # `microphysics_1m_implicit_params`, so the second CM BMT call inside the
+    # predictor fills `ᶜmp_tendency_implicitʲs` at the transported state.
     mp_imp = CAP.microphysics_1m_implicit_params(p.params)
     @test !isnothing(mp_imp.processes.cloud_liquid_formation)
     @test !isnothing(mp_imp.processes.cloud_ice_formation)
+    @test !isnothing(mp_imp.processes.rain_condensation_evaporation)
+    @test !isnothing(mp_imp.processes.snow_deposition_sublimation)
 
     # Transport-only result of the recurrence, swept bottom to top.
     function predicted_transport(χ_name; α = α, ε = ε, r_sfc = r_sfc)
@@ -192,9 +198,13 @@ column(f) = vec(Array(parent(f)))
         return χ_new
     end
 
-    # Full prediction: transport + `dtγ · (S_bulk + S_impl)`. `S_impl` is
-    # cond/subl from `ᶜmp_tendency_implicitʲs`, nonzero only for `q_lcl`
-    # and `q_icl` under `implicit_microphysics: true`.
+    # Full prediction: transport + `dtγ · (S_bulk + S_impl)`, followed for the
+    # four condensates by per-species flooring at zero and proportional
+    # rescaling so their sum does not exceed `max(0, q_totʲ)`. `S_impl` holds
+    # the four implicit 1M phase-change processes (`cloud_liquid_formation`,
+    # `cloud_ice_formation`, `rain_condensation_evaporation`, and
+    # `snow_deposition_sublimation`) under `implicit_microphysics: true`.
+    cond_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
     S_impl = Dict{Any, Vector{FT}}(
         @name(mse) => zeros(FT, nz),
         @name(q_tot) => zeros(FT, nz),
@@ -203,8 +213,25 @@ column(f) = vec(Array(parent(f)))
         @name(q_rai) => zeros(FT, nz),
         @name(q_sno) => zeros(FT, nz),
     )
-    predicted(χ_name) =
-        predicted_transport(χ_name) .+ dtγ .* (S[χ_name] .+ S_impl[χ_name])
+    function apply_post_source_bounds(tr_dict, S_dict, S_impl_dict)
+        out = Dict{Any, Vector{FT}}()
+        out[@name(mse)] = copy(tr_dict[@name(mse)])
+        out[@name(q_tot)] = copy(tr_dict[@name(q_tot)])
+        for cn in cond_names
+            out[cn] =
+                max.(zero(FT), tr_dict[cn] .+ dtγ .* (S_dict[cn] .+ S_impl_dict[cn]))
+        end
+        q_tot_pos = max.(zero(FT), out[@name(q_tot)])
+        q_sum =
+            out[@name(q_lcl)] .+ out[@name(q_icl)] .+ out[@name(q_rai)] .+
+            out[@name(q_sno)]
+        scale =
+            ifelse.(q_sum .> q_tot_pos, q_tot_pos ./ max.(q_sum, eps(FT)), one(FT))
+        for cn in cond_names
+            out[cn] .*= scale
+        end
+        return out
+    end
 
     @testset "matches the documented recurrence" begin
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
@@ -221,12 +248,22 @@ column(f) = vec(Array(parent(f)))
         end
         @test any(!=(0), S[@name(q_lcl)])
         @test S[@name(q_lcl)] != S_cached
-        # The implicit split places cond/subl in `ᶜmp_tendency_implicitʲs`,
+        # The implicit split places cond/subl/evap in `ᶜmp_tendency_implicitʲs`,
         # not in the bulk cache.
         @test any(!=(0), S_impl[@name(q_lcl)])
+        tr_pred = Dict{Any, Vector{FT}}(
+            χ_name => predicted_transport(χ_name) for (χ_name, _) in sgs_tracers
+        )
+        # Subcloud evaporation drives the un-clamped post-source rain negative,
+        # exercising the per-species floor at zero.
+        @test any(
+            cn -> any(<(0), tr_pred[cn] .+ dtγ .* (S[cn] .+ S_impl[cn])),
+            cond_names,
+        )
+        pred = apply_post_source_bounds(tr_pred, S, S_impl)
         for (χ_name, _) in sgs_tracers
             @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈
-                  predicted(χ_name) rtol = 1e-12
+                  pred[χ_name] rtol = 1e-12
         end
         # Draft area and velocity are untouched.
         @test parent(sgsʲ.ρa) == parent(Y_init.c.sgsʲs.:(1).ρa)
@@ -236,28 +273,41 @@ column(f) = vec(Array(parent(f)))
 
     @testset "fast entrainment relaxes to the environment value" begin
         Y .= Y_init
-        # ε dtγ = 6e4, so the stage and source terms leave a relative residual
+        # ε dtγ = 6e4, so the stage term leaves a relative transport residual
         # of ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
         @. p.precomputed.ᶜturb_entrʲs.:(1) = FT(1e3)
-        CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        for (χ_name, S_name) in sgs_tracers
-            χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
-            # Strip explicit and implicit cached sources off the condensates;
-            # what remains is the transport result, which the fast-ε limit
-            # pulls to χ⁰.
-            if !isnothing(S_name)
-                S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
-                χ_new = χ_new .- dtγ .* S_used
-                if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
-                    S_used_impl = column(
-                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
-                    )
-                    χ_new = χ_new .- dtγ .* S_used_impl
-                end
-            end
+        CA._sweep_sgs_updraft_tracers!(Y, p, dtγ, map(first, sgs_tracers))
+        for (χ_name, _) in sgs_tracers
+            χ_tr = column(MatrixFields.get_field(sgsʲ, χ_name))
             # Cell 1 of `mse` and `q_tot` also feels the surface relaxation.
             i₀ = sfc_forced(χ_name) ? 2 : 1
-            @test χ_new[i₀:end] ≈ χ⁰[χ_name][i₀:end] rtol = 1e-3
+            @test χ_tr[i₀:end] ≈ χ⁰[χ_name][i₀:end] rtol = 1e-3
+        end
+        Y .= Y_init
+        CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        S_fast = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        S_fast_impl = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        for (χ_name, S_name) in sgs_tracers
+            isnothing(S_name) && continue
+            S_fast[χ_name] =
+                column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+            S_fast_impl[χ_name] =
+                MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name) ?
+                column(MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name)) :
+                zeros(FT, nz)
+        end
+        pred_fast = apply_post_source_bounds(χ⁰, S_fast, S_fast_impl)
+        for (χ_name, _) in sgs_tracers
+            χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
+            i₀ = sfc_forced(χ_name) ? 2 : 1
+            @test χ_new[i₀:end] ≈ pred_fast[χ_name][i₀:end] rtol = 1e-3 atol =
+                FT(1e-8)
         end
     end
 
@@ -273,24 +323,42 @@ column(f) = vec(Array(parent(f)))
             parent(ᶜrate) .= 0
         end
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        tr_off = Dict{Any, Vector{FT}}()
+        S_off = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        S_off_impl = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
         for (χ_name, S_name) in sgs_tracers
+            if sfc_forced(χ_name)
+                v = copy(χ_old[χ_name])
+                v[1] =
+                    (χ_old[χ_name][1] / dtγ + r_sfc * χ_sfc(χ_name)) /
+                    (1 / dtγ + r_sfc)
+                tr_off[χ_name] = v
+            else
+                tr_off[χ_name] = copy(χ_old[χ_name])
+                S_off[χ_name] =
+                    column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+                S_off_impl[χ_name] =
+                    MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name) ?
+                    column(
+                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                    ) : zeros(FT, nz)
+            end
+        end
+        pred_off = apply_post_source_bounds(tr_off, S_off, S_off_impl)
+        for (χ_name, _) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
             if sfc_forced(χ_name)
-                @test χ_new[1] ≈
-                      (χ_old[χ_name][1] / dtγ + r_sfc * χ_sfc(χ_name)) /
-                      (1 / dtγ + r_sfc) rtol = 1e-12
+                @test χ_new[1] ≈ pred_off[χ_name][1] rtol = 1e-12
                 @test χ_new[1] != χ_old[χ_name][1]
                 @test χ_new[2:end] ≈ χ_old[χ_name][2:end] rtol = 1e-14
             else
-                S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
-                expected = χ_old[χ_name] .+ dtγ .* S_used
-                if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
-                    S_used_impl = column(
-                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
-                    )
-                    expected = expected .+ dtγ .* S_used_impl
-                end
-                @test χ_new ≈ expected rtol = 1e-12
+                @test χ_new ≈ pred_off[χ_name] rtol = 1e-12
             end
         end
     end
@@ -302,7 +370,7 @@ column(f) = vec(Array(parent(f)))
         # state-dependent `-dtγ / τ_vap_to_q_lcl` / `-dtγ / τ_vap_to_q_icl`
         # evaluated at the matching (grid-mean or updraft) state.
         import CloudMicrophysics.MicrophysicsNonEq as CMNe
-        import Thermodynamics as TD
+        import ClimaAtmos: TD
         alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
         cache = CA.jacobian_cache(alg, Y, p.atmos)
         matrix = cache.matrix.matrix
@@ -406,7 +474,7 @@ column(f) = vec(Array(parent(f)))
 
     @testset "Jacobian diagonals for q_rai / q_sno (evaporation and sublimation/deposition)" begin
         import CloudMicrophysics.Microphysics1M as CM1
-        import Thermodynamics as TD
+        import ClimaAtmos: TD
         alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
         cache = CA.jacobian_cache(alg, Y, p.atmos)
         matrix = cache.matrix.matrix
@@ -490,11 +558,12 @@ column(f) = vec(Array(parent(f)))
             )
             return column(ᶜtmp)
         end
-        # A depleted grid mean aloft leaves a negative environment value there,
-        # which the guess floors at zero.
+        # A depleted grid mean aloft leaves a negative environment value there.
         @. Y.c.ρq_lcl *= ifelse(ᶜz > 3 * z_max / 4, FT(0.1), FT(1))
         q_lcl⁰_old = env_q_lcl(Y)
         @test any(<(0), q_lcl⁰_old) && any(>(0), q_lcl⁰_old)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_old = column(ᶜtmp)
         Y_old = similar(Y)
         Y_old .= Y
         p.precomputed.ᶜsgsʲs_picard_snapshot.:(1) .= sgsʲ
@@ -503,8 +572,17 @@ column(f) = vec(Array(parent(f)))
         @. sgsʲ.ρa *= ifelse(ᶜz < z_max / 2, FT(1.5), FT(0.5))
         @. sgsʲ.q_lcl += FT(4e-4)
         CA.warm_start_grid_mean_tracers!(Y, p)
-        @test env_q_lcl(Y) ≈ max.(q_lcl⁰_old, 0) rtol = 1e4 * eps(FT) atol =
-            eps(FT)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_new = column(ᶜtmp)
+        # A non-negative environment value is kept; a negative one is left in
+        # place (the area change is scaled by `max(0, q_lcl⁰_old) = 0`), so it
+        # persists scaled by the environment area ratio.
+        expected = ifelse.(
+            q_lcl⁰_old .>= 0,
+            q_lcl⁰_old,
+            q_lcl⁰_old .* ρa⁰_old ./ ρa⁰_new,
+        )
+        @test env_q_lcl(Y) ≈ expected rtol = 1e4 * eps(FT) atol = eps(FT)
         @test parent(Y.c.ρq_lcl) != parent(Y_old.c.ρq_lcl)
         # `warm_start_grid_mean_tracers!` also rewrites `ρq_icl`, `ρq_rai`,
         # `ρq_sno`, `ρq_tot`, and `ρe_tot` so the predictor's updraft move

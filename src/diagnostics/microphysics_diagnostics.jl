@@ -33,23 +33,55 @@ The bulk and implicit sets are process-disjoint by construction
   - `implicit_microphysics: true` → bulk carries every process except
     `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
     and `snow_deposition_sublimation`; implicit carries only those four.
-  - `implicit_microphysics: false` → bulk carries every process (including the
-    two formations); implicit carries no active process, so its contribution
+  - `implicit_microphysics: false` → bulk carries every process (including
+    those four); implicit carries no active process, so its contribution
     for every source term is zero.
 
-Either way the sum equals the single-set evaluation that `microphysics_tendency!`
-applies to the state, with no double counting.
+Either way, each process appears in exactly one parameter set, with no double
+counting. Floors each condensate species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`) at
+zero and raises `q_tot` to at least their sum before calling `BMT`, matching the
+non-quadrature `microphysics_tendencies_1m`.
 """
 @inline function _mp1m_source_term(
     ::Val{F}, mp_bulk, mp_imp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
 ) where {F}
+    FT = typeof(ρ)
+    q_lcl_pos = max(zero(FT), q_lcl)
+    q_icl_pos = max(zero(FT), q_icl)
+    q_rai_pos = max(zero(FT), q_rai)
+    q_sno_pos = max(zero(FT), q_sno)
+    q_tot_safe = max(
+        zero(FT),
+        q_tot,
+        q_lcl_pos + q_icl_pos + q_rai_pos + q_sno_pos,
+    )
     src_bulk = BMT.bulk_microphysics_tendencies(
-        BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
-        mp_bulk, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
+        BMT.InstantaneousVerbose(),
+        BMT.Microphysics1Moment(),
+        mp_bulk,
+        tps,
+        ρ,
+        T,
+        w,
+        q_tot_safe,
+        q_lcl_pos,
+        q_icl_pos,
+        q_rai_pos,
+        q_sno_pos,
     )
     src_imp = BMT.bulk_microphysics_tendencies(
-        BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
-        mp_imp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
+        BMT.InstantaneousVerbose(),
+        BMT.Microphysics1Moment(),
+        mp_imp,
+        tps,
+        ρ,
+        T,
+        w,
+        q_tot_safe,
+        q_lcl_pos,
+        q_icl_pos,
+        q_rai_pos,
+        q_sno_pos,
     )
     return getfield(src_bulk, F) + getfield(src_imp, F)
 end
@@ -197,8 +229,12 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     cmp_i = CAP.microphysics_1m_implicit_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
+    eps_FT = eps(eltype(thp))
     ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        max(
+            eps_FT,
+            TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        ),
     )
     ᶜw⁰ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)

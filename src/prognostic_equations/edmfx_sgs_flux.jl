@@ -41,14 +41,18 @@ function edmfx_sgs_mass_flux_tendency!(
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
+    eps_FT = eps(eltype(thermo_params))
     ᶜρ⁰ = @. lazy(
-        TD.air_density(
-            thermo_params,
-            ᶜT⁰,
-            ᶜp,
-            ᶜq_tot_nonneg⁰,
-            ᶜq_liq⁰,
-            ᶜq_ice⁰,
+        max(
+            eps_FT,
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
         ),
     )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))

@@ -256,9 +256,19 @@ the grid mean and the drafts is stiff at the timesteps of interest.
 
 The draft mass ``\hat{\rho}^j`` and vertical velocity ``u_3^j`` are *not*
 advanced by the Newton solve. At the start of every implicit stage, before the
-solve, `initialize_implicit_stage_problem!` overwrites them in the state with
-values obtained from closed-form column solves, and caches the implied
-tendencies
+solve, `initialize_implicit_stage_problem!` records
+``-u_3^{j,\mathrm{old}} / (\gamma \Delta t)`` and
+``-\hat{\rho}^{j,\mathrm{old}} / (\gamma \Delta t)``,
+refreshes `set_implicit_precomputed_quantities_core!` when Picard rounds
+follow (without them, the solves use the buoyancy of the last cache update),
+and clamps ``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``. The grid-mean state
+enters the Newton guess as it enters the stage, moved only by the updraft
+increment of the Picard predictor (`warm_start_grid_mean_tracers!`, which
+shifts the grid-mean condensates, ``\rho q_t``, and ``\rho e_t`` so that the
+environment keeps its stage-entering values).
+`initialize_implicit_stage_problem!` then overwrites ``u_3^j`` and
+``\hat{\rho}^j`` in the state with values obtained from closed-form column
+solves, and caches the implied tendencies
 
 ```math
 \frac{u_3^{j,\mathrm{stage}} - u_3^{j,\mathrm{old}}}{\gamma \Delta t} ,
@@ -271,28 +281,35 @@ the implicit tendencies of those variables. Because the tendencies are
 *assigned* rather than accumulated, and the corresponding Jacobian rows are
 identity blocks, the Newton solve reproduces the analytic stage values exactly
 and leaves them alone. The result is less general than a Newton solve but
-cannot fail: each solve is exact, needs one sweep through the column, and is
-constructed so that it cannot produce a negative area or a downward updraft.
+cannot fail: each solve is exact, needs one or two sweeps through the column,
+and is constructed so that it cannot produce a negative area or a downward
+updraft.
 
 `u_3^j` enters the buoyancy-affecting draft scalars (``h_s^j``, ``q_t^j``, 1M
 condensates) through the upwind-advection sweep, and those scalars in turn
 drive the buoyancy that closes the next ``u_3^j`` solve. To tighten the
 within-stage coupling, `initialize_implicit_stage_problem!` runs
 `edmfx_updraft_picard_rounds` Picard rounds (default `2`; ``0`` reproduces
-the single-pass behavior) that alternate the analytic ``u_3^j`` solve with
-the semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
-turbulent entrainment toward the environment, first-cell surface mass-source
-relaxation of ``h_s^j`` and ``q_t^j``, and 1M microphysics), each round
-starting from the stage-initial `Y.(f,c).sgsʲs`. Within a round, the sweep
-transports every draft scalar first; the draft thermodynamics and
-`ᶜmp_tendencyʲs` are then evaluated at the transported state, so that the
-vapor of each cell is consistent with the condensate that arrives with it, and
-the condensate and precipitation tracers receive ``\gamma \Delta t`` times
-that source; the draft thermodynamics are refreshed again at the full iterate
-for the next ``u_3^j`` solve. The final analytic ``u_3^j`` and
-``\hat{\rho}^j`` solves then run with Picard-converged buoyancy and
-microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve so
-the Jacobian stays consistent.
+the single-pass behavior) that alternate the analytic ``u_3^j`` solve, the
+two-pass area solve (`solve_sgs_ρa_two_pass!`, which evaluates the lower and
+upper area-limiter factors — gating buoyancy detrainment and the
+mass-flux-divergence detrainment prefactor — and the convergence sign test at
+``\max(\hat{\rho}^{j,\mathrm{old}}, \hat{\rho}^{j,\mathrm{pass1}})``), and the
+semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
+turbulent entrainment toward the environment diagnosed from the stage-start
+draft snapshot, first-cell surface mass-source relaxation of ``h_s^j`` and
+``q_t^j``, and 1M microphysics), each round starting from the stage-initial
+`Y.(f,c).sgsʲs` with the clamped area. Within a round, the sweep transports
+every draft scalar first; the draft thermodynamics and `ᶜmp_tendencyʲs` are
+then evaluated at the transported state, so that the vapor of each cell is
+consistent with the condensate that arrives with it, and the condensate and
+precipitation tracers receive ``\gamma \Delta t`` times that source (floored at
+zero and proportionally rescaled so their sum does not exceed ``q_t^j``); the
+draft thermodynamics are refreshed again at the full iterate for the next
+``u_3^j`` solve. The final analytic
+``u_3^j`` and two-pass ``\hat{\rho}^j`` solves then run with Picard-converged
+buoyancy and microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton
+solve so the Jacobian stays consistent.
 
 ### Vertical velocity
 
