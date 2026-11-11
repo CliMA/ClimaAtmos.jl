@@ -500,10 +500,7 @@ import Thermodynamics as TD
                 # lower faces are neutral (0), face 2+half has a strong jump.
                 Fields.level(ᶠ∂θli∂z, 2 + Fields.half) .= FT(0.02)
                 Fields.level(ᶠ∂qt∂z, 2 + Fields.half) .= FT(-1e-5)
-                ᶜgrad_θ = Fields.zeros(CA.Geometry.Covariant3Vector{FT}, cspace)
-                ᶜgrad_q = Fields.zeros(CA.Geometry.Covariant3Vector{FT}, cspace)
-                CA.ᶜVanLeer_gradient!(ᶜgrad_θ, ᶠ∂θli∂z)
-                CA.ᶜVanLeer_gradient!(ᶜgrad_q, ᶠ∂qt∂z)
+                ᶜgrad_θ = Base.materialize(CA.ᶜVanLeer_gradient(ᶠ∂θli∂z))
                 # Van Leer harmonic mean vanishes in cell 2 because its lower face is 0:
                 @test Array(parent(Fields.level(ᶜgrad_θ, 2)))[1] == FT(0)
                 # Face-maximum dry N² in cell 2 and cell 3 sees the full inversion jump:

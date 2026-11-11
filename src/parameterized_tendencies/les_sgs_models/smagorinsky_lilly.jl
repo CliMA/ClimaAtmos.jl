@@ -83,8 +83,11 @@ See also `horizontal_smagorinsky_lilly_tendency!` and
 `vertical_smagorinsky_lilly_tendency!`, which consume these quantities.
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
-    (; ᶜu, ᶠu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =
+    (; ᶜu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =
         p.precomputed
+    # (materialized: the horizontal strain rate applies horizontal operators to it)
+    ᶠu = p.scratch.ᶠtemp_CT123
+    ᶠu .= compute_ᶠu(Y, p)
     c_smag = CAP.c_smag(p.params)
 
     # Precompute 3D strain rate tensor

@@ -86,10 +86,9 @@ function edmfx_tke_sources!(Yₜ, Y, p)
             ᶜρʲs,
             ᶜρ_diffʲs,
             ᶜarea_bounding_entr_detrʲs,
-            ᶜuʲs,
-            ᶠu³ʲs,
-            ᶜu⁰,
         ) = p.precomputed
+        ᶜuʲs = ᶜdraft_velocities(Y, p)
+        ᶜu⁰ = ᶜenv_velocity(Y, p)
         (; ᶠgradᵥ_ᶜΦ) = p.core
         ᶜlg = Fields.local_geometry_field(Y.c)
         ᶠlg = Fields.local_geometry_field(Y.f)
@@ -99,11 +98,11 @@ function edmfx_tke_sources!(Yₜ, Y, p)
             Operators.BottomBiasedC2F(bottom = Operators.SetValue(FT(0)))
 
         DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
-            ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+            Yₜ.c, Y.c, Y.f, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
+            ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶜu⁰,
             ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg,
-        ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
-        ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+        ) do Yₜc, Yc, Yf, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
+        ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶜu⁰,
         ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg
             add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
             # Pressure-drag return-to-isotropy for every updraft, then the
@@ -125,11 +124,12 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                 ᶜρaʲ = Yc.sgsʲs.:($j).ρa
                 ᶜρʲ = ᶜρʲs.:($j)
                 ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+                ᶠu³ʲ = register_copy(compute_ᶠu³(Yc.uₕ, Yc.ρ, Yf.sgsʲs.:($j).u₃))
                 ᶜΔw = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
                 ᶜbuoy_inv_time_scale = @inline @. lazy(
                     ᶜinterp(
                         detr_buoy_inv_time_scale(
-                            get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
+                            get_physical_w(ᶠu³ʲ, ᶠlg),
                             vertical_buoyancy_acceleration(
                                 ᶠinterp(ᶜρ_diffʲs.:($$j)),
                                 ᶠgradᵥ_ᶜΦ,
@@ -147,7 +147,7 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                         ᶜaʲ,
                         ᶜρaʲ,
                         ᶜbuoy_inv_time_scale,
-                        ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu³ʲs.:($$j)),
+                        ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu³ʲ),
                         ᶜarea_bounding_entr_detrʲs.:($$j),
                         detr_model,
                     ),

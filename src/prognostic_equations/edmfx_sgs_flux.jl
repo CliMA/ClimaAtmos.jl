@@ -35,9 +35,10 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶜp, ᶠu³) = p.precomputed
-    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜp) = p.precomputed
+    (; ᶠu³) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -70,14 +71,17 @@ function edmfx_sgs_mass_flux_tendency!(
         χ_names = sgs_tracer_names(Y)
         ρχ_names = unrolled_map(get_ρχ_name, χ_names)
 
+        (; ᶠu³⁰, ᶜK⁰) = p.precomputed
         # Drafts
         for j in 1:n
             DataLayouts.foreach_column(
-                Yₜ.c, Y.c, ᶜρʲs.:($j), ᶠu³, ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶜh_tot,
-                Y.c.sgsʲs.:($j),
-            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ
+                Yₜ.c, Y.c, ᶜρʲs.:($j), ᶠu³,
+                compute_ᶠu³(Y.c.uₕ, Y.c.ρ, Y.f.sgsʲs.:($j).u₃),
+                Y.f.sgsʲs.:($j).u₃, ᶜh_tot, Y.c.sgsʲs.:($j),
+            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶠu₃ʲ, ᶜh_tot, ᶜsgsʲ
                 ᶜχʲs = unrolled_map(name -> MatrixFields.get_field(ᶜsgsʲ, name), χ_names)
                 ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+                ᶜKʲ = compute_kinetic(Yc.uₕ, ᶠu₃ʲ)
                 add_sgs_mass_flux_tendencies!(
                     Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ.mse, ᶜsgsʲ.q_tot,
                     ᶜaʲ, ᶜχʲs, ρχ_names, dt, edmfx_sgsflux_upwinding,
@@ -161,12 +165,12 @@ of the EDMFX environment (the subdomain counterpart of
 `ᶜdiffusing_water_phases`). With non-equilibrium microphysics,
 `q_tot_eff⁰ = q_tot⁰ - q_rai⁰ - q_sno⁰` and the suspended cloud species are the
 diagnosed environment specific humidities; with an equilibrium scheme,
-`q_tot_eff⁰ = q_tot⁰` and the cloud species are the cached diagnostic `ᶜq_liq⁰`
-and `ᶜq_ice⁰`.
+`q_tot_eff⁰ = q_tot⁰` and the cloud species are the diagnosed `ᶜq_liq⁰` and
+`ᶜq_ice⁰` (`ᶜenv_thermo_fields`).
 """
 function ᶜenv_diffusing_water(Y, p)
     (; turbconv_model, microphysics_model) = p.atmos
-    (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     nonequil_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
     return env_diffusing_water(
@@ -197,10 +201,11 @@ Return `(q_tot_effʲ, q_lclʲ, q_iclʲ)`, the diffusing total, liquid, and ice w
 of updraft `j`. With non-equilibrium microphysics,
 `q_tot_effʲ = q_totʲ - q_raiʲ - q_snoʲ` and the suspended cloud species are read
 from `Y.c.sgsʲs.:(j)`; with an equilibrium scheme, `q_tot_effʲ = q_totʲ` and the
-cloud species are the cached diagnostic `ᶜq_liqʲs.:(j)` and `ᶜq_iceʲs.:(j)`.
+cloud species are the diagnosed `ᶜq_liqʲs.:(j)` and `ᶜq_iceʲs.:(j)`
+(`ᶜdraft_thermo_tuples`).
 """
 function ᶜupdraft_diffusing_water(Y, p, ::Val{j}) where {j}
-    (; ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜq_liqʲs, ᶜq_iceʲs) = ᶜdraft_thermo_tuples(Y, p)
     nonequil_val = Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics)
     return updraft_diffusing_water(
         Y.c.sgsʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), nonequil_val,
@@ -232,7 +237,7 @@ scheme, return `Y.c.sgsʲs.:(j).mse` itself.
     updraft_diffusing_mse!(
         ᶜmse_eff,
         Y.c.sgsʲs.:($j),
-        p.precomputed.ᶜTʲs.:($j),
+        ᶜdraft_thermo_tuples(Y, p).ᶜTʲs.:($j),
         CAP.thermodynamics_params(p.params),
         Val(p.atmos.microphysics_model isa NonEquilibriumMicrophysics),
     )
@@ -391,7 +396,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ϵ_FT = eps(FT)
             nonequil_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
             thermo_params = CAP.thermodynamics_params(p.params)
-            (; ᶜT⁰, ᶜTʲs, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+            (; ᶜT⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+            (; ᶜTʲs, ᶜq_liqʲs, ᶜq_iceʲs) = ᶜdraft_thermo_tuples(Y, p)
             # The blended cloud-species flux needs the closures of the 1M scheme.
             blend = Val(blended_cloud_species_flux(Y, p))
             blend_fields =
@@ -685,7 +691,10 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         return nothing
     iscolumn(axes(Y.c)) && return nothing
     (; microphysics_model) = p.atmos
-    (; ᶜK_u_h, ᶜK_h_h, ᶜu, ᶠu) = p.precomputed
+    (; ᶜK_u_h, ᶜK_h_h, ᶜu) = p.precomputed
+    # (materialized: the slab loop below applies horizontal operators to it)
+    ᶠu = p.scratch.ᶠtemp_CT123
+    ᶠu .= compute_ᶠu(Y, p)
     thermo_params = CAP.thermodynamics_params(p.params)
 
     # The full strain rate `S` is the sum of the strain rates of the vertical
@@ -733,12 +742,16 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     f_j = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
     χ_pairs = edmfx_diffused_scalars(Y)
     ρχ_names = self_diffused_tracer_names(Y, false)
-    thermo_fields =
-        turbconv_model isa PrognosticEDMFX ?
+    thermo_fields = if turbconv_model isa PrognosticEDMFX
+        ᶜenv_fields = ᶜenv_thermo_fields(Y, p)
+        ᶜdraft_fields = ᶜdraft_thermo_tuples(Y, p)
         (
-            p.precomputed.ᶜT⁰, p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰,
-            p.precomputed.ᶜTʲs, p.precomputed.ᶜq_liqʲs, p.precomputed.ᶜq_iceʲs,
-        ) : (p.precomputed.ᶜT, p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
+            ᶜenv_fields.ᶜT⁰, ᶜenv_fields.ᶜq_liq⁰, ᶜenv_fields.ᶜq_ice⁰,
+            ᶜdraft_fields.ᶜTʲs, ᶜdraft_fields.ᶜq_liqʲs, ᶜdraft_fields.ᶜq_iceʲs,
+        )
+    else
+        (p.precomputed.ᶜT, p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
+    end
     DataLayouts.foreach_slab(
         Yₜ.c, Y.c, ᶜK_h_h, ᶜK_u_h, ᶜu, ᶜΔu, p.core.ᶜΦ, thermo_fields;
         shmem = Val(:medium),

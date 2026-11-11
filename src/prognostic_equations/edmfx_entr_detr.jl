@@ -587,7 +587,8 @@ The generic method is a no-op; the `PrognosticEDMFX` method mutates
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
-    (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
+    (; ᶜK, ᶜh_tot, ᶜturb_entrʲs) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
     χ_names = sgs_tracer_names(Y)
