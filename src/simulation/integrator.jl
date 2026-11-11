@@ -209,12 +209,14 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                 max_iters = ngmres_max_iters,
                 update_j,
                 rtol = use_newton_rtol ? FT(newton_rtol) : FT(0),
+                verbose = CTS.Verbose(),
             )
             return CTS.IMEXAlgorithm(ode_algo_name(), nl_solver)
         end
         newtons_method = CTS.NewtonsMethod(;
             max_iters = max_newton_iters_ode,
             update_j,
+            verbose = CTS.Verbose(),
             krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
@@ -228,6 +230,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                     else
                         CTS.ConstantForcing(FT(krylov_rtol))
                     end,
+                    verbose = CTS.Verbose(),
                     solve_kwargs = (; reorthogonalization = true, itmax = 5),
                 )
             else
