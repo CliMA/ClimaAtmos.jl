@@ -56,6 +56,13 @@ function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
 end
 
 """
+    specific_nonneg(ρχ, ρ)
+
+Return the non-negative specific quantity `max(specific(ρχ, ρ), 0)`.
+"""
+@inline specific_nonneg(ρχ, ρ) = max(specific(ρχ, ρ), zero(ρ))
+
+"""
     env_relaxation_feedback(ρaʲ, ρa⁰, ρ, turbconv_model)
 
 Return the magnitude of `-∂χ⁰/∂χʲ` for an environment value diagnosed by

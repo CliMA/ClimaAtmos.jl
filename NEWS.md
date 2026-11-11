@@ -3,6 +3,36 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Accumulate `surface_rain_flux`,
+  `surface_snow_flux`, and `col_integrated_precip_energy_tendency` across IMEX
+  stages weighted by the tableau `b_imp` coefficients (and apply the matching
+  pointwise stage flux plus post-Newton Jacobian increment to prognostic
+  `SlabOceanTemperature` surfaces, converting level-1 velocity on the center
+  space before slicing), matching the discrete column sedimentation sink under
+  direct Newton solves without Krylov or line search
+  (`update_jacobian_every = "solve"`, or `"stage"` when
+  `max_newton_iters_ode == 1`) with `ManualSparseJacobian` and
+  `constrain_state!` leaving column water unchanged at `ρq_tot ≥ 0` (Krylov,
+  line search, `update_jacobian_every = "dt"`, `"stage"` with
+  `max_newton_iters_ode > 1`, and autodiff disable the `w_jac` accumulator and
+  leave a slab ocean on the pointwise stage flux with a one-time warning, and
+  explicit-diagonal stage weights on `SSP` / `IMKG` tableaus are redistributed
+  approximately in the diagnostic). Clamp negative tracer densities and draft
+  areas to zero in the grid-mean, updraft, and environment sedimentation
+  residual fluxes, and route cloud ice (`ᶜwᵢ`, `ᶜwᵢʲs`, and P3 `ᶜwnᵢ`) through
+  `fill_column_max!` alongside rain and snow in `update_sedimentation_jacobian!`,
+  `update_sgs_advection_jacobian!`, `updraft_sedimentation_matrix!`, and
+  `record_stage_precipitation_linearization!` so `Chen2022` / P3 cloud-ice
+  shafts (`CFL_sed > 1`) do not collapse their super-diagonal over empty or
+  negative cells; because the cloud-ice, rain, and snow sedimentation Jacobians
+  retain the column-maximum terminal velocity `w_jac` across empty and negative
+  cells, the
+  linearized flux is upward when `|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)`
+  (from a negative bottom cell with a net implicit sink and `w_jac > 0` or a
+  positive bottom cell drained below `(1 - w_base / w_jac) ρq^g` in one stage,
+  e.g. subcloud evaporation with `dtγ λ > w_base / (w_jac - w_base)`) or when
+  negative `b_imp` stage weights (`ARS343`) outweigh positive stages, in each
+  case equaling the discrete column sink.
 - ![][badge-💥breaking] Rename the numerics keys `energy_q_tot_upwinding` to
   `energy_humidity_upwinding` and `edmfx_mse_q_tot_upwinding` to
   `edmfx_mse_humidity_upwinding` (YAML keys and `AtmosNumerics` keywords), since

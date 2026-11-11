@@ -172,10 +172,11 @@ gravity waves, radiation, tracers).
 # Keyword Arguments
 
   - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
-    explicit), used to extract `dtγ` and the
+    explicit), used to extract `dtγ`, `b_imp` stage weights, and the
     `compensate_explicit_scalar_advection` flag.
   - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
-    scalar advection dissipation weight.
+    stage-weighted surface precipitation accumulator and scalar advection
+    dissipation weight.
   - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
     or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
 
@@ -283,6 +284,26 @@ function build_cache(
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = atmos.surface.boundary_overrides
+    has_noneq_precip =
+        atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+            NonEquilibriumMicrophysics2MP3,
+        }
+    b_imp_stages, n_imp_stages =
+        (jacobian isa ManualSparseJacobian && has_noneq_precip) ?
+        imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
+    if atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature &&
+       has_noneq_precip &&
+       !iszero(dtγ) &&
+       n_imp_stages == 0
+        @warn(
+            "Stage-weighted surface precipitation accumulator is disabled for \
+             this solver/Jacobian configuration; `SlabOceanTemperature` \
+             receives only the pointwise stage flux while the atmosphere \
+             applies the post-solve sedimentation increment."
+        )
+    end
     compensate_explicit_scalar_advection =
         !iszero(dtγ) &&
         (
@@ -298,6 +319,8 @@ function build_cache(
     scratch = temporary_quantities(
         Y,
         atmos;
+        b_imp_stages,
+        n_imp_stages,
         compensate_explicit_scalar_advection,
     )
 

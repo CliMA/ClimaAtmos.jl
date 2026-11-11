@@ -1088,23 +1088,25 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 
     # Condensate masses carry their diagonal and their ρq_tot, ρ, and ρe_tot
     # columns into the loop; the other sedimenting tracers only their diagonal.
-    # `ᶜwₚ_jac` is the running column max of `ᶜwₚ` for rain and snow mass and
-    # for rain number (so the super-diagonal does not collapse where the
-    # species is empty), and the pointwise `ᶜwₚ` for cloud liquid,
-    # cloud ice, cloud-liquid number, ice number, and the P3 rime quantities,
-    # which fall slowly enough that the pointwise stencil is stable. The
-    # pointwise `ᶜwₚ` is passed separately for the sedimentation kinetic energy
-    # carried into `ρe_tot`.
+    # `ᶜwₚ_jac` is the running column max of `ᶜwₚ` for cloud ice (including P3
+    # rime mass/volume and ice number), rain mass, snow mass, and rain number
+    # (so the super-diagonal does not collapse where the species is empty or
+    # negative under `Chen2022` / P3 fall speeds), and the pointwise `ᶜwₚ` for
+    # cloud liquid and cloud-liquid number, which fall in the Stokes/fixed
+    # regime (`CFL_sed ≪ 1`). The pointwise `ᶜwₚ` is passed separately for the
+    # sedimentation kinetic energy carried into `ρe_tot`.
     mass_names = unrolled_filter(n -> !isnothing(condensate_phase(n)), ρχ_names)
     other_names = unrolled_filter(n -> isnothing(condensate_phase(n)), ρχ_names)
     ᶜw(ρχ_name) =
         MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name))
-    # Borrow `ᶜtemp_scalar_3`, `ᶜtemp_scalar_4`, and `ᶜtemp_scalar_5` (all
-    # free until later diffusion-Jacobian work) for the rain mass, snow mass,
-    # and rain number column maxes.
+    # Borrow `ᶜtemp_scalar_3`..`ᶜtemp_scalar_7` (all free until later
+    # diffusion-Jacobian work) for the column maxes of `ᶜwᵣ`, `ᶜwₛ`, `ᶜwₙᵣ`,
+    # `ᶜwᵢ`, and `ᶜwnᵢ`.
     ᶜwᵣ_max = p.scratch.ᶜtemp_scalar_3
     ᶜwₛ_max = p.scratch.ᶜtemp_scalar_4
     ᶜwₙᵣ_max = p.scratch.ᶜtemp_scalar_5
+    ᶜwᵢ_max = p.scratch.ᶜtemp_scalar_6
+    ᶜwnᵢ_max = p.scratch.ᶜtemp_scalar_7
     if MatrixFields.has_field(Y.c, @name(ρq_rai))
         fill_column_max!(ᶜwᵣ_max, p.precomputed.ᶜwᵣ)
     end
@@ -1114,10 +1116,22 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     if MatrixFields.has_field(Y.c, @name(ρn_rai))
         fill_column_max!(ᶜwₙᵣ_max, p.precomputed.ᶜwₙᵣ)
     end
+    if MatrixFields.has_field(Y.c, @name(ρq_icl))
+        fill_column_max!(ᶜwᵢ_max, p.precomputed.ᶜwᵢ)
+    end
+    if MatrixFields.has_field(Y.c, @name(ρn_ice))
+        fill_column_max!(ᶜwnᵢ_max, p.precomputed.ᶜwnᵢ)
+    end
     ᶜw_jac(ρχ_name) =
         ρχ_name == @name(ρq_rai) ? ᶜwᵣ_max :
         ρχ_name == @name(ρq_sno) ? ᶜwₛ_max :
-        ρχ_name == @name(ρn_rai) ? ᶜwₙᵣ_max : ᶜw(ρχ_name)
+        ρχ_name == @name(ρn_rai) ? ᶜwₙᵣ_max :
+        (
+            ρχ_name == @name(ρq_icl) ||
+            ρχ_name == @name(ρq_rim) ||
+            ρχ_name == @name(ρb_rim)
+        ) ? ᶜwᵢ_max :
+        ρχ_name == @name(ρn_ice) ? ᶜwnᵢ_max : ᶜw(ρχ_name)
     mass_args = unrolled_map(mass_names) do ρχ_name
         s = center_state_name(ρχ_name)
         (
@@ -1155,6 +1169,17 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     other_groups
         ᶠρ_col = @. ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col
         ᶜbidiag = @. dtγ * (-(ᶜprecipdivᵥ_matrix())) * DiagonalMatrixRow(ᶠρ_col)
+        # Although the residual clamps the sedimentation flux of a negative cell
+        # to zero (`specific_nonneg`, zero exact derivative), `ᶠband` keeps
+        # `ᶜwₚ_jac` in empty and negative cells — including level 1, where
+        # `dz_bottom` gives the largest sedimentation Courant number in the
+        # column — so precipitation arriving from above at `CFL_sed > 1`
+        # traverses them in the same stage rather than piling up. This matches
+        # `updraft_sedimentation_matrix!`.
+        # TODO: Investigate using `w_base` at level 1 where `ρq_1^g > 0` and
+        # `0` where `ρq_1^g ≤ 0` (matching `_precip_lin_nt`) so subcloud
+        # evaporation cannot drive `F_sfc` upward, once multi-cell shaft arrival
+        # into an empty bottom cell is verified on coupled 3D runs.
         @inline ᶠband(ᶜwₚ_jac) = @. lazy(
             DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
             (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ_jac) / ᶜρ_col)),
@@ -1890,16 +1915,16 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             p.precomputed,
             sgs_sedimentation_velocity_name(χ_name),
         )
-        # For rain mass, snow mass, and rain number, route `ᶠsed` through the
-        # running column max of `ᶜwʲ` (into `ᶜtemp_scalar_3`, reused across the
-        # species because their per-species foreach_columns do not overlap) so
-        # the super-diagonal does not collapse where the species is empty.
-        # Cloud liquid, cloud ice, and cloud-liquid number keep the pointwise
-        # `ᶜwʲ` — they fall slowly enough that the pointwise stencil is stable.
-        # The pointwise `ᶜwʲ` above is also kept for the lateral-mixing
-        # diagonal below.
+        # For cloud ice, rain mass, snow mass, and rain number, route `ᶠsed`
+        # through the running column max of `ᶜwʲ` (into `ᶜtemp_scalar_3`, reused
+        # across the species because their per-species foreach_columns do not
+        # overlap) so the super-diagonal does not collapse where the species is
+        # empty. Cloud liquid and cloud-liquid number keep the pointwise `ᶜwʲ`,
+        # which stays in the Stokes/fixed regime (`CFL_sed ≪ 1`). The pointwise
+        # `ᶜwʲ` above is also kept for the lateral-mixing diagonal below.
         ᶜwʲ_jac =
-            if χ_name == @name(q_rai) ||
+            if χ_name == @name(q_icl) ||
+               χ_name == @name(q_rai) ||
                χ_name == @name(q_sno) ||
                χ_name == @name(n_rai)
                 fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwʲ)
@@ -1946,7 +1971,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
             ᶜsgsʲ = Yc.sgsʲs.:(1)
-            ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+            ᶜa = @. draft_area(max(zero_FT, ᶜsgsʲ.ρa), ᶜρʲ)
             ᶜ∂a∂z =
                 @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
@@ -1955,7 +1980,10 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # diagonal, which vanishes where the residual environment flux is
             # clamped at zero.
             ᶜlateral_coeff = @. dtγ * ifelse(
-                (ᶜ∂a∂z < 0) & (ᶜw_gs * ᶜρχ_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ > 0),
+                (ᶜ∂a∂z < 0) &
+                (ᶜsgsʲ.ρa > 0) &
+                (ᶜχʲ > 0) &
+                (ᶜw_gs * max(zero_FT, ᶜρχ_gs) - ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ > 0),
                 ᶜ∂a∂z * ᶜa * ᶜρʲ * ᶜwʲ / max(1 - ᶜa, ε_area),
                 zero_FT,
             )
@@ -2013,10 +2041,11 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             c_μ = condensate_heat_capacity(phase, thermo_params)
             ᶜinv_cp_mʲ =
                 @. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
+            ᶜχʲ_pos = @. lazy(max(zero_FT, ᶜχʲ))
             @. ∂ᶜmseʲ_diag +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) *
                 (ᶜM - DiagonalMatrixRow(ᶜlateral_coeff)) *
-                DiagonalMatrixRow(ᶜχʲ * c_μ * ᶜinv_cp_mʲ)
+                DiagonalMatrixRow(ᶜχʲ_pos * c_μ * ᶜinv_cp_mʲ)
             MatrixFields.unrolled_foreach(
                 map(tuple, mass_names, mse_col_blocks),
             ) do (ν_name, ∂ᶜmseʲ_∂ᶜq_νʲ)
@@ -2026,7 +2055,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                     DiagonalMatrixRow(ᶜinv_ρ̂) *
                     (ᶜM - DiagonalMatrixRow(ᶜlateral_coeff)) *
                     DiagonalMatrixRow(
-                        ᶜχʲ * c_μ * ᶜinv_cp_mʲ * L_ν(thermo_params, ᶜTʲ),
+                        ᶜχʲ_pos * c_μ * ᶜinv_cp_mʲ * L_ν(thermo_params, ᶜTʲ),
                     )
                 return nothing
             end

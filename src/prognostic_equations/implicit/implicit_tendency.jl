@@ -328,8 +328,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, Yc.ρ))
             add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, nothing, Val(:none))
+            # The residual's donor-cell sedimentation flux out of a negative
+            # cell is zero (`specific_nonneg`); the single-Newton step adds the
+            # Jacobian flux `w_jac (ρq* - ρq^g)` so falling precipitation
+            # traverses empty or negative cells in one stage.
             @. ᶜρχₜ -= ᶜprecipdivᵥ(
-                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜχ))),
+                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific_nonneg(ᶜρχ, Yc.ρ)))),
             )
         end
 
@@ -554,11 +558,48 @@ end
 ) = nothing
 
 """
+    post_newton_stage_update!(Yₜ, Y, p, t)
+
+Accumulate stage-weighted surface precipitation fluxes, write the post-Newton
+vertical advection correction into `Yₜ` at `Y = U*`, and apply the linearized
+surface precipitation increment to a prognostic slab ocean when active.
+
+Registered as the `T_post_imp!` hook of `ClimaODEFunction`, which
+`ClimaTimeSteppers.solve_stage_implicit!` invokes once per implicit stage and
+applies as `U ← U* + dtγ · Yₜ`. Calls
+`accumulate_stage_precipitation_surface_fluxes!` (advancing
+`p.scratch.precip_stage_idx[]`), overwrites `Yₜ` with
+`correct_implicit_advection_tendency!`, and adds the post-Newton surface
+precipitation increment via `add_post_newton_surface_precipitation_tendency!` so
+a `SlabOceanTemperature` surface receives the same linearized stage flux as the
+atmosphere loses when the stage-weighted `ManualSparseJacobian` accumulator is
+active (`has_precip_stage_accumulator(p)`). Keeping the accumulation outside
+`correct_implicit_advection_tendency!` leaves the stage counter in phase when
+tendency diagnostics sample the correction. Returns `nothing`.
+"""
+function post_newton_stage_update!(Yₜ, Y, p, t)
+    accumulate_stage_precipitation_surface_fluxes!(
+        Y,
+        p,
+        p.atmos.microphysics_model,
+    )
+    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
+    add_post_newton_surface_precipitation_tendency!(
+        Yₜ,
+        Y,
+        p,
+        p.atmos.surface.temperature,
+        p.atmos.microphysics_model,
+    )
+    return nothing
+end
+
+"""
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
 Apply the post-Newton upwind treatment of the implicit vertical advection of
 `implicit_vertical_advection_tendency!`, evaluated at the Newton-solved stage
-state `Y = U*` and velocity. Registered as `T_post_imp!` and called by the
+state `Y = U*` and velocity. Called by `post_newton_stage_update!` and by the
 tendency diagnostics; it leaves `p` unchanged.
 
 Overwrites `Yₜ` with `add_vertical_advection_corrections!` at the stage step

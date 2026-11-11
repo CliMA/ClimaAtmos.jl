@@ -2,7 +2,7 @@ using ClimaCore: Fields
 using ClimaCore.Utilities: half
 using ClimaCore.MatrixFields
 using ClimaCore
-import StaticArrays: SMatrix
+import StaticArrays: SVector, SMatrix
 
 """
     implicit_temporary_quantities(Y, atmos)
@@ -72,8 +72,98 @@ function cloud_species_diffusion_temporary_quantities(Y, atmos)
     )
 end
 
+@inline function pad_b_imp_stages(b_imp, ::Type{FT}) where {FT}
+    n = length(b_imp)
+    n <= 8 ||
+        error("Algorithm has $n implicit stages; maximum supported is 8")
+    return SVector{8, FT}(ntuple(i -> i <= n ? FT(b_imp[i]) : zero(FT), Val(8)))
+end
+
 """
-    temporary_quantities(Y, atmos; compensate_explicit_scalar_advection = true)
+    precipitation_surface_flux_accumulator_quantities(Y, atmos, b_imp_stages, n_imp_stages)
+
+Allocate the scratch fields and stage counter that accumulate the stage-weighted
+bottom-face sedimentation fluxes (`surface_rain_flux`, `surface_snow_flux`, and
+`col_integrated_precip_energy_tendency`) across the implicit stages of each
+IMEX timestep for the non-equilibrium microphysics schemes. Returns `(;)` for
+dry and 0-moment schemes.
+"""
+function precipitation_surface_flux_accumulator_quantities(
+    Y,
+    atmos,
+    b_imp_stages::SVector{8, FT},
+    n_imp_stages::Int,
+) where {FT}
+    atmos.microphysics_model isa Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+        NonEquilibriumMicrophysics2MP3,
+    } || return (;)
+    sfc_space = axes(Fields.level(Y.f, half))
+    c_lev1_space = axes(Fields.level(Y.c, 1))
+    PrecipLinNT = @NamedTuple{
+        w_lcl_jac::FT,
+        w_icl_jac::FT,
+        w_rai_jac::FT,
+        w_sno_jac::FT,
+        f_guess_lcl::FT,
+        f_guess_icl::FT,
+        f_guess_rai::FT,
+        f_guess_sno::FT,
+        ρq_lcl_guess::FT,
+        ρq_icl_guess::FT,
+        ρq_rai_guess::FT,
+        ρq_sno_guess::FT,
+        e_lcl::FT,
+        e_icl::FT,
+        e_rai::FT,
+        e_sno::FT,
+        f_e_sgs::FT,
+    }
+    return (;
+        b_imp_stages,
+        n_imp_stages,
+        precip_stage_idx = Base.RefValue(0),
+        sfc_precip_lin_state = Fields.Field(PrecipLinNT, sfc_space),
+        surface_rain_flux_accum = zeros(sfc_space),
+        surface_snow_flux_accum = zeros(sfc_space),
+        col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
+        sfc_precip_env_density = zeros(sfc_space),
+        c_lev1_uvw = Fields.Field(UVW{FT}, c_lev1_space),
+        c_lev1_uvwʲ = Fields.Field(UVW{FT}, c_lev1_space),
+        c_lev1_uvw⁰ = Fields.Field(UVW{FT}, c_lev1_space),
+    )
+end
+function precipitation_surface_flux_accumulator_quantities(
+    Y,
+    atmos,
+    b_imp_stages = (),
+    n_imp_stages = 0,
+)
+    FT = Spaces.undertype(axes(Y.c))
+    b_imp_svec =
+        b_imp_stages isa SVector{8, FT} ? b_imp_stages :
+        pad_b_imp_stages(b_imp_stages, FT)
+    n_imp =
+        b_imp_stages isa SVector{8, FT} ? Int(n_imp_stages) :
+        (
+            isempty(b_imp_stages) ? 0 :
+            (n_imp_stages == 0 ? length(b_imp_stages) : Int(n_imp_stages))
+        )
+    return precipitation_surface_flux_accumulator_quantities(
+        Y,
+        atmos,
+        b_imp_svec,
+        n_imp,
+    )
+end
+
+"""
+    temporary_quantities(
+        Y, atmos;
+        b_imp_stages = (), n_imp_stages = 0,
+        compensate_explicit_scalar_advection = true,
+    )
 
 Allocate the scratch fields stored in `p.scratch`.
 
@@ -82,6 +172,8 @@ on the fly. Unlike the precomputed quantities, they carry no persistent state:
 any function may overwrite any scratch field, so a caller must never assume a
 scratch field is unchanged across a call. Using scratch (or lazy broadcasting)
 is how tendencies and cache setters avoid allocating `Field`s in the hot path.
+The exception is the stage-persistent precipitation surface-flux accumulator
+(`precipitation_surface_flux_accumulator_quantities`).
 
 Fields are named by location and type: a `ᶜ`/`ᶠ` prefix for cell centers/faces,
 then the element type (`scalar`, `C3`, `CT3`, `UVWxUVW`, matrix rows for the
@@ -91,6 +183,10 @@ comment on each entry records a representative use.
 
 # Keyword Arguments
 
+  - `b_imp_stages = ()`: Stage weights of the IMEX implicit tableau, forwarded to
+    `precipitation_surface_flux_accumulator_quantities`.
+  - `n_imp_stages = 0`: Number of implicit tableau stages (`0` disables the
+    precipitation accumulator).
   - `compensate_explicit_scalar_advection = true`: Whether post-Newton implicit
     dissipation weights by `1 + 2 |u³| dtγ` (`_dissipation_weight`).
 
@@ -101,6 +197,8 @@ A `NamedTuple` of scratch fields keyed by name.
 function temporary_quantities(
     Y,
     atmos;
+    b_imp_stages = (),
+    n_imp_stages = 0,
     compensate_explicit_scalar_advection::Bool = true,
 )
     center_space, face_space = axes(Y.c), axes(Y.f)
@@ -120,6 +218,12 @@ function temporary_quantities(
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
         cloud_species_diffusion_temporary_quantities(Y, atmos)...,
+        precipitation_surface_flux_accumulator_quantities(
+            Y,
+            atmos,
+            b_imp_stages,
+            n_imp_stages,
+        )...,
         cosp_temporary_quantities(Y, atmos.cosp)...,
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),

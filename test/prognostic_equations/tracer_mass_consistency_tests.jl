@@ -252,6 +252,33 @@ end
     @. Y.c.sgsʲs.:(1).q_sno = cond_orig.q_snoʲ
     CA.set_implicit_precomputed_quantities!(Y, p, t)
 
+    # Non-negative specific humidity clamp across all four sedimentation flux
+    # sites (`implicit_vertical_advection_tendency!`,
+    # `vertical_advection_of_water_tendency!`, `set_precipitation_velocities!`,
+    # and `set_precipitation_surface_fluxes!`): negative condensate in a
+    # pre-Newton state must produce zero sedimentation flux rather than an
+    # upward moisture/energy source from below the surface.
+    Y_neg = copy(Y)
+    @. Y_neg.f.u₃ = zero(Y_neg.f.u₃)
+    for ρχ_name in (:ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+        getproperty(Y_neg.c, ρχ_name) .= FT(-1e-4) .* Y_neg.c.ρ
+    end
+    CA.set_implicit_precomputed_quantities!(Y_neg, p, t)
+    @. p.precomputed.ᶜwₗ = FT(0.05)
+    @. p.precomputed.ᶜwᵢ = FT(0.1)
+    @. p.precomputed.ᶜwᵣ = FT(4.0)
+    @. p.precomputed.ᶜwₛ = FT(1.0)
+    p.scratch.precip_stage_idx[] = 0
+    CA.set_precipitation_surface_fluxes!(Y_neg, p, p.atmos.microphysics_model)
+    @test maximum(abs, parent(p.precomputed.surface_rain_flux)) == 0
+    @test maximum(abs, parent(p.precomputed.surface_snow_flux)) == 0
+    Yₜ .= zero(eltype(Yₜ))
+    CA.implicit_vertical_advection_tendency!(Yₜ, Y_neg, p, t)
+    for ρχ_name in (:ρ, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+        @test maximum(abs, parent(getproperty(Yₜ.c, ρχ_name))) == 0
+    end
+    CA.set_precomputed_quantities!(Y, p, t)
+
     # With χ uniform across the grid mean and all subdomains (χ ≡ 1), the
     # difference-form SGS fluxes must vanish identically. Only Y is modified;
     # the precomputed subdomain velocities and densities keep their spun-up

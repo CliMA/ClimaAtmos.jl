@@ -78,7 +78,46 @@ specified as a fixed value for each tracer.
 
 Sedimentation is treated implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
-results in sedimentation terms for density and total energy.
+results in sedimentation terms for density and total energy. In the Newton
+residual, donor-cell sedimentation fluxes clamp negative tracer densities to zero
+(`specific_nonneg`), whereas the cloud-ice (including P3 ice rime and ice
+number), rain, snow, and rain-number sedimentation Jacobians retain the running
+column-maximum terminal velocity `w_jac` across empty and negative cells
+(including level 1, where `dz_bottom` gives the largest sedimentation Courant
+number in the column) so multi-cell falls at Courant numbers above one traverse
+them in a single stage. In one Newton step, a cell's linearized outflow is
+therefore `w_base max(0, ρq^g) + w_jac (ρq* - ρq^g)` (nonzero out of a negative
+cell whenever `w_jac > 0` and `ρq* ≠ ρq^g`). Across the implicit stages of each
+step, `surface_rain_flux`, `surface_snow_flux`, and
+`col_integrated_precip_energy_tendency` are accumulated with the IMEX tableau
+`b_imp` weights from those linearized stage bottom-face fluxes (and a
+`SlabOceanTemperature` surface receives the matching post-Newton increment per
+stage when the accumulator is active). Both the accumulated surface diagnostic
+and `SlabOceanTemperature` conservation match the discrete column sedimentation
+sink under four conditions: direct Newton solve without Krylov or line search,
+with the Jacobian updated at the final Newton iterate
+(`update_jacobian_every = "solve"`, or `"stage"` when
+`max_newton_iters_ode == 1`); `ManualSparseJacobian` (Krylov, line search,
+`update_jacobian_every = "dt"`, `"stage"` with `max_newton_iters_ode > 1`, and
+autodiff Jacobians disable the `w_jac` accumulator and leave a slab ocean on the
+pointwise stage flux, with a one-time warning in `build_cache`); direct
+inversion of the block-lower-triangular scalar submatrix
+(`ApproximateBlockArrowheadIterativeSolve` approximates only the velocity Schur
+complement, whose `ᶜadvdivᵥ` columns integrate to zero over each column); and
+`constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
+`update_constrain_state_every = "dss"` under condensate warm-starting preserves
+conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
+the stage flux upward). On tableaus with an explicit-diagonal stage that carries
+nonzero `b_imp` (`SSP`, `IMKG` with `β ≠ 0`), redistributing that weight across
+the implicit stages is approximate for the surface diagnostic. A stage flux is
+upward whenever `|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from a negative
+bottom cell with a net implicit sink and `w_jac > 0` (from condensate aloft, the
+1M `10⁻⁸` rain terminal-velocity floor, or `FixedTerminalVelocity`), or a
+positive bottom cell drained below `(1 - w_base / w_jac) ρq^g` in one stage
+(such as subcloud evaporation at linearized dimensionless rate
+`dtγ λ > w_base / (w_jac - w_base)`) — and negative `b_imp` weights (`ARS343`
+has `b_imp[3] ≈ -0.644`) can make the step sum upward even when every stage flux
+is downward; in each case the accumulated value equals the discrete column sink.
 
 !!! note
 

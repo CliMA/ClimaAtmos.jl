@@ -439,7 +439,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
-            ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+            ᶜa = @. draft_area(max(zero_FT, ᶜsgsʲ.ρa), ᶜρʲ)
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
             ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
             ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
@@ -456,20 +456,26 @@ function edmfx_sgs_vertical_advection_tendency!(
             ) do (name, (ᶜwʲ, ᶜw_gs))
                 @inline
                 ᶜqʲ = MatrixFields.get_field(ᶜsgsʲ, name)
+                ᶜqʲ_pos = @. lazy(max(zero_FT, ᶜqʲ))
                 ᶜqʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)
                 ᶜρq_gs = MatrixFields.get_field(Yc, get_ρχ_name(name))
-                # Environment sedimentation flux density, the clamped residual of
-                # the grid-mean flux: ρ⁰w⁰q⁰ = max((w ρq - ρa wʲ qʲ) / (1 - a), 0)
+                # Environment sedimentation flux density, the clamped residual
+                # of the grid-mean flux:
+                # ρ⁰w⁰q⁰ = max((w ρq⁺ - ρa⁺ wʲ qʲ⁺) / (1 - a), 0)
                 ᶜρ⁰w⁰q⁰ = @. max(
-                    (ᶜw_gs * ᶜρq_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜqʲ) / max(1 - ᶜa, ε_area),
+                    (
+                        ᶜw_gs * max(zero_FT, ᶜρq_gs) -
+                        max(zero_FT, ᶜsgsʲ.ρa) * ᶜwʲ * ᶜqʲ_pos
+                    ) / max(1 - ᶜa, ε_area),
                     zero_FT,
                 )
-                vtt_q = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ, ᶜρ⁰w⁰q⁰)
+                vtt_q =
+                    updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ_pos, ᶜρ⁰w⁰q⁰)
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt_q
                 @. ᶜsgsʲₜ.q_tot += ᶜinv_ρ̂ * vtt_q
                 @. ᶜsed_mass_source += vtt_q
                 h_cond_func = enthalpy_function(condensate_phase(name))
-                ᶜqhʲ = @. ᶜqʲ * (h_cond_func(thp, ᶜTʲ) + ᶜΦ)
+                ᶜqhʲ = @. ᶜqʲ_pos * (h_cond_func(thp, ᶜTʲ) + ᶜΦ)
                 ᶜρ⁰w⁰qh⁰ = @. ᶜρ⁰w⁰q⁰ * (h_cond_func(thp, ᶜT⁰) + ᶜΦ)
                 vtt_h = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqhʲ, ᶜρ⁰w⁰qh⁰)
                 @. ᶜsgsʲₜ.mse += ᶜinv_ρ̂ * vtt_h
@@ -491,13 +497,18 @@ function edmfx_sgs_vertical_advection_tendency!(
             ) do (name, (ᶜwʲ, ᶜw_gs))
                 @inline
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, name)
+                ᶜχʲ_pos = @. lazy(max(zero_FT, ᶜχʲ))
                 ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, name)
                 ᶜρχ_gs = MatrixFields.get_field(Yc, get_ρχ_name(name))
                 ᶜρ⁰w⁰χ⁰ = @. max(
-                    (ᶜw_gs * ᶜρχ_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ) / max(1 - ᶜa, ε_area),
+                    (
+                        ᶜw_gs * max(zero_FT, ᶜρχ_gs) -
+                        max(zero_FT, ᶜsgsʲ.ρa) * ᶜwʲ * ᶜχʲ_pos
+                    ) / max(1 - ᶜa, ε_area),
                     zero_FT,
                 )
-                vtt_n = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜχʲ, ᶜρ⁰w⁰χ⁰)
+                vtt_n =
+                    updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜχʲ_pos, ᶜρ⁰w⁰χ⁰)
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt_n
                 return nothing
             end
@@ -609,7 +620,8 @@ terminal velocity, `ᶜa` the updraft area fraction, `ᶠJ` the face Jacobian, a
 `ᶜρ⁰w⁰χ⁰` the environment sedimentation flux density.
 
 The environment flux density `ρ⁰w⁰q⁰` of the lateral correction is
-reconstructed from the grid-mean flux, `ρ̂⁰w⁰q⁰ = w ρq - ρ̂ʲwʲqʲ` and
+reconstructed from the clamped grid-mean and updraft fluxes,
+`ρ̂⁰w⁰q⁰ = w max(0, ρq) - max(0, ρaʲ) wʲ max(0, qʲ)` and
 `ρ⁰w⁰q⁰ = max(ρ̂⁰w⁰q⁰ / (1 - a), 0)`. `vtt` is `p.scratch.ᶜtemp_scalar_4`,
 overwritten for each species, and `updraft_sedimentation!` writes
 `ᶠtemp_scalar`, `ᶠtemp_scalar_2`, and `ᶠtemp_scalar_3`. Supports a single
@@ -624,7 +636,7 @@ function foreach_updraft_sedimentation(f, Y, p, j)
     zero_FT = zero(FT)
     (; ᶜρʲs) = p.precomputed
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
-    ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
+    ᶜa = (@. lazy(draft_area(max(zero_FT, Y.c.sgsʲs.:(1).ρa), ᶜρʲs.:(1))))
     # Tuples: (species name, updraft vel, GS vel)
     sgs_microphysics_tracers = (
         (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
@@ -638,13 +650,16 @@ function foreach_updraft_sedimentation(f, Y, p, j)
         MatrixFields.has_field(Y.c.sgsʲs.:(1), name) || return
 
         ᶜqʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), name)
+        ᶜqʲ_pos = @. lazy(max(zero_FT, ᶜqʲ))
         ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
         ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
         ᶜρq_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
         ᶜρ⁰w⁰χ⁰ = @. lazy(
             max(
-                (ᶜw_gs * ᶜρq_gs - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜqʲ) /
-                max(1 - ᶜa, ε_area),
+                (
+                    ᶜw_gs * max(zero_FT, ᶜρq_gs) -
+                    max(zero_FT, Y.c.sgsʲs.:(1).ρa) * ᶜwʲ * ᶜqʲ_pos
+                ) / max(1 - ᶜa, ε_area),
                 zero_FT,
             ),
         )
@@ -655,7 +670,7 @@ function foreach_updraft_sedimentation(f, Y, p, j)
             ᶜρʲs.:(1),
             ᶜwʲ,
             ᶜa,
-            ᶜqʲ,
+            ᶜqʲ_pos,
             ᶠJ,
             ᶜρ⁰w⁰χ⁰,
         )
@@ -675,21 +690,21 @@ broadcast.
 
 Where `∂a/∂z ≥ 0`, `vtt = a ∂_z(ρwχ)`; where `∂a/∂z < 0`,
 `vtt = ∂_z(aρwχ) - ∂a/∂z ρ⁰w⁰χ⁰` with
-`ρ⁰w⁰χ⁰ = max((w ρχ - ρa wʲ χʲ) / (1 - a), 0)`. Where the residual is
-positive, `∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a)`, so the lateral term contributes
-`dtγ ∂a/∂z a ρʲ wʲ / (1 - a)` to the diagonal; where the clamp is active, its
+`ρ⁰w⁰χ⁰ = max((w max(0, ρχ) - max(0, ρa) wʲ max(0, χʲ)) / (1 - a), 0)`. Where
+`ρa > 0`, `χʲ > 0`, and the residual is positive,
+`∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a)`, so the lateral term contributes
+`dtγ ∂a/∂z a ρʲ wʲ / (1 - a)` to the diagonal; where any clamp is active, its
 derivative is zero. The flux through each face comes from the cell above, so
-`ᶜM` is upper bidiagonal. For `q_rai`, `q_sno`, and `n_rai` the face stencil
-uses the running column max of `ᶜwʲ` (into `p.scratch.ᶜtemp_scalar_3`)
-instead of the pointwise value, so the super-diagonal does not collapse at
-the leading edge where the species is empty and one Newton step carries the
-sedimenting mass or number across multiple cells at CFL > 1; cloud liquid,
-cloud ice, and cloud-liquid number keep pointwise `ᶜwʲ`. The lateral-mixing
-diagonal keeps pointwise `ᶜwʲ`. `ᶜ∂a∂z` is the area gradient of
-`updraft_sedimentation!`. Writes `ᶠsed_tracer_advection` (and, for the
-column-maxed species, `ᶜtemp_scalar_3`) in `p.scratch`. Called from
-`updraft_sedimentation_rate!`; the column loop of `update_sgs_advection_jacobian!`
-builds the same operator.
+`ᶜM` is upper bidiagonal. For `q_icl`, `q_rai`, `q_sno`, and `n_rai`, the face
+stencil uses the running column max of `ᶜwʲ` (into `p.scratch.ᶜtemp_scalar_3`)
+instead of the pointwise value, so the super-diagonal does not collapse at the
+leading edge where the species is empty and one Newton step carries the
+sedimenting mass or number across multiple cells at CFL > 1; cloud liquid and
+cloud-liquid number keep pointwise `ᶜwʲ`. The lateral-mixing diagonal keeps
+pointwise `ᶜwʲ`. `ᶜ∂a∂z` is the area gradient of `updraft_sedimentation!`.
+Writes `ᶠsed_tracer_advection` (and, for the column-maxed species,
+`ᶜtemp_scalar_3`) in `p.scratch`. Called from `updraft_sedimentation_rate!`;
+the column loop of `update_sgs_advection_jacobian!` builds the same operator.
 """
 function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     (; ᶜρʲs) = p.precomputed
@@ -702,20 +717,21 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     zero_FT = zero(FT)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
+    ᶜa = (@. lazy(draft_area(max(zero_FT, Y.c.sgsʲs.:(1).ρa), ᶜρʲs.:(1))))
     ᶜwʲ = MatrixFields.get_field(
         p.precomputed,
         sgs_sedimentation_velocity_name(χ_name),
     )
-    # For rain mass, snow mass, and rain number, route the face stencil
-    # through the running column max of `ᶜwʲ` so the super-diagonal does not
-    # collapse at the leading edge where the species is empty; cloud liquid,
-    # cloud ice, and cloud-liquid number keep pointwise `ᶜwʲ`. Must match
+    # For cloud ice, rain mass, snow mass, and rain number, route the face
+    # stencil through the running column max of `ᶜwʲ` so the super-diagonal does
+    # not collapse at the leading edge where the species is empty; cloud liquid
+    # and cloud-liquid number keep pointwise `ᶜwʲ`. Must match
     # `update_sgs_advection_jacobian!`. `ᶜtemp_scalar_3` is free in this call
     # path (the caller `solve_sgs_ρa_implicit_stage_analytic!` only writes it
     # later as `ᶜmass_flux_factor_bot`).
     ᶜwʲ_jac =
-        if χ_name == @name(q_rai) ||
+        if χ_name == @name(q_icl) ||
+           χ_name == @name(q_rai) ||
            χ_name == @name(q_sno) ||
            χ_name == @name(n_rai)
             fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwʲ)
@@ -733,7 +749,9 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     ᶜlateral_coeff = @. lazy(
         dtγ * ifelse(
             (ᶜ∂a∂z < 0) &
-            (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜχʲ > 0),
+            (Y.c.sgsʲs.:(1).ρa > 0) &
+            (ᶜχʲ > 0) &
+            (ᶜw_gs * max(zero_FT, ᶜρχ_gs) - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜχʲ > 0),
             ᶜ∂a∂z * ᶜa * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, ε_area),
             zero_FT,
         ),
@@ -785,16 +803,12 @@ function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
     ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
+    ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+    ᶜρʲ = ᶜρʲs.:($j)
+    ᶜa = @. lazy(draft_area(max(zero_FT, ᶜρaʲ), ᶜρʲ))
     @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
     ᶜinv_ρ̂ = @. lazy(
-        specific(
-            one_FT,
-            Y.c.sgsʲs.:($$j).ρa,
-            zero_FT,
-            ᶜρʲs.:($$j),
-            p.atmos.turbconv_model,
-        ),
+        specific(one_FT, ᶜρaʲ, zero_FT, ᶜρʲ, p.atmos.turbconv_model),
     )
     @. ᶜr = 0
     foreach_updraft_sedimentation(Y, p, j) do vtt, name, _, _, _, _, _

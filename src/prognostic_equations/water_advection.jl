@@ -25,10 +25,13 @@ function is inactive for a `DryModel`.
 For `PrognosticEDMFX`, the grid-mean energy flux is corrected so it equals the sum
 of the subdomain (updraft and environment) fluxes: each correction is the
 subdomain sedimentation mass flux times the difference between its specific energy
-and the grid-mean one (`Φ` cancels, being identical across subdomains). The
-environment mass flux is taken as the residual `ρqw - ρaʲqʲwʲ`, so the subdomain
-mass fluxes sum to the grid-mean flux by construction. This path currently assumes
-one updraft, and approximates the environment kinetic term with the grid-mean
+and the grid-mean one (`Φ` cancels, being identical across subdomains); see
+`updraft_precip_energy_flux` and `environment_precip_energy_flux`, which the
+surface-flux linearization shares. The environment mass flux is the nonnegative
+residual `max(0, (max(0, ρq) w - max(0, ρaʲ) max(0, qʲ) wʲ) / ρ⁰)`, so the
+subdomain mass fluxes sum to the grid-mean flux where that residual is
+nonnegative and exceed it where the floor activates. This path assumes one
+updraft, and approximates the environment kinetic term with the grid-mean
 terminal velocity.
 
 Reads the precomputed terminal velocities `ᶜwₗ`, `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ` (and their
@@ -77,7 +80,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             @inline
             ᶜρq = MatrixFields.get_field(Yc, ρq_name)
             e_int_func = internal_energy_func(ρq_name)
-            ᶜq = @. specific(ᶜρq, Yc.ρ)
+            ᶜq = @. specific_nonneg(ᶜρq, Yc.ρ)
             vtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq))))
             @. Yₜc.ρ += vtt
             @. Yₜc.ρq_tot += vtt
@@ -87,23 +90,13 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         return nothing
     end
 
-    # For prognostic edmf, augment the energy tendencies with the additional energy contributions
-    # so that the total-grid energy flux remains consistent. Specifically, we enforce that the
-    # grid-mean energy flux equals the sum of the subdomain (updraft/environment) energy fluxes
-    # by accounting for the energy carried by sedimenting tracers.
-    #
-    # The grid-mean flux applied above carries the specific energy
-    # e_int(T) + Φ + Kin(w, u) per unit sedimenting mass. Each subdomain
-    # correction replaces this grid-mean specific energy with the subdomain
-    # value, weighted by the subdomain sedimentation mass flux:
-    #
-    #   F_corr(k) = (mass flux)ᵏ * [(e_intᵏ + Kinᵏ) - (e_int + Kin)],
-    #
-    # where Φ cancels because it is identical in all subdomains at a given
-    # level. The environment mass flux is defined as the residual
-    # ρ⁰a⁰q⁰w⁰ = ρqw - ρaʲqʲwʲ, so the subdomain mass fluxes sum to the
-    # grid-mean flux by construction, and both corrections enter with the
-    # same sign convention as the grid-mean flux.
+    # Recorded before the EDMF correction, whose early return skips the rest of
+    # this function when the updrafts have no condensate.
+    record_stage_precipitation_linearization!(Y, p)
+
+    # For prognostic EDMF, the grid-mean energy flux applied above is corrected
+    # so that it equals the sum of the updraft and environment energy fluxes;
+    # see `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
@@ -129,18 +122,21 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             sgs_microphysics_tracers,
         )
         # One fused column loop for the updraft and environment corrections of
-        # all species; the subdomain face densities, the updraft area, and the
-        # specific energies are loop temporaries.
+        # all species; the subdomain face densities and the converted
+        # velocities are loop temporaries.
+        eps_FT = eps(eltype(thp))
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
             ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
         ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
         ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
-            ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+            ᶜρ⁰ = @. max(
+                eps_FT,
+                TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+            )
             ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
-            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
             # The velocities are converted once for every species.
             ᶜuvw = @. Geometry.UVWVector(ᶜu)
             ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
@@ -151,31 +147,433 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 @inline
                 ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
                 ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
-                e_int_func = internal_energy_func(get_ρχ_name(q_name))
-                # Grid-mean specific energy carried by the sedimentation flux
-                # applied above (Φ is identical in all subdomains at a given
-                # level, so it cancels in the subdomain differences).
-                ᶜe_gm = @. e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜuvw))
-                # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
-                ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
+                # A function broadcasts through a heap `Ref` that this nested
+                # broadcast does not elide; the 1-tuple broadcasts as a
+                # scalar without one.
+                e_int_func = (internal_energy_func(get_ρχ_name(q_name)),)
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(ᶠ∂ξ³∂x³ * (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ))),
-                )
-                # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
-                # environment sedimentation velocity is not stored separately
-                # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
-                # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
-                # TODO: Update for when updraft area fraction is not necessarily
-                # small
-                ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
-                ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
-                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(ᶠ∂ξ³∂x³ * (ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰))),
+                    CT3(
+                        ᶠ∂ξ³∂x³ * (
+                            ᶠρʲ * ᶠtop_bias(
+                                updraft_precip_energy_flux(
+                                    ᶜqʲ, ᶜwʲ, ᶜTʲ, ᶜuvwʲ, ᶜw, ᶜT, ᶜuvw,
+                                    ᶜρaʲ, ᶜρʲ, e_int_func, thp,
+                                ),
+                            ) +
+                            ᶠρ⁰ * ᶠtop_bias(
+                                environment_precip_energy_flux(
+                                    ᶜqʲ, ᶜwʲ, ᶜρq, ᶜw, ᶜT, ᶜuvw, ᶜT⁰, ᶜuvw⁰,
+                                    ᶜρ⁰, ᶜρaʲ, e_int_func, thp,
+                                ),
+                            )
+                        ),
+                    ),
                 )
             end
             return nothing
         end
     end
 
+    return nothing
+end
+
+"""
+    sedimentation_kinetic_energy(w, uvw)
+
+Return the specific kinetic energy `|uvw - w ẑ|² / 2` [J/kg] of a species that
+falls at terminal velocity `w` [m/s] through air moving with the `UVWVector`
+`uvw` [m/s]. The scalar counterpart of the lazy broadcast `Kin`.
+"""
+@inline sedimentation_kinetic_energy(w, uvw) =
+    norm_sqr(Geometry.UVWVector(0, 0, -w) + uvw) / 2
+
+"""
+    updraft_precip_energy_flux(qʲ, wʲ, Tʲ, uvwʲ, w, T, uvw, ρaʲ, ρʲ, e_int_func, thp)
+
+Return the updraft correction to the downward sedimentation energy flux per unit
+updraft density, `-wʲ aʲ max(0, qʲ) Δeʲ` [m/s · J/kg], where
+`aʲ = max(0, ρaʲ / ρʲ)` and
+
+    Δeʲ = e_int(Tʲ) + Kin(wʲ, uʲ) - e_int(T) - Kin(w, u)
+
+is the excess of the updraft specific energy over the grid-mean specific energy
+that the grid-mean flux already carries; `Φ` is the same in every subdomain at
+a level and cancels. `e_int_func(thp, T)` is the liquid or ice internal energy
+of the species. Multiplying by the updraft density and applying `ᶠtop_bias`
+gives the face flux; multiplying by `ᶜρʲ ᶜJ / ᶠJ` at level 1 gives its value
+through the surface face.
+"""
+@inline function updraft_precip_energy_flux(
+    qʲ, wʲ, Tʲ, uvwʲ, w, T, uvw, ρaʲ, ρʲ, e_int_func, thp,
+)
+    zero_FT = zero(w)
+    aʲ_pos = max(zero_FT, draft_area(ρaʲ, ρʲ))
+    Δeʲ =
+        e_int_func(thp, Tʲ) + sedimentation_kinetic_energy(wʲ, uvwʲ) -
+        e_int_func(thp, T) - sedimentation_kinetic_energy(w, uvw)
+    return -wʲ * aʲ_pos * max(zero_FT, qʲ) * Δeʲ
+end
+
+"""
+    environment_precip_energy_flux(
+        qʲ, wʲ, ρq, w, T, uvw, T⁰, uvw⁰, ρ⁰, ρaʲ, e_int_func, thp,
+    )
+
+Return the environment correction to the downward sedimentation energy flux per
+unit environment density, `-(w a q)⁰ Δe⁰` [m/s · J/kg], where
+
+    Δe⁰ = e_int(T⁰) + Kin(w, u⁰) - e_int(T) - Kin(w, u)
+
+and the environment sedimentation mass flux is the residual of the grid mean
+and the updraft, `(w a q)⁰ = max(0, (max(0, ρq) w - max(0, ρaʲ) max(0, qʲ) wʲ) / ρ⁰)`.
+The environment falls at the grid-mean terminal velocity `w`, since no separate
+environment velocity is stored. The clamp keeps the environment flux downward
+where the updraft flux exceeds the grid-mean flux; there, the subdomain fluxes
+sum to more than the grid-mean flux.
+"""
+@inline function environment_precip_energy_flux(
+    qʲ, wʲ, ρq, w, T, uvw, T⁰, uvw⁰, ρ⁰, ρaʲ, e_int_func, thp,
+)
+    zero_FT = zero(w)
+    Δe⁰ =
+        e_int_func(thp, T⁰) + sedimentation_kinetic_energy(w, uvw⁰) -
+        e_int_func(thp, T) - sedimentation_kinetic_energy(w, uvw)
+    waq⁰ = max(
+        zero_FT,
+        (max(zero_FT, ρq) * w - max(zero_FT, ρaʲ) * max(zero_FT, qʲ) * wʲ) / ρ⁰,
+    )
+    return -waq⁰ * Δe⁰
+end
+
+"""
+    set_sfc_sgs_precip_energy_flux!(dest, Y, p, turbconv_model, gm)
+
+Write into the surface-level field `dest` the subdomain correction to the
+bottom-face sedimentation energy flux at the Newton linearization state, summed
+over the four condensate species [W/m²]. `gm` holds the surface-level grid-mean
+inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
+`int_T`, `int_uvw`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
+`J_ratio (ρʲ fʲ + ρ⁰ f⁰)` with `fʲ` and `f⁰` from `updraft_precip_energy_flux`
+and `environment_precip_energy_flux`, which is the value of the column
+correction flux through the surface face. Zero for every turbulence-convection
+model other than `PrognosticEDMFX`, and for a `PrognosticEDMFX` whose updrafts
+carry no prognostic condensate species.
+
+The environment density is first stored in `p.scratch.sfc_precip_env_density`,
+and the species terms are added in separate broadcasts: a single fused
+broadcast repeats the lazy density in every term and exceeds the 4 KiB kernel
+parameter limit of some GPUs.
+"""
+@inline function _sfc_sgs_species_energy_flux(
+    J_ratio,
+    int_qʲ,
+    sfc_wʲ,
+    int_ρq,
+    sfc_w,
+    int_T,
+    int_uvw,
+    int_Tʲ,
+    int_uvwʲ,
+    int_ρʲ,
+    int_T⁰,
+    int_uvw⁰,
+    int_ρ⁰,
+    int_ρaʲ,
+    e_int_func,
+    thp,
+)
+    return J_ratio * (
+        int_ρʲ * updraft_precip_energy_flux(
+            int_qʲ, sfc_wʲ, int_Tʲ, int_uvwʲ, sfc_w, int_T, int_uvw,
+            int_ρaʲ, int_ρʲ, e_int_func, thp,
+        ) +
+        int_ρ⁰ * environment_precip_energy_flux(
+            int_qʲ, sfc_wʲ, int_ρq, sfc_w, int_T, int_uvw, int_T⁰,
+            int_uvw⁰, int_ρ⁰, int_ρaʲ, e_int_func, thp,
+        )
+    )
+end
+
+set_sfc_sgs_precip_energy_flux!(dest, Y, p, _, gm) =
+    fill!(dest, zero(eltype(p.params)))
+function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
+    FT = eltype(p.params)
+    fill!(dest, zero(FT))
+    sgs_species = unrolled_filter(
+        ((q_name, _, _, _, _),) ->
+            MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
+        (
+            (
+                @name(q_lcl), @name(ᶜwₗʲs.:(1)),
+                gm.int_ρq_lcl, gm.sfc_wₗ, TD.internal_energy_liquid,
+            ),
+            (
+                @name(q_icl), @name(ᶜwᵢʲs.:(1)),
+                gm.int_ρq_icl, gm.sfc_wᵢ, TD.internal_energy_ice,
+            ),
+            (
+                @name(q_rai), @name(ᶜwᵣʲs.:(1)),
+                gm.int_ρq_rai, gm.sfc_wᵣ, TD.internal_energy_liquid,
+            ),
+            (
+                @name(q_sno), @name(ᶜwₛʲs.:(1)),
+                gm.int_ρq_sno, gm.sfc_wₛ, TD.internal_energy_ice,
+            ),
+        ),
+    )
+    isempty(sgs_species) && return nothing
+    (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+    (; sfc_lev, J_ratio, int_T, int_uvw) = gm
+    thp = CAP.thermodynamics_params(p.params)
+
+    int_ρʲ = sfc_lev(ᶜρʲs.:(1))
+    int_Tʲ = sfc_lev(ᶜTʲs.:(1))
+    int_uvwʲ = if hasproperty(p.scratch, :c_lev1_uvwʲ)
+        @. p.scratch.c_lev1_uvwʲ =
+            Geometry.UVWVector($(Fields.level(ᶜuʲs.:(1), 1)))
+        Fields.Field(Fields.field_values(p.scratch.c_lev1_uvwʲ), axes(dest))
+    else
+        @. lazy(Geometry.UVWVector($(sfc_lev(ᶜuʲs.:(1)))))
+    end
+    int_T⁰ = sfc_lev(ᶜT⁰)
+    int_uvw⁰ = if hasproperty(p.scratch, :c_lev1_uvw⁰)
+        @. p.scratch.c_lev1_uvw⁰ = Geometry.UVWVector($(Fields.level(ᶜu⁰, 1)))
+        Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw⁰), axes(dest))
+    else
+        @. lazy(Geometry.UVWVector($(sfc_lev(ᶜu⁰))))
+    end
+    int_ρ⁰ =
+        hasproperty(p.scratch, :sfc_precip_env_density) ?
+        p.scratch.sfc_precip_env_density :
+        Fields.Field(p.scratch.temp_data_level_2, axes(dest))
+    eps_FT = eps(FT)
+    @. int_ρ⁰ = max(
+        eps_FT,
+        TD.air_density(
+            thp,
+            int_T⁰,
+            $(sfc_lev(ᶜp)),
+            $(sfc_lev(ᶜq_tot_nonneg⁰)),
+            $(sfc_lev(ᶜq_liq⁰)),
+            $(sfc_lev(ᶜq_ice⁰)),
+        ),
+    )
+    int_ρaʲ = sfc_lev(Y.c.sgsʲs.:(1).ρa)
+
+    MatrixFields.unrolled_foreach(
+        sgs_species,
+    ) do (q_name, wʲ_name, int_ρq, sfc_w, e_int)
+        int_qʲ = sfc_lev(MatrixFields.get_field(Y.c.sgsʲs.:(1), q_name))
+        sfc_wʲ = sfc_lev(MatrixFields.get_field(p.precomputed, wʲ_name))
+        # The 1-tuple broadcasts the function as a scalar without a heap `Ref`.
+        e_int_func = (e_int,)
+        @. dest += _sfc_sgs_species_energy_flux(
+            J_ratio,
+            int_qʲ,
+            sfc_wʲ,
+            int_ρq,
+            sfc_w,
+            int_T,
+            int_uvw,
+            int_Tʲ,
+            int_uvwʲ,
+            int_ρʲ,
+            int_T⁰,
+            int_uvw⁰,
+            int_ρ⁰,
+            int_ρaʲ,
+            e_int_func,
+            thp,
+        )
+    end
+    return nothing
+end
+
+@inline function _precip_lin_nt(
+    thp,
+    int_J,
+    sfc_J,
+    int_T,
+    int_Φ,
+    int_uvw,
+    ρq_lcl_guess,
+    ρq_icl_guess,
+    ρq_rai_guess,
+    ρq_sno_guess,
+    sfc_wₗ,
+    sfc_wᵢ,
+    sfc_wᵣ,
+    sfc_wₛ,
+    sfc_wᵢ_jac,
+    sfc_wᵣ_jac,
+    sfc_wₛ_jac,
+)
+    zero_FT = zero(int_T)
+    J_ratio = int_J / sfc_J
+    w_lcl_base = -sfc_wₗ * J_ratio
+    w_icl_base = -sfc_wᵢ * J_ratio
+    w_rai_base = -sfc_wᵣ * J_ratio
+    w_sno_base = -sfc_wₛ * J_ratio
+    w_lcl_jac = w_lcl_base
+    w_icl_jac = -sfc_wᵢ_jac * J_ratio
+    w_rai_jac = -sfc_wᵣ_jac * J_ratio
+    w_sno_jac = -sfc_wₛ_jac * J_ratio
+    f_guess_lcl = w_lcl_base * max(zero_FT, ρq_lcl_guess)
+    f_guess_icl = w_icl_base * max(zero_FT, ρq_icl_guess)
+    f_guess_rai = w_rai_base * max(zero_FT, ρq_rai_guess)
+    f_guess_sno = w_sno_base * max(zero_FT, ρq_sno_guess)
+    e_int_liq = TD.internal_energy_liquid(thp, int_T)
+    e_int_ice = TD.internal_energy_ice(thp, int_T)
+    e_lcl = e_int_liq + int_Φ + sedimentation_kinetic_energy(sfc_wₗ, int_uvw)
+    e_icl = e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wᵢ, int_uvw)
+    e_rai = e_int_liq + int_Φ + sedimentation_kinetic_energy(sfc_wᵣ, int_uvw)
+    e_sno = e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wₛ, int_uvw)
+    f_e_sgs = zero_FT
+    return (;
+        w_lcl_jac,
+        w_icl_jac,
+        w_rai_jac,
+        w_sno_jac,
+        f_guess_lcl,
+        f_guess_icl,
+        f_guess_rai,
+        f_guess_sno,
+        ρq_lcl_guess,
+        ρq_icl_guess,
+        ρq_rai_guess,
+        ρq_sno_guess,
+        e_lcl,
+        e_icl,
+        e_rai,
+        e_sno,
+        f_e_sgs,
+    )
+end
+
+"""
+    record_stage_precipitation_linearization!(Y, p)
+
+Cache the level-1 condensate mass densities, specific energies, and SGS bottom
+energy-flux correction at the Newton linearization state `Y = U^g` into
+`p.scratch.sfc_precip_lin_state`. Read after the Newton solve by
+`accumulate_stage_precipitation_surface_fluxes!` to evaluate the stage
+bottom-face sedimentation flux
+
+    F = w_base * max(0, ρq^g) + w_jac * (ρq* - ρq^g),
+
+where `w_base` is the level-1 terminal velocity (`ᶜJ_1 / ᶠJ_{1/2}`-scaled) and
+`w_jac` is the Jacobian terminal velocity: `w_base` for cloud liquid, and the
+column maxima `ᶜwᵢ_max` / `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for cloud
+ice, rain, and snow, matching `update_sedimentation_jacobian!`. This
+linearization matches the discrete column sink applied by the stage under four
+conditions: (1) direct Newton solve without Krylov or line search, with the
+Jacobian refreshed at the final Newton iterate (`update_jacobian_every = "solve"`,
+or `"stage"` when `max_newton_iters_ode == 1`); (2) `ManualSparseJacobian`
+(autodiff uses the pointwise derivative and disables this accumulator);
+(3) direct inversion of the block-lower-triangular scalar submatrix `A₁₁`
+(`ApproximateBlockArrowheadIterativeSolve` wraps `SchurComplementReductionSolve`
+with `alg₁ = BlockLowerTriangularSolve`, approximating only the velocity Schur
+complement whose `ᶜadvdivᵥ` columns integrate to zero over each column, so
+column sums hold at any `approximate_solve_iters ≥ 1`); and
+(4) `constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
+`update_constrain_state_every = "dss"` under condensate warm-starting preserves
+conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
+the stage flux upward). A stage flux is upward (`F > 0`) whenever
+`|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from (a) a negative bottom cell
+with a net implicit sink and `w_jac > 0` (from condensate aloft, the 1M `10⁻⁸`
+rain terminal-velocity floor, or `FixedTerminalVelocity`), or (b) a positive
+bottom cell drained below `(1 - w_base / w_jac) ρq^g` within one stage (e.g.,
+subcloud evaporation at linearized dimensionless rate
+`dtγ λ > w_base / (w_jac - w_base)`) — and (c) negative IMEX `b_imp` stage
+weights (`ARS343` has `b_imp[3] ≈ -0.644`) can make the step sum upward even
+when every stage flux is downward; in all cases the accumulated sum equals the
+discrete column sink (up to explicit-diagonal weight redistribution on `SSP` /
+`IMKG` tableaus). The SGS correction comes from `set_sfc_sgs_precip_energy_flux!`,
+which dispatches on the turbulence-convection model.
+"""
+function record_stage_precipitation_linearization!(Y, p)
+    (
+        eltype(Y) === eltype(p.params) &&
+        has_precip_stage_accumulator(p) &&
+        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_sno))
+    ) || return nothing
+
+    (; params) = p
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜu, ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+    (; sfc_precip_lin_state) = p.scratch
+    thp = CAP.thermodynamics_params(params)
+    sfc_space = axes(sfc_precip_lin_state)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    int_J = sfc_lev(ᶜJ)
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    J_ratio = @. lazy(int_J / sfc_J)
+
+    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+    int_T = sfc_lev(ᶜT)
+    int_Φ = sfc_lev(ᶜΦ)
+    @. p.scratch.c_lev1_uvw = Geometry.UVWVector($(Fields.level(ᶜu, 1)))
+    int_uvw = Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw), sfc_space)
+    sfc_wₗ = sfc_lev(ᶜwₗ)
+    sfc_wᵢ = sfc_lev(ᶜwᵢ)
+    sfc_wᵣ = sfc_lev(ᶜwᵣ)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
+
+    # TODO: Replace the three 3D `fill_column_max!` scans with level-1
+    # `Operators.column_reduce!(max, ...)` (skipping explicit-stage and
+    # diagnostic calls), and reuse `sfc_precip_lin_state` in
+    # `surface_precipitation_tendency!` for `SlabOceanTemperature`.
+    fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwᵣ)
+    sfc_wᵣ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_3)
+    fill_column_max!(p.scratch.ᶜtemp_scalar_4, ᶜwₛ)
+    sfc_wₛ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_4)
+    fill_column_max!(p.scratch.ᶜtemp_scalar_5, ᶜwᵢ)
+    sfc_wᵢ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_5)
+
+    # `_precip_lin_nt` computes the linearization fields from the pointwise
+    # inputs so each input `Field` enters the broadcast kernel once (staying
+    # within the 4 KiB CUDA kernel parameter limit).
+    @. sfc_precip_lin_state = _precip_lin_nt(
+        thp,
+        int_J,
+        sfc_J,
+        int_T,
+        int_Φ,
+        int_uvw,
+        int_ρq_lcl,
+        int_ρq_icl,
+        int_ρq_rai,
+        int_ρq_sno,
+        sfc_wₗ,
+        sfc_wᵢ,
+        sfc_wᵣ,
+        sfc_wₛ,
+        sfc_wᵢ_jac,
+        sfc_wᵣ_jac,
+        sfc_wₛ_jac,
+    )
+    gm = (;
+        sfc_lev, J_ratio, int_T, int_uvw,
+        int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
+        sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
+    )
+    set_sfc_sgs_precip_energy_flux!(
+        sfc_precip_lin_state.f_e_sgs,
+        Y,
+        p,
+        p.atmos.turbconv_model,
+        gm,
+    )
     return nothing
 end
