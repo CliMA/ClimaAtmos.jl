@@ -415,8 +415,14 @@ function sgs_u₃_implicit_tendency!(
 
     # Use the implied tendency cached during implicit-stage initialization.
     # This keeps the analytically solved u₃ value fixed during the ODE solve.
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ = ᶠu₃_tendencyʲs.:($$j)
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (Yₜ.f.sgsʲs.:($j).u₃, ᶠu₃_tendencyʲs.:($j))
+    end
+    DataLayouts.foreach_point(drafts) do drafts
+        for (ᶠu₃ₜʲ, ᶠu₃_tendencyʲ) in drafts
+            @. ᶠu₃ₜʲ = ᶠu₃_tendencyʲ
+        end
     end
 end
 

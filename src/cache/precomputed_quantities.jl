@@ -575,9 +575,12 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
     sfc_u₃ .= surface_velocity(Y.f.u₃, ᶠuₕ³)
     if turbconv_model isa PrognosticEDMFX
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
-            @. sfc_u₃ʲ = sfc_u₃
+        DataLayouts.foreach_point(
+            Fields.level(Y.f.sgsʲs, half), sfc_u₃,
+        ) do sfc_sgsʲs, sfc_u₃
+            for j in 1:n_mass_flux_subdomains(turbconv_model)
+                @. sfc_sgsʲs.:($$j).u₃.components.data.:1 = sfc_u₃
+            end
         end
     end
     return nothing
@@ -630,12 +633,12 @@ function set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
     )
     top_u₃ .= top_velocity(Y.f.u₃, ᶠuₕ³)
     if turbconv_model isa PrognosticEDMFX
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            top_u₃ʲ = Fields.level(
-                Y.f.sgsʲs.:($j).u₃.components.data.:1,
-                Spaces.nlevels(axes(Y.c)) + half,
-            )
-            @. top_u₃ʲ = top_u₃
+        DataLayouts.foreach_point(
+            Fields.level(Y.f.sgsʲs, Spaces.nlevels(axes(Y.c)) + half), top_u₃,
+        ) do top_sgsʲs, top_u₃
+            for j in 1:n_mass_flux_subdomains(turbconv_model)
+                @. top_sgsʲs.:($$j).u₃.components.data.:1 = top_u₃
+            end
         end
     end
     return nothing
@@ -850,12 +853,44 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
     end
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    # Grid-mean velocities and kinetic energy in one fused column loop.
+    T_min_sgs = CAP.T_min_sgs(p.params)
+    # Grid-mean velocities and kinetic energy in one fused column loop. With
+    # nonequilibrium microphysics, the same loop then sets the thermodynamic
+    # state from the prognostic water species, the total specific enthalpy, and
+    # the pressure.
     DataLayouts.foreach_column(
-        ᶜu, ᶠu³, ᶜK, ᶠu, Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ,
-    ) do ᶜu, ᶠu³, ᶜK, ᶠu, Yc, ᶠu₃, ᶠuₕ³, ᶜJ
+        ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+        Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ, ᶜΦ,
+    ) do ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+    Yc, ᶠu₃, ᶠuₕ³, ᶜJ, ᶜΦ
+        (ᶠu₃, ᶠuₕ³, ᶜJ) = register_copy((ᶠu₃, ᶠuₕ³, ᶜJ))
         set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
         @. ᶠu = CT123(ᶠwinterp(Yc.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+        microphysics_model isa NonEquilibriumMicrophysics || return nothing
+        ᶜρ = register_copy(Yc.ρ)
+        ᶜq_liq_reg =
+            @. max(0, specific(Yc.ρq_lcl, ᶜρ)) + max(0, specific(Yc.ρq_rai, ᶜρ))
+        ᶜq_ice_reg =
+            @. max(0, specific(Yc.ρq_icl, ᶜρ)) + max(0, specific(Yc.ρq_sno, ᶜρ))
+        ᶜq_tot_reg = @. max(ᶜq_liq_reg + ᶜq_ice_reg, specific(Yc.ρq_tot, ᶜρ))
+        ᶜT_reg = @. max(
+            T_min_sgs,
+            TD.air_temperature(
+                thermo_params,
+                specific(Yc.ρe_tot, ᶜρ) - ᶜK - ᶜΦ,
+                ᶜq_tot_reg,
+                ᶜq_liq_reg,
+                ᶜq_ice_reg,
+            ),
+        )
+        @. ᶜq_liq = ᶜq_liq_reg
+        @. ᶜq_ice = ᶜq_ice_reg
+        @. ᶜq_tot_nonneg = ᶜq_tot_reg
+        @. ᶜT = ᶜT_reg
+        set_enthalpy_and_pressure!(
+            ᶜh_tot, ᶜp, (; ρ = ᶜρ, Yc.ρe_tot), ᶜT_reg, ᶜq_tot_reg, ᶜq_liq_reg,
+            ᶜq_ice_reg, thermo_params,
+        )
     end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
@@ -872,39 +907,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
         # @. ᶜK += Y.c.ρtke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    T_min_sgs = CAP.T_min_sgs(p.params)
-    if microphysics_model isa NonEquilibriumMicrophysics
-        # Thermodynamic state from the prognostic water species, total specific
-        # enthalpy, and pressure in one fused column loop.
-        DataLayouts.foreach_column(
-            ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Y.c, ᶜK, ᶜΦ,
-        ) do ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Yc, ᶜK, ᶜΦ
-            # (Named differently from the enclosing function's ᶜe_int: assigning
-            # a captured name inside the loop body would box it.)
-            ᶜe_int_col = @. lazy(specific(Yc.ρe_tot, Yc.ρ) - ᶜK - ᶜΦ)
-            @. ᶜq_liq =
-                max(0, specific(Yc.ρq_lcl, Yc.ρ)) +
-                max(0, specific(Yc.ρq_rai, Yc.ρ))
-            @. ᶜq_ice =
-                max(0, specific(Yc.ρq_icl, Yc.ρ)) +
-                max(0, specific(Yc.ρq_sno, Yc.ρ))
-            @. ᶜq_tot_nonneg =
-                max(ᶜq_liq + ᶜq_ice, specific(Yc.ρq_tot, Yc.ρ))
-            @. ᶜT = max(
-                T_min_sgs,
-                TD.air_temperature(
-                    thermo_params,
-                    ᶜe_int_col,
-                    ᶜq_tot_nonneg,
-                    ᶜq_liq,
-                    ᶜq_ice,
-                ),
-            )
-            set_enthalpy_and_pressure!(
-                ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params,
-            )
-        end
-    else
+    if !(microphysics_model isa NonEquilibriumMicrophysics)
         ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
         if microphysics_model isa EquilibriumMicrophysics0M
             # Compute thermodynamic state variables using combined getter function.

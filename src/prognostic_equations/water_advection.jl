@@ -36,9 +36,9 @@ terminal velocity.
 
 Reads the precomputed terminal velocities `ᶜwₗ`, `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ` (and their
 updraft counterparts plus subdomain temperatures, densities, and velocities for
-EDMFX), the temperature `ᶜT`, and the geopotential `ᶜΦ` from `p.core`; `t` is
-unused. Called from `implicit_tendency!`, so these terms are part of the
-implicitly treated vertical transport. See the "Microphysics" page of
+EDMFX), the temperature `ᶜT`, and the geopotential `ᶜΦ` from `p.core`, in one
+column loop; `t` is unused. Called from `implicit_tendency!`, so these terms are
+part of the implicitly treated vertical transport. See the "Microphysics" page of
 the docs (`docs/src/microphysics.md`). Returns `nothing`.
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
@@ -67,68 +67,59 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         microphysics_tracers,
     )
 
-    # One fused column loop for all species: the face density and the per-species
-    # specific humidity and energy density are loop temporaries (registers on
-    # GPUs) rather than scratch fields, and the five broadcasts per species run in
-    # the same kernel.
+    # For prognostic EDMF, the grid-mean energy flux is corrected so that it
+    # equals the sum of the updraft and environment energy fluxes; see
+    # `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
+    # TODO the corrections work for only one updraft
+    ᶜsubdomain_inputs =
+        p.atmos.turbconv_model isa PrognosticEDMFX ?
+        let (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed,
+            (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+            # The updraft velocity of each species, or an empty container for a
+            # species that the updraft does not carry
+            ᶜwʲs = unrolled_map(ρq_names) do ρq_name
+                q_name = specific_tracer_name(ρq_name)
+                MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name) ?
+                MatrixFields.get_field(
+                    p.precomputed,
+                    sgs_sedimentation_velocity_name(q_name),
+                ) : ()
+            end
+            (
+                ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1), ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs,
+            )
+        end : ()
+
+    # One fused column loop for all species and subdomains: the face fluxes of
+    # mass and energy are summed over the species (and, for the energy, over
+    # the subdomain corrections), so that the density,
+    # total water, and energy tendencies each take one flux divergence.
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs
+        (ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs) =
+            register_copy((ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws, ᶜsubdomain_inputs))
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
         ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
-        MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
-            @inline
-            ᶜρq = MatrixFields.get_field(Yc, ρq_name)
-            e_int_func = internal_energy_func(ρq_name)
-            ᶜq = @. specific_nonneg(ᶜρq, Yc.ρ)
-            vtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq))))
-            @. Yₜc.ρ += vtt
-            @. Yₜc.ρq_tot += vtt
-            ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw)))
-            @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(ᶜρwe))))
-        end
-    end
-
-    # Recorded before the EDMF correction, whose early return skips the rest of
-    # this function when the updrafts have no condensate.
-    record_stage_precipitation_linearization!(Y, p)
-
-    # For prognostic EDMF, the grid-mean energy flux applied above is corrected
-    # so that it equals the sum of the updraft and environment energy fluxes;
-    # see `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
-        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
-
-        # TODO the following code works for only one updraft
-        sgs_microphysics_tracers = unrolled_filter(
-            ((q_name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
-            (
-                (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-                (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-                (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-                (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
-            ),
-        )
-        isempty(sgs_microphysics_tracers) && return nothing
-        q_names = unrolled_map(first, sgs_microphysics_tracers)
-        # The updraft and grid-mean velocities of each species.
-        ᶜw_pairs = unrolled_map(
-            ((_, wʲ_name, w_name),) -> (
-                MatrixFields.get_field(p.precomputed, wʲ_name),
-                MatrixFields.get_field(p.precomputed, w_name),
-            ),
-            sgs_microphysics_tracers,
-        )
-        # One fused column loop for the updraft and environment corrections of
-        # all species; the subdomain face densities and the converted
-        # velocities are loop temporaries.
-        eps_FT = eps(eltype(thp))
-        DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
-            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs,
-        ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
-        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜw_pairs
+        ᶠρwq = @. zero(ᶠρ)
+        ᶠρwe = @. zero(ᶠρ)
+        if ᶜsubdomain_inputs === ()
+            MatrixFields.unrolled_foreach(map(tuple, ρq_names, ᶜws)) do (ρq_name, ᶜw)
+                @inline
+                ᶜρq = MatrixFields.get_field(Yc, ρq_name)
+                e_int_func = internal_energy_func(ρq_name)
+                ᶜq = @. specific_nonneg(ᶜρq, Yc.ρ)
+                @. ᶠρwq += ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq)
+                @. ᶠρwe +=
+                    ᶠρ * ᶠtop_bias(
+                        -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw))),
+                    )
+            end
+        else
+            (ᶜρʲ, ᶜTʲ, ᶜuʲ, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs) =
+                ᶜsubdomain_inputs
+            eps_FT = eps(eltype(thp))
             ᶜρ⁰ = @. max(
                 eps_FT,
                 TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
@@ -137,40 +128,58 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
             # The velocities are converted once for every species.
-            ᶜuvw = @. Geometry.UVWVector(ᶜu)
             ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
             ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
             MatrixFields.unrolled_foreach(
-                map(tuple, q_names, ᶜw_pairs),
-            ) do (q_name, (ᶜwʲ, ᶜw))
+                map(tuple, ρq_names, ᶜws, ᶜwʲs),
+            ) do (ρq_name, ᶜw, ᶜwʲ)
                 @inline
-                ᶜqʲ = MatrixFields.get_field(Yc.sgsʲs.:(1), q_name)
-                ᶜρq = MatrixFields.get_field(Yc, get_ρχ_name(q_name))
-                # A function broadcasts through a heap `Ref` that this nested
-                # broadcast does not elide; the 1-tuple broadcasts as a
-                # scalar without one.
-                e_int_func = (internal_energy_func(get_ρχ_name(q_name)),)
-                @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    CT3(
-                        ᶠ∂ξ³∂x³ * (
-                            ᶠρʲ * ᶠtop_bias(
-                                updraft_precip_energy_flux(
-                                    ᶜqʲ, ᶜwʲ, ᶜTʲ, ᶜuvwʲ, ᶜw, ᶜT, ᶜuvw,
-                                    ᶜρaʲ, ᶜρʲ, e_int_func, thp,
-                                ),
-                            ) +
-                            ᶠρ⁰ * ᶠtop_bias(
-                                environment_precip_energy_flux(
-                                    ᶜqʲ, ᶜwʲ, ᶜρq, ᶜw, ᶜT, ᶜuvw, ᶜT⁰, ᶜuvw⁰,
-                                    ᶜρ⁰, ᶜρaʲ, e_int_func, thp,
-                                ),
-                            )
-                        ),
-                    ),
-                )
+                ᶜρq = MatrixFields.get_field(Yc, ρq_name)
+                e_int_func = internal_energy_func(ρq_name)
+                ᶜq = @. specific_nonneg(ᶜρq, Yc.ρ)
+                @. ᶠρwq += ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq)
+                if ᶜwʲ === ()
+                    @. ᶠρwe +=
+                        ᶠρ * ᶠtop_bias(
+                            -(ᶜw) * ᶜq *
+                            (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw))),
+                        )
+                else
+                    ᶜqʲ = MatrixFields.get_field(
+                        Yc.sgsʲs.:(1),
+                        specific_tracer_name(ρq_name),
+                    )
+                    # A function broadcasts through a heap `Ref` that this
+                    # nested broadcast does not elide; the 1-tuple broadcasts
+                    # as a scalar without one.
+                    e_int_func_tuple = (e_int_func,)
+                    @. ᶠρwe +=
+                        ᶠρ * ᶠtop_bias(
+                            -(ᶜw) * ᶜq *
+                            (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw))),
+                        ) +
+                        ᶠρʲ * ᶠtop_bias(
+                            updraft_precip_energy_flux(
+                                ᶜqʲ, ᶜwʲ, ᶜTʲ, ᶜuvwʲ, ᶜw, ᶜT, ᶜuvw,
+                                ᶜρaʲ, ᶜρʲ, e_int_func_tuple, thp,
+                            ),
+                        ) +
+                        ᶠρ⁰ * ᶠtop_bias(
+                            environment_precip_energy_flux(
+                                ᶜqʲ, ᶜwʲ, ᶜρq, ᶜw, ᶜT, ᶜuvw, ᶜT⁰, ᶜuvw⁰,
+                                ᶜρ⁰, ᶜρaʲ, e_int_func_tuple, thp,
+                            ),
+                        )
+                end
             end
         end
+        ᶜvtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * ᶠρwq))
+        @. Yₜc.ρ += ᶜvtt
+        @. Yₜc.ρq_tot += ᶜvtt
+        @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * ᶠρwe))
     end
+
+    record_stage_precipitation_linearization!(Y, p)
 
     return nothing
 end
