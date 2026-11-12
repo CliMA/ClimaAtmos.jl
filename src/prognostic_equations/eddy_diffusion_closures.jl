@@ -1025,18 +1025,33 @@ add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscr
     )
 
 """
+    diffusionₕ(ᶜχ, ᶜw, p)
+
+Horizontal diffusion `∇ₕ⋅(ᶜw ∇ₕχ)` of the center scalar `ᶜχ` with the center
+weight `ᶜw`. On CG spaces it is the lazy weak divergence `wdivₕ(ᶜw gradₕ(ᶜχ))`,
+whose elements are coupled by the DSS of the tendency. On DG spaces it is the
+SIPG Laplacian (`Operators.scalar_laplacian!`), whose face terms couple the
+elements, written into `p.scratch.ᶜdg_diffusion` and valid until the next call.
+"""
+function diffusionₕ(ᶜχ, ᶜw, p)
+    ᶜout = p.scratch.ᶜdg_diffusion
+    return isnothing(ᶜout) ? Operators.scalar_laplacian(ᶜχ; weight = ᶜw) :
+           Operators.scalar_laplacian!(ᶜout, ᶜχ; weight = ᶜw)
+end
+
+"""
     add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
 
-Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the weak
-divergence `wdivₕ(ᶜw (c_p ∇ₕT + ∇ₕΦ))` to `ᶜρe_totₜ`, with the center weight
-`ᶜw`.
+Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the horizontal
+diffusion `∇ₕ⋅(ᶜw (c_p ∇ₕT + ∇ₕΦ))` (`diffusionₕ`) to `ᶜρe_totₜ`, with the
+center weight `ᶜw`.
 """
 function add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
     (; ᶜΦ) = p.core
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
-    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜcp * gradₕ(ᶜT))
-    @. ᶜρe_totₜ += wdivₕ(ᶜw * gradₕ(ᶜΦ))
+    ᶜρe_totₜ .+= diffusionₕ(ᶜT, (@. lazy(ᶜw * ᶜcp)), p)
+    ᶜρe_totₜ .+= diffusionₕ(ᶜΦ, ᶜw, p)
     return nothing
 end
 
@@ -1452,9 +1467,9 @@ cloud_species_phase(_) = nothing
         ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
     )
 
-Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the weak
-divergence `wdivₕ(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
-to `ᶜρe_totₜ`, with the center weight `ᶜw`.
+Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the horizontal
+diffusion `∇ₕ⋅(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
+(`diffusionₕ`) to `ᶜρe_totₜ`, with the center weight `ᶜw`.
 """
 function add_water_enthalpy_diffusionₕ!(
     ᶜρe_totₜ,
@@ -1470,13 +1485,13 @@ function add_water_enthalpy_diffusionₕ!(
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
-    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜρe_totₜ .+= diffusionₕ(ᶜq, (@. lazy(ᶜw * ᶜh)), p)
     ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
-    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜρe_totₜ .+= diffusionₕ(ᶜq, (@. lazy(ᶜw * ᶜh)), p)
     ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
-    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜρe_totₜ .+= diffusionₕ(ᶜq, (@. lazy(ᶜw * ᶜh)), p)
     return nothing
 end
 
@@ -1606,7 +1621,7 @@ function add_moisture_diffusionₕ!(
     ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
     ᶜq_tot = ᶜq_water[1]
     ᶜρq_totₜ = ᶜscratch_2
-    @. ᶜρq_totₜ = wdivₕ(ᶜρD * gradₕ(ᶜq_tot))
+    ᶜρq_totₜ .= diffusionₕ(ᶜq_tot, ᶜρD, p)
     @. Yₜ.c.ρq_tot += ᶜρq_totₜ
     @. Yₜ.c.ρ += ᶜρq_totₜ
     add_water_enthalpy_diffusionₕ!(Yₜ.c.ρe_tot, ᶜρD, ᶜT, ᶜq_water, p, ᶜscratch)
@@ -1616,7 +1631,7 @@ function add_moisture_diffusionₕ!(
         MatrixFields.has_field(Y.c, ρχ_name) || return
         ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
         ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+        ᶜρχₜ .+= diffusionₕ((@. lazy(specific(ᶜρχ, ᶜρ))), ᶜρD, p)
     end
     return nothing
 end
@@ -1687,7 +1702,7 @@ function add_scalar_diffusionₕ!(
     add_moisture_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation)
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ρχ_name in microphysics_tracer_names(Y) && return
-        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+        ᶜρχₜ .+= diffusionₕ((@. lazy(specific(ᶜρχ, ᶜρ))), ᶜρD, p)
     end
     return nothing
 end

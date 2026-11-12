@@ -698,7 +698,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                 ᶜq_scratch,
             )
             ᶜq_tot⁰ = maybe_materialize!(ᶜq_scratch, ᶜq_water⁰[1])
-            @. ᶜρχₜ_diffusion = wdivₕ(ᶜw⁰ * gradₕ(ᶜq_tot⁰))
+            ᶜρχₜ_diffusion .= diffusionₕ(ᶜq_tot⁰, ᶜw⁰, p)
             @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
             @. Yₜ.c.ρ += ᶜρχₜ_diffusion
         end
@@ -714,10 +714,10 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                     ᶜq_scratch,
                     ᶜspecific_env_value(χ_name, Y, p),
                 )
-                @. ᶜρχₜ += wdivₕ(ᶜw⁰ * gradₕ(ᶜχ⁰))
+                ᶜρχₜ .+= diffusionₕ(ᶜχ⁰, ᶜw⁰, p)
             else
                 ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-                @. ᶜρχₜ += wdivₕ(ᶜρK_h_h * gradₕ(specific(ᶜρχ, ᶜρ)))
+                ᶜρχₜ .+= diffusionₕ((@. lazy(specific(ᶜρχ, ᶜρ))), ᶜρK_h_h, p)
             end
         end
 
@@ -748,7 +748,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                 )
                 ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
                 @. Yₜ.c.sgsʲs.:($$j).mse +=
-                    ᶜinv_ρaʲ * wdivₕ(ᶜwʲ * gradₕ(ᶜmse_effʲ))
+                    ᶜinv_ρaʲ * $(diffusionₕ(ᶜmse_effʲ, ᶜwʲ, p))
 
                 if moist
                     add_water_enthalpy_diffusionₕ!(
@@ -761,7 +761,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                         ᶜq_scratch,
                     )
                     ᶜq_totʲ = maybe_materialize!(ᶜq_scratch, ᶜq_waterʲ[1])
-                    @. ᶜρχₜ_diffusion = wdivₕ(ᶜwʲ * gradₕ(ᶜq_totʲ))
+                    ᶜρχₜ_diffusion .= diffusionₕ(ᶜq_totʲ, ᶜwʲ, p)
                     @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
                     @. Yₜ.c.ρ += ᶜρχₜ_diffusion
                     @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
@@ -774,7 +774,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                     ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
                     ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
                     ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-                    @. ᶜρχₜ_diffusion = wdivₕ(ᶜwʲ * gradₕ(ᶜχʲ))
+                    ᶜρχₜ_diffusion .= diffusionₕ(ᶜχʲ, ᶜwʲ, p)
                     @. ᶜρχₜ += ᶜρχₜ_diffusion
                     @. ᶜχʲₜ += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
                 end
@@ -830,15 +830,12 @@ end
 Momentum part of [`edmfx_sgs_horizontal_diffusive_flux_tendency!`](@ref): the
 horizontal weak divergence of the SGS stress `τ = -2 K_u S` with the full
 center strain rate `ᶜS` (overwritten with `τ`), for `uₕ` at centers and `u₃`
-at faces. Element-local, so it errors on DG spaces, which need the face terms
-of a tensor interior-penalty form.
+at faces. On DG spaces, the Laplacian form of
+[`dg_sgs_horizontal_momentum_diffusion!`](@ref) instead.
 """
 function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
-    is_dg_horizontal(axes(Y.c)) && error(
-        "edmfx_sgs_horizontal_diffusive_flux has no DG form of the momentum \
-         stress yet; the scalar fluxes are coupled across elements by SIPG, \
-         but wdivₕ(ρτ) would act element by element",
-    )
+    is_dg_horizontal(axes(Y.c)) &&
+        return dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
     (; ᶜK_u_h) = p.precomputed
     (; ᶜu, ᶠu) = p.precomputed
     ᶜρ = Y.c.ρ
@@ -855,4 +852,83 @@ function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_h) / ᶠρ)
 
     return nothing
+end
+
+"""
+    dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+
+Horizontal SGS momentum diffusion on DG spaces, in Laplacian form: the SIPG
+Laplacian `∇ₕ⋅(ρ K_u ∇ₕuᵢ) / ρ` (`Operators.scalar_laplacian!`) of each
+Cartesian component `uᵢ` of the horizontal velocity at centers, projected onto
+the local horizontal plane, and of the vertical velocity `w` at faces, with the
+weight `ρ K_u` interpolated to faces. Unlike the stress divergence on CG spaces,
+it omits the transpose part `(∇u)ᵀ` of the strain rate, which vanishes for
+uniform `K_u` and nondivergent flow, and the vertical-shear part of the face
+stress.
+"""
+function dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
+    (; ᶜK_u_h, ᶜu) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜcoord = Fields.coordinate_field(Y.c)
+    ᶜρK_u = @. lazy(ᶜρ * ᶜK_u_h)
+    ᶜuv = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜu))
+    ᶜ∇²uᵢ = p.scratch.ᶜtemp_scalar_3
+    for i in 1:3
+        Operators.scalar_laplacian!(
+            ᶜ∇²uᵢ,
+            (@. lazy(cartesian_velocity_component(ᶜuv, ᶜcoord, i)));
+            weight = ᶜρK_u,
+        )
+        @. Yₜ.c.uₕ += C12(horizontal_velocity_of_cartesian(ᶜ∇²uᵢ, ᶜcoord, i) / ᶜρ)
+    end
+
+    ᶠρ = p.scratch.ᶠtemp_scalar
+    ᶠρK_u = p.scratch.ᶠtemp_scalar_2
+    @. ᶠρ = ᶠinterp(ᶜρ)
+    @. ᶠρK_u = ᶠρ * ᶠinterp(ᶜK_u_h)
+    ᶠ∇²w = p.scratch.ᶠtemp_scalar_3
+    Operators.scalar_laplacian!(
+        ᶠ∇²w,
+        (@. lazy(w_component(Geometry.WVector(Y.f.u₃))));
+        weight = ᶠρK_u,
+    )
+    @. Yₜ.f.u₃ += C3(Geometry.WVector(ᶠ∇²w / ᶠρ))
+    return nothing
+end
+
+"""
+    horizontal_unit_vectors(coord)
+
+The eastward and northward unit vectors at `coord` as Cartesian `SVector`s:
+geocentric on the sphere, `x̂` and `ŷ` on a plane.
+"""
+function horizontal_unit_vectors(coord::Geometry.LatLongZPoint)
+    (; lat, long) = coord
+    e_east = SA.SVector(-sind(long), cosd(long), zero(long))
+    e_north =
+        SA.SVector(-sind(lat) * cosd(long), -sind(lat) * sind(long), cosd(lat))
+    return (e_east, e_north)
+end
+horizontal_unit_vectors(coord) = (SA.SVector(1, 0, 0), SA.SVector(0, 1, 0))
+
+"""
+    cartesian_velocity_component(uv, coord, i)
+
+The `i`-th Cartesian component of the horizontal velocity `uv` (`UVVector`) at
+`coord`.
+"""
+function cartesian_velocity_component(uv, coord, i)
+    e_east, e_north = horizontal_unit_vectors(coord)
+    return uv.u * e_east[i] + uv.v * e_north[i]
+end
+
+"""
+    horizontal_velocity_of_cartesian(uᵢ, coord, i)
+
+The `UVVector` projection onto the horizontal plane at `coord` of the vector
+whose only nonzero Cartesian component is the `i`-th, `uᵢ`.
+"""
+function horizontal_velocity_of_cartesian(uᵢ, coord, i)
+    e_east, e_north = horizontal_unit_vectors(coord)
+    return Geometry.UVVector(uᵢ * e_east[i], uᵢ * e_north[i])
 end

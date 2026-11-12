@@ -140,6 +140,10 @@ function temporary_quantities(Y, atmos)
         ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,
+        # Output of the SIPG horizontal diffusion (`diffusionₕ`) on DG spaces; `nothing`
+        # on CG spaces, where the weak divergence stays lazy.
+        ᶜdg_diffusion = is_dg_horizontal(center_space) ?
+                        Fields.Field(FT, center_space) : nothing,
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
