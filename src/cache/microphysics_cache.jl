@@ -71,9 +71,14 @@ end
 
 Return a generic numerical-zero threshold. Used for variance floors, σ guards,
 and density-weighted mass checks, anywhere the exact value does not matter as
-long as it is small but safely above underflow.
+long as it is small but safely above underflow. For `Float32` and `Float64` the
+value is a constant of the method, since a GPU compiler does not fold the call
+of `cbrt`.
 """
 ϵ_numerics(FT) = cbrt(floatmin(FT))
+for FT in (Float32, Float64)
+    @eval ϵ_numerics(::Type{$FT}) = $(cbrt(floatmin(FT)))
+end
 
 """
     fill_column_max!(ᶜw_max, ᶜw)
@@ -1085,21 +1090,29 @@ function set_environment_1m_tendency!(
         end
     end
 
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs, mode_args...,
+            ᶜT⁰, w_component(WVec(ᶜu⁰)), cmp, thp, dt, nsubs, mode_args...,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
-        )
+        DataLayouts.foreach_point(
+            ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜu⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+            ᶜsgs_moments, ᶜα, ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac,
+        ) do ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜu⁰, ᶜq_tot_nonneg⁰,
+        ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+        ᶜsgs_moments, ᶜα, ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                w_component(WVec(ᶜu⁰)),
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
+            )
+        end
     end
     return nothing
 end
