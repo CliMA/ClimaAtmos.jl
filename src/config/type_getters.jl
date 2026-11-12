@@ -413,7 +413,7 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["jvp_step_adjustment"],
         args["use_ngmres"],
         args["ngmres_max_iters"],
-        args["ngmres_window"],
+        get(args, "ngmres_window", 0),
         args["jacobian_update_n_steps"],
     )
 end
