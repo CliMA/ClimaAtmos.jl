@@ -77,6 +77,9 @@ use_ngmres:
 ngmres_max_iters:
   help: "Maximum number of NGMRES iterations per solve (only used when use_ngmres is true)"
   value: 10
+ngmres_window:
+  help: "Sliding history window for NGMRES: at iteration k use only the most recent min(k, window) increments. Default 0 means full history (no limit)."
+  value: 0
 jacobian_update_n_steps:
   help: "Refresh the preconditioner Jacobian every N timesteps (0 = every timestep). Used by NGMRES; ignored by NewtonsMethod."
   value: 0

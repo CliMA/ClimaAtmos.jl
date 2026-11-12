@@ -152,7 +152,8 @@ end
                       use_krylov_method, use_dynamic_krylov_rtol,
                       eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol,
                       newton_rtol, jvp_step_adjustment,
-                      use_ngmres, ngmres_max_iters, jacobian_update_n_steps) where {FT}
+                      use_ngmres, ngmres_max_iters, ngmres_window,
+                      jacobian_update_n_steps) where {FT}
 
 Build the ClimaTimeSteppers algorithm named by `ode_name`.
 
@@ -176,7 +177,8 @@ configured here:
 function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
     eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
-    jvp_step_adjustment, use_ngmres, ngmres_max_iters, jacobian_update_n_steps,
+    jvp_step_adjustment, use_ngmres, ngmres_max_iters, ngmres_window,
+    jacobian_update_n_steps,
 ) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
@@ -204,7 +206,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
             error("Unknown value of `update_jacobian_every`: $(update_jacobian_every)")
         end
         if use_ngmres
-            @info "Using NGMRES (Anderson acceleration) with max_iters = $ngmres_max_iters"
+            @info "Using NGMRES (Anderson acceleration) with max_iters = $ngmres_max_iters, window = $ngmres_window"
             # NGMRES preconditioner update frequency. Never uses UpdateEveryN
             # (skips the first build → cache.j = 0 → NaN).
             # "dt"    → once per timestep (via maybe_update_jacobian! / NewTimeStep)
@@ -219,6 +221,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
             end
             nl_solver = CTS.NGMRES(;
                 max_iters = ngmres_max_iters,
+                window = ngmres_window == 0 ? typemax(Int) : ngmres_window,
                 update_j = ngmres_update_j,
                 rtol = use_newton_rtol ? FT(newton_rtol) : FT(0),
                 verbose = CTS.Silent(),
