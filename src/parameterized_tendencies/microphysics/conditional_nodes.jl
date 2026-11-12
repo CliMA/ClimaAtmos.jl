@@ -259,7 +259,9 @@ which may be infinite:
 The thresholds, sorted, bound four intervals; each gets the nodes of
 `_conditional_interval_nodes`, two Gauss nodes where it carries actual cloud and
 one node at its conditional mean otherwise, for eight node slots in all. The
-weights sum to one; an interval of zero width contributes zero weight.
+weights sum to one; an interval of zero width contributes zero weight. The nodes
+of an interval are stored before the next interval is evaluated, so that a GPU
+kernel does not hold all eight in registers.
 """
 @inline function conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, T_min)
     FT = typeof(σ_S)
@@ -285,22 +287,18 @@ weights sum to one; an interval of zero width contributes zero weight.
         normal_tail_prob(abs(b₃ / σ_S)),
         zero(FT),
     )
-    nodes = ntuple(Val(4)) do i
+    nodes = SA.MVector{8, ConditionalNode{FT}}(undef)
+    @inbounds for i in 1:4
         lo = bounds[i]
         hi = bounds[i + 1]
         # an interval between sorted thresholds lies entirely on one side of
         # each threshold, so its lower bound decides every flag
-        _conditional_interval_nodes(
+        (nodes[2i - 1], nodes[2i]) = _conditional_interval_nodes(
             T, σ_S, β_T, lo, hi, Qs[i], Qs[i + 1],
             lo >= t_a, lo >= t_p, T_min,
         )
     end
-    return ConditionalRule(
-        SA.SVector{8}(
-            nodes[1][1], nodes[1][2], nodes[2][1], nodes[2][2],
-            nodes[3][1], nodes[3][2], nodes[4][1], nodes[4][2],
-        ),
-    )
+    return ConditionalRule(SA.SVector(nodes))
 end
 
 """
@@ -374,23 +372,34 @@ whole probability at `t = 0` and the second has zero weight.
 end
 
 """
-    _point_value(f, n, t, spread)
+    _point_state(n, t, spread)
 
-`f(T, q, shaft, q_sat)` at the temperature point of the node `n` offset by `t`
-[-], in units of the spread `σ⊥` at fixed saturation excess
-(`_temperature_points`): the point's temperature is `n.T + t σ⊥` floored at
-`spread.T_min` [K], and its total water is set from the `TemperatureSpread`
-`spread` so that the evaluator recovers the node's `S′`, clamped to
-`[0, spread.q_max]` [kg/kg]. The saturation specific humidity the point's total
-water was built from is passed to `f`, which needs the same value to recover
-`S′`. The value is wrapped for accumulation (`add_auto_broadcasters`), so `f`
-may return a scalar or a `NamedTuple` of scalars.
+`(T, q, q_sat)` at the temperature point of the node `n` offset by `t` [-], in
+units of the spread `σ⊥` at fixed saturation excess (`_temperature_points`):
+the point's temperature is `n.T + t σ⊥` floored at `spread.T_min` [K], and its
+total water is set from the `TemperatureSpread` `spread` so that the evaluator
+recovers the node's `S′`, clamped to `[0, spread.q_max]` [kg/kg], with the
+saturation specific humidity `q_sat` it was built from, which the evaluator
+needs to recover `S′`.
 """
-@inline function _point_value(f, n, t, spread)
+@inline function _point_state(n, t, spread)
     FT = typeof(n.w)
     T_pt = max(spread.T_min, n.T + t * spread.σ⊥)
     q_sat_pt = TD.q_vap_saturation(spread.thp, T_pt, spread.ρ)
     q_pt = clamp(q_sat_pt + spread.mu_S + n.S′, zero(FT), spread.q_max)
+    return (T_pt, q_pt, q_sat_pt)
+end
+
+"""
+    _point_value(f, n, t, spread)
+
+`f(T, q, shaft, q_sat)` at the temperature point of the node `n` offset by `t`
+(`_point_state`). The value is wrapped for accumulation
+(`add_auto_broadcasters`), so `f` may return a scalar or a `NamedTuple` of
+scalars.
+"""
+@inline function _point_value(f, n, t, spread)
+    (T_pt, q_pt, q_sat_pt) = _point_state(n, t, spread)
     return add_auto_broadcasters(f(T_pt, q_pt, n.shaft, q_sat_pt))
 end
 
