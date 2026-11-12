@@ -18,3 +18,9 @@ ClimaCalibrate = "0.3"
 ClimaComms = "0.6"
 EnsembleKalmanProcesses = "2.7.1"
 JLD2 = "0.6"
+
+[extras]
+ClimaParams = "5c42b081-d73a-476f-9059-fd94b934656c"
+
+[preferences.ClimaParams]
+CLIMA_PARAMS_MODE = "bits"

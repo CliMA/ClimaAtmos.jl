@@ -119,10 +119,7 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) =
-    let cmc = _unwrapped(cmc)
-        CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q)
-    end
+) = CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q)
 
 # Ice, 1M
 terminal_velocity(
@@ -142,10 +139,7 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) =
-    let cmc = _unwrapped(cmc)
-        CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
-    end
+) = CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
 
 # Rain, 1M
 terminal_velocity(
@@ -169,8 +163,8 @@ terminal_velocity(
     ρ,
     q::FT,
 ) where {FT} = CM1.terminal_velocity(
-    _unwrapped(cmp).precip.rain,
-    _unwrapped(cmp).terminal_velocity.rain,
+    cmp.precip.rain,
+    cmp.terminal_velocity.rain,
     ρ,
     max(q, FT(1e-8)),
 )
@@ -185,12 +179,7 @@ terminal_velocity(
     ρ,
     q::FT,
 ) where {FT} =
-    CM1.terminal_velocity(
-        _unwrapped(cmp).precip.rain,
-        _unwrapped(cmc).Ch2022.rain,
-        ρ,
-        max(q, FT(1e-8)),
-    )
+    CM1.terminal_velocity(cmp.precip.rain, cmc.Ch2022.rain, ρ, max(q, FT(1e-8)))
 
 # Snow, 1M
 terminal_velocity(
@@ -210,10 +199,7 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) =
-    let cmp = _unwrapped(cmp)
-        CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q)
-    end
+) = CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -224,12 +210,7 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CM1.terminal_velocity(
-    _unwrapped(cmp).precip.snow,
-    _unwrapped(cmc).Ch2022.large_ice,
-    ρ,
-    q,
-)
+) = CM1.terminal_velocity(cmp.precip.snow, cmc.Ch2022.large_ice, ρ, q)
 
 """
     gs_terminal_velocity(

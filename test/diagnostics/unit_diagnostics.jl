@@ -205,7 +205,7 @@ p_1m_cosp.precomputed.cloudsat_tcc2 .= FT(12.5)
 ## Non-orographic gravity wave
 nogw_params = CA.NonOrographicGravityWaveParameters(FT)
 non_orographic_gravity_wave = CA.NonOrographicGravityWave(;
-    (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
+    (f => getproperty(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
 )
 microphysics_model = CA.EquilibriumMicrophysics0M()
 model_nogw = (; microphysics_model, non_orographic_gravity_wave)
@@ -218,7 +218,7 @@ beres_source = CA.BeresSourceParams{FT}(;
     detailed_diagnostics = true,  # unlock the nogw_* source-internal diagnostics
 )
 nogw_beres = CA.NonOrographicGravityWave(;
-    (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
+    (f => getproperty(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
     beres_source,
 )
 model_nogw_beres = (;
