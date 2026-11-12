@@ -462,8 +462,6 @@ function predict_sgs_tracers!(Y, p, dtγ)
     FT = eltype(p.params)
     thp = CAP.thermodynamics_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
-    dev = ClimaComms.device(Y.c)
-    vcmp_i, vthp = _fold(dev, cmp_i), _fold(dev, thp)
     nsubs = microphysics_model.n_substeps
     ϵ = ϵ_numerics(FT)
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -475,7 +473,7 @@ function predict_sgs_tracers!(Y, p, dtγ)
         @. ᶜSʲ = microphysics_tendencies_1m(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl, ᶜsgsʲ.q_rai, ᶜsgsʲ.q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ, vcmp_i, vthp, FT(dtγ), nsubs,
+            ᶜTʲs.:($$j), ᶜwʲ, cmp_i, thp, FT(dtγ), nsubs,
         )
         ᶜq_lcl = @. lazy(max(zero(FT), ᶜsgsʲ.q_lcl + dtγ * ᶜSʲ.dq_lcl_dt))
         ᶜq_icl = @. lazy(max(zero(FT), ᶜsgsʲ.q_icl + dtγ * ᶜSʲ.dq_icl_dt))

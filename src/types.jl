@@ -577,7 +577,7 @@ Selected by `hyperdiff: "Hyperdiffusion"`, whose coefficients come from the
 `hyperdiffusion_prandtl_number` config keys. See also
 `cam_se_hyperdiffusion`.
 """
-@kwdef struct Hyperdiffusion{FT}
+CP.@params struct Hyperdiffusion{FT}
     ν₄_vorticity_coeff::FT
     divergence_damping_factor::FT
     prandtl_number::FT
@@ -642,7 +642,7 @@ only and leaves momentum untouched.
 
   - `C_E`: Dimensionless coefficient scaling the surface-driven diffusivity [-].
 """
-@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
+CP.@params struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 VerticalDiffusion{FT}(; disable_momentum_vertical_diffusion, C_E) where {FT} =
@@ -673,7 +673,7 @@ only and leaves momentum untouched.
   - `H`: Decay scale height of the diffusivity [m].
   - `D₀`: Diffusivity at the surface [m²/s].
 """
-@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
+CP.@params struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
@@ -782,7 +782,7 @@ is purely dissipative. Enabled by `amd_les: true`.
 les = ClimaAtmos.AnisotropicMinimumDissipation{Float32}(; c_amd = 0.3)
 ```
 """
-@kwdef struct AnisotropicMinimumDissipation{FT} <: EddyViscosityModel
+CP.@params struct AnisotropicMinimumDissipation{FT} <: EddyViscosityModel
     c_amd::FT
 end
 
@@ -798,7 +798,7 @@ uniform diffusivity. Momentum is not diffused. Enabled by
 
   - `D`: Horizontal diffusivity applied to energy and tracers [m²/s].
 """
-@kwdef struct ConstantHorizontalDiffusion{FT} <: EddyViscosityModel
+CP.@params struct ConstantHorizontalDiffusion{FT} <: EddyViscosityModel
     D::FT
 end
 
@@ -860,7 +860,7 @@ with `zmax` the domain top height, so that damping ramps up smoothly from `zd`.
 sponge = ClimaAtmos.ViscousSponge{Float32}(; zd = 20_000, κ₂ = 1e6)
 ```
 """
-@kwdef struct ViscousSponge{FT} <: SpongeModel
+CP.@params struct ViscousSponge{FT} <: SpongeModel
     # Lower damping height, in meters
     zd::FT
     # Damping coefficient, in m²/s
@@ -922,7 +922,7 @@ By default only the vertical velocity is damped (`α_uₕ = 0`, `α_w = 1`,
 sponge = ClimaAtmos.RayleighSponge{Float32}(; zd = 20_000)
 ```
 """
-@kwdef struct RayleighSponge{FT} <: SpongeModel
+CP.@params struct RayleighSponge{FT} <: SpongeModel
     # Lower damping height, in meters
     zd::FT
     # Damping coefficient for horizontal velocity, by default 0 (no damping)
@@ -1082,7 +1082,7 @@ source on top of it wherever the EDMF scheme convects.
   - `beres_source`: `nothing`, or a `BeresSourceParams` adding the convective
     source of [beres2004](@cite).
 """
-Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
+CP.@params struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -1152,7 +1152,7 @@ with the shape parameters taken from `params.orographic_gravity_wave_params`.
   - `topography`: `Val` of the configured `topography` key, used when the drag
     tensor is computed on the fly.
 """
-Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
+CP.@params struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
     γ::FT
     ϵ::FT
     β::FT
@@ -1321,10 +1321,10 @@ Analytic horizontal-wind nudging for the M-PACE mixed-phase Arctic cloud case
 `Setups.MPACE`, which `initial_condition: "MPACE"` selects; the
 `external_forcing` key does not accept it.
 """
-Base.@kwdef struct MPACEForcing{FT}
-    u_nudge::FT = FT(-13)
-    v_nudge::FT = FT(-3)
-    τ_wind::FT = FT(3600)
+CP.@params struct MPACEForcing{FT}
+    u_nudge::FT = -13
+    v_nudge::FT = -3
+    τ_wind::FT = 3600
 end
 MPACEForcing(::Type{FT}) where {FT} = MPACEForcing{FT}()
 
@@ -1462,6 +1462,15 @@ TKE-based vertical diffusion. TKE is always prognostic. Selected by
 struct EDOnlyEDMFX <: AbstractEDMF end
 
 """
+    SmallAreaFraction{FT}
+
+The `a_half` of a `PrognosticEDMFX` [-].
+"""
+CP.@params struct SmallAreaFraction{FT}
+    a_half::FT
+end
+
+"""
     PrognosticEDMFX{N, TKE, FT}
 
 Prognostic eddy-diffusivity/mass-flux scheme with `N` updraft subdomains and an
@@ -1472,19 +1481,28 @@ microphysics tracers, and exchanges mass with the environment through
 entrainment and detrainment. `TKE` is a boolean type parameter selecting
 prognostic (`true`) or diagnostic (`false`) turbulent kinetic energy.
 
-# Fields
+# Properties
 
   - `a_half`: Area fraction at which the SGS weight function equals 0.5, i.e. the
     threshold below which subdomain values are smoothly blended toward the
-    grid mean [-]. Only meant to be used through `specific`.
+    grid mean [-]. Only meant to be used through `specific`. It is stored in a
+    `SmallAreaFraction`, since `ClimaParams.@params` would replace the keyword
+    constructor of `PrognosticEDMFX` with one that takes `a_half`.
 
 See the constructor `PrognosticEDMFX(; n_updrafts, prognostic_tke, area_fraction)`.
 """
-struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_half::FT # WARNING: this should never be used outside of `specific`
+struct PrognosticEDMFX{N, TKE, FT, A <: SmallAreaFraction{FT}} <: AbstractEDMF
+    small_area_fraction::A
+end
+function PrognosticEDMFX{N, TKE, FT}(a_half) where {N, TKE, FT}
+    small_area_fraction = SmallAreaFraction{FT}(a_half)
+    return PrognosticEDMFX{N, TKE, FT, typeof(small_area_fraction)}(small_area_fraction)
 end
 PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
+Base.getproperty(model::PrognosticEDMFX, name::Symbol) =
+    name === :a_half ? getfield(model, :small_area_fraction).a_half :
+    getfield(model, name)
 
 """
     PrognosticEDMFX(; n_updrafts = 1, prognostic_tke = false, area_fraction)
@@ -1669,7 +1687,7 @@ Selected by `rad: "DYCOMS"`.
   - `F0`: Cloud-top longwave cooling amplitude [W/m²].
   - `F1`: Cloud-base longwave warming amplitude [W/m²].
 """
-@kwdef struct RadiationDYCOMS{FT}
+CP.@params struct RadiationDYCOMS{FT}
     # Large-scale divergence
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
@@ -1693,7 +1711,7 @@ by `rad: "ISDAC"`.
   - `F₁`: Cloud-base longwave warming amplitude [W/m²].
   - `κ`: Mass absorption coefficient of cloud liquid water [m²/kg].
 """
-@kwdef struct RadiationISDAC{FT}
+CP.@params struct RadiationISDAC{FT}
     F₀::FT = 72  # W/m²
     F₁::FT = 15  # W/m²
     κ::FT = 170  # m²/kg

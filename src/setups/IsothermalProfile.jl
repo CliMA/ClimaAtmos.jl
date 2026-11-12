@@ -9,11 +9,9 @@ A setup with a uniform temperature and barometric pressure profile.
 setup = IsothermalProfile(; temperature = 300)
 ```
 """
-struct IsothermalProfile{FT}
-    temperature::FT
+CP.@params struct IsothermalProfile{FT}
+    temperature::FT = 300
 end
-
-IsothermalProfile(; temperature = 300) = IsothermalProfile(temperature)
 
 function center_initial_condition(setup::IsothermalProfile, local_geometry, params)
     FT = eltype(params)

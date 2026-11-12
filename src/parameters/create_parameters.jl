@@ -341,7 +341,7 @@ Assemble the cloud-microphysics parameters shared by all microphysics models.
 
 # Returns
 
-A `NamedTuple` with:
+A `Parameters.CloudParameters` with:
 
   - `liquid`, `ice`: `CloudMicrophysics` cloud liquid and ice properties.
   - `stokes`, `Ch2022`: Stokes-regime and Chen (2022) terminal-velocity
@@ -354,7 +354,7 @@ A `NamedTuple` with:
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(create_toml_dict(FT))
 
-cloud_parameters(toml_dict::CP.ParamDict) = (;
+cloud_parameters(toml_dict::CP.ParamDict) = CAP.CloudParameters(;
     liquid = CM.Parameters.CloudLiquid(toml_dict),
     ice = CM.Parameters.CloudIce(toml_dict),
     stokes = CM.Parameters.StokesRegimeVelType(toml_dict),
