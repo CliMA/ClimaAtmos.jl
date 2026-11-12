@@ -22,7 +22,7 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
   CLIMAATMOS_MAIN_COMMIT: "d9da6bfdf119872c4c7b5b3c3838c0d8630437c7"
-  CLIMAATMOS_PR_COMMIT: "7fc867907bb93fc2140029ac7820cdcca47ac4f5"
+  CLIMAATMOS_PR_COMMIT: "6a2f2fdd706c783ca575f94d02b3752f2d558363"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -77,6 +77,9 @@ steps:
       - echo "--- pr (the @params branch)"
       - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
+      # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
+      # (which do not apply to direct dependencies of this project)
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
       # The parameter structs take their mode from the preferences of the active project
       - 'printf "[ClimaParams]\nCLIMA_PARAMS_MODE = \"type\"\n" > $$PROFILE_DIR/coupler_pr/experiments/AMIP/LocalPreferences.toml'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
