@@ -710,59 +710,51 @@ linear step for the sedimentation of the condensate, so `r ρaʲ` is the
 sedimented mass that dilutes the updraft scalars there, at any Courant number.
 `solve_sgs_ρa_implicit_stage_analytic!` applies it in the `ρa` recurrence.
 
-Row `i` of the step is solved as `Δq_μ[i] = b_μ[i] + c_μ[i] Δq_μ[i+1]`: one
-column loop writes the offset `b` and the factor `c` of every species, and one
-sweep solves them and writes the sum of their `Δq / dtγ`, in the order of
-`sedimenting_sgs_mass_names`, to `ᶜr`. The offsets and factors are written to
-`ᶜr`, `ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, `ᶜtemp_scalar_4`,
-`ᶜtemp_scalar_6`, `ᶜtemp_scalar_7`, and `temp_data` in `p.scratch`, so `ᶜr` must
-be a different field. The factor of cloud ice, rain, and snow overwrites the
-running column max of its terminal velocity (the face flux velocity of `M_μ`).
-Supports a single updraft. Returns `nothing`.
+With `U = ρ̂⁻¹ dtγ ∂vtt/∂(w χ)` the flux part of `ρ̂⁻¹ M_μ` per unit of its face
+flux velocity `w_μ` (the terminal velocity of cloud liquid, and the running
+column max of the terminal velocity of cloud ice, rain, and snow), which is the
+same for every species, and `l_μ` its lateral diagonal, row `i` of the step is
+
+    Δq_μ[i] = (rhs_μ[i] + U[i, i+1] w_μ[i+1] Δq_μ[i+1]) / (1 - l_μ[i] - U[i, i] w_μ[i]).
+
+One column loop writes `U[i, i]` and `U[i, i+1]`, and `rhs_μ` and `1 - l_μ` of
+every species, and one top-to-bottom sweep takes the running column maxes,
+solves the species, and writes the sum of their `Δq / dtγ`, in the order of
+`sedimenting_sgs_mass_names`, to `ᶜr`. The loop writes `ᶜr`, `ᶜtemp_scalar`,
+`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, `ᶜtemp_scalar_4`, `ᶜtemp_scalar_6`,
+`ᶜtemp_scalar_7`, `ᶜtemp_scalar_8`, `ᶜtemp_scalar_9`, and `temp_data` in
+`p.scratch`, so `ᶜr` must be a different field. Supports a single updraft.
+Returns `nothing`.
 """
 function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
     j == 1 || error("Updraft sedimentation supports a single updraft")
     names = sedimenting_sgs_mass_names(Y)
     isempty(names) && (fill!(ᶜr, 0); return nothing)
     (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_4) = p.scratch
-    (; ᶜtemp_scalar_6, ᶜtemp_scalar_7, temp_data) = p.scratch
+    (; ᶜtemp_scalar_6, ᶜtemp_scalar_7, ᶜtemp_scalar_8, ᶜtemp_scalar_9) = p.scratch
     (; turbconv_model) = p.atmos
     FT = eltype(p.params)
     (one_FT, zero_FT, ε_area) = (one(FT), zero(FT), eps(FT))
     scratch = (
         ᶜr, ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_4,
-        ᶜtemp_scalar_6, ᶜtemp_scalar_7, Fields.Field(temp_data, axes(Y.c)),
+        ᶜtemp_scalar_6, ᶜtemp_scalar_7, Fields.Field(p.scratch.temp_data, axes(Y.c)),
     )
-    # The offset and the factor of each species
-    coefficients = ntuple(i -> (scratch[2i - 1], scratch[2i]), Val(length(names)))
-    # (ᶜqʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜρq_gs) of each species, where `ᶜwʲ_jac` is the
-    # face flux velocity of `M_μ`, which for cloud ice, rain, and snow is the
-    # running column max of `ᶜwʲ`, written to the field of the factor, which the
-    # column loop reads before it writes the factor
-    species = unrolled_map(names, coefficients) do name, (_, ᶜfactor)
+    # (ᶜqʲ, ᶜwʲ, ᶜw_gs, ᶜρq_gs) and (ᶜrhs, ᶜlateral_diagonal = 1 - l) of each species
+    species = unrolled_map(names) do name
         ρχ_name = get_ρχ_name(name)
-        ᶜwʲ =
-            MatrixFields.get_field(p.precomputed, sgs_sedimentation_velocity_name(name))
-        column_max =
-            name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)
-        column_max && fill_column_max!(ᶜfactor, ᶜwʲ)
         (
             MatrixFields.get_field(Y.c.sgsʲs.:(1), name),
-            ᶜwʲ,
-            column_max ? ᶜfactor : ᶜwʲ,
+            MatrixFields.get_field(p.precomputed, sgs_sedimentation_velocity_name(name)),
             MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name)),
             MatrixFields.get_field(Y.c, ρχ_name),
         )
     end
+    rows = ntuple(i -> (scratch[2i - 1], scratch[2i]), Val(length(names)))
     dtγ = FT(dtγ)
     DataLayouts.foreach_column(
-        Y.c.sgsʲs.:(1).ρa, p.precomputed.ᶜρʲs.:(1), p.core.ᶠ∂ξ³∂x³, species,
-        coefficients,
-    ) do ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, species, coefficients
-        # The offset `rhs / diagonal` and the factor `-superdiagonal / diagonal` of row i
-        # of the backward-Euler sedimentation step of each species, with right-hand side
-        # `dtγ ρ̂⁻¹ vtt`, diagonal `1 - ρ̂⁻¹ M[i, i]`, and superdiagonal `-ρ̂⁻¹ M[i, i+1]`,
-        # written to its coefficients
+        Y.c.sgsʲs.:(1).ρa, p.precomputed.ᶜρʲs.:(1), p.core.ᶠ∂ξ³∂x³, species, rows,
+        ᶜtemp_scalar_8, ᶜtemp_scalar_9,
+    ) do ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, species, rows, ᶜdiagonal_factor, ᶜsuperdiagonal_factor
         ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
         ᶠJ = Fields.local_geometry_field(axes(ᶠ∂ξ³∂x³)).J
         ᶜρaʲ = register_copy(ᶜρaʲ)
@@ -771,10 +763,23 @@ function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
         ᶜ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
         ᶜinv_ρ̂ = @. specific(one_FT, ᶜρaʲ, zero_FT, ᶜρʲ, turbconv_model)
         ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
+        # ∂vtt/∂(w χ). The flux through each face comes from the cell above, so
+        # it is upper bidiagonal. The face flux matrix stays lazy, since it is
+        # read at neighboring faces.
+        ᶠsed = @inline @. lazy(
+            DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³)) *
+            (DiagonalMatrixRow(ᶠρ) * ᶠtop_bias_matrix()),
+        )
+        ᶜ∂vtt∂wχ = @. ifelse(ᶜ∂a∂z < 0,
+            ᶜprecipdivᵥ_matrix() * ᶠsed * DiagonalMatrixRow(ᶜa),
+            DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
+        )
+        @. ᶜdiagonal_factor = dtγ * ᶜinv_ρ̂ * getindex(ᶜ∂vtt∂wχ, 0)
+        @. ᶜsuperdiagonal_factor = dtγ * ᶜinv_ρ̂ * getindex(ᶜ∂vtt∂wχ, 1)
         MatrixFields.unrolled_foreach(
             species,
-            coefficients,
-        ) do (ᶜqʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜρq_gs), (ᶜoffset, ᶜfactor)
+            rows,
+        ) do (ᶜqʲ, ᶜwʲ, ᶜw_gs, ᶜρq_gs), (ᶜrhs, ᶜlateral_diagonal)
             @inline
             ᶜqʲ_pos = @. max(zero_FT, ᶜqʲ)
             ᶜwʲ = register_copy(ᶜwʲ)
@@ -785,50 +790,53 @@ function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
             ᶜρ⁰w⁰q⁰ = @. max(ᶜresidual / max(1 - ᶜa, ε_area), zero_FT)
             ᶜvtt =
                 updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ᶜ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ_pos, ᶜρ⁰w⁰q⁰)
-            ᶜlateral_coeff = @. dtγ * ifelse(
-                (ᶜ∂a∂z < 0) & (ᶜρaʲ > 0) & (ᶜqʲ_pos > 0) & (ᶜresidual > 0),
-                ᶜ∂a∂z * ᶜa * ᶜρʲ * ᶜwʲ / max(1 - ᶜa, ε_area),
-                zero_FT,
-            )
-            # M = dtγ ∂vtt/∂χʲ. Where ρa > 0, χʲ > 0, and the residual is
-            # positive, ∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a), so the lateral term
-            # contributes `ᶜlateral_coeff` to the diagonal; where any clamp is
-            # active, its derivative is zero. The flux through each face comes
-            # from the cell above, so M is upper bidiagonal. For q_icl, q_rai, and
-            # q_sno, the face fluxes use the running column max of wʲ instead of
-            # its pointwise value, so that the super-diagonal does not collapse at
-            # the leading edge where the species is empty and one Newton step
-            # carries the sedimenting mass across multiple cells at CFL > 1. The
-            # face flux matrix stays lazy, since it is read at neighboring faces.
-            ᶠsed = @inline @. lazy(
-                DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³)) *
-                (
-                    DiagonalMatrixRow(ᶠρ) * ᶠtop_bias_matrix() *
-                    DiagonalMatrixRow(-(ᶜwʲ_jac))
-                ),
-            )
-            ᶜM = @. dtγ * ifelse(ᶜ∂a∂z < 0,
-                -(ᶜprecipdivᵥ_matrix()) * ᶠsed * DiagonalMatrixRow(ᶜa),
-                -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
-            ) + DiagonalMatrixRow(ᶜlateral_coeff)
-            ᶜdiagonal = @. 1 - ᶜinv_ρ̂ * getindex(ᶜM, 0)
-            @. ᶜoffset = dtγ * ᶜinv_ρ̂ * ᶜvtt / ᶜdiagonal
-            @. ᶜfactor = ᶜinv_ρ̂ * getindex(ᶜM, 1) / ᶜdiagonal
+            @. ᶜrhs = dtγ * ᶜinv_ρ̂ * ᶜvtt
+            # Where ρa > 0, χʲ > 0, and the residual is positive,
+            # ∂(ρ⁰w⁰χ⁰)/∂χʲ = -ρa wʲ / (1 - a), so the lateral term contributes
+            # to the diagonal of M; where any clamp is active, its derivative is
+            # zero.
+            @. ᶜlateral_diagonal =
+                1 -
+                ᶜinv_ρ̂ *
+                dtγ *
+                ifelse(
+                    (ᶜ∂a∂z < 0) & (ᶜρaʲ > 0) & (ᶜqʲ_pos > 0) & (ᶜresidual > 0),
+                    ᶜ∂a∂z * ᶜa * ᶜρʲ * ᶜwʲ / max(1 - ᶜa, ε_area),
+                    zero_FT,
+                )
         end
     end
     # One top-to-bottom sweep for all species, starting with Δq = 0 above the top
-    # cell, that writes `Σ_μ Δq_μ / dtγ` to `ᶜr`
-    rows = unrolled_map(c -> (@. lazy(tuple(c...))), coefficients)
-    input = @. lazy(tuple(rows...))
+    # cell, that writes `Σ_μ Δq_μ / dtγ` to `ᶜr`. For q_icl, q_rai, and q_sno, the
+    # face fluxes use the running column max of wʲ instead of its pointwise
+    # value, so that the super-diagonal does not collapse at the leading edge
+    # where the species is empty and one Newton step carries the sedimenting
+    # mass across multiple cells at CFL > 1.
+    column_maxes = unrolled_map(names) do name
+        name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)
+    end
+    ᶜspecies_rows = unrolled_map(species, rows) do (_, ᶜwʲ, _, _), (ᶜrhs, ᶜlateral_diagonal)
+        @. lazy(tuple(ᶜrhs, ᶜlateral_diagonal, ᶜwʲ))
+    end
+    input = @. lazy(tuple(tuple(ᶜspecies_rows...), ᶜtemp_scalar_8, ᶜtemp_scalar_9))
     Operators.column_accumulate!(
         ᶜr,
         input;
-        init = unrolled_map(Returns(zero_FT), coefficients),
+        init = unrolled_map(Returns((zero_FT, -floatmax(FT))), names),
         reverse = true,
-        transform = Δq -> unrolled_reduce((r, Δqμ) -> r + Δqμ / dtγ, Δq, zero_FT),
-    ) do Δq_above, rows
-        unrolled_map(Δq_above, rows) do Δqμ_above, (offset, factor)
-            offset + factor * Δqμ_above
+        transform = Δq_and_w ->
+            unrolled_reduce((r, (Δq, _)) -> r + Δq / dtγ, Δq_and_w, zero_FT),
+    ) do Δq_and_w_above, (species_rows, diagonal_factor, superdiagonal_factor)
+        unrolled_map(
+            Δq_and_w_above,
+            species_rows,
+            column_maxes,
+        ) do (Δq_above, w_above), (rhs, lateral_diagonal, w), column_max
+            w_jac = column_max ? max(w_above, w) : w
+            Δq =
+                (rhs + superdiagonal_factor * (w_above * Δq_above)) /
+                (lateral_diagonal - diagonal_factor * w_jac)
+            (Δq, w_jac)
         end
     end
     return nothing
