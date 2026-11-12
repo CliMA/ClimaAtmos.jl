@@ -6,9 +6,16 @@ Parameter structs for ClimaAtmos and accessors for their values.
 The top-level container is `ClimaAtmosParameters`, which holds the
 parameters that ClimaAtmos owns directly, together with the parameter sets of
 the packages it calls (Thermodynamics, CloudMicrophysics, SurfaceFluxes, RRTMGP,
-and Insolation). The structs here are plain, immutable, `isbits` value types, so
-they can be captured by GPU kernels; they are built from a ClimaParams TOML
-dictionary by the constructors in `create_parameters.jl`.
+and Insolation). The structs here are defined with `ClimaParams.@params`. When
+the `CLIMA_PARAMS_MODE` preference of ClimaParams is "type" (it is set in the
+`[preferences.ClimaParams]` section of the active project, as in `Project.toml`
+and `.buildkite/Project.toml`), their values are stored in a type parameter
+instead of in their fields, so that they are singletons and a GPU kernel that
+captures one carries no parameter values; when it is "bits", they are plain
+`isbits` structs. Read their values with `getproperty`, since `getfield`
+returns `nothing` in "type" mode, in which the values also have to be `isbits`.
+The structs are built from a ClimaParams TOML dictionary by the constructors in
+`create_parameters.jl`.
 
 Every parameter is read through an accessor function of one argument, e.g.
 `CAP.planet_radius(params)`, rather than by field access. The accessors are
@@ -27,6 +34,7 @@ without knowing which package defines it, and lets parameter sets be swapped
 """
 module Parameters
 
+import ClimaParams as CP
 import ClimaCore as CC
 import Insolation.Parameters as IP
 import Thermodynamics as TD
@@ -186,7 +194,7 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
 """
-Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
+CP.@params struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
     max_area::FT
     min_area::FT
@@ -354,7 +362,7 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     default `0.25` is set from overcast stratocumulus and is likely low for ice
     and convective clouds at coarse resolution [-].
 """
-Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
+CP.@params struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
@@ -399,7 +407,7 @@ RCEMIP protocol.
   - `SST_wavelength_latitude`: Wavelength of the SST sinusoid on the sphere
     [degrees latitude].
 """
-Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP
+CP.@params struct SurfaceTemperatureParameters{FT} <: ASTP
     SST_mean::FT
     SST_delta::FT
     SST_wavelength::FT
@@ -446,7 +454,7 @@ The phase-speed grid is `c[n] = (n - 1) dc - cmax`, so an exact `c = 0` bin
 exists only when `cmax / dc` is an integer. The Beres steady source deposits in
 that bin and silently does nothing without it.
 """
-Base.@kwdef struct NonOrographicGravityWaveParameters{FT} <: AGWP
+CP.@params struct NonOrographicGravityWaveParameters{FT} <: AGWP
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -497,7 +505,7 @@ nonlinear drag. Loaded only when the scheme is enabled.
     spacing, `L = α · Δx`, used by `compute_OGW_info` (both `raw_topo_online` and
     offline artifact generation) [-].
 """
-Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
+CP.@params struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
     ϵ::FT                    # number_density_exponent: number density of orography in a grid cell, n(h) ∝ h^(-ε)
     β::FT                    # mountain_shape_parameter: L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mountains, β>1 for pointy mountains
@@ -545,7 +553,7 @@ enabled.
   - `L_system`: Largest convective-system scale, setting `k_min = 2π / L_system`
     for the steady source [m].
 """
-Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
+CP.@params struct BeresSourceParameters{FT} <: AGWP
     Q0_threshold::FT         # K/s, minimum heating rate to activate Beres
     scale_factor::FT         # dimensionless amplitude scaling (folds ρ₀/(Lτ), |Q_t|² weight, tuning)
     σ_x::FT                  # m, convective cell horizontal half-width
@@ -659,7 +667,7 @@ accessors generated at the bottom of this module, e.g.
 Built from a ClimaParams TOML dictionary by `ClimaAtmosParameters(toml_dict; ...)` in `create_parameters.jl`, which also decides which sub-parameter sets to
 load.
 """
-Base.@kwdef struct ClimaAtmosParameters{
+CP.@params struct ClimaAtmosParameters{
     FT,
     TP,
     RP,

@@ -21,6 +21,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [sources]
 ClimaAtmos = {path = ".."}
+ClimaParams = {rev = "dy/params_macro", url = "https://github.com/CliMA/ClimaParams.jl"}
 
 [compat]
 ClimaAnalysis = "0.5"

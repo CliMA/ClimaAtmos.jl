@@ -35,12 +35,18 @@ SnoopCompile = "aa65fe97-06da-5843-b5b1-d5d13cad87d2"
 SnoopCompileCore = "e2b509da-e806-4183-be48-004708413034"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+SurfaceFluxes = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [sources]
 ClimaAtmos = {path = ".."}
+ClimaParams = {rev = "dy/params_macro", url = "https://github.com/CliMA/ClimaParams.jl"}
+CloudMicrophysics = {rev = "dy/params_macro", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
 PrecompileCI = {path = "PrecompileCI"}
+SurfaceFluxes = {rev = "dy/params_macro", url = "https://github.com/CliMA/SurfaceFluxes.jl"}
+Thermodynamics = {rev = "dy/params_macro", url = "https://github.com/CliMA/Thermodynamics.jl"}
 
 [compat]
 ArgParse = "1"
@@ -74,3 +80,6 @@ Statistics = "1"
 StatsBase = "0.34"
 YAML = "0.4"
 julia = "1.10"
+
+[preferences.ClimaParams]
+CLIMA_PARAMS_MODE = "type"

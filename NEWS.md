@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🚀performance] ![][badge-💥breaking] Define the parameter structs
+  with `ClimaParams.@params`. When the `CLIMA_PARAMS_MODE` preference of
+  ClimaParams is `"type"`, the structs are singletons that hold their values in
+  a type parameter, so GPU kernels capture no parameter values. `Project.toml`
+  and `.buildkite/Project.toml` set it to `"type"`; a project that uses
+  ClimaAtmos sets it in its own `[preferences.ClimaParams]` section, since the
+  default is `"bits"`, in which the structs are unchanged. Read parameter
+  values with `getproperty`, since `getfield` returns `nothing` in `"type"`
+  mode.
 - ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
   from `1` to `2` and `update_constrain_state_every` from `step` to `stage` in
   `config/default_configs/default_config.yml` and the matching keyword defaults

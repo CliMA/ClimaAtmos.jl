@@ -42,6 +42,12 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [weakdeps]
 Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 
+[sources]
+ClimaParams = {rev = "dy/params_macro", url = "https://github.com/CliMA/ClimaParams.jl"}
+CloudMicrophysics = {rev = "dy/params_macro", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
+SurfaceFluxes = {rev = "dy/params_macro", url = "https://github.com/CliMA/SurfaceFluxes.jl"}
+Thermodynamics = {rev = "dy/params_macro", url = "https://github.com/CliMA/Thermodynamics.jl"}
+
 [extensions]
 ClimaAtmosMusica = "Musica"
 
@@ -105,3 +111,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Aqua", "Distributions", "Downloads", "IntervalSets", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
+
+[preferences.ClimaParams]
+CLIMA_PARAMS_MODE = "type"

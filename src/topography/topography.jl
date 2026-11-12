@@ -1,3 +1,4 @@
+import ClimaParams as CP
 using ClimaCore: Geometry, Spaces, Fields
 export CosineTopography,
     AgnesiTopography,
@@ -80,7 +81,7 @@ solutions for this profile are available from `steady_state_velocity`.
 topography = CosineTopography{2, Float64}(; h_max = 100, λ = 20e3)
 ```
 """
-Base.@kwdef struct CosineTopography{D, FT} <: AbstractTopography
+CP.@params struct CosineTopography{D, FT} <: AbstractTopography
     h_max::FT = 25.0
     λ::FT = 25e3
 end
@@ -115,7 +116,7 @@ mountain-wave tests. Steady-state solutions for this profile are available from
 topography = AgnesiTopography{Float64}(; h_max = 400, a = 10e3)
 ```
 """
-Base.@kwdef struct AgnesiTopography{FT} <: AbstractTopography
+CP.@params struct AgnesiTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
     x_center::FT = 50e3
     a::FT = 5e3
@@ -148,7 +149,7 @@ Steady-state solutions for this profile are available from
 topography = ScharTopography{Float64}(; h_max = 250, λ = 4e3, a = 5e3)
 ```
 """
-Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
+CP.@params struct ScharTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
     x_center::FT = 50e3
     λ::FT = 4e3
@@ -298,7 +299,7 @@ linear decay of [`LinearWarp`](@ref).
 Schär et al. (2002), "A new terrain-following vertical coordinate formulation
 for atmospheric prediction models", Mon. Wea. Rev.
 """
-Base.@kwdef struct SLEVEWarp{FT <: AbstractFloat} <: MeshWarpType
+CP.@params struct SLEVEWarp{FT <: AbstractFloat} <: MeshWarpType
     eta::FT = 0.7
     s::FT = 10.0
 end

@@ -1025,7 +1025,7 @@ Returns `(; mu_S, sigma_S)`.
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
     FT = typeof(ρ)
-    mu_S = q_tot_mean - TD.q_vap_saturation(_unwrapped(thp), T_mean, ρ)
+    mu_S = q_tot_mean - TD.q_vap_saturation(thp, T_mean, ρ)
     sigma_S =
         not_quadrature(sgs_quad) ? ϵ_numerics(FT) :
         _sgs_linear_sigma_S(thp, ρ, T_mean, T′T′, q′q′, corr_Tq)
@@ -1042,7 +1042,7 @@ Linearized Clausius–Clapeyron saturation-excess standard deviation
 @inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
     FT = typeof(ρ)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-    γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
+    γ = FT(TD.∂q_vap_sat_∂T(thp, T, ρ))
     var_S = σ_q^2 - 2 * γ * corr * σ_T * σ_q + γ^2 * σ_T^2
     return max(sqrt(max(var_S, zero(FT))), ϵ_numerics(FT))
 end
@@ -1117,7 +1117,7 @@ ramp. Used by `sgs_variance_fidelity`.
 """
 @inline function sgs_microphysics_timescale(thp, T, τ_cond, τ_sub)
     FT = typeof(T)
-    λ_eq = FT(TD.liquid_fraction_ramp(_unwrapped(thp), T))
+    λ_eq = FT(TD.liquid_fraction_ramp(thp, T))
     τ_l, τ_i = FT(τ_cond), FT(τ_sub)
     return ifelse(
         λ_eq >= one(FT),
@@ -1832,7 +1832,7 @@ directly, matching the σ_S → 0 limit.
     c = Inf32,
 )
     FT = typeof(ρ)
-    q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
     mu_S_cloud = q_tot_cloud - q_sat
     not_quadrature(sgs_quad) &&
         return (;
@@ -1916,8 +1916,6 @@ function set_quadrature_cloud_fraction!(
     sgs_quad = p.atmos.sgs_quadrature
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
     c = equilibrium_condensate_truncation(p)
-    # Carried in by type, so the parameters fold to literals in the kernel.
-    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     # The cloud-available water enters the loop as a lazy field: without
     # prognostic precipitation `ᶜq_precip` is a number, which the column loop
     # cannot slice on its own.
@@ -1928,7 +1926,7 @@ function set_quadrature_cloud_fraction!(
     ) do ᶜcloud_fraction, c0, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
         ᶜcf = @. _compute_cloud_fraction(
-            $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
+            thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c),
         )
         _edmf_weight_cloud_fraction!(
@@ -1962,8 +1960,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     zero_FT = zero(eltype(p.params))
     sgs_quad = p.atmos.sgs_quadrature
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
-    # Carried in by type, so the parameters fold to literals in the kernel.
-    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     c = equilibrium_condensate_truncation(p)
     # The displacement coefficients enter the loop as a field only when the
     # curvature-aware condensate is configured; otherwise `_disp_lin` and
@@ -1982,7 +1978,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
             ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             (@inline @. lazy(_disp_lin(ᶜdisp_S))), (@inline @. lazy(_disp_curv(ᶜdisp_S))),
-            c, vthermo, thermo_params, sgs_quad, σ_abs,
+            c, thermo_params, sgs_quad, σ_abs,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
@@ -2023,13 +2019,12 @@ NVTX.@annotate function set_sgs_moments!(Y, p)
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
 
     FT = eltype(p.params)
-    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     c = equilibrium_condensate_truncation(p)
 
     if p.atmos.sgs_variance_curvature
         ᶜdisp_S = p.precomputed.ᶜdisp_S
         @. ᶜsgs_moments = _compute_sgs_moments(
-            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
         )
@@ -2037,7 +2032,7 @@ NVTX.@annotate function set_sgs_moments!(Y, p)
         lin₀ = zero(FT)
         curv₀ = zero(FT)
         @. ᶜsgs_moments = _compute_sgs_moments(
-            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
         )
@@ -2049,25 +2044,22 @@ end
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
         ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
-        vthermo, thermo_params, sgs_quad, σ_abs,
+        thermo_params, sgs_quad, σ_abs,
     )
 
 Part of the column loop of `set_sgs_moments_and_cloud_fraction!`: fill the SGS
 moments (`_compute_sgs_moments`) and the cloud fraction
 (`_compute_cloud_fraction`) of one column. `lin` and `curv` are the
 displacement coefficients, read from `ᶜdisp_S` or zero, and `c` the
-displacement truncation (`sgs_displacement_truncation`). `vthermo` carries the
-thermodynamics parameters in its type, so they fold to literals in the quadrature
-kernel; `thermo_params` is the same parameters as a value, for the saturation
-calls beside it.
+displacement truncation (`sgs_displacement_truncation`).
 """
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
     ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
-    vthermo, thermo_params, sgs_quad, σ_abs,
+    thermo_params, sgs_quad, σ_abs,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
-        vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv, c,
     )
     # The cloud fraction from `q_c` and `σ_S` with the augmented-width closure,
