@@ -1,6 +1,8 @@
 # Temporary comparison pipeline (not for merging), on one A100 per job: perf/profile_amip_steps.jl
 # traces 20 coupling steps of the flagship AMIP benchmark in two environments that differ only in
-# ClimaAtmos, main (CLIMAATMOS_MAIN_COMMIT) and CliMA/ClimaAtmos.jl#4953 (CLIMAATMOS_PR_COMMIT),
+# ClimaAtmos and its parameter packages: main (CLIMAATMOS_MAIN_COMMIT) and the @params branch
+# (CLIMAATMOS_PR_COMMIT, with the dy/params_macro branches of ClimaParams, Thermodynamics,
+# SurfaceFluxes, and CloudMicrophysics that its [sources] pin, in "type" mode),
 # with the ClimaCore that the coupler environment resolves and the cache, tendency, and Jacobian
 # functions marked with NVTX ranges (perf/annotate_components.py). It sums the Nsight Compute
 # counters of one coupling step and of the RRTMGP kernels in the one radiation call of the traced
@@ -19,8 +21,8 @@ env:
   CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
-  CLIMAATMOS_MAIN_COMMIT: "7eacbde078a3a0e5b84eaca15b9be3d7de816cf7"
-  CLIMAATMOS_PR_COMMIT: "a86ca53e0eeb900776b2981d039c81c457c74708"
+  CLIMAATMOS_MAIN_COMMIT: "d9da6bfdf119872c4c7b5b3c3838c0d8630437c7"
+  CLIMAATMOS_PR_COMMIT: "7fc867907bb93fc2140029ac7820cdcca47ac4f5"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -29,7 +31,7 @@ env:
 timeout_in_minutes: 480
 
 steps:
-  - label: "init: ClimaAtmos of main and CliMA/ClimaAtmos.jl#4953"
+  - label: "init: ClimaAtmos of main and the @params branch"
     key: "init_trees"
     command:
       - mkdir -p $$PROFILE_DIR
@@ -72,9 +74,11 @@ steps:
       - echo "--- main (ClimaAtmos main)"
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_main")); Pkg.add("MPI")'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- pr (CliMA/ClimaAtmos.jl#4953)"
+      - echo "--- pr (the @params branch)"
       - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
+      # The parameter structs take their mode from the preferences of the active project
+      - 'printf "[ClimaParams]\nCLIMA_PARAMS_MODE = \"type\"\n" > $$PROFILE_DIR/coupler_pr/experiments/AMIP/LocalPreferences.toml'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
       - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest.toml || true
@@ -122,7 +126,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), CliMA/ClimaAtmos.jl#4953: CUDA trace of 20 coupling steps"
+  - label: "flagship AMIP components (A100), the @params branch: CUDA trace of 20 coupling steps"
     key: "trace_pr"
     depends_on: "init_amip"
     command:
@@ -135,7 +139,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), CliMA/ClimaAtmos.jl#4953: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
+  - label: "flagship AMIP components (A100), the @params branch: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
     key: "ncu_pr"
     depends_on: "init_amip"
     command:
