@@ -53,12 +53,7 @@ end
 
 get_base_atmos_config() = atmos_config_for(BENCH_FT)
 
-function elapsed_us(f!, ::ClimaComms.CUDADevice)
-    return 1e6 * (CUDA.@elapsed f!())
-end
-function elapsed_us(f!, ::ClimaComms.AbstractDevice)
-    return 1e6 * (@elapsed f!())
-end
+elapsed_us(f!, device) = 1e6 * ClimaComms.elapsed(f!, device)
 
 function sync_device(::ClimaComms.CUDADevice)
     CUDA.synchronize()
@@ -95,6 +90,10 @@ function get_bench_items(
     eddy_diffs =
         CA.use_derivative(diffusion_flag) ?
         CA.eddy_diffusivity_coefficients!(Y, p) : nothing
+    # Matches the flag passed by `set_covariance_cache_and_cloud_fraction!`.
+    store_θ_li =
+        CA.uses_covariances(p.atmos) &&
+        !iszero(CA.CAP.sgs_variance_horizontal_scale_factor(p.params))
     return [
         (
             "implicit_tendency! (total)",
@@ -234,7 +233,12 @@ function get_bench_items(
         ),
         (
             "    set_buoyancy_gradient_inputs!",
-            () -> CA.set_buoyancy_gradient_inputs!(Y, p, thermo_params),
+            () -> CA.set_buoyancy_gradient_inputs!(
+                Y,
+                p,
+                thermo_params,
+                store_θ_li,
+            ),
         ),
         ("    set_precip_fraction!", () -> CA.set_precip_fraction!(Y, p)),
         ("  set_face_diffusivities!", () -> CA.set_face_diffusivities!(Y, p)),
@@ -317,18 +321,14 @@ function get_bench_items(
             () -> CA.update_sgs_advection_jacobian!(matrix, Y, p, p.dt),
         ),
         (
-            "  update_sgs_diffusion_jacobian!",
-            () -> CA.update_sgs_diffusion_jacobian!(
+            "  update_sgs_diffusion_and_entr_detr_jacobian!",
+            () -> CA.update_sgs_diffusion_and_entr_detr_jacobian!(
                 matrix,
                 Y,
                 p,
                 p.dt,
                 diffusion_flag,
             ),
-        ),
-        (
-            "  update_sgs_entr_detr_jacobian!",
-            () -> CA.update_sgs_entr_detr_jacobian!(matrix, Y, p, p.dt),
         ),
         (
             "  update_sgs_boundary_condition_jacobian!",
@@ -495,8 +495,14 @@ function print_comparison(items, res_base, res_new)
     )
     println("|---|---|---|---|")
     for (name, _) in items
-        rb = res_base[name]
         r = res_new[name]
+        # Baseline timings saved by a version of this script with a different
+        # set of passes have no entry for the passes it lacks.
+        if !haskey(res_base, name)
+            @printf("| %s | n/a | %.1f / %.1f | n/a |\n", name, r.min_us, r.med_us)
+            continue
+        end
+        rb = res_base[name]
         @printf(
             "| %s | %.1f / %.1f | %.1f / %.1f | %.2fx / %.2fx |\n",
             name,

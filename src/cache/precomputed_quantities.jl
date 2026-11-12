@@ -677,7 +677,7 @@ inlined.
     ᶜq_ice,
     thermo_params,
 )
-    ᶜe_tot = @. lazy(specific(Yc.ρe_tot, Yc.ρ))
+    ᶜe_tot = @inline @. lazy(specific(Yc.ρe_tot, Yc.ρ))
     @. ᶜh_tot =
         TD.total_enthalpy(
             thermo_params,
@@ -739,12 +739,14 @@ grid mean. Mutates `ᶜK` and returns `nothing`.
     through the subdomain densities. See the comment at that call site.
 """
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-        @. ᶜK +=
-            ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Y.f.u₃, CT3(ᶠu₃ʲ - Y.f.u₃))) / 2 / Y.c.ρ
+    DataLayouts.foreach_column(Y.c, Y.f, ᶜK, ᶜρa⁰, ᶠu₃⁰) do Yc, Yf, ᶜK, ᶜρa⁰, ᶠu₃⁰
+        @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            ᶜρaʲ = Yc.sgsʲs.:($j).ρa
+            ᶠu₃ʲ = Yf.sgsʲs.:($j).u₃
+            @. ᶜK +=
+                ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
+        end
     end
     return nothing
 end
@@ -854,7 +856,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
     ) do ᶜu, ᶠu³, ᶜK, ᶠu, Yc, ᶠu₃, ᶠuₕ³, ᶜJ
         set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
         @. ᶠu = CT123(ᶠwinterp(Yc.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
-        return nothing
     end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
@@ -902,7 +903,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
             set_enthalpy_and_pressure!(
                 ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params,
             )
-            return nothing
         end
     else
         ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
@@ -1033,10 +1033,13 @@ current state `Y`. This is only called before each evaluation of
 
 Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
 and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
-precipitation terminal velocities, the microphysics tendency cache, surface
-precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
+precipitation terminal velocities (unless they depend on the state, in which case
+`set_implicit_precomputed_quantities_core!` sets them; see
+`state_dependent_precipitation_velocities`), the microphysics tendency cache,
+surface precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
 Smagorinsky-Lilly quantities (each step only when the corresponding model
-component is active). Returns `nothing`.
+component is active). Reads the implicit precomputed quantities, so it must follow
+`set_implicit_precomputed_quantities_core!` at the same state. Returns `nothing`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model) = p.atmos
@@ -1079,8 +1082,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
     end
 
-    # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
-    set_precipitation_velocities!(
+    # Cache precipitation terminal velocities for grid mean and prognostic EDMF
+    # updrafts, unless `set_implicit_precomputed_quantities_core!` already set them
+    # at this state.
+    state_dependent_precipitation_velocities(p.atmos) || set_precipitation_velocities!(
         Y,
         p,
         p.atmos.microphysics_model,

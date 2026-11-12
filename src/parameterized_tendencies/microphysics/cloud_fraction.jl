@@ -38,21 +38,41 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
 
     # Materialize the pointwise buoyancy-gradient chain-rule coefficients,
     # exact face gradients, and centered vertical gradients of (θ_li, q_tot)
-    # once (`ᶜθ_li` remains in `p.scratch.ᶜtemp_scalar`).
-    set_buoyancy_gradient_inputs!(Y, p, thermo_params)
+    # once, and `ᶜθ_li` in `p.scratch.ᶜtemp_scalar` where the horizontal
+    # gradient invariants read it.
+    uses_hgrad =
+        uses_covariances(p.atmos) &&
+        !iszero(CAP.sgs_variance_horizontal_scale_factor(p.params))
+    set_buoyancy_gradient_inputs!(Y, p, thermo_params, uses_hgrad)
 
     # Precompute horizontal gradient invariants once before the Picard loop:
     # they depend only on `(ᶜq_tot_nonneg, ᶜθ_li)`, which are fixed during
-    # Picard.
-    c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
-    if uses_covariances(p.atmos) && !iszero(c_Δx)
+    # Picard. The invariants of `hgrad_invariant!` for q_tot and θ_li and the
+    # cross invariant of `hgrad_cross_invariant!` for (θ_li, q_tot) are computed
+    # in one slab loop and then DSSed. The slab loop requests the shared memory
+    # of the `:medium` level, which its lumped restrictions need, so that it is
+    # not first compiled without it.
+    if uses_hgrad
         ᶜθ_li = p.scratch.ᶜtemp_scalar
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
         ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
         ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+        DataLayouts.foreach_slab(
+            ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq_tot_nonneg, ᶜθ_li;
+            shmem = Val(:medium),
+        ) do ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ
+            ᶜ∇q = @. gradₕ(ᶜq)
+            ᶜ∇θ = @. gradₕ(ᶜθ)
+            @. ᶜinv_q = lumpedₕ(norm_sqr(ᶜ∇q))
+            @. ᶜinv_θ = lumpedₕ(norm_sqr(ᶜ∇θ))
+            @. ᶜinv_θq = lumpedₕ(dot(Geometry.Contravariant12Vector(ᶜ∇θ), ᶜ∇q))
+        end
+        buf = p.scratch.ᶜscalar_dss_buffer
+        if buf !== nothing
+            Spaces.weighted_dss!(ᶜinv_q, buf)
+            Spaces.weighted_dss!(ᶜinv_θ, buf)
+            Spaces.weighted_dss!(ᶜinv_θq, buf)
+        end
     end
 
     if p.atmos.numerics.reproducible_restart
@@ -69,25 +89,21 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         fused ? cloud_env_state(Y, p, thermo_params; materialize = is_edmf) :
         nothing
 
-    # Picard iterates: c0 = initial cloud fraction, c1 = first Picard iterate.
+    # Picard iterates: `c0` holds the initial cloud fraction, and the first
+    # iterate stays in `ᶜcloud_fraction` until the Aitken step reads it.
     c0 = p.scratch.ᶜtemp_scalar_4
-    c1 = p.scratch.ᶜtemp_scalar_7
     @. c0 = ᶜcloud_fraction
 
     # One Picard step: fused buoygrad + covariance + l_mix + α, then the cloud
-    # fraction. The first step stores its iterate in `c1`; the second applies
-    # the Aitken acceleration.
+    # fraction. The second step applies the Aitken acceleration.
     function picard_step!(::Val{aitken}) where {aitken}
         set_covariance_cache!(Y, p, thermo_params; env_state)
         if fused
-            set_quadrature_cloud_fraction!(Y, p, env_state, c0, c1, Val(aitken))
+            set_quadrature_cloud_fraction!(Y, p, env_state, c0, Val(aitken))
         else
-            set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
-            if aitken
-                @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, ᶜcloud_fraction)
-            else
-                @. c1 = ᶜcloud_fraction
-            end
+            set_cloud_fraction!(
+                Y, p, microphysics_model, cloud_model, aitken ? c0 : nothing,
+            )
         end
         return nothing
     end
@@ -129,7 +145,8 @@ i.e. when the iterates oscillate about the fixed point and the Aitken value is
 expected to lie between them, and when the denominator is above roundoff.
 Otherwise the second Picard iterate `c2` is retained.
 
-Called from `set_covariance_cache_and_cloud_fraction!`.
+Called in the Aitken step of `set_covariance_cache_and_cloud_fraction!`, by
+`set_quadrature_cloud_fraction!` and `set_ml_cloud_fraction!`.
 """
 @inline function _aitken_picard_helper(c0, c1, c2)
     FT = typeof(c0)
@@ -147,7 +164,6 @@ end
 # ============================================================================
 # Utility Functions
 # ============================================================================
-
 
 """
     uses_covariances(atmos)
@@ -552,7 +568,7 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
 Scratch: the caller fills `ᶜtemp_scalar_5`, `temp_data`, and `ᶜtemp_scalar_6`
 with the moisture, potential-temperature, and cross invariants.
 `ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3` hold the environment
-density and cloud condensates, and `ᶜtemp_C3` the precipitation, when they are
+density and cloud condensates, and `ᶜtemp_scalar_7` the precipitation, when they are
 not fields already and `env_state` does not provide them.
 """
 function set_covariance_cache!(
@@ -788,7 +804,7 @@ function _set_covariance_cache_loop!(
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm
         ᶜz = ᶜlg.coordinates.z
-        ᶜtke = has_tke ? (@. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
+        ᶜtke = has_tke ? (@inline @. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
         sfc_tke =
             has_tke ?
             (lazy.(specific.(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
@@ -802,10 +818,10 @@ function _set_covariance_cache_loop!(
             )
         end
         if is_edmf
-            ᶜprandtl_nvec = @. lazy(
+            ᶜprandtl_nvec = @inline @. lazy(
                 turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm),
             )
-            ᶜml = @. lazy(
+            ᶜml = @inline @. lazy(
                 mixing_length_lopez_gomez_2020(
                     turbconv_params,
                     sf_params,
@@ -845,13 +861,13 @@ function _set_covariance_cache_loop!(
         )
 
         if has_tke
-            ᶜtke_pos = @. lazy(max(ᶜtke, zero_FT))
+            ᶜtke_pos = @inline @. lazy(max(ᶜtke, zero_FT))
             ᶜl_mix_disp = @. buoyancy_bounded_mixing_length(
                 ᶜl_mix,
                 κ_b_per_tke * ᶜtke_pos,
                 ᶜN²_disp,
             )
-            ᶜτ_turb = @. lazy(
+            ᶜτ_turb = @inline @. lazy(
                 turbulent_lagrangian_time(ᶜl_mix_disp, κ_b_per_tke * ᶜtke_pos),
             )
             ᶜl_d = @. displacement_length(
@@ -872,18 +888,18 @@ function _set_covariance_cache_loop!(
             )
         end
 
-        ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
-        ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
-        ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
-        ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
-        ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+        ᶜℓ_v_q² = @inline @. lazy(2 * c_σ * ᶜl_d^2)
+        ᶜℓ_v_θ² = @inline @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
+        ᶜℓ_v_θq = @inline @. lazy(r_v_θ * ᶜℓ_v_q²)
+        ᶜ∂q∂z = @inline @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
+        ᶜ∂θ∂z = @inline @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
 
         # The Jacobian at the mean state of the domain that carries the SGS
         # closure, with its total water and cloud condensate.
-        ᶜρ_mean = @. lazy(_1(ᶜenv_pack))
-        ᶜT_mean = @. lazy(_2(ᶜenv_pack))
-        ᶜq_mean = @. lazy(_7(ᶜenv_pack))
-        ᶜθ_li_mean = @. lazy(
+        ᶜρ_mean = @inline @. lazy(_1(ᶜenv_pack))
+        ᶜT_mean = @inline @. lazy(_2(ᶜenv_pack))
+        ᶜq_mean = @inline @. lazy(_7(ᶜenv_pack))
+        ᶜθ_li_mean = @inline @. lazy(
             TD.liquid_ice_pottemp(
                 thermo_params, ᶜT_mean, ᶜρ_mean, ᶜq_mean, _5(ᶜenv_pack), _6(ᶜenv_pack),
             ),
@@ -907,7 +923,7 @@ function _set_covariance_cache_loop!(
             ))
         end
         if has_curvature
-            ᶜχ = @. lazy(
+            ᶜχ = @inline @. lazy(
                 r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean) * ᶜ∂T_∂θ,
             )
             @. ᶜdisp_S = displacement_curvature_coefficients(
@@ -933,8 +949,10 @@ function _set_covariance_cache_loop!(
             if is_0m
                 @. ᶜα = one_FT / A
             else
-                ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)))
-                ᶜsigma_S = @. lazy(
+                ᶜγ = @inline @. lazy(
+                    TD.∂q_vap_sat_∂T(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)),
+                )
+                ᶜsigma_S = @inline @. lazy(
                     sqrt(
                         max(
                             ᶜq′q′ - 2 * ᶜγ * ᶜcorr_Tq * sqrt(max(ᶜT′T′ * ᶜq′q′, zero_FT)) +
@@ -943,7 +961,7 @@ function _set_covariance_cache_loop!(
                         ),
                     ),
                 )
-                ᶜmu_S = @. lazy(
+                ᶜmu_S = @inline @. lazy(
                     _3(ᶜenv_pack) -
                     TD.q_vap_saturation(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)),
                 )
@@ -972,7 +990,6 @@ function _set_covariance_cache_loop!(
                 )
             end
         end
-        return nothing
     end
     return nothing
 end
@@ -1538,7 +1555,6 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
     return α_Da * α_eq
 end
 
-
 """
     updraft_variance_fidelity(
         α, sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs, sigma_S,
@@ -1855,7 +1871,7 @@ State of the domain that carries the SGS cloud closure — the environment under
 `_get_condensate_means`, and `_get_precip_mean`).
 
 With `materialize`, the lazy fields are written to `ᶜtemp_scalar`,
-`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_C3`; otherwise they stay lazy.
+`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_7`; otherwise they stay lazy.
 Without EDMF, the grid-mean mixing length overwrites `ᶜtemp_scalar` and
 `ᶜtemp_scalar_2` in every covariance update, so a state that must outlive one
 update stays lazy.
@@ -1869,13 +1885,7 @@ function cloud_env_state(Y, p, thermo_params; materialize)
         ᶜρ_env = _materialized(p.scratch.ᶜtemp_scalar, ᶜρ_env)
         ᶜq_lcl = _materialized(p.scratch.ᶜtemp_scalar_2, ᶜq_lcl)
         ᶜq_icl = _materialized(p.scratch.ᶜtemp_scalar_3, ᶜq_icl)
-        ᶜq_precip = _materialized(
-            Fields.Field(
-                Fields.field_values(p.scratch.ᶜtemp_C3.components.data.:1),
-                axes(Y.c),
-            ),
-            ᶜq_precip,
-        )
+        ᶜq_precip = _materialized(p.scratch.ᶜtemp_scalar_7, ᶜq_precip)
     end
     return (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip)
 end
@@ -1883,18 +1893,20 @@ _materialized(dest, src::Union{Fields.Field, Number}) = src
 _materialized(dest, src) = (dest .= src)
 
 """
-    set_quadrature_cloud_fraction!(Y, p, env_state, c0, c1, ::Val{aitken})
+    set_quadrature_cloud_fraction!(Y, p, env_state, c0, ::Val{aitken})
 
 Picard update of the `QuadratureCloud` cloud fraction in one column loop: the
 truncated-Gaussian closure with the linearized `σ_S` (see
 `_compute_cloud_fraction`) at the state `env_state` (`cloud_env_state`),
 centred on the cloud-available water (total water less precipitation), with
 EDMF updraft weighting (`_edmf_weight_cloud_fraction!`). Without `aitken`, the
-result is also stored in the first Picard iterate `c1`; with it, the result is
-the guarded Aitken acceleration of `c0`, `c1`, and the new iterate.
+new iterate replaces the cloud fraction; with it, the guarded Aitken
+acceleration of the initial iterate `c0`, the current cloud fraction (the first
+Picard iterate), and the new iterate does, so the new iterate is not stored
+until the current cloud fraction is read.
 """
 function set_quadrature_cloud_fraction!(
-    Y, p, env_state, c0, c1, ::Val{aitken},
+    Y, p, env_state, c0, ::Val{aitken},
 ) where {aitken}
     (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
     (; ᶜcloud_fraction, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
@@ -1911,24 +1923,23 @@ function set_quadrature_cloud_fraction!(
     # cannot slice on its own.
     ᶜq_cloud = @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))
     DataLayouts.foreach_column(
-        ᶜcloud_fraction, c0, c1, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
+        ᶜcloud_fraction, c0, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
         ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p),
-    ) do ᶜcloud_fraction, c0, c1, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
+    ) do ᶜcloud_fraction, c0, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
-        @. ᶜcloud_fraction = _compute_cloud_fraction(
+        ᶜcf = @. _compute_cloud_fraction(
             $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c),
         )
         _edmf_weight_cloud_fraction!(
-            ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
+            ᶜcf, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
             thermo_params, σ_abs,
         )
         if aitken
-            @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, ᶜcloud_fraction)
+            @. ᶜcloud_fraction = _aitken_picard_helper(c0, ᶜcloud_fraction, ᶜcf)
         else
-            @. c1 = ᶜcloud_fraction
+            @. ᶜcloud_fraction = ᶜcf
         end
-        return nothing
     end
     return nothing
 end
@@ -1968,16 +1979,15 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, drafts
         _sgs_moments_and_cloud_fraction_point!(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-            (@. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
+            (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
             ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-            (@. lazy(_disp_lin(ᶜdisp_S))), (@. lazy(_disp_curv(ᶜdisp_S))),
+            (@inline @. lazy(_disp_lin(ᶜdisp_S))), (@inline @. lazy(_disp_curv(ᶜdisp_S))),
             c, vthermo, thermo_params, sgs_quad, σ_abs,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
             thermo_params, σ_abs,
         )
-        return nothing
     end
     return nothing
 end
@@ -2104,11 +2114,10 @@ precipitation). No-op without `PrognosticEDMFX`. The draft fields come from
     ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model::PrognosticEDMFX,
     microphysics_model, thermo_params, σ_abs,
 )
-    ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+    ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
     @. ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ_env)
     is_noneq = microphysics_model isa NonEquilibriumMicrophysics
-    unrolled_foreach(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
-        @inline
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜsgsʲ = Yc.sgsʲs.:($j)
         ᶜq_lclʲ, ᶜq_iclʲ =
             is_noneq ? (ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl) :
@@ -2126,7 +2135,6 @@ precipitation). No-op without `PrognosticEDMFX`. The draft fields come from
                 σ_abs,
                 microphysics_model,
             )
-        return nothing
     end
     return nothing
 end
@@ -2326,10 +2334,14 @@ end
 # ============================================================================
 
 """
-    set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
+    set_cloud_fraction!(Y, p, microphysics_model, cloud_model, c0 = nothing)
 
 Compute the grid-scale cloud fraction from subgrid-scale properties and store it in
-`p.precomputed.ᶜcloud_fraction`.
+`p.precomputed.ᶜcloud_fraction`. Given the initial Picard iterate `c0` of
+`set_covariance_cache_and_cloud_fraction!`, store the guarded Aitken acceleration
+(`_aitken_picard_helper`) of `c0`, the current cloud fraction, and the new value
+instead. Only the `MLCloud` value depends on the covariances; the others have equal
+Picard iterates, which are their own acceleration, so they ignore `c0`.
 
 Dispatches on `microphysics_model` and `cloud_model`:
 
@@ -2343,7 +2355,7 @@ A moist `QuadratureCloud` is updated in fused column loops instead
 
 Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
-NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
+NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, cloud_model, c0 = nothing)
     FT = eltype(p.params)
     p.precomputed.ᶜcloud_fraction .= FT(0)
 end
@@ -2352,6 +2364,7 @@ NVTX.@annotate function set_cloud_fraction!(
     p,
     microphysics_model::MoistMicrophysics,
     ::GridScaleCloud,
+    c0 = nothing,
 )
     ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, microphysics_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -2396,6 +2409,7 @@ NVTX.@annotate function set_cloud_fraction!(
     p,
     ::MoistMicrophysics,
     qc::MLCloud,
+    c0 = nothing,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_model = p.atmos.turbconv_model
@@ -2415,6 +2429,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜT_mean,
         ᶜq_mean,
         ᶜθ_mean,
+        c0,
     )
 end
 
@@ -2655,9 +2670,11 @@ end
 
 """
     set_ml_cloud_fraction!(Y, p, ml_cloud, thermo_params, turbconv_model,
-                          ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean)
+                          ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, c0 = nothing)
 
-Overwrite `p.precomputed.ᶜcloud_fraction` with the ML prediction.
+Overwrite `p.precomputed.ᶜcloud_fraction` with the ML prediction, or, given the
+initial Picard iterate `c0`, with the guarded Aitken acceleration
+(`_aitken_picard_helper`) of `c0`, the current cloud fraction, and the prediction.
 
 The network is evaluated point-wise on non-dimensional π groups built from the
 thermodynamic state, the mixing length, and the vertical gradients of `q_tot` and
@@ -2677,6 +2694,7 @@ not applied in machine learning cloud fracrtion.
   - `ᶜT_mean`: Mean temperature [K].
   - `ᶜq_mean`: Mean total specific humidity [kg/kg].
   - `ᶜθ_mean`: Mean liquid-ice potential temperature [K].
+  - `c0`: Initial Picard iterate of the cloud fraction, or `nothing`.
 
 Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
@@ -2690,6 +2708,7 @@ function set_ml_cloud_fraction!(
     ᶜT_mean,
     ᶜq_mean,
     ᶜθ_mean,
+    c0 = nothing,
 )
     ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
@@ -2701,7 +2720,8 @@ function set_ml_cloud_fraction!(
     ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
     @. ᶜ∇θ = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg)
 
-    p.precomputed.ᶜcloud_fraction .=
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
+    ᶜcloud_fraction_ml = lazy.(
         compute_ml_cloud_fraction.(
             Ref(ml_cloud.model),
             ᶜmixing_length_field,
@@ -2712,7 +2732,14 @@ function set_ml_cloud_fraction!(
             ᶜq_mean,
             ᶜθ_mean,
             thermo_params,
-        )
+        ),
+    )
+    if isnothing(c0)
+        ᶜcloud_fraction .= ᶜcloud_fraction_ml
+    else
+        @. ᶜcloud_fraction =
+            _aitken_picard_helper(c0, ᶜcloud_fraction, ᶜcloud_fraction_ml)
+    end
 end
 
 """

@@ -28,13 +28,14 @@ end
 
 Compute the explicit ("remaining") tendencies of the IMEX splitting.
 
-Zeroes `Yₜ` and `Yₜ_lim`, then accumulates, in order:
+Zeroes `Yₜ`, then calls `add_remaining_tendency!`, which zeroes `Yₜ_lim` and
+accumulates, in order:
 
- 1. `horizontal_tracer_advection_tendency!` (into `Yₜ_lim`).
- 2. `horizontal_dynamics_tendency!`.
- 3. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
- 4. `explicit_vertical_advection_tendency!`.
- 5. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
+ 1. `horizontal_advection_tendency!`: `horizontal_tracer_advection_tendency!` (into
+    `Yₜ_lim`) and `horizontal_dynamics_tendency!` in one slab loop.
+ 2. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
+ 3. `explicit_vertical_advection_tendency!`.
+ 4. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
 
 `Yₜ_lim` collects the tracer tendencies that are subject to the horizontal
 limiters (see `limiters_func!`); everything else accumulates into `Yₜ`. The
@@ -46,11 +47,20 @@ implicitly treated counterparts (vertical acoustic/advective terms, diffusion wh
 `Yₜ`, the populated main tendency vector.
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
-    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    return add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+end
+
+"""
+    add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Add the tendencies of `remaining_tendency!` to `Yₜ`, overwriting `Yₜ_lim`.
+Returns `Yₜ`.
+"""
+function add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
-    horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+    horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
@@ -127,8 +137,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 @. Yₜc.ρtke -= ᶜβ_tr * Yc.ρtke
             end
             # Updrafts relax toward the grid mean.
-            unrolled_foreach(draft_indices) do j
-                @inline
+            for j in draft_indices
                 ᶜsgsʲ = Yc.sgsʲs.:($j)
                 ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
                 @. ᶜsgsʲₜ.mse -= ᶜβ_tr * (ᶜsgsʲ.mse - (ᶜh_tot - ᶜK))
@@ -142,9 +151,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                     ᶜsgs_χₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
                     @. ᶜsgs_χₜ -= ᶜβ_tr * (ᶜsgs_χ - specific(ᶜρχ, Yc.ρ))
                 end
-                return nothing
             end
-            return nothing
         end
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
@@ -225,9 +232,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
     end
 
-    amd = p.atmos.amd_les
-    horizontal_amd_tendency!(Yₜ, Y, p, t, amd)
-    vertical_amd_tendency!(Yₜ, Y, p, t, amd)
+    amd_tendency!(Yₜ, Y, p, t, p.atmos.amd_les)
 
     chd = p.atmos.constant_horizontal_diffusion
     horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, chd)
@@ -247,21 +252,19 @@ end
 """
     fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-Compute the full tendency explicitly, by evaluating `implicit_tendency!` into
-scratch space and adding it to `remaining_tendency!`, together with the
+Compute the full tendency explicitly, by adding the tendencies of
+`remaining_tendency!` to those of `implicit_tendency!`, together with the
 vertical advection corrections that the implicit path applies after the Newton
 solve (`add_vertical_advection_corrections!` with a unit Courant limiter), so
 that `energy_humidity_upwinding` and `tracer_upwinding` take full effect.
 
 Experimental timestepping mode used by `args_integrator` when `prescribed_flow` is
 set, where the flow is imposed and implicit treatment of sound waves is
-unnecessary. Mutates `Yₜ`, `Yₜ_lim`, and `p.scratch.temp_Yₜ_imp`.
+unnecessary. Mutates `Yₜ` and `Yₜ_lim`.
 """
 function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    (; temp_Yₜ_imp) = p.scratch
-    implicit_tendency!(temp_Yₜ_imp, Y, p, t)
-    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    Yₜ .+= temp_Yₜ_imp
+    implicit_tendency!(Yₜ, Y, p, t)
+    add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     add_vertical_advection_corrections!(Yₜ, Y, p, zero(p.dtγ))
     return nothing
 end

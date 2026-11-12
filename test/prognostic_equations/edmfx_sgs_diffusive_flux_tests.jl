@@ -1,6 +1,6 @@
 #=
 Tests the EDMFX vertical SGS diffusive flux (`edmfx_sgs_diffusive_flux_tendency!`)
-and its implicit Jacobian (`update_diffusion_jacobian!`, `update_sgs_diffusion_jacobian!`):
+and its implicit Jacobian (`update_diffusion_jacobian!`, `update_sgs_diffusion_and_entr_detr_jacobian!`):
 - Draft cloud species diffuse down their own gradients; environment cloud liquid
   and ice carry the blended flux of `add_cloud_species_diffusionᵥ!`; rain and
   snow receive no `K_h` transport.
@@ -476,7 +476,12 @@ include("../test_helpers.jl")
         CA.UseDerivative(),
         eddy_diffusivities,
     )
-    CA.update_sgs_diffusion_jacobian!(
+    # Without entrainment, the updraft blocks hold the diffusion alone.
+    p.precomputed.ᶜturb_entrʲs.:1 .= 0
+    p.precomputed.ᶜentr_vel_scaleʲs.:1 .= 0
+    p.precomputed.ᶜentr_nonvel_rateʲs.:1 .= 0
+    p.precomputed.ᶜarea_bounding_entr_detrʲs.:1 .= 0
+    CA.update_sgs_diffusion_and_entr_detr_jacobian!(
         matrix,
         Y,
         p,

@@ -132,17 +132,17 @@ tendency `-∂ᵥ(ρ u³ χ)`, with zero-flux boundary conditions imposed by
     interpolation), `Val(:first_order)`, `Val(:third_order)`, or
     `Val(:vanleer_limiter)`.
 """
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     # `ᶠlin_vanleer` receives `zero(dt)`, evaluating the `dt`-independent MUSCL
@@ -153,7 +153,7 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
         -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, zero(dt)))),
     )
 end
-function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
+@inline function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
@@ -186,9 +186,9 @@ the same divergence operator (and reconstruction) is used as in
 two reconstructions of the updraft advection.
 """
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
-    @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
+    @inline @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
-    @. lazy(-(ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
+    @inline @. lazy(-(ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 """
     add_energy_transport!(ᶜρe_totₜ, ᶠρ, ᶠu³, ᶜe_tot, ᶜp)
@@ -374,7 +374,7 @@ end
 Add the Exner-form pressure gradient and buoyancy tendency
 `-(∂ᵥΦ - ∂ᵥΦ_r + cp_d (θ_v - θ_vr) ∂ᵥΠ)` to `Yₜf.u₃` for one column, which is
 equivalent to `grad_v(Φ) + grad_v(p) / ρ`. Called inside the fused column loop
-of `implicit_vertical_advection_tendency!`, so it must stay inlined.
+of `implicit_vertical_advection_tendency!`.
 """
 @inline function add_implicit_u₃_tendency!(
     Yₜf,
