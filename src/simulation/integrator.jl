@@ -221,7 +221,7 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
                 max_iters = ngmres_max_iters,
                 update_j = ngmres_update_j,
                 rtol = use_newton_rtol ? FT(newton_rtol) : FT(0),
-                verbose = CTS.Verbose(),
+                verbose = CTS.Silent(),
             )
             return CTS.IMEXAlgorithm(ode_algo_name(), nl_solver)
         end

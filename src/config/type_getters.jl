@@ -381,7 +381,10 @@ function jacobian_from_parsed_args(parsed_args)
             padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
         )
     else
-        return ManualSparseJacobian(; approximate_solve_iters)
+        return ManualSparseJacobian(;
+            approximate_solve_iters,
+            sgs_jacobian = parsed_args["use_sgs_jacobian"],
+        )
     end
 end
 

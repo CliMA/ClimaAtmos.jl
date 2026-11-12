@@ -80,6 +80,9 @@ ngmres_max_iters:
 jacobian_update_n_steps:
   help: "Refresh the preconditioner Jacobian every N timesteps (0 = every timestep). Used by NGMRES; ignored by NewtonsMethod."
   value: 0
+use_sgs_jacobian:
+  help: "Include SGS (EDMF entrainment/detrainment, mass flux, boundary condition) blocks in the Jacobian/preconditioner. Set to false for a lightweight preconditioner that only contains acoustics and vertical diffusion blocks; affordable to update every implicit stage."
+  value: true
 use_dynamic_krylov_rtol:
   help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
   value: false

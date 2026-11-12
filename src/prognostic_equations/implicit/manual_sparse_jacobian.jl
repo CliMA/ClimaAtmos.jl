@@ -50,7 +50,7 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ManualSparseJacobian(; approximate_solve_iters = 2)
+    ManualSparseJacobian(; approximate_solve_iters = 2, sgs_jacobian = true)
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
 derived tendency derivatives and inverts it using a specialized nested linear
@@ -67,16 +67,28 @@ functions; see the implicit Jacobian section of [Implicit Solver](@ref).
   - `approximate_solve_iters = 2`: Number of iterations to take for the
     approximate linear solve required when grid-scale diffusion is treated
     implicitly, the configuration is moist, or prognostic `ρtke` is active [-].
+  - `sgs_jacobian = true`: Whether to include SGS (EDMF) Jacobian blocks
+    (entrainment/detrainment, mass flux, boundary conditions, SGS advection and
+    diffusion). Set to `false` to build a lightweight preconditioner that only
+    contains the acoustics, buoyancy, and vertical diffusion blocks. SGS
+    variables then receive identity blocks and their Anderson directions are
+    recovered by the NGMRES history. The update cost with `sgs_jacobian = false`
+    is dominated by O(nz) arithmetic reading precomputed `ᶠK_h`/`ᶠK_u`, making
+    per-stage Jacobian refreshes affordable.
 
 # Fields
 
   - `approximate_solve_iters`: As above [-].
+  - `sgs_jacobian`: As above [-].
 """
 struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
+    sgs_jacobian::Bool
 end
-ManualSparseJacobian(; approximate_solve_iters::Int = 2) =
-    ManualSparseJacobian(approximate_solve_iters)
+ManualSparseJacobian(;
+    approximate_solve_iters::Int = 2,
+    sgs_jacobian::Bool = true,
+) = ManualSparseJacobian(approximate_solve_iters, sgs_jacobian)
 
 """
     _derivative_flags(atmos, Y)
@@ -547,6 +559,7 @@ function jacobian_solver_algorithm(
     atmos,
     diffusion_flag,
     approximate_solve_iters,
+    sgs_jacobian = true,
 )
     is_in_Y(name) = MatrixFields.has_field(Y, name)
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
@@ -563,13 +576,15 @@ function jacobian_solver_algorithm(
         unrolled_map(sgs_state_name, sedimenting_sgs_tracer_names(Y))
 
     mass_and_surface_names = (@name(c.ρ), sfc_if_available...)
+    # When sgs_jacobian = false, SGS scalars have only identity blocks, so they
+    # are excluded from the Schur-complement solve and handled trivially.
     available_scalar_names = (
         mass_and_surface_names...,
         unrolled_map(center_state_name, microphysics_tracer_names(Y))...,
         @name(c.ρe_tot),
         ρtke_if_available...,
-        sgs_scalar_names...,
-        sgs_ρa_if_available...,
+        (sgs_jacobian ? sgs_scalar_names : ())...,
+        (sgs_jacobian ? sgs_ρa_if_available : ())...,
     )
 
     velocity_alg = MatrixFields.BlockLowerTriangularSolve(
@@ -604,8 +619,11 @@ function jacobian_solver_algorithm(
         else
             MatrixFields.BlockLowerTriangularSolve(mass_and_surface_names...)
         end
+        # When sgs_jacobian = false, the SGS scalars have identity blocks and
+        # no cross-couplings to grid-scale variables, so the two levels of
+        # BlockLowerTriangularSolve wrapping the gs_scalar_subalg are skipped.
         scalar_alg =
-            if atmos.turbconv_model isa PrognosticEDMFX
+            if sgs_jacobian && atmos.turbconv_model isa PrognosticEDMFX
                 MatrixFields.BlockLowerTriangularSolve(
                     sgs_sedimenting_names...;
                     alg₂ = MatrixFields.BlockLowerTriangularSolve(
@@ -660,12 +678,15 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     (; topography_flag, diffusion_flag) = derivative_flags
     FT = Spaces.undertype(axes(Y.c))
 
+    # When sgs_jacobian = false, the SGS process blocks are omitted. All SGS
+    # variables then receive identity fallback blocks, and the SGS update
+    # functions are skipped in update_jacobian!.
     process_block_pairs = merge_jacobian_blocks((
-        sgs_advection_jacobian_blocks(Y, atmos)...,
+        (alg.sgs_jacobian ? sgs_advection_jacobian_blocks(Y, atmos) : ())...,
         advection_jacobian_blocks(Y, atmos, topography_flag)...,
         diffusion_jacobian_blocks(Y, atmos, diffusion_flag)...,
         sedimentation_jacobian_blocks(Y, atmos)...,
-        sgs_massflux_jacobian_blocks(Y, atmos)...,
+        (alg.sgs_jacobian ? sgs_massflux_jacobian_blocks(Y, atmos) : ())...,
     ))
     block_pairs = (
         process_block_pairs...,
@@ -678,6 +699,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         atmos,
         diffusion_flag,
         alg.approximate_solve_iters,
+        alg.sgs_jacobian,
     )
 
     return (;
@@ -3055,11 +3077,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         diffusion_flag,
         eddy_diffusivities,
     )
-    update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+    if alg.sgs_jacobian
+        update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
+        update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+        update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+        update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
+        # update_sgs_massflux_jacobian! must precede update_implicit_microphysics_jacobian!
+        # when sgs_mass_flux is active: the former initializes the (ρq_x, sgsʲs.:(1).q_x)
+        # off-diagonal blocks that the latter accumulates into.
+        update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+    end
     update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
