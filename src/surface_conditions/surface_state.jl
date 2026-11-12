@@ -111,7 +111,7 @@ derived from Monin–Obukhov stability).
 
 The single-argument form `ExchangeCoefficients(C)` sets `Cd = Ch = C`.
 """
-Base.@kwdef struct ExchangeCoefficients{FT} <: SurfaceParameterization{FT}
+CP.@params struct ExchangeCoefficients{FT} <: SurfaceParameterization{FT}
     Cd::FT
     Ch::FT
 end
