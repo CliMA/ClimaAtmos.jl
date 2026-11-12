@@ -50,7 +50,7 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
     compact = get(io, :compact, false)::Bool
     typename = typeof(x).name.name  # name without module prefix
     keys = fieldnames(typeof(x))
-    vals = [getfield(x, k) for k in keys]
+    vals = [getproperty(x, k) for k in keys]
     print(io, "$(typename)")
     if compact
         print(io, "(")
@@ -84,7 +84,7 @@ by its fields in parentheses.
 # Keyword Arguments
 
   - `with_kwargs = true`: Print the fields as keyword arguments, as required by
-    structs defined with `@kwdef`.
+    structs defined with `@kwdef` or `ClimaParams.@params`.
   - `skip_fields_by_value = ()`: Values whose fields are omitted. Because the
     output must still reconstruct an equivalent instance, list only values that
     are the corresponding fields' defaults.
@@ -101,7 +101,7 @@ function parseable_show_with_fields_no_type_header(io::IO, x;
 )
     typename = typeof(x).name.wrapper  # name with module prefix, e.g. ClimaAtmos.QuadratureCloud
     keys = fieldnames(typeof(x))
-    vals = [getfield(x, k) for k in keys]
+    vals = [getproperty(x, k) for k in keys]
     show(io, typename)
     print(io, "(")
     printed_first_arg = false

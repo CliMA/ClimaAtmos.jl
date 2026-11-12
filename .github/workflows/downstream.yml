@@ -42,6 +42,9 @@ jobs:
       - run: |
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.develop(; path = ".")'
+          # Temporary: remove when the parameter packages with `@params` are released.
+          # The [sources] of ClimaAtmos do not apply to direct dependencies of the coupler environment.
+          julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ ClimaCoupler.jl/experiments/test/runtests.jl
       - uses: ./.github/actions/julia-depot-save
         if: ${{ !cancelled() }}

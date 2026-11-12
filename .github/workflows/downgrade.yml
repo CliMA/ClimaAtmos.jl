@@ -37,10 +37,17 @@ jobs:
           hash: ${{ hashFiles('Project.toml') }}
       # The cached depot's registry can predate the newest compat bounds of Project.toml.
       - run: julia --color=yes -e 'using Pkg; Pkg.Registry.update()'
+      # Temporary: remove when the parameter packages with `@params` are released.
+      # julia-downgrade-compat cannot write a manifest for a project with url [sources],
+      # so it resolves the registered versions, which the next step replaces.
+      - run: sed -i '/rev = "dy\/params_macro"/d' Project.toml
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica
           mode: 'forcedeps'
+      # Temporary: remove when the parameter packages with `@params` are released.
+      - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
+        shell: julia --color=yes --project=. {0}
 
       - uses: julia-actions/julia-buildpkg@latest
       - name: Run infrastructure tests

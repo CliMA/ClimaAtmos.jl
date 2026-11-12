@@ -1,4 +1,4 @@
-468
+469
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+469
+- Parameter values are constant-folded during compilation (`ClimaParams.@params`),
+  which changes the deep convection column (TRMM) at the level of roundoff on
+  x86 CPUs; it is bitwise unchanged on ARM CPUs.
+
 468
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL

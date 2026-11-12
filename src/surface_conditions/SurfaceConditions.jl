@@ -9,6 +9,7 @@ import ..ColumnDatasets
 import ..parse_date
 import ..iscolumn
 
+import ClimaParams as CP
 import ClimaCore: Geometry, Fields
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
