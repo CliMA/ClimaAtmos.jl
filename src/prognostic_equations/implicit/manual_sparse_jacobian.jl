@@ -2461,7 +2461,7 @@ function update_implicit_microphysics_jacobian!(
             )
         ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
         @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
+        if is_edmf && sgs_jacobian
             (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs) = p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_lcl)
@@ -2498,7 +2498,7 @@ function update_implicit_microphysics_jacobian!(
             )
         ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
         @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
+        if is_edmf && sgs_jacobian
             (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendency_implicitʲs) =
                 p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -2534,7 +2534,7 @@ function update_implicit_microphysics_jacobian!(
         )
         ∂ᶜρq_rai_err_∂ᶜρq_rai = matrix[@name(c.ρq_rai), @name(c.ρq_rai)]
         @. ∂ᶜρq_rai_err_∂ᶜρq_rai += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
+        if is_edmf && sgs_jacobian
             (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_rai)
@@ -2564,7 +2564,7 @@ function update_implicit_microphysics_jacobian!(
         )
         ∂ᶜρq_sno_err_∂ᶜρq_sno = matrix[@name(c.ρq_sno), @name(c.ρq_sno)]
         @. ∂ᶜρq_sno_err_∂ᶜρq_sno += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
+        if is_edmf && sgs_jacobian
             (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_sno)
