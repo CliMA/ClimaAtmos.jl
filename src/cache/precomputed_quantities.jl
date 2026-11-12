@@ -346,16 +346,10 @@ function precomputed_quantities(Y, atmos)
             # `set_covariance_cache!`): `T′q′ / √(T′T′ q′q′)` for
             # `tq_correlation_model: diagnosed`, or the prescribed
             # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
-            # The displacement covariance `ᶜT′q′` is only allocated for the
-            # diagnosed model.
             ᶜcorr_Tq = zeros(axes(Y.c)),
             # Local SGS variance fidelity (see `sgs_variance_fidelity`),
             # refreshed inside `set_covariance_cache!`.
             ᶜα = zeros(axes(Y.c)),
-            (
-                atmos.tq_correlation_model isa DiagnosedTqCorrelation ?
-                (; ᶜT′q′ = zeros(axes(Y.c))) : (;)
-            )...,
             # Linear and curvature coefficients `(lin, curv)` of the saturation
             # excess under the vertical displacement, `S = μ_S + lin x +
             # ½ curv (x² − 1) + h` with `x` standard normal
