@@ -182,15 +182,37 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ) = p.precomputed
 
     T_min_sgs = CAP.T_min_sgs(p.params)
-    # One column loop per draft: velocities and kinetic energies, then the draft
-    # thermodynamic state.
-    for j in 1:n
-        DataLayouts.foreach_column(
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (
             ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), ᶜTʲs.:($j),
             ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), ᶜρʲs.:($j),
             Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
-        ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-        ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+        )
+    end
+    # One fused column loop for every draft: velocities and kinetic energies,
+    # then the draft thermodynamic state.
+    DataLayouts.foreach_column(drafts) do drafts
+        for (
+                ᶜuʲ,
+                ᶠu³ʲ,
+                ᶜKʲ,
+                ᶠKᵥʲ,
+                ᶜTʲ,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+                ᶜρʲ,
+                ᶜsgsʲ,
+                ᶠu₃ʲ,
+                ᶜuₕ,
+                ᶠuₕ³,
+                ᶜΦ,
+                ᶜp,
+            ) in drafts
+
+            (ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp) =
+                register_copy((ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp))
             set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
             @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
             set_draft_thermo_column!(

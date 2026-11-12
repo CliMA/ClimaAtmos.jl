@@ -199,11 +199,11 @@ function temporary_quantities(
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
-        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
+        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²ₕ, the curl of u₃
         ᶠtemp_CT12ʲs = Fields.Field(
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
-        ), # ᶠω¹²ʲs
+        ), # ᶠω¹²ₕʲs, the curls of the draft u₃
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # ᶜΔu, vertical velocity differences
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # ᶠΔu, vertical velocity differences
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
