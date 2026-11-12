@@ -2189,8 +2189,7 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     (has_cond || has_subl || has_evap || has_subl_sno) || return nothing
     thp = CAP.thermodynamics_params(p.params)
     # TODO: Fuse the per-species scratch evaluations with the matrix block
-    # updates and fold `mp_i` / `thp` via `_fold` to reduce kernel launches and
-    # GPU parameter footprint.
+    # updates to reduce kernel launches.
     ᶜr⁰ = p.scratch.ᶜtemp_scalar
     ᶜrʲ = p.scratch.ᶜtemp_scalar_2
 

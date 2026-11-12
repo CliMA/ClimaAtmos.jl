@@ -41,6 +41,12 @@ main
   orography, and it is applied every step with the current wind in a
   backward-Euler form, so one forward-Euler step cannot reverse the wind. See the
   Orographic Gravity Waves docs page.
+- ![][badge-🚀performance] ![][badge-💥breaking] Define the parameter structs
+  with `ClimaParams.@params`, so that they are singletons that hold their
+  values in a type parameter, and GPU kernels capture no parameter values. Read
+  parameter values with `getproperty`, since `getfield` returns `nothing`. Set
+  the `CLIMA_PARAMS_MODE` preference of ClimaParams to `"bits"` for workflows
+  that construct many parameter sets, each of which is otherwise a new type.
 - ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
   from `1` to `2` and `update_constrain_state_every` from `step` to `stage` in
   `config/default_configs/default_config.yml` and the matching keyword defaults

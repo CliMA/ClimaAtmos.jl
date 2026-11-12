@@ -126,7 +126,7 @@ function build_gw()
     )
     P = typeof(gw_params)
     kwargs = NamedTuple{fieldnames(P)}(
-        ntuple(i -> getfield(gw_params, i), fieldcount(P)),
+        map(name -> getproperty(gw_params, name), fieldnames(P)),
     )
     return CA.NonOrographicGravityWave{FT, Nothing}(;
         kwargs...,
