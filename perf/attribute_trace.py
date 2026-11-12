@@ -43,24 +43,25 @@ def load(directory, atmos_names):
     host = {int(r["id"]): (float(r["start"]), r["tid"]) for r in read_tsv(f"{directory}/host.tsv")}
     device = read_tsv(f"{directory}/device.tsv")
     starts, ends = {}, {}
-    for r in read_tsv(f"{directory}/nvtx.tsv"):
+    for seq, r in enumerate(read_tsv(f"{directory}/nvtx.tsv")):
         if r["type"] == "start":
-            starts[int(r["id"])] = (float(r["start"]), r["tid"], short(r["name"]))
+            starts[int(r["id"])] = (float(r["start"]), r["tid"], short(r["name"]), seq)
         elif r["type"] == "end":
-            ends[int(r["id"])] = float(r["start"])
-    # events per thread: (time, order, kind, payload); ends sort before starts at equal times
+            ends[int(r["id"])] = (float(r["start"]), seq)
+    # events per thread: (time, order, kind, payload); range events at equal times keep the
+    # order in which they were recorded (a range can start and end within one clock tick)
     events = collections.defaultdict(list)
-    for rid, (t0, tid, name) in starts.items():
+    for rid, (t0, tid, name, seq) in starts.items():
         if rid in ends:
-            events[0].append((t0, 1, "start", (rid, name)))
-            events[0].append((ends[rid], 0, "end", rid))
+            events[0].append((t0, seq, "start", (rid, name)))
+            events[0].append((ends[rid][0], ends[rid][1], "end", rid))
     kernels = []
     for i, r in enumerate(device):
         rid = int(r["id"])
         if rid not in host:
             continue
         t, tid = host[rid]
-        events[0].append((t, 2, "launch", i))
+        events[0].append((t, float("inf"), "launch", i))
     stack_of = {}
     ranges = {}  # range id -> [name, parent ids, is atmos component step]
     step_ranges = []
@@ -83,7 +84,7 @@ def load(directory, atmos_names):
                     stack.remove(payload)
             else:
                 stack_of[payload] = tuple(stack)
-    step_wall = [ends[rid] - starts[rid][0] for rid in step_ranges]
+    step_wall = [ends[rid][0] - starts[rid][0] for rid in step_ranges]
     for i, r in enumerate(device):
         if i not in stack_of:
             continue
