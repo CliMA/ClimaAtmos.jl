@@ -860,8 +860,8 @@ end
 Horizontal SGS momentum diffusion on DG spaces, in Laplacian form: the SIPG
 Laplacian `∇ₕ⋅(ρ K_u ∇ₕuᵢ) / ρ` (`Operators.scalar_laplacian!`) of each
 Cartesian component `uᵢ` of the horizontal velocity at centers, projected onto
-the local horizontal plane, and of the vertical velocity `w` at faces, with the
-weight `ρ K_u` interpolated to faces. Unlike the stress divergence on CG spaces,
+the local horizontal plane, and of the vertical velocity `w` at interior faces,
+with the weight `ρ K_u` interpolated to faces. Unlike the stress divergence on CG spaces,
 it omits the transpose part `(∇u)ᵀ` of the strain rate, which vanishes for
 uniform `K_u` and nondivergent flow, and the vertical-shear part of the face
 stress.
@@ -892,6 +892,9 @@ function dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
         (@. lazy(w_component(Geometry.WVector(Y.f.u₃))));
         weight = ᶠρK_u,
     )
+    # w at the bottom and top faces is set by the kinematic boundary conditions
+    Fields.level(ᶠ∇²w, half) .= 0
+    Fields.level(ᶠ∇²w, Spaces.nlevels(axes(Y.c)) + half) .= 0
     @. Yₜ.f.u₃ += C3(Geometry.WVector(ᶠ∇²w / ᶠρ))
     return nothing
 end
