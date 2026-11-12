@@ -209,9 +209,8 @@ function temporary_quantities(
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠτ_smag
         # Post-Newton implicit upwind dissipation
-        # (`add_vertical_advection_corrections!`): the operator, the system
-        # `I - dtγ 𝒟`, and the tridiagonal solver cache.
-        ᶜupwind_dissipation_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        # (`add_vertical_advection_corrections!`): the system `I - dtγ 𝒟` and
+        # the tridiagonal solver cache.
         ᶜupwind_dissipation_system = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜupwind_dissipation_solver_cache = MatrixFields.single_field_solver_cache(
             similar(Y.c, TridiagonalMatrixRow{FT}),
