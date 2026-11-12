@@ -2319,7 +2319,7 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
-    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ, sgs_jacobian = true)
 
 Add Jacobian contributions for implicit 1M condensation, sublimation, rain
 evaporation, and snow sublimation/deposition.
@@ -2371,7 +2371,13 @@ Preconditioner caveats, intentional:
     `ρ`, `ρq_tot`, and `ρe_tot` unchanged, while `Γ` uses the isobaric
     psychrometric approximation along the phase-change direction).
 """
-function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+function update_implicit_microphysics_jacobian!(
+    matrix,
+    Y,
+    p,
+    dtγ,
+    sgs_jacobian = true,
+)
     MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
     microphysics_model = p.atmos.microphysics_model
     microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
@@ -2388,7 +2394,10 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     FT = Spaces.undertype(axes(Y.c))
     is_edmf = p.atmos.turbconv_model isa PrognosticEDMFX
     has_sgs_mf = is_edmf && p.atmos.edmfx_model.sgs_mass_flux
-    if is_edmf && !has_sgs_mf
+    # The (gs_cond, sgs_cond) off-diagonal blocks are only allocated when
+    # sgs_jacobian = true (via sgs_advection_jacobian_blocks or
+    # sgs_massflux_jacobian_blocks). Skip zeroing them when sgs_jacobian = false.
+    if sgs_jacobian && is_edmf && !has_sgs_mf
         z = zero(FT)
         MatrixFields.unrolled_foreach((
             (has_cond, @name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
@@ -3087,7 +3096,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         # off-diagonal blocks that the latter accumulates into.
         update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     end
-    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+    update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ, alg.sgs_jacobian)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
