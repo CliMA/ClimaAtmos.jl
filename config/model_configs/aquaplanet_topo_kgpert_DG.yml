@@ -1,29 +1,23 @@
 horizontal_discretization: "DG"
-
-# Horizontal DG formulation: keep exactly one block uncommented (with both
-# commented out, the defaults give vi with rusanov penalties).
-# --- FDDG: flux-form Cartesian momentum, KPEP Kennedy-Gruber two-point flux
-# with the Exner force in two-point form, equation-of-state Roe dissipation
-# dg_equation_form: "fddg"
-# dg_volume_flux: "kg_kpep"
-# dg_interface_flux: "roe_eos"
-# dg_fddg_vertical: "vi"
-#
-# --- ES-VI: vector-invariant form with entropy-variable interface penalties
-dg_equation_form: "vi"
-dg_vi_interface_flux: "es"
-
+dg_equation_form: "fddg"
+dg_volume_flux: "kg_kpep"
+dg_interface_flux: "roe_eos"
+dg_fddg_vertical: "full_flux"
+#dg_vertical_cross_term: "gcl"
 hyperdiff: ~
-apply_zhang_shu_limiter: true
+apply_zhang_shu_limiter: false
 update_constrain_state_every: "stage"
 config: "sphere"
-h_elem: 60
+h_elem: 30
 z_elem: 63
-z_max: 30000.0
+z_max: 50000.0
+dt: "30secs"
+rayleigh_sponge: true
+toml: ["toml/longrun_aquaplanet.toml"]
 dz_bottom: 30.0
-dt_rad: "6hours"
+dt_rad: "1hours"
 topography: "Earth"
-topography_damping_factor: 1.0
+topography_damping_factor: 5.0
 mesh_warp_type: "SLEVE"
 rad: "allskywithclear"
 insolation: "timevarying"
@@ -39,18 +33,18 @@ implicit_diffusion: true
 #edmfx_vertical_diffusion: true
 #edmfx_filter: true
 #edmfx_sgs_mass_flux: true
-microphysics_model: "1M"
+microphysics_model: "0M"
 use_sgs_quadrature: true
+sgs_distribution: mean
 initial_condition: "WeatherModel"
 start_date: "20100701"
-output_dir: "/scratch/asridhar/weathertest"
+output_dir: "/resnick/scratch/asridhar/weathertest"
 # Rebalance the IC column pressure against the model's discrete Exner-split
 # vertical PGF 
 ic_hydrostatic_rebalance: true
 # era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
 # So far, only tried with era5_ic_full_pressure = false
 era5_ic_full_pressure: true # false = hydrostatic p from surface pressure; true = read 3D p from file
-dt: "30secs"
 t_end: "7days"
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 1

@@ -1,47 +1,6 @@
 #=
 DG interface completions for the horizontal tendencies.
 
-On a `Grids.DG` horizontal space the element-local horizontal operators must
-be completed by interface terms (on CG spaces DSS couples the elements and
-every function here is a no-op):
-
-  - `split_divₕ(ρu, ψ)` (ρ, ρe_tot, tracers): interface flux with the
-    SplitDivergence-matched central part `{ρ uv·n̂}{ψ}` plus a λ-Rusanov
-    penalty on the ρ-weighted jump of the specific quantity, `{ρ}⟦e_tot⟧` /
-    `{ρ}⟦χ⟧`, so a uniform ψ stays uniform across a density jump
-    (`F*_ρψ = ψ F*_ρ` exactly). The density flux stays central — a ⟦ρ⟧ penalty
-    is kinetic-energy-sign-indefinite under the vector-invariant pairing.
-  - `gradₕ` PGF/K terms (uₕ): central gradient liftings of the same scalars.
-  - uₕ stability: ρ-weighted λ-jump penalties on the orthonormal velocity
-    components (an exactly sign-definite KE sink). With
-    `dg_vi_velocity_penalty = wave_selective`, the normal jump is damped at
-    the acoustic speed and the tangential and vertical-velocity jumps at the
-    shear speed (still a sign-definite KE sink).
-  - With `dg_vi_interface_flux = rusanov_moist`, the energy penalty acts on
-    the energy jump at fixed composition, `{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`, which is
-    `{ρ}⟦e_tot⟧` for dry air and vanishes across a humidity front at uniform
-    temperature and velocity; the total-water penalty moves the water's mass
-    and the energy of its phases as under `es`, so such a front is damped
-    without temperature jumps. The velocity penalties stay ρ-weighted (an
-    exact kinetic-energy sink). The Rusanov rate uses the moist sound speed.
-  - With `dg_vi_interface_flux = es`, the energy penalty acts on the jump of
-    the entropy variable ∂(ρs)/∂(ρe) = 1/T of the physical entropy ρs, and the
-    velocity penalties carry the own-side weight {β}/β with β = 1/T, so every
-    face penalty is a sink of −ρs at fixed ρ and composition (the mass flux
-    stays central) and vanishes at uniform T whatever the humidity. The
-    velocity penalties stay Galilean invariant; they conserve momentum up to
-    O(⟦u⟧⟦1/β⟧).
-    The total-water penalty also moves the mass and energy the water carries.
-    The energy is that of the water's actual phases, from the diagnostic
-    vapor/liquid/ice partition (saturation adjustment for 0M, the prognostic
-    condensates for 1M), so an exchange of water across a face leaves T and u
-    unchanged with either microphysics scheme. The central part is not
-    entropy-conservative, so this is entropy-dissipative face dissipation, not
-    a discrete entropy inequality for the whole scheme.
-  - Vorticities (`ᶜω³` and the `wcurlₕ(u₃)` part of `ᶠω¹²`): strong curl
-    plus central curl lifting replaces the CG weak curl (gated in
-    `explicit_vertical_advection_tendency!`).
-
 Face states are carried in the local orthonormal frame (`UVVector`), which is
 single-valued at shared nodes including cubed-sphere panel edges, where
 covariant components are not. The face velocity is the horizontal projection
