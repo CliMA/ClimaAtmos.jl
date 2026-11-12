@@ -710,77 +710,55 @@ linear step for the sedimentation of the condensate, so `r ρaʲ` is the
 sedimented mass that dilutes the updraft scalars there, at any Courant number.
 `solve_sgs_ρa_implicit_stage_analytic!` applies it in the `ρa` recurrence.
 
-Row `i` of the step is solved as `Δq_μ[i] = b_μ[i] + c_μ[i] Δq_μ[i+1]`. The
-species are taken in pairs: a column loop writes the offset `b` and the factor
-`c` of both species of a pair, and one sweep solves both and adds their `Δq / dtγ` to `ᶜr`, in the order of `sedimenting_sgs_mass_names`. Writes
-`ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_4` in
-`p.scratch`, and the running column max of the terminal velocity of cloud ice,
-rain, and snow (the face flux velocity of `M_μ`) of the first and second species
-of a pair in `ᶜtemp_scalar_6` and `temp_data`, so `ᶜr` must be a different
-field. Supports a single updraft. Returns `nothing`.
+Row `i` of the step is solved as `Δq_μ[i] = b_μ[i] + c_μ[i] Δq_μ[i+1]`: one
+column loop writes the offset `b` and the factor `c` of every species, and one
+sweep solves them and writes the sum of their `Δq / dtγ`, in the order of
+`sedimenting_sgs_mass_names`, to `ᶜr`. The offsets and factors are written to
+`ᶜr`, `ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, `ᶜtemp_scalar_4`,
+`ᶜtemp_scalar_6`, `ᶜtemp_scalar_7`, and `temp_data` in `p.scratch`, so `ᶜr` must
+be a different field. The factor of cloud ice, rain, and snow overwrites the
+running column max of its terminal velocity (the face flux velocity of `M_μ`).
+Supports a single updraft. Returns `nothing`.
 """
 function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
     j == 1 || error("Updraft sedimentation supports a single updraft")
-    (; ᶜρʲs) = p.precomputed
+    names = sedimenting_sgs_mass_names(Y)
+    isempty(names) && (fill!(ᶜr, 0); return nothing)
     (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_4) = p.scratch
+    (; ᶜtemp_scalar_6, ᶜtemp_scalar_7, temp_data) = p.scratch
+    (; turbconv_model) = p.atmos
     FT = eltype(p.params)
-    consts = (one(FT), zero(FT), eps(FT), FT(dtγ), p.atmos.turbconv_model)
-    coefficients = ((ᶜtemp_scalar, ᶜtemp_scalar_2), (ᶜtemp_scalar_3, ᶜtemp_scalar_4))
-    ᶜw_maxes = (p.scratch.ᶜtemp_scalar_6, Fields.Field(p.scratch.temp_data, axes(Y.c)))
-    # (ᶜqʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜρq_gs) of a species, where `ᶜwʲ_jac` is the
+    (one_FT, zero_FT, ε_area) = (one(FT), zero(FT), eps(FT))
+    scratch = (
+        ᶜr, ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_4,
+        ᶜtemp_scalar_6, ᶜtemp_scalar_7, Fields.Field(temp_data, axes(Y.c)),
+    )
+    # The offset and the factor of each species
+    coefficients = ntuple(i -> (scratch[2i - 1], scratch[2i]), Val(length(names)))
+    # (ᶜqʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜρq_gs) of each species, where `ᶜwʲ_jac` is the
     # face flux velocity of `M_μ`, which for cloud ice, rain, and snow is the
-    # running column max of `ᶜwʲ`, written to `ᶜwʲ_max`
-    function species(name, ᶜwʲ_max)
+    # running column max of `ᶜwʲ`, written to the field of the factor, which the
+    # column loop reads before it writes the factor
+    species = unrolled_map(names, coefficients) do name, (_, ᶜfactor)
         ρχ_name = get_ρχ_name(name)
         ᶜwʲ =
             MatrixFields.get_field(p.precomputed, sgs_sedimentation_velocity_name(name))
         column_max =
             name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)
-        column_max && fill_column_max!(ᶜwʲ_max, ᶜwʲ)
-        return (
+        column_max && fill_column_max!(ᶜfactor, ᶜwʲ)
+        (
             MatrixFields.get_field(Y.c.sgsʲs.:(1), name),
             ᶜwʲ,
-            column_max ? ᶜwʲ_max : ᶜwʲ,
+            column_max ? ᶜfactor : ᶜwʲ,
             MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name)),
             MatrixFields.get_field(Y.c, ρχ_name),
         )
     end
-    # The species of a pair, whose column maxes are written right before its
-    # column loop, so that every pair stores them in `ᶜw_maxes`
-    pair_species(names) =
-        unrolled_map(species, names, ntuple(i -> ᶜw_maxes[i], Val(length(names))))
-    pairs = species_pairs(sedimenting_sgs_mass_names(Y))
-    isempty(pairs) && (fill!(ᶜr, 0); return nothing)
-    args = (Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1), p.core.ᶠ∂ξ³∂x³, coefficients, consts)
-    sedimentation_rate_pair!(ᶜr, nothing, pair_species(first(pairs)), args...)
-    MatrixFields.unrolled_foreach(Base.tail(pairs)) do names
-        sedimentation_rate_pair!(ᶜr, ᶜr, pair_species(names), args...)
-    end
-    return nothing
-end
-
-species_pairs(::Tuple{}) = ()
-species_pairs(species::Tuple{Any}) = (species,)
-species_pairs(species::Tuple) =
-    ((species[1], species[2]), species_pairs(Base.tail(Base.tail(species)))...)
-
-# One pair of species of `updraft_sedimentation_rate!`, whose rate is added to
-# `ᶜr_prev`, or to zero for the first pair (`nothing`).
-function sedimentation_rate_pair!(
-    ᶜr,
-    ᶜr_prev,
-    pair,
-    ᶜρaʲ,
-    ᶜρʲ,
-    ᶠ∂ξ³∂x³,
-    coefficients,
-    consts,
-)
-    (one_FT, zero_FT, ε_area, dtγ, turbconv_model) = consts
-    pair_coefficients = ntuple(i -> coefficients[i], Val(length(pair)))
+    dtγ = FT(dtγ)
     DataLayouts.foreach_column(
-        ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, pair, pair_coefficients,
-    ) do ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, pair, pair_coefficients
+        Y.c.sgsʲs.:(1).ρa, p.precomputed.ᶜρʲs.:(1), p.core.ᶠ∂ξ³∂x³, species,
+        coefficients,
+    ) do ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, species, coefficients
         # The offset `rhs / diagonal` and the factor `-superdiagonal / diagonal` of row i
         # of the backward-Euler sedimentation step of each species, with right-hand side
         # `dtγ ρ̂⁻¹ vtt`, diagonal `1 - ρ̂⁻¹ M[i, i]`, and superdiagonal `-ρ̂⁻¹ M[i, i+1]`,
@@ -794,8 +772,8 @@ function sedimentation_rate_pair!(
         ᶜinv_ρ̂ = @. specific(one_FT, ᶜρaʲ, zero_FT, ᶜρʲ, turbconv_model)
         ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
         MatrixFields.unrolled_foreach(
-            pair,
-            pair_coefficients,
+            species,
+            coefficients,
         ) do (ᶜqʲ, ᶜwʲ, ᶜwʲ_jac, ᶜw_gs, ᶜρq_gs), (ᶜoffset, ᶜfactor)
             @inline
             ᶜqʲ_pos = @. max(zero_FT, ᶜqʲ)
@@ -838,21 +816,20 @@ function sedimentation_rate_pair!(
             @. ᶜfactor = ᶜinv_ρ̂ * getindex(ᶜM, 1) / ᶜdiagonal
         end
     end
-    # One top-to-bottom sweep for the species of the pair, starting with Δq = 0 above the
-    # top cell, that writes `ᶜr_prev + Σ_μ Δq_μ / dtγ` to `ᶜr`
-    rows = unrolled_map(c -> (@. lazy(tuple(c...))), pair_coefficients)
-    input = @. lazy(tuple(tuple(rows...), $(something(ᶜr_prev, zero_FT))))
+    # One top-to-bottom sweep for all species, starting with Δq = 0 above the top
+    # cell, that writes `Σ_μ Δq_μ / dtγ` to `ᶜr`
+    rows = unrolled_map(c -> (@. lazy(tuple(c...))), coefficients)
+    input = @. lazy(tuple(rows...))
     Operators.column_accumulate!(
         ᶜr,
         input;
-        init = (unrolled_map(Returns(zero_FT), pair_coefficients), zero_FT),
+        init = unrolled_map(Returns(zero_FT), coefficients),
         reverse = true,
-        transform = last,
-    ) do (Δq_above, _), (rows, r_prev)
-        Δq = unrolled_map(Δq_above, rows) do Δqμ_above, (offset, factor)
+        transform = Δq -> unrolled_reduce((r, Δqμ) -> r + Δqμ / dtγ, Δq, zero_FT),
+    ) do Δq_above, rows
+        unrolled_map(Δq_above, rows) do Δqμ_above, (offset, factor)
             offset + factor * Δqμ_above
         end
-        return (Δq, unrolled_reduce((r, Δqμ) -> r + Δqμ / dtγ, Δq, r_prev))
     end
     return nothing
 end

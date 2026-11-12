@@ -57,9 +57,10 @@ For `PrognosticEDMFX`:
     that the sedimentation Jacobian drains through the surface.
 
  2. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
-    the analytic `u₃` solve, the two-pass area solve (`solve_sgs_ρa_two_pass!`),
-    and the semi-implicit tracer sweep, each round starting from the clamped
-    stage-initial `Y.(f,c).sgsʲs` (snapshotted into pre-allocated scratch).
+    the analytic `u₃` solve, the two passes of the area solve (as in
+    `solve_sgs_ρa_two_pass!`), and the semi-implicit tracer sweep, each round
+    starting from the clamped stage-initial `Y.(f,c).sgsʲs` (snapshotted into
+    pre-allocated scratch).
     The sweep diagnoses the entrained environment from `ᶜsgsʲs_picard_snapshot`,
     transports every solved tracer, and, for the non-equilibrium microphysics,
     evaluates the draft thermodynamics and `ᶜmp_tendencyʲs` at the transported
@@ -85,10 +86,10 @@ For `PrognosticEDMFX`:
     guess so that each environment specific content / mse keeps its
     stage-initial value (`warm_start_grid_mean_tracers!`).
 
-Each Picard round ends by restoring the snapshot of the draft velocities and
-with one column loop for every draft that applies the microphysics sources,
-refreshes the draft thermodynamics and buoyancy, and restores the snapshot of
-the draft scalars.
+Each Picard round ends with one column loop for every draft that restores the
+snapshot of the draft velocities, applies the microphysics sources, refreshes
+the draft thermodynamics and buoyancy, and restores the snapshot of the draft
+scalars.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
     reset_precip_stage_accumulator!(p)
@@ -109,7 +110,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     # `-u₃_old / dtγ` and `-ρa_old / dtγ` are recorded before the area clamp so
     # the Newton residual reproduces `u₃_stage` and `ρa_stage`. The clamp bounds
     # the predictor that `ᶜsnapshot` and the Picard solves start from, `ρa` to
-    # `[0, a_max ρʲ]`. The implicit cache, including the draft densities
+    # `[0, a_max ρʲ]`, in the point loop that records `-ρa_old / dtγ` and, for
+    # the Picard rounds, takes the snapshot of the draft scalars and sets the
+    # buoyancy `ᶜρ_diffʲs`. The implicit cache, including the draft densities
     # `ᶜρʲs`, is refreshed at the stage-entering state only for the Picard
     # rounds, which recompute the buoyancy from it. Without Picard rounds, the
     # `u₃` and `ρa` solves use the buoyancy `ᶜρ_diffʲs` and densities `ᶜρʲs` of
@@ -126,34 +129,31 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             @. ᶠu₃_tendencyʲs.:($$j) = -Yf.sgsʲs.:($$j).u₃ / dtγ
         end
     end
-    DataLayouts.foreach_point(ᶜρa_tendencyʲs, Y.c) do ᶜρa_tendencyʲs, Yc
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            @. ᶜρa_tendencyʲs.:($$j) = -Yc.sgsʲs.:($$j).ρa / dtγ
-        end
-    end
     n_picard > 0 && set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
     a_max = CAP.max_area(CAP.turbconv_params(p.params))
-    for j in 1:n
-        @. Y.c.sgsʲs.:($$j).ρa =
-            clamp(Y.c.sgsʲs.:($$j).ρa, zero_FT, a_max * ᶜρʲs.:($$j))
+    ᶠsnapshot = p.precomputed.ᶠsgsʲs_picard_snapshot
+    ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
+    snapshot_drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (
+            ᶜρa_tendencyʲs.:($j), ᶜsnapshot.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j),
+            ᶜρʲs.:($j),
+        )
+    end
+    DataLayouts.foreach_point(snapshot_drafts, Y.c.ρ) do snapshot_drafts, ᶜρ
+        for (ᶜρa_tendencyʲ, ᶜsnapshotʲ, ᶜρ_diffʲ, ᶜsgsʲ, ᶜρʲ) in snapshot_drafts
+            @. ᶜρa_tendencyʲ = -(ᶜsgsʲ.ρa) / dtγ
+            @. ᶜsgsʲ.ρa = clamp(ᶜsgsʲ.ρa, zero_FT, a_max * ᶜρʲ)
+            n_picard > 0 || continue
+            @. ᶜsnapshotʲ = ᶜsgsʲ
+            @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
+        end
     end
 
     if n_picard > 0
-        ᶠsnapshot = p.precomputed.ᶠsgsʲs_picard_snapshot
-        ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
         DataLayouts.foreach_point(ᶠsnapshot, Y.f) do ᶠsnapshot, Yf
             for j in 1:n_mass_flux_subdomains(turbconv_model)
                 @. ᶠsnapshot.:($$j) = Yf.sgsʲs.:($$j)
-            end
-        end
-        snapshot_drafts = unrolled_map(StaticOneTo(n)) do j
-            @inline
-            (ᶜsnapshot.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j), ᶜρʲs.:($j))
-        end
-        DataLayouts.foreach_point(snapshot_drafts, Y.c.ρ) do snapshot_drafts, ᶜρ
-            for (ᶜsnapshotʲ, ᶜρ_diffʲ, ᶜsgsʲ, ᶜρʲ) in snapshot_drafts
-                @. ᶜsnapshotʲ = ᶜsgsʲ
-                @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
             end
         end
         (; ᶜmp_tendencyʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
@@ -166,7 +166,10 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
-            solve_sgs_ρa_two_pass!(Y, p, dtγ, ᶜsnapshot)
+            # The two passes of `solve_sgs_ρa_two_pass!`, whose stage-initial area
+            # is the one that `Y.c.sgsʲs` holds at the start of every round.
+            solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot)
+            solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot)
             _sweep_sgs_updraft_tracers!(
                 Y,
                 p,
@@ -181,15 +184,10 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             update_updraft_microphysics_tendency_cache!(
                 Y, p, microphysics_model, turbconv_model, dtγ,
             )
-            # Restore the snapshot of the draft velocities, so that `u₃_old` of the
-            # next `u₃` solve is the stage `u₃` (with the surface and top values
-            # set by `set_implicit_precomputed_quantities_core!`).
-            DataLayouts.foreach_point(ᶠsnapshot, Y.f) do ᶠsnapshot, Yf
-                for j in 1:n_mass_flux_subdomains(turbconv_model)
-                    @. Yf.sgsʲs.:($$j) = ᶠsnapshot.:($$j)
-                end
-            end
-            # End the round in one column loop for every draft. For the non-equilibrium
+            # End the round in one column loop for every draft. Restore the
+            # snapshot of the draft velocities, so that `u₃_old` of the next `u₃`
+            # solve is the stage `u₃` (with the surface and top values set by
+            # `set_implicit_precomputed_quantities_core!`). For the non-equilibrium
             # microphysics, add the explicit and, for the 1M scheme, the implicit
             # sources to the condensate and precipitation tracers, floor each of them
             # at zero, and rescale them so that their sum does not exceed `q_totʲ`
@@ -215,8 +213,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                     )
                 end
                 DataLayouts.foreach_column(
-                    round_drafts, Y.c.ρ, p.core.ᶜΦ, p.precomputed.ᶜp,
-                ) do round_drafts, ᶜρ, ᶜΦ, ᶜp
+                    round_drafts, Y.c.ρ, p.core.ᶜΦ, p.precomputed.ᶜp, Y.f.sgsʲs, ᶠsnapshot,
+                ) do round_drafts, ᶜρ, ᶜΦ, ᶜp, ᶠsgsʲs, ᶠsnapshot
+                    @. ᶠsgsʲs = ᶠsnapshot
                     for (ᶜsgsʲ, ᶜρʲ, ᶜρ_diffʲ, ᶜsnapshotʲ, sources_args) in round_drafts
                         if !isempty(sources_args)
                             (
@@ -302,84 +301,50 @@ updraft increment is nonzero, its central grid-mean vertical advection is not
 compensated by the `1 + 2 C_γ` post-Newton dissipation weight).
 
 Applies with `PrognosticEDMFX` 1M microphysics, regardless of which
-implicit microphysics sources are on. Writes `p.scratch.ᶜtemp_scalar`.
+implicit microphysics sources are on, in one point loop for every tracer.
 """
 function warm_start_grid_mean_tracers!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
     microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
     ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
-    ᶜq⁰_old = p.scratch.ᶜtemp_scalar
-    FT = eltype(p.params)
-    zero_FT = zero(FT)
-
-    condensate_names = (
-        (@name(c.ρq_lcl), @name(q_lcl)),
-        (@name(c.ρq_icl), @name(q_icl)),
-        (@name(c.ρq_rai), @name(q_rai)),
-        (@name(c.ρq_sno), @name(q_sno)),
+    (; ᶜh_tot, ᶜK) = p.precomputed
+    zero_FT = zero(eltype(p.params))
+    χ_names = unrolled_filter(
+        χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
+        (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno), @name(q_tot)),
     )
-    MatrixFields.unrolled_foreach(condensate_names) do (gm_name, sgs_name)
-        MatrixFields.has_field(Y, gm_name) || return nothing
-        ρq_χ = MatrixFields.get_field(Y, gm_name)
-        contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
-        @. ᶜq⁰_old = max(
-            zero_FT,
-            specific(
-                env_value(ρq_χ, contrib, ᶜsnapshot),
-                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
-                ρq_χ,
-                Y.c.ρ,
-                turbconv_model,
-            ),
-        )
-        @. ρq_χ +=
-            (
-                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) -
-                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model)
-            ) * ᶜq⁰_old +
-            draft_sum(contrib, Y.c.sgsʲs) - draft_sum(contrib, ᶜsnapshot)
-        return nothing
-    end
-
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ρq_tot = Y.c.ρq_tot
-        contrib_qt(sgsʲ) = sgsʲ.ρa * sgsʲ.q_tot
-        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
-        @. ᶜq⁰_old = max(
-            zero_FT,
-            specific(
-                env_value(ρq_tot, contrib_qt, ᶜsnapshot),
-                ᶜρa⁰_old,
-                ρq_tot,
-                Y.c.ρ,
-                turbconv_model,
-            ),
-        )
-        @. ρq_tot +=
-            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜq⁰_old +
-            draft_sum(contrib_qt, Y.c.sgsʲs) -
-            draft_sum(contrib_qt, ᶜsnapshot)
-    end
-
-    # Energy warm-start. The EDMFX decomposition
-    #   ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
-    # follows from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`.
-    # Holding `mse⁰` and `(ρK − p)` at their stage-initial values while
-    # swapping in the predictor's updated `ρaʲ`, `mseʲ`, `ρa⁰` gives
-    #   Δρe_tot = (ρa⁰_new − ρa⁰_old)·mse⁰_old
-    #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
-    if MatrixFields.has_field(Y, @name(c.ρe_tot))
-        (; ᶜh_tot, ᶜK) = p.precomputed
-        ᶜmse⁰_old = p.scratch.ᶜtemp_scalar
-        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
-        @. ᶜmse⁰_old =
-            specific_env_mse(Y.c.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model)
-        @. Y.c.ρe_tot +=
-            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜmse⁰_old +
-            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs) -
+    DataLayouts.foreach_point(Y.c, ᶜsnapshot, ᶜh_tot, ᶜK) do Yc, ᶜsnapshot, ᶜh_tot, ᶜK
+        ᶜρa⁰_old = @inline @. lazy(ρa⁰(Yc.ρ, ᶜsnapshot, turbconv_model))
+        ᶜΔρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model) - ᶜρa⁰_old)
+        MatrixFields.unrolled_foreach(χ_names) do χ_name
+            @inline
+            ρq_χ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+            contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, χ_name)
+            @. ρq_χ +=
+                ᶜΔρa⁰ * max(
+                    zero_FT,
+                    specific(
+                        env_value(ρq_χ, contrib, ᶜsnapshot),
+                        ᶜρa⁰_old,
+                        ρq_χ,
+                        Yc.ρ,
+                        turbconv_model,
+                    ),
+                ) + draft_sum(contrib, Yc.sgsʲs) - draft_sum(contrib, ᶜsnapshot)
+        end
+        # Energy warm-start. The EDMFX decomposition
+        #   ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
+        # follows from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`.
+        # Holding `mse⁰` and `(ρK − p)` at their stage-initial values while
+        # swapping in the predictor's updated `ρaʲ`, `mseʲ`, `ρa⁰` gives
+        #   Δρe_tot = (ρa⁰_new − ρa⁰_old)·mse⁰_old
+        #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
+        @. Yc.ρe_tot +=
+            ᶜΔρa⁰ *
+            specific_env_mse(Yc.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model) +
+            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Yc.sgsʲs) -
             draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsnapshot)
     end
-
     return nothing
 end
 
@@ -759,9 +724,8 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
     # multiplicative correction on the implicit advection term), leaving the
     # `(ε − δ)` term to carry only the area-bounding, velocity-scale
     # entrainment, and buoyancy-based detrainment pieces. The sweep reads the
-    # offset `numerator / denominator` and the factor
+    # offset `numerator / denominator`, which overwrites `ρa`, and the factor
     # `mass_flux_factor_bot / denominator` of the recurrence.
-    ᶜoffset = p.scratch.ᶜtemp_scalar
     ᶜfactor = p.scratch.ᶜtemp_scalar_2
     ᶜmass_source_rate = p.scratch.ᶜtemp_scalar_5
     nonequilibrium_mp =
@@ -791,10 +755,10 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
             isnothing(ᶜsnapshot) ? (p.precomputed.ᶜρa_tendencyʲs.:($j), ()) :
             ((), ᶜsnapshot.:($j).ρa)
         DataLayouts.foreach_column(
-            ᶜoffset, ᶜfactor, Y.c.sgsʲs.:($j).ρa, ρa_old_sources,
+            ᶜfactor, Y.c.sgsʲs.:($j).ρa, ρa_old_sources,
             Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j), ᶜρ_diffʲs.:($j), rates, ᶜr_mass,
             p.precomputed.sfc_mass_flux_sourceʲs.:($j), ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz,
-        ) do ᶜoffset, ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
+        ) do ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
         ᶜρ_diffʲ, rates, ᶜr_mass_column, mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
             (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
             ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
@@ -861,7 +825,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
                 Operators.SetBoundaryOperator(bottom = Operators.SetValue(zero_FT))
             ᶜone_first_cell =
                 Operators.SetBoundaryOperator(bottom = Operators.SetValue(one_FT))
-            @. ᶜoffset =
+            @. ᶜρaʲ =
                 (
                     max(zero_FT, ᶜρa_old) / dtγ +
                     ᶜone_first_cell(zero_FT * ᶜdz) * mass_flux_source
@@ -875,11 +839,13 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
 
         # ρʲ is in the input tuple so the per-cell cap `ρʲ·a_max` is available
         # inside the closure.
-        input = @. lazy(tuple(ᶜoffset, ᶜfactor, ᶜρʲs.:($$j)))
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        input = @. lazy(tuple(ᶜρaʲ, ᶜfactor, ᶜρʲs.:($$j)))
 
-        # Bottom-to-top sweep. `clamp` to `ρa ∈ [0, ρʲ·a_max]` per-cell.
+        # Bottom-to-top sweep, which reads the offset of each cell before it
+        # overwrites it. `clamp` to `ρa ∈ [0, ρʲ·a_max]` per-cell.
         Operators.column_accumulate!(
-            Y.c.sgsʲs.:($j).ρa,
+            ᶜρaʲ,
             input;
             init = FT(0),
         ) do ρa_prev, (offset, factor, ρ_cell)
@@ -1114,7 +1080,8 @@ where `num` and `den` are the numerator and denominator of the recurrence
 (including the surface relaxation in cell 1, and `a[1] = 0`). One column loop
 computes the entrainment rate, `α`, and `den`, writes `a`
 to `p.scratch.ᶜtemp_scalar`, and overwrites each solved scalar with its `b`,
-and each scalar is then swept on its own, which reads two values per level.
+and one sweep then solves the scalars of the draft, leaving its other values
+as they are.
 The environment values `χ⁰` are diagnosed from the draft states in `ᶜsnapshot`,
 or from `Y.c.sgsʲs` when it is `nothing`.
 """
@@ -1232,11 +1199,15 @@ function _sweep_sgs_updraft_tracers!(
                     q_tot_sfc,
                 )
         end
-        MatrixFields.unrolled_foreach(χ_names) do χ_name
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            input = @. lazy(tuple(ᶜχʲ, ᶜadvection_factor))
-            Operators.column_accumulate!(ᶜχʲ, input; init = zero_FT) do χ_prev, (b, a)
-                return b + a * χ_prev
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
+        input = @. lazy(tuple(ᶜsgsʲ, ᶜadvection_factor))
+        init = drop_auto_broadcasters(zero(add_auto_broadcasters(eltype(ᶜsgsʲ))))
+        Operators.column_accumulate!(ᶜsgsʲ, input; init) do sgs_prev, (sgs_offsets, a)
+            unrolled_reduce(χ_names, drop_auto_broadcasters(sgs_offsets)) do sgsʲ, χ_name
+                χ =
+                    MatrixFields.get_field(sgsʲ, χ_name) +
+                    a * MatrixFields.get_field(sgs_prev, χ_name)
+                merge(sgsʲ, NamedTuple{(MatrixFields.extract_first(χ_name),)}((χ,)))
             end
         end
     end
