@@ -19,6 +19,10 @@ env:
   SLURM_KILL_BAD_EXIT: 1
   CLIMACOMMS_DEVICE: "CUDA"
   CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
+  # Experiment: both trees compile their kernels with SROA and instcombine after GPUCompiler's
+  # last AlwaysInlinerPass (perf/profile_amip_steps.jl), which promotes the stack copies of the
+  # by-value kernel arguments to registers
+  PROFILE_SROA: "1"
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
   CLIMAATMOS_MAIN_COMMIT: "d9da6bfdf119872c4c7b5b3c3838c0d8630437c7"
@@ -92,7 +96,7 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
-  - label: "flagship AMIP components (A100), ClimaAtmos main: CUDA trace of 20 coupling steps"
+  - label: "flagship AMIP components (A100), late SROA, ClimaAtmos main: CUDA trace of 20 coupling steps"
     key: "trace_main"
     depends_on: "init_amip"
     command:
@@ -105,7 +109,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), ClimaAtmos main: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
+  - label: "flagship AMIP components (A100), late SROA, ClimaAtmos main: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
     key: "ncu_main"
     depends_on: "init_amip"
     command:
@@ -129,7 +133,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), the @params branch: CUDA trace of 20 coupling steps"
+  - label: "flagship AMIP components (A100), late SROA, the @params branch: CUDA trace of 20 coupling steps"
     key: "trace_pr"
     depends_on: "init_amip"
     command:
@@ -142,7 +146,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), the @params branch: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
+  - label: "flagship AMIP components (A100), late SROA, the @params branch: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
     key: "ncu_pr"
     depends_on: "init_amip"
     command:

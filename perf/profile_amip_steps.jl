@@ -11,6 +11,23 @@ steps. Takes the arguments of experiments/AMIP/run_simulation.jl, and reads
 All modes first run two coupling steps, which compile the step.
 =#
 import CUDA
+# PROFILE_SROA=1 (experiment): run SROA and instcombine after GPUCompiler's last
+# AlwaysInlinerPass, at the start of its cleanup pipeline, which no promotion pass follows, so
+# that the stack copies of the by-value kernel arguments are promoted to registers. The
+# original pipeline is called in the world before this method replaces it.
+if get(ENV, "PROFILE_SROA", "0") == "1"
+    let GPUC = only(m for (k, m) in Base.loaded_modules if k.name == "GPUCompiler"), world = Base.get_world_counter()
+        FPM = isdefined(GPUC, :NewPMFunctionPassManager) ? :NewPMFunctionPassManager : :FunctionPassManager
+        @eval GPUC function buildCleanupPipeline(mpm, @nospecialize(job::CompilerJob), opt_level)
+            add!(mpm, $FPM()) do fpm
+                add!(fpm, SROAPass())
+                add!(fpm, instcombine_pass(job))
+            end
+            Base.invoke_in_world($world, buildCleanupPipeline, mpm, job, opt_level)
+        end
+    end
+    @info "GPUCompiler.buildCleanupPipeline runs SROA and instcombine first"
+end
 include(joinpath(ENV["COUPLER_DIR"], "experiments", "AMIP", "code_loading.jl"))
 const NVTX = only(m for (k, m) in Base.loaded_modules if k.name == "NVTX")
 
