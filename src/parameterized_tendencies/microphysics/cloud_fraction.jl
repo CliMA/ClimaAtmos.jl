@@ -489,7 +489,7 @@ end
 
 Materializes T-based SGS covariances into cached fields for use by downstream
 computations (SGS quadrature, cloud fraction). Populates
-`p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation).
+`p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)`.
 
 The covariance of `(θ_li, q_tot)` is that of a Gaussian subgrid displacement
 acting on the resolved gradients (`displacement_covariance`), with moisture
@@ -581,7 +581,7 @@ function set_covariance_cache!(
 
     FT = eltype(p.params)
     diag_corr = p.atmos.tq_correlation_model isa DiagnosedTqCorrelation
-    has_curvature = p.atmos.sgs_variance_curvature
+    has_curvature = hasproperty(p.precomputed, :ᶜdisp_S)
     (;
         ᶜT′T′,
         ᶜq′q′,
@@ -598,7 +598,6 @@ function set_covariance_cache!(
     c_g = FT(CAP.sgs_variance_geometric_coeff(p.params))
     c_Δx = FT(CAP.sgs_variance_horizontal_scale_factor(p.params))
     r_Δx_θ = FT(CAP.sgs_variance_theta_horizontal_scale_ratio(p.params))
-    r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(p.params))
     r_h_θq = FT(CAP.sgs_variance_horizontal_cross_correlation(p.params))
     Δx_h = FT(
         Spaces.node_horizontal_length_scale(
@@ -631,21 +630,16 @@ function set_covariance_cache!(
         ᶜl_mix = p.precomputed.ᶜl_mix
     end
 
-    turbconv_params = CAP.turbconv_params(p.params)
-    c_b = FT(CAP.static_stab_coeff(turbconv_params))
-    κ_b_per_tke = c_b / (2 * c_σ)
+    c_b = FT(CAP.static_stab_coeff(CAP.turbconv_params(p.params)))
     w_min = floor_velocity(
         horizontal_filter_scale(axes(Y.c)),
         FT(CAP.sgs_variance_vertical_velocity_floor(p.params)),
         FT(CAP.sgs_variance_floor_reference_resolution(p.params)),
         FT(CAP.sgs_variance_floor_resolution_exponent(p.params)),
     )
-    τ_0 = FT(CAP.sgs_variance_floor_time_scale(p.params))
     κ_min = w_min^2 / (2 * c_σ * c_b)
     c_b_κ_min = c_b * κ_min
 
-    r_max = FT(CAP.sgs_variance_max_rel_std(p.params))
-    corr_fallback = FT(correlation_Tq(p.params))
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -653,7 +647,6 @@ function set_covariance_cache!(
     has_tke = hasproperty(Y.c, :ρtke)
     is_0m = p.atmos.microphysics_model isa EquilibriumMicrophysics0M
     has_α = hasproperty(p.precomputed, :ᶜα)
-    A = FT(CAP.cloud_fraction_steepness_scale(p.params))
     # The 1M scheme takes the relaxation times of its own processes unless the
     # constant-timescale switch is on (`sgs_microphysics_relaxation_time`).
     uses_1m_times =
@@ -665,19 +658,11 @@ function set_covariance_cache!(
             FT(CAP.condensation_evaporation_timescale(p.params)),
             FT(CAP.sublimation_deposition_timescale(p.params)),
         )
-    w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
-    q_min = FT(TD.Parameters.q_min(thermo_params))
-    c_d = tke_dissipation_coefficient(turbconv_params)
-    c_trunc = equilibrium_condensate_truncation(p)
-    sf_params = CAP.surface_fluxes_params(p.params)
-    vkc = CAP.von_karman_const(p.params)
     ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
     scale_blending_method = is_edmf ? p.atmos.edmfx_model.scale_blending_method : nothing
     (; sfc_conditions, ᶜstrain_rate_norm) = p.precomputed
     ᶜα = has_α ? p.precomputed.ᶜα : ᶜcorr_Tq
-    ᶜT′q′ = diag_corr ? p.precomputed.ᶜT′q′ : ᶜcorr_Tq
     ᶜdisp_S = has_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
-    (zero_FT, one_FT, ϵ_FT, inf_FT) = (zero(FT), one(FT), eps(FT), FT(Inf))
 
     # The mean state of the domain that carries the SGS closure
     # (`cloud_env_state`): the environment under `PrognosticEDMFX`, the grid
@@ -696,17 +681,14 @@ function set_covariance_cache!(
 
     _set_covariance_cache_loop!(
         Y, thermo_params,
-        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
         ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
         ᶠ∂θli∂z, ᶠ∂qt∂z,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
-        c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
-        κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
-        A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
-        turbconv_params, sf_params, scale_blending_method,
-        zero_FT, one_FT, ϵ_FT, inf_FT,
+        p.params, τ_mp_params, scale_blending_method,
+        ℓ_h_q², ℓ_h_θ², ℓ_h_θq, c_b_κ_min,
         Val(is_edmf),
         Val(has_tke),
         Val(diag_corr),
@@ -717,7 +699,8 @@ function set_covariance_cache!(
     has_α && set_updraft_variance_fidelity!(
         p.atmos.sgs_variance_fidelity_model, turbconv_model,
         p.atmos.microphysics_model,
-        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq,
+        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean,
+        FT(CAP.sgs_fidelity_equilibrium_weight(p.params)),
     )
     return nothing
 end
@@ -763,17 +746,14 @@ end
 
 function _set_covariance_cache_loop!(
     Y, thermo_params,
-    ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
     ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
     ᶠ∂θli∂z, ᶠ∂qt∂z,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm,
-    c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
-    κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
-    A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
-    turbconv_params, sf_params, scale_blending_method,
-    zero_FT, one_FT, ϵ_FT, inf_FT,
+    params, τ_mp_params, scale_blending_method,
+    ℓ_h_q², ℓ_h_θ², ℓ_h_θq, c_b_κ_min,
     ::Val{is_edmf},
     ::Val{has_tke},
     ::Val{diag_corr},
@@ -791,18 +771,37 @@ function _set_covariance_cache_loop!(
     val_master = Val{:master}()
     # (outputs in one container: a loop over more than 31 arguments would not infer)
     DataLayouts.foreach_column(
-        (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+        (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
         Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
         ᶠ∂θli∂z, ᶠ∂qt∂z,
         ᶜenv_pack, ᶜinv_pack,
         ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
         sfc_conditions, ᶜstrain_rate_norm,
-    ) do (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
+    ) do (; ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜα, ᶜdisp_S),
     Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
     ᶠ∂θli∂z, ᶠ∂qt∂z,
     ᶜenv_pack, ᶜinv_pack,
     ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
     sfc_conditions, ᶜstrain_rate_norm
+        # Constants of the parameters, evaluated in the loop so that the kernel
+        # folds them: a scalar that the loop captures is a run-time value, and
+        # every value derived from it stays in a register through the whole loop.
+        FT = eltype(params)
+        (zero_FT, one_FT, ϵ_FT, inf_FT) = (zero(FT), one(FT), eps(FT), FT(Inf))
+        turbconv_params = CAP.turbconv_params(params)
+        sf_params = CAP.surface_fluxes_params(params)
+        vkc = CAP.von_karman_const(params)
+        c_σ = FT(CAP.diagnostic_covariance_coeff(params))
+        r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(params))
+        κ_b_per_tke = FT(CAP.static_stab_coeff(turbconv_params)) / (2 * c_σ)
+        τ_0 = FT(CAP.sgs_variance_floor_time_scale(params))
+        r_max = FT(CAP.sgs_variance_max_rel_std(params))
+        corr_fallback = FT(correlation_Tq(params))
+        A = FT(CAP.cloud_fraction_steepness_scale(params))
+        w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(params))
+        q_min = FT(TD.Parameters.q_min(thermo_params))
+        c_d = tke_dissipation_coefficient(turbconv_params)
+        c_trunc = equilibrium_condensate_truncation(params, Val(has_curvature))
         ᶜz = ᶜlg.coordinates.z
         ᶜtke = has_tke ? (@inline @. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
         sfc_tke =
@@ -913,15 +912,6 @@ function _set_covariance_cache_loop!(
         @. ᶜT′T′ =
             ᶜ∂T_∂θ^2 *
             displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², _3(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂θ∂z)
-        if diag_corr
-            @. ᶜT′q′ =
-                ᶜ∂T_∂θ *
-                displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, _2(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂q∂z)
-            @. ᶜT′q′ *= sqrt(min(
-                one_FT,
-                (r_max * ᶜq_mean)^2 / max(ᶜq′q′, ϵ_FT^2),
-            ))
-        end
         if has_curvature
             ᶜχ = @inline @. lazy(
                 r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean) * ᶜ∂T_∂θ,
@@ -935,15 +925,22 @@ function _set_covariance_cache_loop!(
                 (ᶜθ_above(ᶠ∂θli∂z) - ᶜθ_below(ᶠ∂θli∂z)) / ᶜΔz,
             )
         end
-        @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_mean)^2)
-
+        # The covariance of the diagnosed correlation is rescaled with the bound
+        # of the variance, which `ᶜq′q′` takes after the correlation has read it.
+        ᶜq′q′_max = @inline @. lazy((r_max * ᶜq_mean)^2)
         if diag_corr
+            ᶜT′q′ = @inline @. lazy(
+                ᶜ∂T_∂θ *
+                displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, _2(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂q∂z) *
+                sqrt(min(one_FT, ᶜq′q′_max / max(ᶜq′q′, ϵ_FT^2))),
+            )
             @. ᶜcorr_Tq = sgs_correlation_Tq(
-                ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT_mean, ᶜq_mean, corr_fallback,
+                ᶜT′T′, min(ᶜq′q′, ᶜq′q′_max), ᶜT′q′, ᶜT_mean, ᶜq_mean, corr_fallback,
             )
         else
             @. ᶜcorr_Tq = corr_fallback
         end
+        @. ᶜq′q′ = min(ᶜq′q′, ᶜq′q′_max)
 
         if has_α
             if is_0m
@@ -1258,14 +1255,21 @@ limit of the curvature-aware one as `curv → 0`.
 
 """
     equilibrium_condensate_truncation(p)
+    equilibrium_condensate_truncation(params, ::Val{curvature})
 
 Displacement truncation `c` passed to `equilibrium_condensate`: the parameter
 `sgs_displacement_truncation`, or `Inf` with `sgs_variance_curvature`, whose
-curvature-aware closure bounds the moist tail itself.
+curvature-aware closure bounds the moist tail itself. The second method is a
+constant in a kernel that captures `params` and the `Val`.
 """
-function equilibrium_condensate_truncation(p)
-    c = CAP.sgs_displacement_truncation(p.params)
-    return p.atmos.sgs_variance_curvature ? oftype(c, Inf) : c
+equilibrium_condensate_truncation(p) =
+    equilibrium_condensate_truncation(p.params, Val(p.atmos.sgs_variance_curvature))
+@inline function equilibrium_condensate_truncation(
+    params,
+    ::Val{curvature},
+) where {curvature}
+    c = CAP.sgs_displacement_truncation(params)
+    return curvature ? oftype(c, Inf) : c
 end
 
 """
@@ -1911,11 +1915,11 @@ function set_quadrature_cloud_fraction!(
     (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
     (; ᶜcloud_fraction, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     (; turbconv_model, microphysics_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
-    zero_FT = zero(eltype(p.params))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    zero_FT = zero(eltype(params))
     sgs_quad = p.atmos.sgs_quadrature
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
-    c = equilibrium_condensate_truncation(p)
+    curvature = Val(hasproperty(p.precomputed, :ᶜdisp_S))
     # The cloud-available water enters the loop as a lazy field: without
     # prognostic precipitation `ᶜq_precip` is a number, which the column loop
     # cannot slice on its own.
@@ -1925,6 +1929,9 @@ function set_quadrature_cloud_fraction!(
         ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p),
     ) do ᶜcloud_fraction, c0, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
+        # (constants of the parameters, which the kernel folds)
+        σ_abs = CAP.cloud_fraction_sigma_abs(params)
+        c = equilibrium_condensate_truncation(params, curvature)
         ᶜcf = @. _compute_cloud_fraction(
             thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c),
@@ -1956,23 +1963,26 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
         p.precomputed
     (; turbconv_model, microphysics_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
-    zero_FT = zero(eltype(p.params))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    zero_FT = zero(eltype(params))
     sgs_quad = p.atmos.sgs_quadrature
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
-    c = equilibrium_condensate_truncation(p)
+    curvature = Val(hasproperty(p.precomputed, :ᶜdisp_S))
     # The displacement coefficients enter the loop as a field only when the
     # curvature-aware condensate is configured; otherwise `_disp_lin` and
     # `_disp_curv` of a scalar field give zeros, for which
     # `displacement_condensate` is the truncated-Gaussian expectation.
     ᶜdisp_S_or_zero =
-        p.atmos.sgs_variance_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+        hasproperty(p.precomputed, :ᶜdisp_S) ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
     DataLayouts.foreach_column(
         ᶜsgs_moments, ᶜcloud_fraction, Y.c, ᶜρ_env, ᶜT_mean, ᶜq_mean,
         ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
         _edmf_weighting_fields(Y, p),
     ) do ᶜsgs_moments, ᶜcloud_fraction, Yc, ᶜρ_env, ᶜT_mean, ᶜq_mean,
     ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, drafts
+        # (constants of the parameters, which the kernel folds)
+        σ_abs = CAP.cloud_fraction_sigma_abs(params)
+        c = equilibrium_condensate_truncation(params, curvature)
         _sgs_moments_and_cloud_fraction_point!(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
             (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
@@ -2018,25 +2028,18 @@ NVTX.@annotate function set_sgs_moments!(Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
 
-    FT = eltype(p.params)
-    c = equilibrium_condensate_truncation(p)
-
-    if p.atmos.sgs_variance_curvature
-        ᶜdisp_S = p.precomputed.ᶜdisp_S
-        @. ᶜsgs_moments = _compute_sgs_moments(
-            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-            max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
-        )
-    else
-        lin₀ = zero(FT)
-        curv₀ = zero(FT)
-        @. ᶜsgs_moments = _compute_sgs_moments(
-            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-            max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
-        )
-    end
+    # The displacement coefficients and the truncation are constants of the
+    # kernel without the curvature-aware condensate (zeros of `_disp_lin` and
+    # `_disp_curv` of a scalar field, and a constant of the parameters).
+    has_curvature = hasproperty(p.precomputed, :ᶜdisp_S)
+    ᶜdisp_S = has_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+    (params, curvature) = (p.params, (Val(has_curvature),))
+    @. ᶜsgs_moments = _compute_sgs_moments(
+        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+        max(0, ᶜq_mean - ᶜq_precip), _disp_lin(ᶜdisp_S), _disp_curv(ᶜdisp_S),
+        equilibrium_condensate_truncation(params, curvature),
+    )
     return nothing
 end
 
