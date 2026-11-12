@@ -2,7 +2,7 @@
 
 julia_version = "1.13.3"
 manifest_format = "2.1"
-project_hash = "a8fdd6972e284d663c25a911e541a8ea9644a0be"
+project_hash = "acdcc915ba53366828b7446ada80bad02d5e2137"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -501,11 +501,11 @@ weakdeps = ["CUDA"]
     ClimaInterpolationsCUDAExt = "CUDA"
 
 [[deps.ClimaParams]]
-deps = ["Dates", "TOML"]
-git-tree-sha1 = "76e9af7a8f5962e5846892fb2b3c8431dc5293aa"
+deps = ["Dates", "Preferences", "TOML"]
+git-tree-sha1 = "7e4b289f59eeb39b46192c076a753a4de5ea4a36"
 registries = "General"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.3.10"
+version = "1.3.11"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "NullBroadcasts", "StaticArrays"]
@@ -536,8 +536,9 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["Adapt", "ClimaParams", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "ca55453ddb957e4bdf55ae19726947000bea2164"
-registries = "General"
+git-tree-sha1 = "4a3e15d8ec91c3e965c05319f37109593429ee81"
+repo-rev = "dy/params_macro"
+repo-url = "https://github.com/CliMA/CloudMicrophysics.jl"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.49.1"
 
@@ -2967,15 +2968,12 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.10.1+0"
 
 [[deps.SurfaceFluxes]]
-deps = ["RootSolvers", "Thermodynamics"]
-git-tree-sha1 = "07e1c2d16a92badba79c1ce034d083bfdecfa226"
-registries = "General"
+deps = ["ClimaParams", "RootSolvers", "Thermodynamics"]
+git-tree-sha1 = "13ac297fe38e1e1c503bdfcb18e01e628c7dee56"
+repo-rev = "dy/params_macro"
+repo-url = "https://github.com/CliMA/SurfaceFluxes.jl"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 version = "1.6.0"
-weakdeps = ["ClimaParams"]
-
-    [deps.SurfaceFluxes.extensions]
-    CreateParametersExt = "ClimaParams"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -3046,15 +3044,12 @@ uuid = "b718987f-49a8-5099-9789-dcd902bef87d"
 version = "1.0.2"
 
 [[deps.Thermodynamics]]
-deps = ["ForwardDiff", "Random", "RootSolvers"]
-git-tree-sha1 = "15eb84002205efc40e231c9f9b4b57a1003793b4"
-registries = "General"
+deps = ["ClimaParams", "ForwardDiff", "Random", "RootSolvers"]
+git-tree-sha1 = "15079ddc526fae64a5d62b4fded358d697354b7a"
+repo-rev = "dy/params_macro"
+repo-url = "https://github.com/CliMA/Thermodynamics.jl"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "1.3.0"
-weakdeps = ["ClimaParams"]
-
-    [deps.Thermodynamics.extensions]
-    CreateParametersExt = "ClimaParams"
 
 [[deps.TiffImages]]
 deps = ["CodecZstd", "ColorTypes", "DataStructures", "DocStringExtensions", "FileIO", "FixedPointNumbers", "IndirectArrays", "Inflate", "Mmap", "OffsetArrays", "PkgVersion", "PrecompileTools", "ProgressMeter", "SIMD", "UUIDs"]

@@ -187,7 +187,7 @@ regressed temperature spread `|β_T| σ_S` never exceeds `σ_T`.
 @inline function sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     FT = typeof(σ_S)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-    γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
+    γ = FT(TD.∂q_vap_sat_∂T(thp, T, ρ))
     return (corr * σ_T * σ_q - γ * σ_T^2) / max(FT(σ_S), ϵ_numerics(FT))^2
 end
 
@@ -389,7 +389,7 @@ may return a scalar or a `NamedTuple` of scalars.
 @inline function _point_value(f, n, t, spread)
     FT = typeof(n.w)
     T_pt = max(spread.T_min, n.T + t * spread.σ⊥)
-    q_sat_pt = TD.q_vap_saturation(_unwrapped(spread.thp), T_pt, spread.ρ)
+    q_sat_pt = TD.q_vap_saturation(spread.thp, T_pt, spread.ρ)
     q_pt = clamp(q_sat_pt + spread.mu_S + n.S′, zero(FT), spread.q_max)
     return add_auto_broadcasters(f(T_pt, q_pt, n.shaft, q_sat_pt))
 end

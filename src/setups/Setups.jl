@@ -9,7 +9,7 @@ import ClimaCore: Fields
 import Thermodynamics as TD
 import Thermodynamics.TemperatureProfiles: DecayingTemperatureProfile, DryAdiabaticProfile
 import ..AtmosphericProfilesLibrary as APL
-import ClimaParams
+import ClimaParams as CP
 
 import ..Parameters as CAP
 import ..geopotential

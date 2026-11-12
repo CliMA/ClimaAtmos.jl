@@ -80,7 +80,7 @@ Q-flux is an idealized meridional profile of ocean heat-flux divergence.
   - `Q₀ = -20`: Q-flux amplitude [W/m²].
   - `ϕ₀ = 16`: Q-flux meridional scale [degrees].
 """
-@kwdef struct SlabOceanTemperature{FT} <: SurfaceTemperature
+CP.@params struct SlabOceanTemperature{FT} <: SurfaceTemperature
     depth_ocean::FT = 40        # ocean mixed-layer depth (m)
     ρ_ocean::FT = 1020          # ocean density (kg/m³)
     cp_ocean::FT = 4184         # ocean heat capacity (J/(kg·K))

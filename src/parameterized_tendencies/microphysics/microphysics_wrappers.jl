@@ -1,4 +1,3 @@
-import ClimaComms
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -207,20 +206,6 @@ end
 ###
 ### 1 Moment Microphysics
 ###
-
-# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
-# its value in its type, so the field costs nothing and the parameters fold to
-# literals instead of being read back from the struct -- worth 162 registers and
-# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
-# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
-@inline _unwrapped(p) = p
-@inline _unwrapped(::Val{P}) where {P} = P
-
-# Only on the device. A struct type parameter is boxed, so on the host each use
-# copies it back out and allocates per point; the device compiler has no heap
-# and folds it to a literal instead.
-@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
-@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
 
 """
     Microphysics1MEvaluator{S, MP, TPS, FT, Args}
@@ -435,7 +420,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
 @inline (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p) = eval(
     T_hat, q_tot_hat, flag_p,
-    TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ),
+    TD.q_vap_saturation(eval.tps, T_hat, eval.ρ),
 )
 @noinline function (eval::Microphysics1MEvaluator)(
     T_hat, q_tot_hat, flag_p, q_sat_hat,
@@ -493,19 +478,18 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # return zero directly instead of running the 5-substep 4x4 linear solver.
     if isempty(eval.args) &&
        no_1m_condensate(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
-        tps = _unwrapped(eval.tps)
-        T_freeze = TD.Parameters.T_freeze(tps)
-        T_icenuc = TD.Parameters.T_icenuc(tps)
+        T_freeze = TD.Parameters.T_freeze(eval.tps)
+        T_icenuc = TD.Parameters.T_icenuc(eval.tps)
         q_smin =
             (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
-            TD.q_vap_saturation(tps, T_hat, eval.ρ, TD.Ice())
+            TD.q_vap_saturation(eval.tps, T_hat, eval.ρ, TD.Ice())
         if q_tot_node <= q_smin
             return zero_1m_tendency(FT)
         end
     end
 
     return _call_bmt_1m(
-        eval.mode, eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+        eval.mode, eval.scheme, eval.mp, eval.tps,
         eval.ρ, T_hat, eval.w,
         q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
         eval.dt, eval.nsubs, eval.args,
@@ -641,18 +625,17 @@ their sum.
     # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
     # return zero without running the substepped 4x4 linear solver.
     if no_1m_condensate(q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos)
-        tps = _unwrapped(thp)
         q_smin = ifelse(
-            T >= TD.Parameters.T_freeze(tps),
-            TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
-            TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
+            T >= TD.Parameters.T_freeze(thp),
+            TD.q_vap_saturation(thp, T, ρ, TD.Liquid()),
+            TD.q_vap_saturation(thp, T, ρ, TD.Ice()),
         )
         if q_tot_safe < q_smin * (one(FT) - 2 * eps(FT))
             return zero_1m_tendency(FT)
         end
     end
     return _call_bmt_1m(
-        mode, BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp),
+        mode, BMT.Microphysics1Moment(), cmp, thp,
         ρ, T, w,
         q_tot_safe, q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos, dt, nsubs, (),
     )
@@ -664,10 +647,8 @@ end
     # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
     # cell constants. They default to being computed here from the mean state; a
     # caller may precompute them once and pass them in.
-    λ = TD.liquid_fraction(
-        _unwrapped(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
-    ),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(_unwrapped(thp), T, ρ),
+    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
     precip_incloud_fraction = zero(ρ),
     precip_frac = one(ρ),
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq),
@@ -741,7 +722,7 @@ tendency SGS integration).
     )
     spread = TemperatureSpread(
         thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
-        FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
+        FT(TD.Parameters.T_freeze(thp)), sgs_quad.T_min, sgs_quad.q_max,
     )
     evaluator = make_evaluator(s * FT(λ_lagrange), s * α_safe, shaft_frac)
     return sum_over_conditional_nodes(evaluator, rule, spread)
@@ -776,9 +757,8 @@ substep-averaged tendency, `Instantaneous` for the implicit path).
     if isempty(args) &&
        no_1m_condensate(q_lcl, q_icl, q_rai, q_sno) &
        !isfinite(FT(λ_eq))
-        tps = _unwrapped(thp)
-        T_freeze = FT(TD.Parameters.T_freeze(tps))
-        T_icenuc = FT(TD.Parameters.T_icenuc(tps))
+        T_freeze = FT(TD.Parameters.T_freeze(thp))
+        T_icenuc = FT(TD.Parameters.T_icenuc(thp))
         ΔT_max = 8 * sqrt(max(FT(T′T′), zero(FT)))
         if (T - ΔT_max >= T_freeze) | (T + ΔT_max <= T_icenuc)
             return zero_1m_tendency(FT)

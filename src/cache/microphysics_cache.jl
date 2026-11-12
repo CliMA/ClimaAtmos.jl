@@ -131,18 +131,13 @@ function set_precipitation_velocities!(
     ᶜρ = Y.c.ρ
     atmos = p.atmos
     params = p.params
-    cmc = CAP.microphysics_cloud_params(params)
+    # Only the terminal velocity members of the cloud parameters, so that the
+    # loops do not capture the droplet number and the aerosol coefficients.
+    (; liquid, ice, stokes, Ch2022) = CAP.microphysics_cloud_params(params)
+    cmc = (; liquid, ice, stokes, Ch2022)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
     eps_FT = eps(eltype(thp))
-    # Carried into the terminal-velocity kernels in the type, so the Chen 2022
-    # coefficients fold to literals instead of being read from a struct per point.
-    # Only the velocity members: `aml` and `activation` are not needed here and
-    # a type parameter has to be isbits.
-    vcmc, vcmp = let dev = ClimaComms.device(Y.c)
-        tv = (; cmc.liquid, cmc.ice, cmc.stokes, cmc.Ch2022)
-        _fold(dev, tv), _fold(dev, cmp)
-    end
 
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
@@ -153,8 +148,8 @@ function set_precipitation_velocities!(
         velocity_mode(atmos, name),
         name,
         params,
-        vcmc,
-        vcmp,
+        cmc,
+        cmp,
         ρ,
         q,
     )
@@ -203,18 +198,13 @@ function set_precipitation_velocities!(
     water = p.atmos.water
     params = p.params
 
-    cmc = CAP.microphysics_cloud_params(params)
+    # Only the terminal velocity members of the cloud parameters, so that the
+    # loop does not capture the droplet number and the aerosol coefficients.
+    (; liquid, ice, stokes, Ch2022) = CAP.microphysics_cloud_params(params)
+    cmc = (; liquid, ice, stokes, Ch2022)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
     eps_FT = eps(eltype(thp))
-    # Carried into the terminal-velocity kernels in the type, so the Chen 2022
-    # coefficients fold to literals instead of being read from a struct per point.
-    # Only the velocity members: `aml` and `activation` are not needed here and
-    # a type parameter has to be isbits.
-    vcmc, vcmp = let dev = ClimaComms.device(Y.c)
-        tv = (; cmc.liquid, cmc.ice, cmc.stokes, cmc.Ch2022)
-        _fold(dev, tv), _fold(dev, cmp)
-    end
     draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
@@ -222,8 +212,8 @@ function set_precipitation_velocities!(
         velocity_mode(water, name),
         name,
         params,
-        vcmc,
-        vcmp,
+        cmc,
+        cmp,
         ρ,
         q,
     )
@@ -1013,8 +1003,6 @@ function update_implicit_1m_tendency!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
-    dev = ClimaComms.device(Y.c)
-    vcmp_i, vthp = _fold(dev, cmp_i), _fold(dev, thp)
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
     mode = BMT.Instantaneous()
@@ -1033,7 +1021,7 @@ function update_implicit_1m_tendency!(
                 ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
                 Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
                 Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dt, nsubs, mode,
+                ᶜTʲs.:($$j), ᶜwʲ_air, cmp_i, thp, dt, nsubs, mode,
             )
         end
     end
@@ -1061,10 +1049,6 @@ function set_environment_1m_tendency!(
     ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
 )
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    # The column loop calls Thermodynamics with `thp`; the microphysics
-    # broadcasts take the parameters folded for the device (see `_fold`).
-    dev = ClimaComms.device(Y.c)
-    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     # Materialize the environment inputs, the liquid fraction `λ`, and the
     # linearized SGS saturation-excess mean `mu_S` in one column loop so the
     # SGS-quadrature microphysics kernel reads them without recomputing them at
@@ -1105,13 +1089,13 @@ function set_environment_1m_tendency!(
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs, mode_args...,
+            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs, mode_args...,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
             ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
@@ -1260,9 +1244,6 @@ function update_updraft_microphysics_tendency_cache!(
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
-    dev = ClimaComms.device(Y.c)
-    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
-    vcmp_i = _fold(dev, cmp_i)
     nsubs = mp1m.n_substeps
     refresh_implicit = has_implicit_1m_microphysics(p)
     DataLayouts.foreach_point(
@@ -1274,7 +1255,7 @@ function update_updraft_microphysics_tendency_cache!(
                 ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
                 Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
                 Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
+                ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dtγ, nsubs,
             )
         end
     end
@@ -1287,7 +1268,7 @@ function update_updraft_microphysics_tendency_cache!(
                 ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
                 Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
                 Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
+                ᶜTʲs.:($$j), ᶜwʲ_air, cmp_i, thp, dtγ, nsubs,
             )
         end
     end
@@ -1468,8 +1449,6 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
-    dev = ClimaComms.device(Y.c)
-    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
 
@@ -1488,7 +1467,7 @@ function set_microphysics_tendency_cache!(
                 ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
                 Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
                 Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dt, nsubs,
+                ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dt, nsubs,
             )
         end
     end

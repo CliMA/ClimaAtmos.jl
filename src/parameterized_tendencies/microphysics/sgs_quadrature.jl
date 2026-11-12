@@ -6,6 +6,7 @@
 # and provides the utilities shared by cloud fraction, microphysics tendencies,
 # and other SGS diagnostics.
 
+import ClimaParams as CP
 import StaticArrays as SA
 import Thermodynamics as TD
 import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
@@ -216,31 +217,33 @@ not stored here; it is supplied per call as `corr_Tq`, the cache field
 `Tq_correlation_coefficient`, or the diagnosed gradient covariance when
 `tq_correlation_model: diagnosed`).
 """
-struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
+CP.@params struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <:
+                  AbstractSGSamplingType
     a::A             # quadrature points
     w::W             # quadrature weights
     dist::D          # distribution type
     T_min::FT        # minimum temperature for physical validity [K]
     q_max::FT        # maximum specific humidity [kg/kg]
-    function SGSQuadrature(
-        ::Type{FT};
-        quadrature_order = 3,
-        distribution::D = GaussianSGS(),
-        T_min = FT(150),   # Reasonable default for atmospheric applications
-        q_max = FT(0.05),  # Maximum humidity: 50 g/kg (above any physical value)
-    ) where {FT, D <: AbstractSGSDistribution}
-        # GridMeanSGS always uses N=1 (single point at origin)
-        N = distribution isa GridMeanSGS ? 1 : quadrature_order
-        a, w = get_quadrature_nodes_weights(distribution, FT, N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w), D, FT}(
-            a,
-            w,
-            distribution,
-            FT(T_min),
-            FT(q_max),
-        )
-    end
+end
+
+function SGSQuadrature(
+    ::Type{FT};
+    quadrature_order = 3,
+    distribution::D = GaussianSGS(),
+    T_min = FT(150),   # Reasonable default for atmospheric applications
+    q_max = FT(0.05),  # Maximum humidity: 50 g/kg (above any physical value)
+) where {FT, D <: AbstractSGSDistribution}
+    # GridMeanSGS always uses N=1 (single point at origin)
+    N = distribution isa GridMeanSGS ? 1 : quadrature_order
+    a, w = get_quadrature_nodes_weights(distribution, FT, N)
+    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+    return SGSQuadrature{N, typeof(a), typeof(w), D, FT}(
+        a,
+        w,
+        distribution,
+        T_min,
+        q_max,
+    )
 end
 
 """

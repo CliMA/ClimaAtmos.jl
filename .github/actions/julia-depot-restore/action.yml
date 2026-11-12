@@ -49,3 +49,7 @@ runs:
         restore-keys: |
           ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}-
           ${{ inputs.prefix }}-${{ inputs.cpu-target }}-
+    # The restored registry is that of the build that saved the depot, which can
+    # predate the releases that the compat bounds of the current project require.
+    - shell: bash
+      run: julia --color=yes --startup-file=no -e 'using Pkg; Pkg.Registry.update()'
