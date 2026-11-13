@@ -1,4 +1,4 @@
-468
+469
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+469
+- Non-orographic gravity-wave drag (AD99 and Beres): waves unstable at the launch
+  level deposit their momentum in the first layer above it instead of being dropped,
+  waves meeting an exact critical level deposit their momentum, and the momentum that
+  escapes through the model top is spread over the damping layer as a mass-weighted
+  uniform acceleration. Changes the output of every run with
+  `non_orographic_gravity_wave` enabled.
+
 468
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
