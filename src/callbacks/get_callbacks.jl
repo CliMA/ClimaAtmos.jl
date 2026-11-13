@@ -521,6 +521,29 @@ function radiation_callback(
     )
 end
 
+"""
+    warn_if_not_whole_steps(name, dt_str, dt)
+
+Warn when a gravity-wave drag interval `dt_str` is not a whole number of model steps `dt`.
+
+A callback can only run at the end of a step, so `call_every_dt` runs it on the first step
+at or after each target time. When the interval is not a whole number of steps, the drag
+computed at one call is held for a varying number of steps, e.g. 360 or 480 s for a 400 s
+interval with 120 s steps, although the interval is exact on average.
+"""
+function warn_if_not_whole_steps(name, dt_str, dt)
+    interval = time_to_seconds(dt_str)
+    step = Float64(dt)
+    n_steps = interval / step
+    isinteger(n_steps) && return nothing
+    if n_steps < 1
+        @warn "$name ($interval s) is shorter than the model step ($step s), so the drag is recomputed every step."
+    else
+        @warn "$name ($interval s) is not a whole number of model steps ($step s), so the drag is recomputed after $(floor(n_steps) * step) or $(ceil(n_steps) * step) s, $interval s on average."
+    end
+    return nothing
+end
+
 function nogw_callback(
     non_orographic_gravity_wave,
     dt_nogw,
@@ -530,6 +553,7 @@ function nogw_callback(
     checkpoint_frequency,
 )
     non_orographic_gravity_wave isa NonOrographicGravityWave || return ()
+    warn_if_not_whole_steps("dt_nogw", dt_nogw, dt)
     return scheduled_callback(
         nogw_model_callback!,
         dt_nogw,
@@ -558,6 +582,7 @@ function ogw_callback(
     checkpoint_frequency,
 )
     orographic_gravity_wave isa OrographicGravityWave || return ()
+    warn_if_not_whole_steps("dt_ogw", dt_ogw, dt)
     return scheduled_callback(
         ogw_model_callback!,
         dt_ogw,

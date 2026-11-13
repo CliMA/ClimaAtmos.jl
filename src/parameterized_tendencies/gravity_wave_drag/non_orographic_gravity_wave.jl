@@ -321,7 +321,7 @@ Steps, in order:
     ±3e-3 m/s², the same limit the orographic scheme uses.
 
 Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
-clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5` and `temp_field_level`.
+clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level`.
 Described in [alexander1999](@cite) and [beres2004](@cite); see the *Non-orographic
 Gravity Waves* page for the derivations.
 """
@@ -973,7 +973,7 @@ and the intermittency factor.
   - `ᶜρ_source`, `ᶜu_source`, `ᶜv_source`: AD99 launch-level density and winds.
   - `gw_ncval`: `Val(nc)` with `nc` the number of phase-speed bins.
   - `p`: Cache; the NOGW cache supplies the source parameters and
-    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5` and `temp_field_level` are clobbered.
+    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level` are clobbered.
 """
 function non_orographic_gravity_wave_forcing(
     ᶜu,
@@ -1054,6 +1054,30 @@ function non_orographic_gravity_wave_forcing(
         FT(2) .* Fields.field_values(z_endlevel) .-
         Fields.field_values(z_endlevel_m1)
     field_shiftlevel_up!(ᶜz, ᶜz_p1, gw_temp_surface)
+
+    # Per-layer rescaling that makes the interior deposit conserve momentum on any grid.
+    # The kernel turns the flux a layer gives up into a drag by dividing by
+    # `√(ρ_k·ρ_{k+1})·(z_{k+1} - z_k)`, and `postprocess_and_accumulate!` gives half of
+    # that drag to each of the two cells the layer spans. Dividing by the mean of the two
+    # cells' masses instead makes the two halves carry exactly the layer's flux: cell
+    # centers sit midway between faces, so half of each cell's mass is the part of that
+    # cell inside the layer. The mass is the one `column_integral_definite!` measures,
+    # `ρ·J/ΔA` with `ΔA` the area element of the bottom face, which on a deep-atmosphere
+    # grid grows with height. `ᶜlayer_ratio` holds the 3D part of the factor and
+    # `gw_temp_surface` the per-column `ΔA`; `u_waveforcing` is free until the kernel
+    # first writes it.
+    ᶜlayer_ratio = p.scratch.ᶜtemp_scalar_6
+    ᶜρJ_p1 = u_waveforcing
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    @. ᶜlayer_ratio = ᶜρ * ᶜJ
+    field_shiftlevel_up!(ᶜlayer_ratio, ᶜρJ_p1, FT(0))
+    @. ᶜlayer_ratio =
+        sqrt(ᶜρ * ᶜρ_p1) * (ᶜz_p1 - ᶜz) / ((ᶜlayer_ratio + ᶜρJ_p1) / 2)
+    ᶠspace = Spaces.face_space(axes(ᶜρ))
+    Fields.field_values(gw_temp_surface) .=
+        Fields.field_values(
+            Fields.level(Fields.local_geometry_field(ᶠspace).J, half),
+        ) ./ Fields.field_values(Fields.level(Fields.Δz_field(ᶠspace), half))
 
     mask_u = StaticBitVector{nc}(_ -> true)
     mask_v = StaticBitVector{nc}(_ -> true)
@@ -1205,6 +1229,7 @@ function non_orographic_gravity_wave_forcing(
         postprocess_and_accumulate!(
             uforcing, vforcing, u_waveforcing, v_waveforcing,
             damp_level, ᶜlevel, level_end, gw_deposit_scale,
+            ᶜlayer_ratio, gw_temp_surface,
         )
 
         # --- Beres convective source (when configured) ---
@@ -1222,6 +1247,7 @@ function non_orographic_gravity_wave_forcing(
             postprocess_and_accumulate!(
                 uforcing, vforcing, u_waveforcing, v_waveforcing,
                 damp_level, ᶜlevel, level_end, gw_deposit_scale,
+                ᶜlayer_ratio, gw_temp_surface,
             )
         end
     end
@@ -1230,7 +1256,8 @@ end
 
 """
     postprocess_and_accumulate!(uforcing, vforcing, u_waveforcing, v_waveforcing,
-                                damp_level, ᶜlevel, level_end, deposit_scale)
+                                damp_level, ᶜlevel, level_end, deposit_scale,
+                                ᶜlayer_ratio, ΔA_bottom)
 
 Redistribute the escaped flux of one source and add its drag to the forcing fields.
 
@@ -1239,15 +1266,21 @@ wavenumber band and source from `non_orographic_gravity_wave_forcing`, after the
 `waveforcing_column_accumulate!` calls that set `u_waveforcing`/`v_waveforcing`.
 
 The top level of the half-level drag left by the upward march holds the momentum flux that
-escaped through the model top. The rest of the drag is moved to full levels by averaging
-adjacent half-levels, `½(X[k-1/2] + X[k+1/2])` with zero below the bottom level and at the
-top level, and the escaped flux is spread over the levels at and above `damp_level` by
-`gw_deposit`, scaled by the per-column `deposit_scale`, so momentum is conserved. On a
-sphere `damp_level` is a field of level indices; single-column tests pass one level index.
+escaped through the model top. The rest of the drag `X` is first rescaled by
+`ᶜlayer_ratio · ΔA_bottom`, which turns the kernel's division by
+`√(ρ_k·ρ_{k+1})·(z_{k+1} - z_k)` into a division by the mean mass of the two cells the
+layer spans, and is then moved to full levels by averaging adjacent half-levels,
+`½(X[k-1/2] + X[k+1/2])` with zero below the bottom level and at the top level. Each layer
+therefore hands each of its two cells the share of its flux that matches the mass of the
+part of that cell inside the layer, so the column momentum `Σ ρ·J/ΔA·drag` equals the
+deposited flux exactly, on stretched and deep-atmosphere grids alike. The escaped flux is
+spread over the levels at and above `damp_level` by `gw_deposit`, scaled by the per-column
+`deposit_scale`, which divides by the same mass, so it is conserved too. On a sphere
+`damp_level` is a field of level indices; single-column tests pass one level index.
 """
 function postprocess_and_accumulate!(
     uforcing, vforcing, u_waveforcing, v_waveforcing,
-    damp_level, ᶜlevel, level_end, deposit_scale,
+    damp_level, ᶜlevel, level_end, deposit_scale, ᶜlayer_ratio, ΔA_bottom,
 )
     FT = eltype(uforcing)
     # The drag at the half level below each full level, zero below the bottom level
@@ -1259,9 +1292,9 @@ function postprocess_and_accumulate!(
         damp_level isa Fields.Field ? ((damp_level,), nothing) : ((), damp_level)
     DataLayouts.foreach_column(
         uforcing, vforcing, u_waveforcing, v_waveforcing, ᶜlevel, deposit_scale,
-        damp_level_fields,
+        ᶜlayer_ratio, ΔA_bottom, damp_level_fields,
     ) do ᶜuforcing, ᶜvforcing, ᶜu_waveforcing, ᶜv_waveforcing, ᶜlevel,
-    ᶜdeposit_scale, damp_level_fields
+    ᶜdeposit_scale, ᶜlayer_ratio, ᶜΔA_bottom, damp_level_fields
         @inline
         ᶜdamp_level =
             isnothing(damp_level_index) ? damp_level_fields[1] : damp_level_index
@@ -1272,11 +1305,13 @@ function postprocess_and_accumulate!(
             @inline
             # The momentum flux that escaped through the model top
             ᶜescaped_flux = Fields.level(ᶜwaveforcing, level_end)
+            # The half-level drag, divided by the mean mass of the two cells it spans
+            ᶜlayer_drag = @. lazy(ᶜwaveforcing * ᶜlayer_ratio * ᶜΔA_bottom)
             @. ᶜforcing += gw_deposit(
                 ᶜescaped_flux,
                 _half * (
-                    ifelse(ᶜlevel == top_level, _zero, ᶜwaveforcing) +
-                    ᶜbelow(ᶠbelow(ᶜwaveforcing))
+                    ifelse(ᶜlevel == top_level, _zero, ᶜlayer_drag) +
+                    ᶜbelow(ᶠbelow(ᶜlayer_drag))
                 ),
                 ᶜdamp_level,
                 ᶜlevel,
