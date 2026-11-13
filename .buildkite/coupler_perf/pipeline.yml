@@ -1,12 +1,9 @@
 # Temporary comparison pipeline (not for merging), on one A100 per job: perf/profile_amip_steps.jl
-# traces 20 coupling steps of the flagship AMIP benchmark in two environments that differ only in
-# ClimaAtmos and its parameter packages: main (CLIMAATMOS_MAIN_COMMIT) and the @params branch
-# (CLIMAATMOS_PR_COMMIT, with the dy/params_macro branches of ClimaParams, Thermodynamics,
-# SurfaceFluxes, and CloudMicrophysics that its [sources] pin, in "type" mode),
-# with the ClimaCore that the coupler environment resolves and the cache, tendency, and Jacobian
-# functions marked with NVTX ranges (perf/annotate_components.py). It sums the Nsight Compute
-# counters of one coupling step and of the RRTMGP kernels in the one radiation call of the traced
-# steps, and attributes the device time and counters to the components (perf/attribute_trace.py).
+# traces 20 coupling steps of the flagship AMIP benchmark for two ClimaAtmos trees (base and new,
+# both with the dy/params_macro branches of ClimaParams, Thermodynamics, SurfaceFluxes, and
+# CloudMicrophysics in "type" mode), with the cache, tendency, and Jacobian functions marked with
+# NVTX ranges (perf/annotate_components.py). A trace job may set environment variables that a tree
+# reads. perf/attribute_trace.py attributes the device time to the components.
 agents:
   queue: clima
   slurm_time: 8:00:00
@@ -20,11 +17,10 @@ env:
   CLIMACOMMS_DEVICE: "CUDA"
   CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
-  # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2 (the coupler commit
-  # that the end-to-end performance pipeline pins resolves CUDA 5.11 and GPUCompiler 1.17)
+  # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_MAIN_COMMIT: "b717c7bae14dcfc3396ca3b838adf332718eb870"
-  CLIMAATMOS_PR_COMMIT: "36defd8058d2f8ed348514870d9c0fe0d2965d51"
+  CLIMAATMOS_BASE_COMMIT: "6cfb02d021eea6f3b7a6880edd18b506241f1f3d"
+  CLIMAATMOS_NEW_COMMIT: "6cfb02d021eea6f3b7a6880edd18b506241f1f3d"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -33,37 +29,37 @@ env:
 timeout_in_minutes: 480
 
 steps:
-  - label: "init: ClimaAtmos of main and the @params branch"
+  - label: "init: ClimaAtmos trees base and new"
     key: "init_trees"
     command:
       - mkdir -p $$PROFILE_DIR
-      - git fetch origin $$CLIMAATMOS_MAIN_COMMIT $$CLIMAATMOS_PR_COMMIT
+      - git fetch origin $$CLIMAATMOS_BASE_COMMIT $$CLIMAATMOS_NEW_COMMIT
       # Start from empty trees, so that a retried job does not annotate them twice
-      - rm -rf $$PROFILE_DIR/ClimaAtmos_main $$PROFILE_DIR/ClimaAtmos_pr
-      - mkdir -p $$PROFILE_DIR/ClimaAtmos_main $$PROFILE_DIR/ClimaAtmos_pr
-      - git archive $$CLIMAATMOS_MAIN_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_main
-      - git archive $$CLIMAATMOS_PR_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_pr
-      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_main
-      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_pr
+      - rm -rf $$PROFILE_DIR/ClimaAtmos_base $$PROFILE_DIR/ClimaAtmos_new
+      - mkdir -p $$PROFILE_DIR/ClimaAtmos_base $$PROFILE_DIR/ClimaAtmos_new
+      - git archive $$CLIMAATMOS_BASE_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_base
+      - git archive $$CLIMAATMOS_NEW_COMMIT | tar -x -C $$PROFILE_DIR/ClimaAtmos_new
+      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_base
+      - python3 perf/annotate_components.py $$PROFILE_DIR/ClimaAtmos_new
       - cp perf/profile_amip_steps.jl perf/attribute_trace.py perf/annotate_components.py $$PROFILE_DIR/
     agents:
       slurm_cpus_per_task: 1
 
-  - label: "init: flagship AMIP environments main and pr"
+  - label: "init: flagship AMIP environments base and new"
     key: "init_amip"
     depends_on: "init_trees"
     command:
       # Start from empty environments, so that a retried job can clone the coupler again
-      - rm -rf $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
-      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $$PROFILE_DIR/coupler_main
-      - bash -c "cd $$PROFILE_DIR/coupler_main && git checkout $$COUPLER_COMMIT"
+      - rm -rf $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_new
+      - git clone https://github.com/CliMA/ClimaCoupler.jl.git $$PROFILE_DIR/coupler_base
+      - bash -c "cd $$PROFILE_DIR/coupler_base && git checkout $$COUPLER_COMMIT"
       # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
-      - "echo 'strict_params: false' >> $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG"
+      - "echo 'strict_params: false' >> $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG"
       - |
         julia -e '
           using TOML
           upstream = split(ENV["UPSTREAM_PACKAGES"])
-          coupler = joinpath(ENV["PROFILE_DIR"], "coupler_main")
+          coupler = joinpath(ENV["PROFILE_DIR"], "coupler_base")
           for project in (coupler, joinpath(coupler, "experiments", "AMIP"))
               file = joinpath(project, "Project.toml")
               toml = TOML.parsefile(file)
@@ -71,21 +67,23 @@ steps:
               toml["compat"] = filter(entry -> !(first(entry) in upstream), toml["compat"])
               open(io -> TOML.print(io, toml; sorted = true), file, "w")
           end'
-      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.Registry.update()'
-      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.instantiate()'
-      - echo "--- main (ClimaAtmos main)"
-      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_main")); Pkg.add("MPI")'
-      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
-      - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- pr (the @params branch)"
-      - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
-      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.Registry.update()'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.instantiate()'
+      - echo "--- base"
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_base")); Pkg.add("MPI")'
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
-      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
-      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_m1_cm6"))'
+      # The parameter structs take their mode from the preferences of the active project
+      - 'printf "[ClimaParams]\nCLIMA_PARAMS_MODE = \"type\"\n" > $$PROFILE_DIR/coupler_base/experiments/AMIP/LocalPreferences.toml'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+      - echo "--- new"
+      - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_new
+      - julia --project=$$PROFILE_DIR/coupler_new/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_new"))'
+      - julia --project=$$PROFILE_DIR/coupler_new/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
-      - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest.toml || true
+      - diff $$PROFILE_DIR/coupler_base/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_new/experiments/AMIP/Manifest.toml || true
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
@@ -93,85 +91,39 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
-  - label: "flagship AMIP components (A100), ClimaAtmos main: CUDA trace of 20 coupling steps"
-    key: "trace_main"
+  - label: "flagship AMIP (A100), base tree: CUDA trace of 20 coupling steps"
+    key: "i2"
     depends_on: "init_amip"
     command:
       - nvidia-smi -L
-      - PROFILE_OUT=$$PROFILE_DIR/trace_main COUPLER_DIR=$$PROFILE_DIR/coupler_main julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id trace_main
-      - tar czf trace_main.tgz -C $$PROFILE_DIR trace_main
-    artifact_paths: "trace_main.tgz"
+      - PROFILE_OUT=$$PROFILE_DIR/i2 COUPLER_DIR=$$PROFILE_DIR/coupler_base julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id i2
+      - tar czf i2.tgz -C $$PROFILE_DIR i2
+    artifact_paths: "i2.tgz"
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), ClimaAtmos main: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
-    key: "ncu_main"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - |
-        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
-        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
-            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
-        done
-        echo "metrics: $$metrics"
-        echo "--- one coupling step"
-        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_main COUPLER_DIR=$$PROFILE_DIR/coupler_main ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_main.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id ncu_main || exit 1
-        echo "--- the RRTMGP kernels of the 20 traced coupling steps"
-        PROFILE_MODE=ncu_rad PROFILE_OUT=$$PROFILE_DIR/ncu_rad_main COUPLER_DIR=$$PROFILE_DIR/coupler_main ncu --profile-from-start off --kernel-name regex:rte_ --print-units base --csv --page raw --metrics $$metrics --log-file ncu_rad_main.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id ncu_rad_main || exit 1
-        grep -c rte_ ncu_rad_main.csv || true
-        cp ncu_main.csv ncu_rad_main.csv $$PROFILE_DIR/
-    artifact_paths: "ncu_main.csv;ncu_rad_main.csv"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP components (A100), the @params branch: CUDA trace of 20 coupling steps"
-    key: "trace_pr"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - PROFILE_OUT=$$PROFILE_DIR/trace_pr COUPLER_DIR=$$PROFILE_DIR/coupler_pr julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_pr/$$AMIP_CONFIG --job_id trace_pr
-      - tar czf trace_pr.tgz -C $$PROFILE_DIR trace_pr
-    artifact_paths: "trace_pr.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP components (A100), the @params branch: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
-    key: "ncu_pr"
+  - label: "flagship AMIP (A100), base tree: Nsight Compute counters of one coupling step"
+    key: "n_i2"
     depends_on: "init_amip"
     command:
       - nvidia-smi -L
       - |
-        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
         metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
-        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
-            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
-        done
-        echo "metrics: $$metrics"
-        echo "--- one coupling step"
-        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_pr COUPLER_DIR=$$PROFILE_DIR/coupler_pr ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_pr.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_pr/$$AMIP_CONFIG --job_id ncu_pr || exit 1
-        echo "--- the RRTMGP kernels of the 20 traced coupling steps"
-        PROFILE_MODE=ncu_rad PROFILE_OUT=$$PROFILE_DIR/ncu_rad_pr COUPLER_DIR=$$PROFILE_DIR/coupler_pr ncu --profile-from-start off --kernel-name regex:rte_ --print-units base --csv --page raw --metrics $$metrics --log-file ncu_rad_pr.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_pr/$$AMIP_CONFIG --job_id ncu_rad_pr || exit 1
-        grep -c rte_ ncu_rad_pr.csv || true
-        cp ncu_pr.csv ncu_rad_pr.csv $$PROFILE_DIR/
-    artifact_paths: "ncu_pr.csv;ncu_rad_pr.csv"
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/n_i2 COUPLER_DIR=$$PROFILE_DIR/coupler_base ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file n_i2.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id n_i2 || exit 1
+        cp n_i2.csv $$PROFILE_DIR/
+    artifact_paths: "n_i2.csv"
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components: device time and counters per component"
+  - label: "flagship AMIP: device time per component"
     key: "amip_summary"
-    depends_on: ["trace_main", "trace_pr", "ncu_main", "ncu_pr"]
+    depends_on: ["i2", "n_i2"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && python3 attribute_trace.py pr=trace_pr,ncu_pr.csv main=trace_main,ncu_main.csv
+      - cd $$PROFILE_DIR && (python3 attribute_trace.py i2=i2 || true)
     agents:
       slurm_cpus_per_task: 1
