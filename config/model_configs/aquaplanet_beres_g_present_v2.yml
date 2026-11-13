@@ -68,4 +68,4 @@ toml: [toml/prognostic_edmfx.toml, toml/nogw_beres_aquaplanet.toml, toml/nogw_st
 diagnostics:
   - short_name: [ua, utendnogw, ta]
     period: 1months
-    reduction: average
+    reduction_time: average
