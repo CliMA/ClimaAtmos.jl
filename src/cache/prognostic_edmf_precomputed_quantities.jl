@@ -83,35 +83,34 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot,
         ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
         Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
-            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
-            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+            # The thermodynamic state is evaluated before the first store, with
+            # the SGS weight of the environment evaluated once, so that every
+            # input is loaded once.
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+            ᶜweight⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, turbconv_model.a_half)
             @inline function ᶜχ⁰(name) # the environment value of a specific tracer
                 ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(name))
                 return @inline @. lazy(
-                    specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
+                    specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜweight⁰),
                 )
             end
-            @. ᶜq_liq⁰ =
-                max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
-            @. ᶜq_ice⁰ =
-                max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
+            ᶜq_liq = @. max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
+            ᶜq_ice = @. max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, $(ᶜχ⁰(@name(q_tot))))
+            ᶜq_tot = @. max(ᶜq_liq + ᶜq_ice, $(ᶜχ⁰(@name(q_tot))))
             ᶜh⁰ = @inline @. lazy(
-                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model) - ᶜΦ,
+                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, ᶜweight⁰) - ᶜΦ,
             )
-            @. ᶜT⁰ = max(
+            ᶜT = @. max(
                 T_min_sgs,
-                TD.air_temperature(
-                    thermo_params,
-                    TD.ph(),
-                    ᶜh⁰,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_liq⁰,
-                    ᶜq_ice⁰,
-                ),
+                TD.air_temperature(thermo_params, TD.ph(), ᶜh⁰, ᶜq_tot, ᶜq_liq, ᶜq_ice),
             )
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
+            @. ᶜq_liq⁰ = ᶜq_liq
+            @. ᶜq_ice⁰ = ᶜq_ice
+            @. ᶜq_tot_nonneg⁰ = ᶜq_tot
+            @. ᶜT⁰ = ᶜT
         end
     else
         ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -242,22 +241,24 @@ adjustment. The density is diagnosed at the grid-mean pressure.
 )
     if microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
-        @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
+        # Every value is evaluated before the first store, so that none is
+        # read back.
+        ᶜq_liq = @. max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
+        ᶜq_ice = @. max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
         # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-        @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-        ᶜhʲ = @inline @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-        @. ᶜTʲ = max(
+        ᶜq_tot = @. max(ᶜq_liq + ᶜq_ice, ᶜsgsʲ.q_tot)
+        ᶜT = @. max(
             T_min_sgs,
             TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜhʲ,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
+                thermo_params, TD.ph(), ᶜsgsʲ.mse - ᶜΦ, ᶜq_tot, ᶜq_liq, ᶜq_ice,
             ),
         )
+        ᶜρ = @. TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+        @. ᶜq_liqʲ = ᶜq_liq
+        @. ᶜq_iceʲ = ᶜq_ice
+        @. ᶜq_tot_nonnegʲ = ᶜq_tot
+        @. ᶜTʲ = ᶜT
+        @. ᶜρʲ = ᶜρ
     else
         @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
         ᶜsa_resultʲ = @. saturation_adjustment_tuple(
@@ -270,15 +271,9 @@ adjustment. The density is diagnosed at the grid-mean pressure.
         @. ᶜTʲ = ᶜsa_resultʲ.T
         @. ᶜq_liqʲ = ᶜsa_resultʲ.q_liq
         @. ᶜq_iceʲ = ᶜsa_resultʲ.q_ice
+        @. ᶜρʲ =
+            TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
     end
-    @. ᶜρʲ = TD.air_density(
-        thermo_params,
-        ᶜTʲ,
-        ᶜp,
-        ᶜq_tot_nonnegʲ,
-        ᶜq_liqʲ,
-        ᶜq_iceʲ,
-    )
     return nothing
 end
 

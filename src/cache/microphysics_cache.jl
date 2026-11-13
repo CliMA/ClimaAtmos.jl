@@ -248,6 +248,8 @@ function set_precipitation_velocities!(
             TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
         )
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        # The SGS weight of the environment, evaluated once for all species
+        ᶜweight⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, turbconv_model.a_half)
         ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
         ᶜρwₕhₜ = @. zero(Yc.ρ)
         # Velocities in UVW components, converted once for all species
@@ -264,7 +266,7 @@ function set_precipitation_velocities!(
             e_int_func = internal_energy_func(χ_name)
             ᶜρχ_gs = MatrixFields.get_field(Yc, ρχ_name)
             ᶜχ⁰ = @. specific_env_value(
-                χ_name, ᶜρχ_gs, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+                χ_name, ᶜρχ_gs, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜweight⁰,
             )
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
