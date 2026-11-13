@@ -12,7 +12,7 @@ using LinearAlgebra
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-import ClimaCore: Fields, Geometry, Operators, Spaces
+import ClimaCore: Fields, Geometry, MatrixFields, Operators, Spaces
 import ClimaCore.MatrixFields: @name, has_field
 import ClimaTimeSteppers as CTS
 
@@ -91,11 +91,22 @@ end
     end
 
     # Implicit dissipation `(I - dtγ 𝒟) ρχ* = ρχ` plus Courant-limited
-    # antidiffusion at `χ*`; snow is processed last, so `ᶜtemp_scalar`
-    # holds `ρχ*`.
+    # antidiffusion at `χ*`, with `ρχ*` solved from the system that the
+    # correction assembles in `ᶜupwind_dissipation_system`.
+    function dissipated(ᶜρχ)
+        ᶜρχ_star = similar(ᶜρχ)
+        MatrixFields.single_field_solve!(
+            p.scratch.ᶜupwind_dissipation_solver_cache,
+            ᶜρχ_star,
+            p.scratch.ᶜupwind_dissipation_system,
+            ᶜρχ,
+        )
+        return ᶜρχ_star
+    end
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶠρ = @. CA.ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    ᶜρJ = @. Y.c.ρ * ᶜJ
+    ᶠρ = @. CA.ᶠinterp(ᶜρJ) / ᶠJ
     ᶜanti_ref = similar(Y.c.ρq_sno)
     # Smooth gentle exponential profile (`Δz / H = 0.1`) with zero boundary `u³`
     # leaves Zalesak FCT inactive (`R^± = 1`) in the interior, matching
@@ -106,7 +117,7 @@ end
         u3_arr[1] = FT(0)
         u3_arr[end] = FT(0)
         CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
-        ᶜρχ_star = copy(p.scratch.ᶜtemp_scalar)
+        ᶜρχ_star = dissipated(Y.c.ρq_sno)
         ᶜχ_star = Base.materialize(@. CA.specific(ᶜρχ_star, Y.c.ρ))
         ᶠweight = @. 1 + 2 * abs(ᶠu³.components.data.:1) * dtγ
         dissipation = Base.materialize(
@@ -118,17 +129,11 @@ end
         )
         @test parent(ᶜρχ_star) .- dtγ .* parent(dissipation) ≈
               parent(Y.c.ρq_sno) rtol = 1e-10
-        fill!(ᶜanti_ref, FT(0))
-        CA.add_antidiffusive_upwind1_transport!(
-            ᶜanti_ref,
-            ᶠρ,
-            ᶠu³,
-            ᶜχ_star,
-            Y.c.ρ,
-            p,
-            dtγ,
-            upwinding,
+        ᶠΔχ = @. CA._c3_scalar(CA.ᶠgradᵥ(ᶜχ_star))
+        ᶠF_anti = CA.antidiffusive_upwind1_flux(
+            ᶠρ, ᶠu³, ᶜχ_star, ᶠΔχ, ᶜρJ, ᶠJ, dtγ, upwinding,
         )
+        @. ᶜanti_ref = -(CA.ᶜadvdivᵥ(ᶠF_anti))
         @test parent(Yₜ_corr.c.ρq_sno) ≈
               parent(dissipation) .+ parent(ᶜanti_ref) rtol = 1e-10
         # Away from top/bottom boundaries, gentle monotone decay leaves Zalesak
@@ -246,8 +251,7 @@ end
         @. Y_fe.c.ρq_sno +=
             dtγ * $(CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜq_sno_div, dt, Val(:none)))
         CA.correct_implicit_advection_tendency!(Yₜ_corr, Y_fe, p, t)
-        # Snow runs last, so `p.scratch.ᶜtemp_scalar` holds its low-order `χ*`.
-        χ_star_vec = vec(Array(parent(p.scratch.ᶜtemp_scalar)))
+        χ_star_vec = vec(Array(parent(dissipated(Y_fe.c.ρq_sno))))
         q_end_vec =
             vec(Array(parent(Y_fe.c.ρq_sno) .+ dtγ .* parent(Yₜ_corr.c.ρq_sno)))
         for k in 1:10
@@ -828,7 +832,14 @@ end
     T_up1 = Array(parent(p.precomputed.ᶜTʲs.:(1)))[1]
     T_en1 = Array(parent(p.precomputed.ᶜT⁰))[1]
     ρ_up1 = Array(parent(p.precomputed.ᶜρʲs.:(1)))[1]
-    ρ_en1 = Array(parent(p.scratch.sfc_precip_env_density))[1]
+    (; ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    ρ_en1 = max(
+        eps(FT),
+        CA.TD.air_density(
+            thp, T_en1, Array(parent(ᶜp))[1], Array(parent(ᶜq_tot_nonneg⁰))[1],
+            Array(parent(ᶜq_liq⁰))[1], Array(parent(ᶜq_ice⁰))[1],
+        ),
+    )
     ρa_up1 = Array(parent(Y.c.sgsʲs.:(1).ρa))[1]
     f_e_sgs_exact = FT(0)
     for (q_sym, ρq_sym, wʲ_sym, w_sym, e_fn) in (

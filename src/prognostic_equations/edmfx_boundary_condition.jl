@@ -7,7 +7,8 @@
     set_edmfx_surface_conditions!(Y, p)
 
 Populate the per-updraft surface boundary-condition payload at model level 1
-for the PROPHET scheme (`EDMFX` in code).
+for the PROPHET scheme (`EDMFX` in code), and the surface TKE flux
+`p.precomputed.ρtke_flux` (`surface_flux_tke`), in one point loop.
 
 For each updraft `j`, writes the level-1 caches
 
@@ -18,15 +19,14 @@ For each updraft `j`, writes the level-1 caches
     rate (`edmfx_sfc_mass_flux_source`) [kg/m³/s].
 
 The buoyant values are computed first so the mass-flux cap can consume them.
-The environment `mse` and `q_tot` are stored in `p.scratch.ᶜtemp_scalar` and
-`ᶜtemp_scalar_2` at level 1, which the loop over updrafts reads.
+The environment `mse` and `q_tot` at level 1 are temporaries of the loop.
 
 These are three separate scalar fields rather than one `NamedTuple`-valued
 field because broadcasting a `NamedTuple` into a `DataLayout` at a single level
 hits a GPU-incompatible `convert` path inside `knl_copyto!`.
 
 No-op unless `p.atmos.turbconv_model isa PrognosticEDMFX`. Mutates
-`p.precomputed` and `p.scratch`; returns `nothing`. Called from
+`p.precomputed`; returns `nothing`. Called from
 `set_prognostic_edmf_precomputed_quantities_explicit_closures!`; the payload is
 consumed by `edmfx_boundary_condition_tendency!` and by the implicit
 `ρa` solve.
@@ -43,12 +43,11 @@ function set_edmfx_surface_conditions!(Y, p)
         ᶜρʲs,
         ᶜK,
         ᶜh_tot,
+        ρtke_flux,
     ) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
-
-    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    q_tot_name = @name(q_tot)
 
     lg_val = Fields.field_values(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
@@ -65,13 +64,8 @@ function set_edmfx_surface_conditions!(Y, p)
     h_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
     K_int_val = Fields.field_values(Fields.level(ᶜK, 1))
     ρq_tot_int_val = Fields.field_values(Fields.level(Y.c.ρq_tot, 1))
-    mse_env_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar, 1))
-    q_tot_env_val = Fields.field_values(Fields.level(p.scratch.ᶜtemp_scalar_2, 1))
-    mse_env_val .= Fields.field_values(Fields.level(ᶜmse⁰, 1))
-    q_tot_env_val .= Fields.field_values(Fields.level(ᶜq_tot⁰, 1))
     ᶜdz = Fields.Δz_field(axes(Y.c))
     dz_int_val = Fields.field_values(Fields.level(ᶜdz, 1))
-
 
     DataLayouts.foreach_point(
         Fields.field_values(Fields.level(sfc_mse_buoyantʲs, 1)),
@@ -80,12 +74,23 @@ function set_edmfx_surface_conditions!(Y, p)
         Fields.field_values(Fields.level(ᶜρʲs, 1)),
         Fields.field_values(Fields.level(Y.c.sgsʲs, 1)),
         bf_val, ρ_int_val, ustar_val, obukhov_val, lg_val, z_int_val, z_sfc_val,
-        h_tot_int_val, K_int_val, ρq_tot_int_val, mse_env_val, q_tot_env_val, dz_int_val,
+        h_tot_int_val, K_int_val, ρq_tot_int_val, dz_int_val,
         Fields.field_values(ρ_flux_h_tot), Fields.field_values(ρ_flux_q_tot),
+        Fields.field_values(ρtke_flux),
     ) do mse_buoyantʲs_val, q_tot_buoyantʲs_val, mass_flux_sourceʲs_val, ρʲs_val,
     sgsʲs_val, bf_val, ρ_int_val, ustar_val, obukhov_val, lg_val, z_int_val, z_sfc_val,
-    h_tot_int_val, K_int_val, ρq_tot_int_val, mse_env_val, q_tot_env_val, dz_int_val,
-    ρ_flux_h_tot_face_val, ρ_flux_q_tot_face_val
+    h_tot_int_val, K_int_val, ρq_tot_int_val, dz_int_val,
+    ρ_flux_h_tot_face_val, ρ_flux_q_tot_face_val, ρtke_flux_val
+        # TODO: replace the density of the first cell by the surface value
+        @. ρtke_flux_val =
+            surface_flux_tke(turbconv_params, ρ_int_val, ustar_val, lg_val)
+        ρa⁰_val = @. ρa⁰(ρ_int_val, sgsʲs_val, turbconv_model)
+        mse_env_val = @. specific_env_mse(
+            ρ_int_val, sgsʲs_val, h_tot_int_val, K_int_val, ρa⁰_val, turbconv_model,
+        )
+        q_tot_env_val = @. specific_env_value(
+            q_tot_name, ρq_tot_int_val, ρ_int_val, sgsʲs_val, ρa⁰_val, turbconv_model,
+        )
         # The surface `C3` flux vectors projected onto the surface normal
         ρ_flux_h_tot_val =
             @inline @. lazy(projected_vector_data(C3, ρ_flux_h_tot_face_val, lg_val))

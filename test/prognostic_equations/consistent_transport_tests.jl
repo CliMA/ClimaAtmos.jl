@@ -53,7 +53,8 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
     (; ᶠu³, ᶜp) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶠρ = @. CA.ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    ᶜρJ = @. Y.c.ρ * ᶜJ
+    ᶠρ = @. CA.ᶠinterp(ᶜρJ) / ᶠJ
     z_c = Fields.coordinate_field(Y.c).z
     z_f = Fields.coordinate_field(Y.f).z
     n_levels = Spaces.nlevels(axes(Y.c))
@@ -139,9 +140,11 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
             (Yₜ_corr.c.ρq_tot, ᶜq_tot),
             (Yₜ_corr.c.ρq_lcl, ᶜq_lcl),
         )
-            CA.add_antidiffusive_upwind1_transport!(
-                ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, Y.c.ρ, p, dtγ, upwinding,
+            ᶠΔχ = @. CA._c3_scalar(CA.ᶠgradᵥ(ᶜχ))
+            ᶠF_anti = CA.antidiffusive_upwind1_flux(
+                ᶠρ, ᶠu³, ᶜχ, ᶠΔχ, ᶜρJ, ᶠJ, dtγ, upwinding,
             )
+            @. ᶜρχₜ -= CA.ᶜadvdivᵥ(ᶠF_anti)
         end
         test_affine(Yₜ_corr, "correction")
 
@@ -630,9 +633,11 @@ end
     spread_before = spread(p.precomputed.ᶜT)
 
     Yₜ = similar(Y)
+    Yₜ_corr = similar(Y)
     Yₜ .= zero(eltype(Yₜ))
     CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    CA.add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
+    CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
+    @. Yₜ += Yₜ_corr
     for name in (:ρ, :ρe_tot, :ρq_tot, :ρq_lcl)
         ᶜχ = getproperty(Y.c, name)
         @. ᶜχ += dt_euler * $(getproperty(Yₜ.c, name))
@@ -704,7 +709,8 @@ end
     end
     Yₜ .= zero(eltype(Yₜ))
     CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    CA.add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
+    CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
+    @. Yₜ += Yₜ_corr
     for name in (:ρ, :ρe_tot, :ρq_tot)
         ᶜχ = getproperty(Y.c, name)
         @. ᶜχ += dt_euler * $(getproperty(Yₜ.c, name))

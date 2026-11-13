@@ -200,7 +200,7 @@ const ᶠwinterp = Operators.WeightedInterpolateC2F(
 # TODO: Replace these boundary conditions with NaN's, since they are
 # meaningless and we only need to specify them in order to be able to
 # materialize broadcasts. Any effect these boundary conditions have on the
-# boundary values of Y.f.u₃ is overwritten when we call set_velocity_at_surface!.
+# boundary values of Y.f.u₃ is overwritten when we call set_velocity_at_boundaries!.
 # Ideally, we would enforce the boundary conditions on Y.f.u₃ by filtering it
 # immediately after adding the tendency to it. However, this is not currently
 # possible because our implicit solver is unable to handle filtering, which is

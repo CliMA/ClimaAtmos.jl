@@ -553,12 +553,17 @@ Return the component of a vector of type `V` whose physical length is 1.
 
 `V` must be a single-component vector type, i.e. a basis-vector type such as
 `CT3`. Multiplying by this factor converts a physical magnitude into the
-component of `V`.
+component of `V`. For `C3`, whose unit component is `1 / √g³³`, only that
+component of the stored metric `gⁱʲ` is read; the general method converts the
+vector to the local basis, which inverts `∂x∂ξ` at every point.
 """
 function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
     FT = Geometry.undertype(typeof(local_geometry))
     return FT(1) / Geometry._norm(V(FT(1)), local_geometry)
 end
+
+unit_basis_vector_data(::Type{C3}, local_geometry) =
+    inv(sqrt(parent(local_geometry.gⁱʲ)[end, end]))
 
 """
     projected_vector_data(::Type{V}, vector, local_geometry)
@@ -1078,10 +1083,18 @@ step to diverge.
 end
 
 """
-    normal_cdf(z)
+    normal_pdf(z)
+
+The standard normal density φ(z) = exp(−z²/2) / √(2π) [-].
+"""
+@inline normal_pdf(z::FT) where {FT} = exp(-z^2 / 2) * (one(FT) / sqrt(FT(2) * FT(π)))
+
+"""
+    normal_cdf(z, φ = normal_pdf(z))
 
 Compute the standard normal CDF Φ(z) [-] with the rational approximation of
-Abramowitz & Stegun (Eq. 26.2.17).
+Abramowitz & Stegun (Eq. 26.2.17), from the density `φ` at `z`, which a caller
+that holds it passes in.
 
 Maximum absolute error ≈ 7.5 × 10⁻⁸ over the full real line.  Uses only
 `exp` and basic arithmetic — no `SpecialFunctions` dependency.
@@ -1093,8 +1106,7 @@ The approximation for z ≥ 0 is
 where `p` is a degree-5 polynomial with the A&S coefficients, and
 `Φ(z) = 1 − Φ(−z)` for z < 0.
 """
-@inline function normal_cdf(z::FT) where {FT}
-    inv_sqrt2pi = one(FT) / sqrt(FT(2) * FT(π))
+@inline function normal_cdf(z::FT, φ = normal_pdf(z)) where {FT}
     z_abs = abs(z)
     t = one(FT) / (one(FT) + FT(0.2316419) * z_abs)
     poly =
@@ -1108,6 +1120,6 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
                 )
             )
         )
-    q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
+    q = φ * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end

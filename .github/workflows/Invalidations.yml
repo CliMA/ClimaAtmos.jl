@@ -22,7 +22,7 @@ jobs:
     - uses: actions/checkout@v7
     # Temporary: remove when the parameter packages with `@params` are released.
     # Julia 1.10 ignores the [sources] of Project.toml.
-    - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
+    - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = name == "CloudMicrophysics" ? "dy/microphysics_fusion" : "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
       shell: julia --color=yes --project=. {0}
     - uses: julia-actions/julia-buildpkg@v1
     - uses: julia-actions/julia-invalidations@v1

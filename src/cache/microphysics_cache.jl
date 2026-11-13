@@ -71,9 +71,14 @@ end
 
 Return a generic numerical-zero threshold. Used for variance floors, σ guards,
 and density-weighted mass checks, anywhere the exact value does not matter as
-long as it is small but safely above underflow.
+long as it is small but safely above underflow. For `Float32` and `Float64` the
+value is a constant of the method, since a GPU compiler does not fold the call
+of `cbrt`.
 """
 ϵ_numerics(FT) = cbrt(floatmin(FT))
+for FT in (Float32, Float64)
+    @eval ϵ_numerics(::Type{$FT}) = $(cbrt(floatmin(FT)))
+end
 
 """
     fill_column_max!(ᶜw_max, ᶜw)
@@ -1085,21 +1090,31 @@ function set_environment_1m_tendency!(
         end
     end
 
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs, mode_args...,
+            ᶜT⁰, w_component(WVec(ᶜu⁰)), cmp, thp, dt, nsubs, mode_args...,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
-        opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
-        )
+        (; params) = p
+        sgs_microphysics_options(params)
+        DataLayouts.foreach_point(
+            ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜu⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+            ᶜsgs_moments, ᶜα, ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac,
+        ) do ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜu⁰, ᶜq_tot_nonneg⁰,
+        ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+        ᶜsgs_moments, ᶜα, ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac
+            opts = unchecked_sgs_microphysics_options(params)
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                w_component(WVec(ᶜu⁰)),
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts, mode_args...,
+            )
+        end
     end
     return nothing
 end
@@ -1822,53 +1837,28 @@ function accumulate_stage_precipitation_surface_fluxes!(
     precip_stage_idx[] = k
     b_k = b_imp_stages[k]
 
-    sfc_space = axes(sfc_precip_lin_state)
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
-
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-
-    f_lcl = @. lazy(
-        sfc_precip_lin_state.f_guess_lcl +
-        sfc_precip_lin_state.w_lcl_jac *
-        (int_ρq_lcl - sfc_precip_lin_state.ρq_lcl_guess),
-    )
-    f_icl = @. lazy(
-        sfc_precip_lin_state.f_guess_icl +
-        sfc_precip_lin_state.w_icl_jac *
-        (int_ρq_icl - sfc_precip_lin_state.ρq_icl_guess),
-    )
-    f_rai = @. lazy(
-        sfc_precip_lin_state.f_guess_rai +
-        sfc_precip_lin_state.w_rai_jac *
-        (int_ρq_rai - sfc_precip_lin_state.ρq_rai_guess),
-    )
-    f_sno = @. lazy(
-        sfc_precip_lin_state.f_guess_sno +
-        sfc_precip_lin_state.w_sno_jac *
-        (int_ρq_sno - sfc_precip_lin_state.ρq_sno_guess),
-    )
-    f_rain = @. lazy(f_rai + f_lcl)
-    f_snow = @. lazy(f_sno + f_icl)
-    f_energy = @. lazy(
-        sfc_precip_lin_state.f_e_sgs +
-        f_rai * sfc_precip_lin_state.e_rai +
-        f_lcl * sfc_precip_lin_state.e_lcl +
-        f_sno * sfc_precip_lin_state.e_sno +
-        f_icl * sfc_precip_lin_state.e_icl,
-    )
-
-    if k == 1
-        @. surface_rain_flux_accum = b_k * f_rain
-        @. surface_snow_flux_accum = b_k * f_snow
-        @. col_integrated_precip_energy_tendency_accum = b_k * f_energy
-    else
-        @. surface_rain_flux_accum += b_k * f_rain
-        @. surface_snow_flux_accum += b_k * f_snow
-        @. col_integrated_precip_energy_tendency_accum += b_k * f_energy
+    first_stage = k == 1
+    DataLayouts.foreach_point(
+        Fields.field_values(surface_rain_flux_accum),
+        Fields.field_values(surface_snow_flux_accum),
+        Fields.field_values(col_integrated_precip_energy_tendency_accum),
+        Fields.field_values(sfc_precip_lin_state),
+        Fields.field_values(Fields.level(Y.c, 1)),
+    ) do rain_accum, snow_accum, energy_accum, lin, int_Yc
+        f_lcl = @. lin.f_guess_lcl + lin.w_lcl_jac * (int_Yc.ρq_lcl - lin.ρq_lcl_guess)
+        f_icl = @. lin.f_guess_icl + lin.w_icl_jac * (int_Yc.ρq_icl - lin.ρq_icl_guess)
+        f_rai = @. lin.f_guess_rai + lin.w_rai_jac * (int_Yc.ρq_rai - lin.ρq_rai_guess)
+        f_sno = @. lin.f_guess_sno + lin.w_sno_jac * (int_Yc.ρq_sno - lin.ρq_sno_guess)
+        f_rain = @. b_k * (f_rai + f_lcl)
+        f_snow = @. b_k * (f_sno + f_icl)
+        f_energy = @. b_k * (
+            lin.f_e_sgs + f_rai * lin.e_rai + f_lcl * lin.e_lcl + f_sno * lin.e_sno +
+            f_icl * lin.e_icl
+        )
+        # The first stage of a step starts the sums.
+        @. rain_accum = ifelse(first_stage, f_rain, rain_accum + f_rain)
+        @. snow_accum = ifelse(first_stage, f_snow, snow_accum + f_snow)
+        @. energy_accum = ifelse(first_stage, f_energy, energy_accum + f_energy)
     end
     return nothing
 end
@@ -1880,51 +1870,52 @@ function set_precipitation_surface_fluxes!(
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
+    sfc_fluxes =
+        (surface_rain_flux, surface_snow_flux, col_integrated_precip_energy_tendency)
     if eltype(Y) === eltype(p.params) &&
        has_precip_stage_accumulator(p) &&
        !p.atmos.numerics.reproducible_restart &&
        p.scratch.precip_stage_idx[] == p.scratch.n_imp_stages
-        @. surface_rain_flux = p.scratch.surface_rain_flux_accum
-        @. surface_snow_flux = p.scratch.surface_snow_flux_accum
-        @. col_integrated_precip_energy_tendency =
-            p.scratch.col_integrated_precip_energy_tendency_accum
+        DataLayouts.foreach_point(
+            unrolled_map(Fields.field_values, sfc_fluxes)...,
+            Fields.field_values(p.scratch.surface_rain_flux_accum),
+            Fields.field_values(p.scratch.surface_snow_flux_accum),
+            Fields.field_values(p.scratch.col_integrated_precip_energy_tendency_accum),
+        ) do rain_flux, snow_flux, energy_tendency, rain_accum, snow_accum, energy_accum
+            @. rain_flux = rain_accum
+            @. snow_flux = snow_accum
+            @. energy_tendency = energy_accum
+        end
         return nothing
     end
     (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
-    sfc_space = axes(sfc_J)
 
     # Jacobian-weighted extrapolation from interior to surface, consistent with
     # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
-    int_J = sfc_lev(ᶜJ)
-    int_ρ = sfc_lev(Y.c.ρ)
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-    sfc_wᵣ = sfc_lev(ᶜwᵣ)
-    sfc_wₛ = sfc_lev(ᶜwₛ)
-    sfc_wₗ = sfc_lev(ᶜwₗ)
-    sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
-    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
-
-    @. surface_rain_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_rai, int_ρ), zero(int_ρ)) * (-sfc_wᵣ) +
-            max(specific(int_ρq_lcl, int_ρ), zero(int_ρ)) * (-sfc_wₗ)
-        )
-    @. surface_snow_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_sno, int_ρ), zero(int_ρ)) * (-sfc_wₛ) +
-            max(specific(int_ρq_icl, int_ρ), zero(int_ρ)) * (-sfc_wᵢ)
-        )
-    @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
-
+    int_val(x) = Fields.field_values(Fields.level(x, 1))
+    DataLayouts.foreach_point(
+        unrolled_map(Fields.field_values, sfc_fluxes)..., Fields.field_values(sfc_J),
+        int_val(ᶜJ), int_val(Y.c), int_val(ᶜwᵣ), int_val(ᶜwₛ), int_val(ᶜwₗ), int_val(ᶜwᵢ),
+        int_val(ᶜwₕhₜ.components.data.:1),
+    ) do rain_flux, snow_flux, energy_tendency, sfc_J, int_J, int_Yc, sfc_wᵣ, sfc_wₛ,
+    sfc_wₗ, sfc_wᵢ, sfc_wₕhₜ
+        int_ρ = int_Yc.ρ
+        sfc_ρ = @. int_ρ * int_J / sfc_J
+        @. rain_flux =
+            sfc_ρ * (
+                max(specific(int_Yc.ρq_rai, int_ρ), zero(int_ρ)) * (-sfc_wᵣ) +
+                max(specific(int_Yc.ρq_lcl, int_ρ), zero(int_ρ)) * (-sfc_wₗ)
+            )
+        @. snow_flux =
+            sfc_ρ * (
+                max(specific(int_Yc.ρq_sno, int_ρ), zero(int_ρ)) * (-sfc_wₛ) +
+                max(specific(int_Yc.ρq_icl, int_ρ), zero(int_ρ)) * (-sfc_wᵢ)
+            )
+        @. energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
+    end
     return nothing
 end
 

@@ -415,8 +415,14 @@ function sgs_u₃_implicit_tendency!(
 
     # Use the implied tendency cached during implicit-stage initialization.
     # This keeps the analytically solved u₃ value fixed during the ODE solve.
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ = ᶠu₃_tendencyʲs.:($$j)
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (Yₜ.f.sgsʲs.:($j).u₃, ᶠu₃_tendencyʲs.:($j))
+    end
+    DataLayouts.foreach_point(drafts) do drafts
+        for (ᶠu₃ₜʲ, ᶠu₃_tendencyʲ) in drafts
+            @. ᶠu₃ₜʲ = ᶠu₃_tendencyʲ
+        end
     end
 end
 
@@ -493,16 +499,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
     ) = p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT) = (zero(FT), one(FT))
     inv_dtγ = 1 / dtγ
 
     turbconv_params = CAP.turbconv_params(params)
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     nh_pressure = p.atmos.edmfx_model.nh_pressure
     (sponge, ᶠz) =
         isnothing(rayleigh_sponge) ? ((), ()) :
@@ -529,6 +528,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             @inline
             (ᶜentr_vel_scaleʲ, ᶜarea_bounding_entr_detrʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) =
                 rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            (zero_FT, one_FT) = (zero(eltype(ᶠdz)), one(eltype(ᶠdz)))
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+            a_min = CAP.min_area(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
+            scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft
             # case). Guard against unphysical extrapolated areas (ρa is solved
             # analytically AFTER u₃, so the u₃ solve sees a possibly
@@ -597,7 +605,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         Operators.column_accumulate!(
             ᶠu₃ʲ,
             input;
-            init = C3(zero_FT),
+            init = C3(zero(eltype(params))),
         ) do u₃_prev_face, (B_face, K_face, C_face)
             return C3(
                 -B_face +
@@ -728,17 +736,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
-
     turbconv_params = CAP.turbconv_params(p.params)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence, computed in one column loop
     # per draft:
@@ -791,6 +791,15 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         ) do ᶜoffset, ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
         ᶜρ_diffʲ, rates, ᶜr_mass_column, mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
             (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            FT = eltype(ᶜρʲ)
+            (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
+            detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+            entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+            detr_massflux_vertdiv_coeff = CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
             ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
             ᶜJ = Fields.local_geometry_field(axes(ᶜρaʲ)).J
             ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
@@ -875,8 +884,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
-            init = FT(0),
+            init = zero(eltype(p.params)),
         ) do ρa_prev, (offset, factor, ρ_cell)
+            a_max = CAP.max_area(turbconv_params)
             return clamp(offset + factor * ρa_prev, zero(ρa_prev), a_max * ρ_cell)
         end
     end
@@ -955,7 +965,7 @@ is swept bottom-to-top with `Operators.column_accumulate!` as
 
 `α[1]` is zero: the bottom face of cell 1 is the surface, through which there
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
-(`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
+(`set_velocity_at_boundaries!`). The entrainment rate uses the `u₃` iterate of
 the current Picard round, which is the velocity the Newton solve's entrainment
 tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. The entrained
 value `χ⁰` and the stage-initial `χ` of every tracer other than `mse` enter

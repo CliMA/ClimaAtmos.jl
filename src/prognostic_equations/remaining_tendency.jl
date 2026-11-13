@@ -166,19 +166,21 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     viscous_sponge_tendency!(Yₜ, Y, p)
 
-    # Held Suarez tendencies
-    @. Yₜ.c.uₕ += hs_tendency_uₕ
-    @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
+    # Held Suarez tendencies. The tendency of an inactive forcing is a
+    # `NullBroadcasted`, whose sum with a field is a broadcast of the field onto
+    # itself, so it is skipped.
+    hs_tendency_uₕ isa NullBroadcasted || @. Yₜ.c.uₕ += hs_tendency_uₕ
+    hs_tendency_ρe_tot isa NullBroadcasted || @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
 
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
 
-    @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
+    bc_lsa_tend_ρe_tot isa NullBroadcasted || @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
     if microphysics_model isa MoistMicrophysics
         bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
-        @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
+        bc_lsa_tend_ρq_tot isa NullBroadcasted || @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
     end
 
-    @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
+    edmf_cor_tend_uₕ isa NullBroadcasted || @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
