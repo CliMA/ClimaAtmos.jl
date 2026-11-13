@@ -2158,8 +2158,7 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     tm = p.atmos.turbconv_model
     is_edmf = tm isa PrognosticEDMFX
     has_sgs_mf = is_edmf && p.atmos.edmfx_model.sgs_mass_flux
-    FT = Spaces.undertype(axes(Y.c))
-    (z, eps_FT) = (zero(FT), eps(FT))
+    z = zero(Spaces.undertype(axes(Y.c)))
     q_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
     ρχ_name(χ_name) = center_state_name(get_ρχ_name(χ_name))
     is_implicit((χ_name, process)) =
@@ -2206,8 +2205,11 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
         ) do ∂ᶜρχ_diags, ∂ᶜχʲ_diags, ∂ᶜρχ_∂ᶜχʲs, Yc,
         ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜmp_tendency⁰,
         ᶜTʲ, ᶜρʲ, ᶜq_tot_nonnegʲ, ᶜmp_tendencyʲ
+            # Constants, evaluated in the loop so that the kernel folds them (a
+            # scalar that the loop captures is a run-time value).
+            (zero_FT, ϵ_FT) = (zero(eltype(ᶜp)), eps(eltype(ᶜp)))
             ᶜρ⁰ = @. max(
-                eps_FT,
+                ϵ_FT,
                 TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
             )
             ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
@@ -2241,8 +2243,9 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
                 if has_sgs_mf
                     @. ∂ᶜρχ_∂ᶜχʲ += DiagonalMatrixRow(dtγ * ᶜsgsʲ.ρa * (ᶜrʲ - ᶜr⁰))
                 else
-                    @. ∂ᶜρχ_∂ᶜχʲ =
-                        TridiagonalMatrixRow(z, dtγ * ᶜsgsʲ.ρa * (ᶜrʲ - ᶜr⁰), z)
+                    @. ∂ᶜρχ_∂ᶜχʲ = TridiagonalMatrixRow(
+                        zero_FT, dtγ * ᶜsgsʲ.ρa * (ᶜrʲ - ᶜr⁰), zero_FT,
+                    )
                 end
             end
         end
