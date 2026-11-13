@@ -1939,9 +1939,7 @@ entrainment, mutates `matrix`, and returns `nothing`.
 """
 function update_sgs_diffusion_and_entr_detr_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    ϵ_FT = eps(Spaces.undertype(axes(Y.c)))
-    updraft_kh_factor =
-        CAP.edmfx_updraft_kh_diffusion_factor(CAP.turbconv_params(p.params))
+    turbconv_params = CAP.turbconv_params(p.params)
     diffusion_args =
         use_derivative(diffusion_flag) && p.atmos.edmfx_model.sgs_diffusive_flux &&
         p.atmos.edmfx_model.vertical_diffusion ?
@@ -2005,6 +2003,10 @@ function update_sgs_diffusion_and_entr_detr_jacobian!(matrix, Y, p, dtγ, diffus
         if !isempty(diffusion_args)
             (ᶠK_h, ∂ᶜχʲ_diff_diags) = diffusion_args
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
+            # Constants, evaluated in the loop so that the kernel folds them (a
+            # scalar that the loop captures is a run-time value).
+            ϵ_FT = eps(eltype(ᶠK_h))
+            updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
             ᶠwʲ_col = ᶠupdraft_diffusion_weight!(nothing, ᶜρaʲ, ᶠK_h, updraft_kh_factor)
             ᶠp_grad = @inline @. lazy(DiagonalMatrixRow(ᶠwʲ_col) * ᶠgradᵥ_matrix())
             ᶜsgs_diff_contrib = @. dtγ * (
