@@ -91,8 +91,8 @@ end
 
 Build the `AtmosNumerics` group from the numerics config keys.
 
-Reads the upwinding schemes (`energy_q_tot_upwinding`, `tracer_upwinding`,
-`edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
+Reads the upwinding schemes (`energy_humidity_upwinding`, `tracer_upwinding`,
+`edmfx_mse_humidity_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
 converted to a `Symbol`), the `apply_sem_quasimonotone_limiter`,
 `test_dycore_consistency`, and `reproducible_restart` switches, `implicit_diffusion`
 (which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
@@ -105,10 +105,10 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
     reproducible_restart = parsed_args["reproducible_restart"]::Bool
 
-    energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
+    energy_humidity_upwinding = Symbol(parsed_args["energy_humidity_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
 
-    edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
+    edmfx_mse_humidity_upwinding = Symbol(parsed_args["edmfx_mse_humidity_upwinding"])
     edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
     edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
@@ -120,9 +120,9 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
     numerics = AtmosNumerics(;
-        energy_q_tot_upwinding,
+        energy_humidity_upwinding,
         tracer_upwinding,
-        edmfx_mse_q_tot_upwinding,
+        edmfx_mse_humidity_upwinding,
         edmfx_sgsflux_upwinding,
         edmfx_tracer_upwinding,
         limiter,

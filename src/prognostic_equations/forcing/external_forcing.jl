@@ -171,13 +171,11 @@ Relax the horizontal momentum `Y.c.uₕ` toward the target `(ᶜu_nudge, ᶜv_nu
 [m/s] with inverse timescale `ᶜinv_τ_wind` [1/s], adding the tendency
 `-(uₕ - uₕ_nudge) / τ` to `Yₜ.c.uₕ`.
 
-Uses the scratch field `p.scratch.ᶜtemp_C12` to hold the target vector. Shared by
-the file-driven and per-term `Nudging` forcings. Returns `nothing`.
+Shared by the file-driven and per-term `Nudging` forcings. Returns `nothing`.
 """
 function nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
+    ᶜuₕ_nudge = @. lazy(C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg))
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
     return nothing
 end
@@ -631,8 +629,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(u(ᶜz), v(ᶜz)), ᶜlg)
+    ᶜuₕ_nudge = @. lazy(C12(Geometry.UVVector(u(ᶜz), v(ᶜz)), ᶜlg))
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind(ᶜz)
 
     # TODO: May make more sense to use initial ISDAC (hydrostatic) pressure, but would need to add it to cache,

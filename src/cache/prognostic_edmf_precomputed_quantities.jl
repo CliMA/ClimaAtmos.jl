@@ -85,18 +85,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
             set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
             set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+            ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
             @inline function ᶜχ⁰(name) # the environment value of a specific tracer
                 ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(name))
-                return @. lazy(
+                return @inline @. lazy(
                     specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
                 )
             end
-            @. ᶜq_liq⁰ = max(0, $(ᶜχ⁰(@name(q_lcl))) + $(ᶜχ⁰(@name(q_rai))))
-            @. ᶜq_ice⁰ = max(0, $(ᶜχ⁰(@name(q_icl))) + $(ᶜχ⁰(@name(q_sno))))
+            @. ᶜq_liq⁰ =
+                max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
+            @. ᶜq_ice⁰ =
+                max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
             @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, $(ᶜχ⁰(@name(q_tot))))
-            ᶜh⁰ = @. lazy(
+            ᶜh⁰ = @inline @. lazy(
                 specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model) - ᶜΦ,
             )
             @. ᶜT⁰ = max(
@@ -110,7 +112,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
                     ᶜq_ice⁰,
                 ),
             )
-            return nothing
         end
     else
         ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -142,9 +143,7 @@ Update the velocity and thermodynamic quantities of each SGS draft (updraft) for
 `PrognosticEDMFX`. Returns `nothing`.
 
 Mutates in `p.precomputed`, for every mass-flux subdomain `j`: `ᶜuʲs`, `ᶠu³ʲs`,
-`ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`, and `ᶜρʲs`;
-for `EquilibriumMicrophysics0M` it also reuses the shared `ᶜsa_result` field as
-a saturation-adjustment workspace.
+`ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`, and `ᶜρʲs`.
 
 For `NonEquilibriumMicrophysics1M`/`2M`, the draft condensate is taken from the
 prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
@@ -164,7 +163,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ᶠuₕ³,
     t,
 )
-    (; turbconv_model) = p.atmos
+    (; microphysics_model, turbconv_model) = p.atmos
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
 
@@ -183,51 +182,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ) = p.precomputed
 
     T_min_sgs = CAP.T_min_sgs(p.params)
+    # One column loop per draft: velocities and kinetic energies, then the draft
+    # thermodynamic state.
     for j in 1:n
-        ᶜuʲ = ᶜuʲs.:($j)
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
-        ᶜKʲ = ᶜKʲs.:($j)
-        ᶠKᵥʲ = ᶠKᵥʲs.:($j)
-        ᶜTʲ = ᶜTʲs.:($j)
-        ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
-        ᶜq_liqʲ = ᶜq_liqʲs.:($j)
-        ᶜq_iceʲ = ᶜq_iceʲs.:($j)
-        ᶜρʲ = ᶜρʲs.:($j)
-        ᶜsgsʲ = Y.c.sgsʲs.:($j)
-        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-
-        if p.atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M,
-        }
-            # One fused column loop per draft: velocities and kinetic energies,
-            # then the draft thermodynamic state from the prognostic tracers.
-            DataLayouts.foreach_column(
-                ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-                ᶜsgsʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
-            ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-            ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
-                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
-                @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-                set_draft_thermo_column!(
-                    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-                    thermo_params, T_min_sgs,
-                )
-                return nothing
-            end
-        else
-            # EquilibriumMicrophysics0M: use saturation adjustment
-            DataLayouts.foreach_column(
-                ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜq_tot_nonnegʲ, ᶜsgsʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³,
-            ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜq_tot_nonnegʲ, ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³
-                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
-                @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-                @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
-                return nothing
-            end
-            set_draft_saturation_adjustment!(
-                ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, p.precomputed.ᶜsa_result,
-                ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp, thermo_params,
+        DataLayouts.foreach_column(
+            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), ᶜTʲs.:($j),
+            ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), ᶜρʲs.:($j),
+            Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
+        ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
+        ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
+            @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+            set_draft_thermo_column!(
+                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+                microphysics_model, thermo_params, T_min_sgs,
             )
         end
     end
@@ -237,68 +205,50 @@ end
 """
     set_draft_thermo_column!(
         ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-        thermo_params, T_min_sgs,
+        microphysics_model, thermo_params, T_min_sgs,
     )
 
-Column body of the draft thermodynamic state for non-equilibrium microphysics:
-condensate from the prognostic draft tracers, `q_tot` clamped to at least the
-condensate, `T` from the enthalpy `mse - Φ` floored at `T_min_sgs`, and `ρ` at the
-grid-mean pressure.
+Column body of the draft thermodynamic state. For `NonEquilibriumMicrophysics1M`/`2M`,
+the condensate comes from the prognostic draft tracers, `q_tot` is clamped to at least
+the condensate, and `T` follows from the enthalpy `mse - Φ`, floored at `T_min_sgs`;
+otherwise, `T` and the phase partition come from a pressure-enthalpy saturation
+adjustment. The density is diagnosed at the grid-mean pressure.
 """
 @inline function set_draft_thermo_column!(
     ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-    thermo_params, T_min_sgs,
+    microphysics_model, thermo_params, T_min_sgs,
 )
-    @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
-    @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
-    # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-    @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-    ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-    @. ᶜTʲ = max(
-        T_min_sgs,
-        TD.air_temperature(
+    if microphysics_model isa
+       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+        @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
+        @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
+        # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
+        @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
+        ᶜhʲ = @inline @. lazy(ᶜsgsʲ.mse - ᶜΦ)
+        @. ᶜTʲ = max(
+            T_min_sgs,
+            TD.air_temperature(
+                thermo_params,
+                TD.ph(),
+                ᶜhʲ,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+            ),
+        )
+    else
+        @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
+        ᶜsa_resultʲ = @. saturation_adjustment_tuple(
             thermo_params,
             TD.ph(),
-            ᶜhʲ,
+            ᶜp,
+            ᶜsgsʲ.mse - ᶜΦ,
             ᶜq_tot_nonnegʲ,
-            ᶜq_liqʲ,
-            ᶜq_iceʲ,
-        ),
-    )
-    @. ᶜρʲ = TD.air_density(
-        thermo_params,
-        ᶜTʲ,
-        ᶜp,
-        ᶜq_tot_nonnegʲ,
-        ᶜq_liqʲ,
-        ᶜq_iceʲ,
-    )
-    return nothing
-end
-
-"""
-    set_draft_saturation_adjustment!(
-        ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsa_result, ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp,
-        thermo_params,
-    )
-
-Draft temperature, phase partition, and density from a pressure-enthalpy
-saturation adjustment (equilibrium microphysics), using `ᶜsa_result` as scratch.
-"""
-function set_draft_saturation_adjustment!(
-    ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsa_result, ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp,
-    thermo_params,
-)
-    @. ᶜsa_result = saturation_adjustment_tuple(
-        thermo_params,
-        TD.ph(),
-        ᶜp,
-        ᶜsgsʲ.mse - ᶜΦ,
-        ᶜq_tot_nonnegʲ,
-    )
-    @. ᶜTʲ = ᶜsa_result.T
-    @. ᶜq_liqʲ = ᶜsa_result.q_liq
-    @. ᶜq_iceʲ = ᶜsa_result.q_ice
+        )
+        @. ᶜTʲ = ᶜsa_resultʲ.T
+        @. ᶜq_liqʲ = ᶜsa_resultʲ.q_liq
+        @. ᶜq_iceʲ = ᶜsa_resultʲ.q_ice
+    end
     @. ᶜρʲ = TD.air_density(
         thermo_params,
         ᶜTʲ,
@@ -322,14 +272,14 @@ subdomain-density difference `ᶜρ_diffʲs`.
 For `NonEquilibriumMicrophysics1M`/`2M`, draft condensate is taken from the
 prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
 floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
-partition come from a pressure-enthalpy saturation adjustment that reuses the
-shared `ᶜsa_result` field as scratch. `ᶜρʲ` is diagnosed at the shared `ᶜp`.
+partition come from a pressure-enthalpy saturation adjustment. `ᶜρʲ` is
+diagnosed at the shared `ᶜp`.
 
 Called from the Picard loop of `initialize_implicit_stage_problem!` after each
 tracer sweep, and from `solve_sgs_updraft_tracers_implicit_stage_analytic!`
 after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
-computes the same thermodynamics (`set_draft_thermo_column!`,
-`set_draft_saturation_adjustment!`) in its fused column loop.
+computes the same thermodynamics (`set_draft_thermo_column!`) in its fused
+column loop.
 """
 function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
@@ -337,36 +287,18 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; ᶜΦ) = p.core
     (; ᶜp, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρʲs) = p.precomputed
     T_min_sgs = CAP.T_min_sgs(p.params)
-
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        ᶜTʲ = ᶜTʲs.:($j)
-        ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
-        ᶜq_liqʲ = ᶜq_liqʲs.:($j)
-        ᶜq_iceʲ = ᶜq_iceʲs.:($j)
-        ᶜρʲ = ᶜρʲs.:($j)
-        ᶜsgsʲ = Y.c.sgsʲs.:($j)
-
-        if microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M,
-        }
-            DataLayouts.foreach_column(
-                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-                ᶜsgsʲ, ᶜΦ, ᶜp,
-            ) do ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-            ᶜsgsʲ, ᶜΦ, ᶜp
-                set_draft_thermo_column!(
-                    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-                    thermo_params, T_min_sgs,
-                )
-                return nothing
-            end
-        else
-            # EquilibriumMicrophysics0M: pressure-enthalpy saturation adjustment.
-            @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
-            set_draft_saturation_adjustment!(
-                ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, p.precomputed.ᶜsa_result,
-                ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp, thermo_params,
+    drafts = unrolled_map(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
+        @inline
+        (
+            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
+            ᶜρʲs.:($j), Y.c.sgsʲs.:($j),
+        )
+    end
+    DataLayouts.foreach_column(drafts, ᶜΦ, ᶜp) do drafts, ᶜΦ, ᶜp
+        for (ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ) in drafts
+            set_draft_thermo_column!(
+                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+                microphysics_model, thermo_params, T_min_sgs,
             )
         end
     end
@@ -386,7 +318,7 @@ entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
 entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
 [-]. It also writes the squared norm of the vertical shear of the horizontal
-wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm!`, the
+wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm_column!`, the
 surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
 per-updraft surface payload at level 1.
 
@@ -399,7 +331,7 @@ Reads `ᶜp`, `ᶠu³`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, 
 `ᶜq_ice⁰`), the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`), and `ustar` from
 `p.precomputed.sfc_conditions`, so it must run after
 `set_prognostic_edmf_precomputed_quantities_draft!` and
-`..._environment!`. Uses `p.scratch.ᶠtemp_C123`.
+`..._environment!`.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
@@ -441,23 +373,39 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     entr_model = p.atmos.edmfx_model.entr_model
-    zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
-    unrolled_foreach(StaticOneTo(n)) do j
+    zero_FT = FT(0)
+    drafts = unrolled_map(StaticOneTo(n)) do j
         @inline
-        # Compute the entrainment velocity scale, non-velocity entrainment rate,
-        # and the signed area-bounding rate, in one fused column loop per draft
-        # (the draft area and buoyancy are loop temporaries shared by the
-        # closures). For j == 1, also fuse the vertical strain-rate norm.
-        DataLayouts.foreach_column(
+        (
             ᶜentr_vel_scaleʲs.:($j), ᶜentr_nonvel_rateʲs.:($j), ᶜturb_entrʲs.:($j),
-            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j), ᶜstrain_rate_norm,
-            Y.c, Y.c.sgsʲs.:($j), ᶜz, z_sfc, ᶜp, ᶜρʲs.:($j), ᶜuʲs.:($j), ᶠu³, ᶜlg,
-            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
-            ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
-        ) do ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ,
-        ᶜarea_bounding_entr_detrʲ, ᶜρ_diffʲ, ᶜstrain_rate_norm,
-        Yc, ᶜsgsʲ, ᶜz, z_sfc, ᶜp, ᶜρʲ, ᶜuʲ, ᶠu³, ᶜlg, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
-        ᶜq_iceʲ, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
+            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j),
+            ᶜρʲs.:($j), ᶜuʲs.:($j), ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
+            ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
+        )
+    end
+    # The entrainment velocity scale, non-velocity entrainment rate, and signed
+    # area-bounding rate of every draft, and the vertical strain-rate norm, in
+    # one fused column loop.
+    DataLayouts.foreach_column(
+        drafts, ᶜstrain_rate_norm, Y.c, ᶜz, z_sfc, ᶜp, ᶠu³, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰,
+        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
+    ) do drafts, ᶜstrain_rate_norm, Yc, ᶜz, z_sfc, ᶜp, ᶠu³, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰,
+    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
+        for (
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜturb_entrʲ,
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜρ_diffʲ,
+                ᶜsgsʲ,
+                ᶜρʲ,
+                ᶜuʲ,
+                ᶜTʲ,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+            ) in drafts
+
             ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
             ᶜbuoyʲ = @. vertical_buoyancy_acceleration(Yc.ρ, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
@@ -506,17 +454,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 
             @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
-
-            if j == 1
-                set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
-            end
-            return nothing
         end
-        return nothing
-    end
-
-    if n == 0
-        set_strain_rate_norm!(Y, p)
+        set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
     end
 
     # Surface BC payload per updraft at level 1 (capped mass flux +

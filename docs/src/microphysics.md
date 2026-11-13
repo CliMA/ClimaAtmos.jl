@@ -78,7 +78,46 @@ specified as a fixed value for each tracer.
 
 Sedimentation is treated implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
-results in sedimentation terms for density and total energy.
+results in sedimentation terms for density and total energy. In the Newton
+residual, donor-cell sedimentation fluxes clamp negative tracer densities to zero
+(`specific_nonneg`), whereas the cloud-ice (including P3 ice rime and ice
+number), rain, snow, and rain-number sedimentation Jacobians retain the running
+column-maximum terminal velocity `w_jac` across empty and negative cells
+(including level 1, where `dz_bottom` gives the largest sedimentation Courant
+number in the column) so multi-cell falls at Courant numbers above one traverse
+them in a single stage. In one Newton step, a cell's linearized outflow is
+therefore `w_base max(0, ρq^g) + w_jac (ρq* - ρq^g)` (nonzero out of a negative
+cell whenever `w_jac > 0` and `ρq* ≠ ρq^g`). Across the implicit stages of each
+step, `surface_rain_flux`, `surface_snow_flux`, and
+`col_integrated_precip_energy_tendency` are accumulated with the IMEX tableau
+`b_imp` weights from those linearized stage bottom-face fluxes (and a
+`SlabOceanTemperature` surface receives the matching post-Newton increment per
+stage when the accumulator is active). Both the accumulated surface diagnostic
+and `SlabOceanTemperature` conservation match the discrete column sedimentation
+sink under four conditions: direct Newton solve without Krylov or line search,
+with the Jacobian updated at the final Newton iterate
+(`update_jacobian_every = "solve"`, or `"stage"` when
+`max_newton_iters_ode == 1`); `ManualSparseJacobian` (Krylov, line search,
+`update_jacobian_every = "dt"`, `"stage"` with `max_newton_iters_ode > 1`, and
+autodiff Jacobians disable the `w_jac` accumulator and leave a slab ocean on the
+pointwise stage flux, with a one-time warning in `build_cache`); direct
+inversion of the block-lower-triangular scalar submatrix
+(`ApproximateBlockArrowheadIterativeSolve` approximates only the velocity Schur
+complement, whose `ᶜadvdivᵥ` columns integrate to zero over each column); and
+`constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
+`update_constrain_state_every = "dss"` under condensate warm-starting preserves
+conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
+the stage flux upward). On tableaus with an explicit-diagonal stage that carries
+nonzero `b_imp` (`SSP`, `IMKG` with `β ≠ 0`), redistributing that weight across
+the implicit stages is approximate for the surface diagnostic. A stage flux is
+upward whenever `|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from a negative
+bottom cell with a net implicit sink and `w_jac > 0` (from condensate aloft, the
+1M `10⁻⁸` rain terminal-velocity floor, or `FixedTerminalVelocity`), or a
+positive bottom cell drained below `(1 - w_base / w_jac) ρq^g` in one stage
+(such as subcloud evaporation at linearized dimensionless rate
+`dtγ λ > w_base / (w_jac - w_base)`) — and negative `b_imp` weights (`ARS343`
+has `b_imp[3] ≈ -0.644`) can make the step sum upward even when every stage flux
+is downward; in each case the accumulated value equals the discrete column sink.
 
 !!! note
 
@@ -160,31 +199,44 @@ fully-coupled implicit microphysics solver.
 
 #### Preconditioner notes
 
-Two simplifications in the Jacobian diagonal
-`update_implicit_microphysics_jacobian!`:
+`update_implicit_microphysics_jacobian!` builds piecewise analytical Jacobian
+entries for cloud condensation/sublimation, rain evaporation, and snow
+sublimation/deposition, plus their `PrognosticEDMFX` off-diagonal couplings.
+With the default `max_newton_iters_ode = 1`, these entries set the single-step
+Newton increment directly (whereas multi-iteration or Krylov solves converge to
+the SGS-integrated residual of `update_implicit_1m_tendency!`):
 
-  - **`τ` evaluated on the cell-mean state.** For variants where `τ` is a
-    local function of the local ice content — e.g.
-    `TemperatureDependentIceNumber`, whose growth time goes through the
-    inferred ice-crystal radius `r_ice(q_icl, n_ice)` — the per-node τ at
-    an SGS quadrature point can differ from the cell-mean value we use.
-    We don't integrate `τ` over the SGS distribution for the
-    preconditioner diagonal.
-  - **State dependence of `τ` dropped from the diagonal.** The diagonal is
-    `−Δtγ / τ`; the term `−Δtγ · (∂(1/τ)/∂q) · S` is not included. Adding
-    it would require CM to expose `∂τ/∂q` for every ice-formation
-    variant. The dropped term is second order in the sublimation residual
-    (`O(S · Δq/τ²)`) and shrinks as Newton converges `S → 0`.
-
-Only the Newton direction is affected; the residual uses the
-SGS-integrated BMT rate from `update_implicit_1m_tendency!`, so
-correctness is unaffected.
+  - **Cell-mean evaluation of `τ`, `C`, and `Γ`.** `τ`, the ventilation
+    prefactor `C`, and `Γ` are evaluated at the cell-mean (or environment /
+    updraft) state without integrating their derivatives over the SGS quadrature
+    nodes. When `TemperatureDependentIceNumber` blocks the cell mean via
+    `INP_limiter` (`τ = Inf`) while SGS quadrature produces a nonzero `tend_icl`
+    (either net deposition from colder nodes or net sublimation from
+    subsaturated nodes), `_implicit_mp_τ_icl` falls back to `CMNe.τ_relax`. When
+    only a fraction `f` of quadrature nodes evaporates or sublimates, evaluating
+    `-Γ C / q_sat` on the cell mean scales the stiff single-iteration increment
+    by `~f`.
+  - **State dependence of `τ` dropped from the cloud diagonal.** The cloud
+    diagonal is `−Δtγ / τ`; the term `−Δtγ · (∂(1/τ)/∂q) · S` is omitted.
+  - **Rain and snow depletion and isobaric psychrometric saturation.** Rain
+    evaporation (`tend < 0`) and snow sublimation (`tend < 0`) combine pool
+    depletion `tend / max(q, ϵ_numerics(FT))` (which over-estimates the
+    power-law derivative `p · tend / q` by `1 / p` so a single step cannot
+    evaporate more than `q`) with `−Γ · C / max(q_sat, √floatmin(FT))` (also
+    used for snow deposition `tend > 0`). Here `Γ = 1 + (L / c_{p,d}) ∂q_{sat}/∂T`
+    is CM's isobaric psychrometric factor, which bounds single-step evaporation
+    to `(q_{sat} - q_v) / Γ` (within `Γ_ρ / Γ - 1 ≈ 15–20%` of the fixed-`ρ`
+    saturation point on the grid mean).
+  - **`PrognosticEDMFX` off-diagonal coupling.** Under `PrognosticEDMFX`,
+    `(c.ρq_x, c.sgsʲs.:(1).q_x)` accumulates `Δtγ · ρa¹ (r¹ − r⁰)` so stiff
+    updraft phase changes map `Δρq_x = ρa¹ Δq_x¹` without perturbing an
+    inactive environment condensate `q_x⁰`.
 
 ### Enforcing physical constraints
 
 Additional corrections are applied through the state-constraint hook
 `constrain_state!`, which runs at the cadence set by
-`update_constrain_state_every` (every step by default). Its microphysics and
+`update_constrain_state_every` (every stage by default). Its microphysics and
 updraft part is
 
 ```julia

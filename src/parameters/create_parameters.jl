@@ -107,11 +107,11 @@ function ClimaAtmosParameters(
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
     # Two 1M parameter sets: `bulk` carries the user's process choices for CM
-    # BMT; `implicit` carries ONLY `cloud_liquid_formation` and
-    # `cloud_ice_formation` (all other processes nulled) so a second CM BMT
-    # call isolates the condensation / sublimation tendency the implicit stage
-    # treats separately. `implicit_microphysics` moves the two formation
-    # options from `bulk` to `implicit`.
+    # BMT; `implicit` carries only `cloud_liquid_formation`, `cloud_ice_formation`,
+    # `rain_condensation_evaporation`, and `snow_deposition_sublimation` (all
+    # other processes nulled) so a second CM BMT call isolates the implicit
+    # condensation / sublimation tendency. `implicit_microphysics` moves those
+    # four options from `bulk` to `implicit`.
     _mp1m_opts = microphysics_1m_options(microphysics_model)
     _clf =
         microphysics_model isa NonEquilibriumMicrophysics1M ?
@@ -121,17 +121,29 @@ function ClimaAtmosParameters(
         microphysics_model isa NonEquilibriumMicrophysics1M ?
         microphysics_model.processes.cloud_ice_formation :
         CM.Parameters.ConstantTimescale()
+    _rce =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.rain_condensation_evaporation :
+        CM.Parameters.RainEvaporation()
+    _sds =
+        microphysics_model isa NonEquilibriumMicrophysics1M ?
+        microphysics_model.processes.snow_deposition_sublimation :
+        CM.Parameters.DepositionAndSublimation()
     _bulk_clf, _implicit_clf = _split_formation(_clf, implicit_microphysics)
     _bulk_cif, _implicit_cif = _split_formation(_cif, implicit_microphysics)
+    _bulk_rce, _implicit_rce = _split_formation(_rce, implicit_microphysics)
+    _bulk_sds, _implicit_sds = _split_formation(_sds, implicit_microphysics)
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
         _mp1m_opts...,
         cloud_liquid_formation = _bulk_clf,
         cloud_ice_formation = _bulk_cif,
+        rain_condensation_evaporation = _bulk_rce,
+        snow_deposition_sublimation = _bulk_sds,
     )
     # Null out every other process on the implicit set so CM BMT with this
-    # set returns only the cond/subl contribution. Explicitly list the other
-    # processes rather than merging options to keep the implicit kernel's
+    # set returns only the cond/evap/subl contribution. Explicitly list the
+    # other processes rather than merging options to keep the implicit kernel's
     # output narrow regardless of `_mp1m_opts`.
     microphysics_1m_implicit_params = microphys_1m_parameters(
         toml_dict;
@@ -141,8 +153,8 @@ function ClimaAtmosParameters(
         cloud_liquid_freezing = nothing,
         rain_autoconversion = nothing,
         snow_autoconversion = nothing,
-        rain_condensation_evaporation = nothing,
-        snow_deposition_sublimation = nothing,
+        rain_condensation_evaporation = _implicit_rce,
+        snow_deposition_sublimation = _implicit_sds,
         snow_melt = nothing,
         cloud_liquid_rain_accretion = nothing,
         cloud_liquid_snow_accretion = nothing,
@@ -278,6 +290,7 @@ atmos_name_map = (;
     :held_suarez_minimum_temperature => :T_min_hs,
     :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
+    :ocean_subsurface_reflectance => :ocean_subsurface_reflectance,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
@@ -704,15 +717,24 @@ function SGSQuadratureParameters(
         sgs_displacement_truncation = FT(3),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
+        # Updraft rule for the variance fidelity (`sgs_variance_fidelity_model:
+        # updraft`): α σ_S = c_u q_c,up, bounded below by α_min and above by the
+        # equilibrium bound 1/(1 − w_eq). c_u is fitted to FastEddy BOMEX and
+        # SGP environment liquid, against the model's own BOMEX updraft (0.75
+        # against the LES updraft). α_min is provisional.
+        sgs_fidelity_updraft_coeff = FT(0.6),
+        sgs_fidelity_updraft_min = FT(0.05),
         # Precipitation-fraction placement of rain and snow over the quadrature:
-        # 0 = uniform (off).
-        sgs_precip_incloud_fraction = FT(0),
+        # all of the rain and snow on the precipitation shaft (0 = uniform). A
+        # uniform placement evaporates 2.5-4.5x the rain of 3.75 km MPAS truth
+        # within ne30 cells; the shaft with a floor of 0.1 matches it to ~0.9-1.4.
+        sgs_precip_incloud_fraction = FT(1),
         # Overlap precipitation fraction (`set_precip_fraction!`): per-level
         # decay of the max-random overlap recursion; 1 = maximum overlap.
         sgs_precip_overlap_decay = FT(1),
         # Floor on the overlap precipitation fraction seen by the placement:
-        # the shaft is never narrower than half the cell.
-        sgs_precip_fraction_floor = FT(0.5),
+        # the shaft is never narrower than a tenth of the cell.
+        sgs_precip_fraction_floor = FT(0.1),
         # Unresolved in-cloud condensate inhomogeneity seen by radiation
         # (`cloud_condensate_relative_variance`): relative variance 0.25, a
         # relative standard deviation of 0.5, within the 0.4–0.8 observed for
@@ -760,6 +782,16 @@ function SGSQuadratureParameters(
         ArgumentError(
             "sgs_displacement_truncation must be at least 1; got $c",
         ),
+    )
+    for (name, value) in (
+        (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
+        (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
+    )
+        value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
+    end
+    w_eq = parameters.sgs_fidelity_equilibrium_weight
+    0 <= w_eq <= 1 || throw(
+        ArgumentError("sgs_fidelity_equilibrium_weight must lie in [0, 1]; got $w_eq"),
     )
     rv_floor = parameters.cloud_condensate_relative_variance_floor
     rv_floor >= 0 || throw(

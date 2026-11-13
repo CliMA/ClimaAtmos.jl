@@ -605,11 +605,9 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     ) do Yₜc, ᶠradiation_flux, drafts
         ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
         @. Yₜc.ρe_tot -= ᶜdiv_flux
-        MatrixFields.unrolled_foreach(drafts) do (ᶜρʲ, ᶜmseʲₜ)
-            @inline
+        for (ᶜρʲ, ᶜmseʲₜ) in drafts
             @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
         end
-        return nothing
     end
     return nothing
 end
@@ -760,16 +758,35 @@ Allocate the working fields of the TRMM_LBA prescribed radiative heating profile
 
 # Returns
 
-A `NamedTuple` holding the heating-rate field `ᶜdTdt_rad` [K/s] and the top-of-atmosphere
-and surface net energy flux accumulators used by the diagnostics.
+A `NamedTuple` holding the heating-rate field `ᶜdTdt_rad` [K/s], the time-height profile
+`rad_profile` from `AtmosphericProfilesLibrary` with its height knots `z_knots` [m], and the
+top-of-atmosphere and surface net energy flux accumulators used by the diagnostics.
 """
 function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
+    rad_profile = APL.TRMM_LBA_radiation(FT)
     return (;
         ᶜdTdt_rad = similar(Y.c, FT),
+        rad_profile,
+        z_knots = APL.TRMM_LBA_radiation_z(FT),
         net_energy_flux_toa = [Geometry.WVector(FT(0))],
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
+end
+
+"""
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+
+Set `ᶜdTdt_rad` to the TRMM_LBA radiative heating rate `rad_profile(t, z)` [K/s].
+
+The profile is evaluated at time `t` on the height knots `z_knots`, and the resulting height
+profile is interpolated linearly in height.
+"""
+function set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+    ᶜz = Fields.coordinate_field(axes(ᶜdTdt_rad)).z
+    z_profile = APL.linear_interp(z_knots, map(z -> rad_profile(t, z), z_knots))
+    @. ᶜdTdt_rad = z_profile(ᶜz)
+    return nothing
 end
 
 """
@@ -787,14 +804,11 @@ pressure. Applied explicitly at every stage.
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
-    # TODO: get working (need to add cache / function)
-    rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
+    (; ᶜdTdt_rad, rad_profile, z_knots) = p.radiation
     ᶜρ = Y.c.ρ
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, FT(t))
     @. Yₜ.c.ρe_tot +=
         ᶜρ * TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing

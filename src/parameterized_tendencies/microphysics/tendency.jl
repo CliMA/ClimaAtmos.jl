@@ -108,30 +108,33 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
 
-    # Environment contribution to grid mean tendency
-    ρ_dq_tot_dt⁰ = @. lazy(ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    @. Yₜ.c.ρq_tot += ρ_dq_tot_dt⁰
-    @. Yₜ.c.ρ += ρ_dq_tot_dt⁰
-    @. Yₜ.c.ρe_tot += ρ_dq_tot_dt⁰ * ᶜmp_tendency⁰.e_tot_hlpr
-    # Updraft contribution to...
-    for j in 1:n
-        # ... grid mean tendency ...
-        @. Yₜ.c.ρq_tot += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-        @. Yₜ.c.ρ += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-        @. Yₜ.c.ρe_tot +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
-            ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
-        # ... and updraft tendency
-        @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
-            (1 - Y.c.sgsʲs.:($$j).q_tot)
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            ᶜmp_tendencyʲs.:($$j).dq_tot_dt * (
-                ᶜmp_tendencyʲs.:($$j).e_tot_hlpr - Y.c.sgsʲs.:($$j).mse
-            )
+    DataLayouts.foreach_point(
+        Yₜ.c, Y.c, ᶜmp_tendency⁰, ᶜmp_tendencyʲs,
+    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
+        # Environment contribution to grid mean tendency
+        ρ_dq_tot_dt⁰ = @. ᶜmp_tendency⁰.dq_tot_dt * ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        @. Yₜc.ρq_tot += ρ_dq_tot_dt⁰
+        @. Yₜc.ρ += ρ_dq_tot_dt⁰
+        @. Yₜc.ρe_tot += ρ_dq_tot_dt⁰ * ᶜmp_tendency⁰.e_tot_hlpr
+        # Updraft contribution to...
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            # ... grid mean tendency ...
+            @. Yₜc.ρq_tot += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+            @. Yₜc.ρ += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+            @. Yₜc.ρe_tot +=
+                Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
+                ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+            # ... and updraft tendency
+            @. Yₜc.sgsʲs.:($$j).ρa += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+            @. Yₜc.sgsʲs.:($$j).q_tot +=
+                ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
+                (1 - Yc.sgsʲs.:($$j).q_tot)
+            @. Yₜc.sgsʲs.:($$j).mse +=
+                ᶜmp_tendencyʲs.:($$j).dq_tot_dt * (
+                    ᶜmp_tendencyʲs.:($$j).e_tot_hlpr - Yc.sgsʲs.:($$j).mse
+                )
+        end
     end
     return nothing
 end
@@ -160,8 +163,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     (; ᶜmp_tendency, ᶜmp_tendency_implicit) = p.precomputed
     @. Yₜ.c.ρq_lcl += Y.c.ρ * (ᶜmp_tendency.dq_lcl_dt + ᶜmp_tendency_implicit.dq_lcl_dt)
     @. Yₜ.c.ρq_icl += Y.c.ρ * (ᶜmp_tendency.dq_icl_dt + ᶜmp_tendency_implicit.dq_icl_dt)
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
-    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜmp_tendency.dq_sno_dt
+    @. Yₜ.c.ρq_rai += Y.c.ρ * (ᶜmp_tendency.dq_rai_dt + ᶜmp_tendency_implicit.dq_rai_dt)
+    @. Yₜ.c.ρq_sno += Y.c.ρ * (ᶜmp_tendency.dq_sno_dt + ᶜmp_tendency_implicit.dq_sno_dt)
     return nothing
 end
 
@@ -197,24 +200,25 @@ function microphysics_tendency!(
         @. Yₜc.ρq_icl = add_sgs_tendencies(Yₜc.ρq_icl, sgs_args..., @name(dq_icl_dt))
         @. Yₜc.ρq_rai = add_sgs_tendencies(Yₜc.ρq_rai, sgs_args..., @name(dq_rai_dt))
         @. Yₜc.ρq_sno = add_sgs_tendencies(Yₜc.ρq_sno, sgs_args..., @name(dq_sno_dt))
-        # Implicit cond/subl accumulation (only q_lcl, q_icl).
+        # Implicit cond/evap/subl accumulation (q_lcl, q_icl, q_rai, q_sno).
         @. Yₜc.ρq_lcl =
             add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args_imp..., @name(dq_lcl_dt))
         @. Yₜc.ρq_icl =
             add_sgs_tendencies(Yₜc.ρq_icl, sgs_args_imp..., @name(dq_icl_dt))
+        @. Yₜc.ρq_rai =
+            add_sgs_tendencies(Yₜc.ρq_rai, sgs_args_imp..., @name(dq_rai_dt))
+        @. Yₜc.ρq_sno =
+            add_sgs_tendencies(Yₜc.ρq_sno, sgs_args_imp..., @name(dq_sno_dt))
 
-        unrolled_foreach(draft_indices) do j
-            @inline
+        for j in draft_indices
             ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
             ᶜmp_impʲ = ᶜmp_tendency_implicitʲs.:($j)
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
             @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt + ᶜmp_impʲ.dq_lcl_dt
             @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt + ᶜmp_impʲ.dq_icl_dt
-            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
-            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt
-            return nothing
+            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt + ᶜmp_impʲ.dq_rai_dt
+            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt + ᶜmp_impʲ.dq_sno_dt
         end
-        return nothing
     end
     return nothing
 end
@@ -265,28 +269,30 @@ function microphysics_tendency!(Yₜ, Y, p, t,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
 
-    # Contribution to grid mean tendency from environment
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    @. Yₜ.c.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
-    @. Yₜ.c.ρn_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dn_lcl_dt
-    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
-    @. Yₜ.c.ρn_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dn_rai_dt
-    @. Yₜ.c.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
+    DataLayouts.foreach_point(
+        Yₜ.c, Y.c, ᶜmp_tendency⁰, ᶜmp_tendencyʲs,
+    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
+        # Contribution to grid mean tendency from environment
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        @. Yₜc.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
+        @. Yₜc.ρn_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dn_lcl_dt
+        @. Yₜc.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
+        @. Yₜc.ρn_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dn_rai_dt
+        @. Yₜc.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_ice_dt
+        # Contribution from updraft microphysics to grid mean and updraft tendency
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            @. Yₜc.ρq_lcl += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
+            @. Yₜc.ρn_lcl += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
+            @. Yₜc.ρq_rai += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
+            @. Yₜc.ρn_rai += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_rai_dt
+            @. Yₜc.ρq_icl += Yc.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
 
-    # Contribution from updraft microphysics to grid mean and updraft tendency
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.c.ρq_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.ρn_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
-        @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.ρq_icl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_ice_dt
-
-        @. Yₜ.c.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.sgsʲs.:($$j).n_lcl += ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).n_rai += ᶜmp_tendencyʲs.:($$j).dn_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+            @. Yₜc.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
+            @. Yₜc.sgsʲs.:($$j).n_lcl += ᶜmp_tendencyʲs.:($$j).dn_lcl_dt
+            @. Yₜc.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
+            @. Yₜc.sgsʲs.:($$j).n_rai += ᶜmp_tendencyʲs.:($$j).dn_rai_dt
+            @. Yₜc.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_ice_dt
+        end
     end
 end
 

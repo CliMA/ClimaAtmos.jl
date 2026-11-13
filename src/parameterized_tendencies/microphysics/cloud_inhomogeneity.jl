@@ -321,7 +321,7 @@ and ice water paths, from the current cloud fraction and condensate; return
 without interactive clouds, idealized clouds, non-quadrature cloud models, or
 `cloud_inhomogeneity_in_sw_radiation: false`, which leaves the shortwave water
 paths unscaled (`χ = 1`) for comparison runs. Under `PrognosticEDMFX`, writes
-`p.scratch.ᶜtemp_scalar` and `ᶜtemp_scalar_4` to `ᶜtemp_scalar_7`.
+`p.scratch.ᶜtemp_scalar` to `ᶜtemp_scalar_5`.
 
 Dispatches on the cloud model: `QuadratureCloud` uses the truncated-Gaussian
 closure (`cloud_optical_depth_factor`), whose subgrid PDF also sets the cloud
@@ -357,10 +357,10 @@ function set_sw_cloud_optical_depth_factor!(
     ᶜq_lcl, ᶜq_icl =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     ᶜa_up, ᶜaq_up, ᶜaq2_up, ᶜalnq_up = _updraft_cloud_moments!(
+        p.scratch.ᶜtemp_scalar_2,
+        p.scratch.ᶜtemp_scalar_3,
         p.scratch.ᶜtemp_scalar_4,
         p.scratch.ᶜtemp_scalar_5,
-        p.scratch.ᶜtemp_scalar_6,
-        p.scratch.ᶜtemp_scalar_7,
         p.scratch.ᶜtemp_scalar,
         Y, p, thermo_params, rv_floor, turbconv_model,
     )

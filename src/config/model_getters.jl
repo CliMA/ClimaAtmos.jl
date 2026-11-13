@@ -69,8 +69,10 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     the ClimaParams `prescribed_cloud_droplet_number_concentration`, the value also used by the
     radiation effective radius.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
-  - `rain_condensation_evaporation`: `"RainEvaporation"`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
+  - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
+    the same way as `cloud_liquid_formation`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`. Routed by
+    `implicit_microphysics` the same way as `cloud_liquid_formation`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
     `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
@@ -683,7 +685,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
-        RadiationTRMM_LBA(FT)
+        RadiationTRMM_LBA()
     elseif radiation_name == "ISDAC"
         RadiationISDAC{FT}()
     elseif isnothing(radiation_name)
@@ -1042,6 +1044,13 @@ function check_case_consistency(parsed_args)
     smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
     config = parsed_args["config"]
 
+    if get(parsed_args, "sgs_variance_fidelity_model", "equilibrium") == "updraft" &&
+       !(turbconv == "prognostic_edmfx" && microphysics in ("1M", "2M", "2MP3"))
+        @warn "sgs_variance_fidelity_model: updraft acts only with \
+               turbconv: prognostic_edmfx and non-equilibrium (1M, 2M or 2MP3) \
+               microphysics; it is ignored here."
+    end
+
     # Geometry consistency (always checked, independent of the case-specific
     # checks below)
     valid_configs = ("sphere", "column", "box", "plane")
@@ -1173,12 +1182,31 @@ function get_tq_correlation_model(parsed_args)
 end
 
 """
+    get_sgs_variance_fidelity_model(parsed_args)
+
+Return the `AbstractVarianceFidelityModel` selected by the
+`sgs_variance_fidelity_model` config key: `"equilibrium"` →
+`EquilibriumVarianceFidelity()` (default), `"updraft"` →
+`UpdraftVarianceFidelity()`.
+"""
+function get_sgs_variance_fidelity_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_fidelity_model", "equilibrium"),
+        Dict(
+            "equilibrium" => EquilibriumVarianceFidelity(),
+            "updraft" => UpdraftVarianceFidelity(),
+        ),
+        "sgs_variance_fidelity_model",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
 
-Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`,
+`get_tracer_nonnegativity_method` and `get_sgs_variance_fidelity_model`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
 (the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
@@ -1194,6 +1222,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
     sgs_variance_curvature = pa["sgs_variance_curvature"]
+    sgs_variance_fidelity_model = get_sgs_variance_fidelity_model(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1227,9 +1256,10 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     terminal_velocity_snow =
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
-    # `implicit_microphysics` only controls whether 1M condensation /
-    # sublimation flow through the implicit cache with a Jacobian; the
-    # microphysics tendency itself is always applied in the implicit stage.
+    # `implicit_microphysics` controls which 1M processes (cloud
+    # liquid/ice formation, rain evaporation, snow sublimation) flow
+    # through the implicit cache with a Jacobian; the microphysics
+    # tendency itself is always applied in the implicit stage.
     return AtmosWater(;
         microphysics_model,
         cloud_model,
@@ -1238,6 +1268,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         sgs_quadrature,
         tq_correlation_model,
         sgs_variance_curvature,
+        sgs_variance_fidelity_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
@@ -1449,7 +1480,10 @@ function AtmosSurface(
             isnothing(pa["rad"]) && error(
                 "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
             )
-            RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
+            RegressionFunctionAlbedo{FT}(;
+                n = params.water_refractive_index,
+                R_sub = params.ocean_subsurface_reflectance,
+            )
         elseif pa["albedo_model"] == "CouplerAlbedo"
             CouplerAlbedo()
         else

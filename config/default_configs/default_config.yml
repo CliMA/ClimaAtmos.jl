@@ -78,7 +78,7 @@ max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
   value: 1
 ode_algo:
-  help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
+  help: "ODE algorithm [`ARS343` (default), `ARS222`, `SSP333`, `IMKG343a`, etc.]. The explicit tableau of `ARS222` amplifies undamped oscillatory modes (`|R(iy)| > 1`), so it suits 1D column setups (which have no horizontal modes) and 3D configurations whose horizontal damping per step is strong, such as `amip_target.yml` and the aquaplanet setups that select it."
   value: "ARS343"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
@@ -105,8 +105,8 @@ update_cache_every:
   help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
   value: "stage"
 update_constrain_state_every:
-  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
-  value: "step"
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]. With `PrognosticEDMFX`, 1M microphysics, and `updraft_picard_rounds > 0`, `dss` re-clamps the warm-started grid-mean condensates of the Newton initial guess after the stage-entering state is copied, which can produce an upward surface precipitation flux."
+  value: "stage"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
   value: false
@@ -279,6 +279,9 @@ use_sgs_quadrature:
 tq_correlation_model:
   help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `diagnosed` uses the covariance of the subgrid displacement that produces the variances, ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed `Tq_correlation_coefficient` where the variances vanish. `constant` uses the prescribed coefficient everywhere. [`diagnosed` (default), `constant`]"
   value: "diagnosed"
+sgs_variance_fidelity_model:
+  help: "Closure for the variance fidelity α of the condensate reconstruction. `equilibrium` uses α = α_Da α_eq. `updraft` (PrognosticEDMFX with non-equilibrium microphysics; ignored otherwise) sets α σ_S = c_u q_c,up from the condensate q_c,up of the cloudy updrafts, bounded to [α_min, 1/(1 − w_eq)], blended with α_Da α_eq as their area grows above the EDMF minimum area, and α_Da α_eq without them. [`equilibrium` (default), `updraft`]"
+  value: "equilibrium"
 sgs_distribution:
   help: "Distribution of the SGS fluctuations over which the microphysics is integrated. `gaussian`: the bivariate Gaussian (`GaussianSGS`); the 1M microphysics nodes sit at the conditional moments of the saturation excess between the cloud and shaft edges, and the 0M microphysics uses Gauss–Hermite quadrature. [`gaussian` (default), `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
@@ -356,10 +359,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
+  help: "Upwinding mode for passive tracers; prognostic `ρtke` uses implicit `first_order` upwind, and the sedimenting microphysics species follow `energy_humidity_upwinding` [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
-energy_q_tot_upwinding:
-  help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
+energy_humidity_upwinding:
+  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]. `first_order` gives positive first-order transport of `e_tot - Φ`, `q_tot`, and the sedimenting species with the leading diffusivity of backward-Euler upwind; `third_order` is linear and unlimited (not positive or monotone on sharp fronts); `none` skips their post-Newton dissipation and antidiffusion, leaving their vertical advection forward-Euler central under one Newton iteration with `ManualSparseJacobian` (amplifying oscillatory modes without vertical diffusion)."
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
@@ -435,8 +438,8 @@ implicit_diffusion:
   help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
   value: false
 approximate_linear_solve_iters:
-  help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
-  value: 1
+  help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true, the configuration is moist, or prognostic `ρtke` is active)"
+  value: 2
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
@@ -511,11 +514,11 @@ edmfx_entr_model:
 edmfx_detr_model:
   help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. This is a placeholder for new detrainment models. For now only supports `Generalized`. [`Generalized` (default)]"
   value: "Generalized"
-edmfx_mse_q_tot_upwinding:
-  help: "Eddy-diffusivity mass-flux upwinding mode [`none`, `first_order` (default), `third_order`]"
+edmfx_mse_humidity_upwinding:
+  help: "Eddy-diffusivity mass-flux upwinding mode for updraft moist static energy, total water, and condensate masses and numbers [`none`, `first_order` (default)]. Only `first_order` keeps the updraft condensates and number concentrations nonnegative."
   value: first_order
 edmfx_tracer_upwinding:
-  help: "Eddy-diffusivity mass-flux tracer upwinding mode [`none`, `first_order` (default)]"
+  help: "Eddy-diffusivity mass-flux upwinding mode for passive updraft tracers; updraft water species follow `edmfx_mse_humidity_upwinding` [`none`, `first_order` (default)]"
   value: first_order
 edmfx_sgsflux_upwinding:
   help: "Eddy-diffusivity mass-flux subgrid-scale mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"

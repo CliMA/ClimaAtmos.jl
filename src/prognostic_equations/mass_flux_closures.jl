@@ -221,39 +221,45 @@ layers (`⟨w'b'⟩_s ≤ 0`).
 end
 
 """
+    condensate_rescale_ratio(q_cond, q_tot, ϵ)
+
+Return the factor `min(1, q_tot / q_cond)` by which condensates that sum to `q_cond`
+are multiplied so that they cannot exceed the total water `q_tot`, or zero where
+`q_cond` or `q_tot` is not above `ϵ`. Applies alike to specific humidities and to
+densities.
+"""
+@inline condensate_rescale_ratio(q_cond, q_tot, ϵ) =
+    ifelse((q_cond > ϵ) & (q_tot > ϵ), min(one(ϵ), q_tot / q_cond), zero(ϵ))
+
+"""
     enforce_grid_mean_microphysics_constraints!(Y, p, t)
 
 Clip the grid-mean condensate tracers to non-negative values and rescale them
 so their sum cannot exceed the available total moisture.
 
-`ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` are first floored at zero, then all
-four are multiplied by `ratio = min(1, ρq_tot / Σ ρq_cond)`; `ratio` is zero
-where either the condensate sum or `ρq_tot` is below `ϵ_numerics`, which
-removes condensate in cells with no (or negative) total water.
+`ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` are first floored at zero, then
+rescaled by `condensate_rescale_ratio`, which removes condensate in cells with
+no (or negative) total water.
 
-Mutates `Y.c` and uses `p.scratch`; returns `nothing`. Called from
+Mutates `Y.c`; returns `nothing`. Called from
 `enforce_physical_constraints!` for the 1M and 2M non-equilibrium
 microphysics models.
 """
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
-    ρq_cond = p.scratch.ᶜtemp_scalar
-    ratio = p.scratch.ᶜtemp_scalar_2
-    @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
-    @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
-    @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
-    @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
-
-    @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
-    @. ratio = ifelse(
-        (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
-        min(FT(1), Y.c.ρq_tot / ρq_cond),
-        FT(0),
-    )
-    @. Y.c.ρq_lcl *= ratio
-    @. Y.c.ρq_icl *= ratio
-    @. Y.c.ρq_rai *= ratio
-    @. Y.c.ρq_sno *= ratio
+    (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
+    DataLayouts.foreach_column(Y.c) do Yc
+        ρq_lcl = @. max(zero_FT, Yc.ρq_lcl)
+        ρq_icl = @. max(zero_FT, Yc.ρq_icl)
+        ρq_rai = @. max(zero_FT, Yc.ρq_rai)
+        ρq_sno = @. max(zero_FT, Yc.ρq_sno)
+        ρq_cond = @. ρq_lcl + ρq_icl + ρq_rai + ρq_sno
+        ratio = @. condensate_rescale_ratio(ρq_cond, Yc.ρq_tot, ϵ)
+        @. Yc.ρq_lcl = ρq_lcl * ratio
+        @. Yc.ρq_icl = ρq_icl * ratio
+        @. Yc.ρq_rai = ρq_rai * ratio
+        @. Yc.ρq_sno = ρq_sno * ratio
+    end
     return nothing
 end
 
@@ -291,71 +297,63 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    for j in 1:n
-        # clip updraft area fraction and vertical velocity to non-negative values
-        @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        @. Y.f.sgsʲs.:($$j).u₃ =
-            C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
-
-        # clip updraft velocity to zero when face-averaged area fraction is negligible
-        @. Y.f.sgsʲs.:($$j).u₃ = ifelse(
-            ᶠinterp(Y.c.sgsʲs.:($$j).ρa) < ϵ_numerics(FT),
-            C3(0),
-            Y.f.sgsʲs.:($$j).u₃,
-        )
-
-        # relax updraft mse and q_tot toward the grid mean when ρa is negligible
-        @. Y.c.sgsʲs.:($$j).mse = ifelse(
-            Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-            ᶜh_tot - ᶜK,
-            Y.c.sgsʲs.:($$j).mse,
-        )
-        @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
-            Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-            specific(Y.c.ρq_tot, Y.c.ρ),
-            # ensure mass conservation: ρaχʲ < ρχ
-            min(
-                max(0, Y.c.sgsʲs.:($$j).q_tot),
-                max(0, Y.c.ρq_tot) / Y.c.sgsʲs.:($$j).ρa,
-            ),
-        )
-
-        # Auto-discovered SGS tracers: relax toward grid mean when ρa is
-        # negligible; enforce mass conservation bound ρaχʲ < ρχ.
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            @. ᶜχʲ = ifelse(
-                Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
-                specific(ᶜρχ, Y.c.ρ),
-                # ensure mass conservation: ρaχʲ < ρχ
-                min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
+    (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
+    # The SGS tracers whose grid-mean densities are prognostic
+    χ_names = unrolled_filter(
+        χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
+        sgs_tracer_names(Y),
+    )
+    (; microphysics_model) = p.atmos
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j))
+    end
+    DataLayouts.foreach_column(Y.c, drafts, ᶜh_tot, ᶜK) do Yc, drafts, ᶜh_tot, ᶜK
+        for (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ) in drafts
+            # Clip the area fraction to [0, 1] and the vertical velocity to
+            # non-negative values, with zero velocity where the face-averaged
+            # area fraction is negligible.
+            ᶜρa = @. max(zero_FT, min(ᶜsgsʲ.ρa, ᶜρʲ))
+            @. ᶜsgsʲ.ρa = ᶜρa
+            @. ᶠu₃ʲ = ifelse(
+                ᶠinterp(ᶜρa) < ϵ,
+                C3(zero_FT),
+                C3(max(ᶠu₃ʲ.components.data.:1, zero_FT)),
             )
-        end
-
-        # Within-subdomain condensate rescaling: ensure
-        # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The GM ↔ SGS bound above
-        # already clipped each χʲ ≥ 0, so we only need the ratio rescale.
-        # Multiplying by ratio ≤ 1 preserves the ρaχʲ ≤ ρχ bound.
-        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M}
-            q_cond = p.scratch.ᶜtemp_scalar
-            ratio = p.scratch.ᶜtemp_scalar_2
-            @. q_cond =
-                Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
-                Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
-            @. ratio = ifelse(
-                (q_cond > ϵ_numerics(FT)) &
-                (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),
-                min(FT(1), Y.c.sgsʲs.:($$j).q_tot / q_cond),
-                FT(0),
+            # Relax mse, q_tot, and the SGS tracers toward the grid mean where
+            # ρa is negligible; elsewhere, floor them at zero and ensure mass
+            # conservation, ρaχʲ ≤ ρχ.
+            ᶜnegligible = @. ᶜρa < ϵ
+            @. ᶜsgsʲ.mse = ifelse(ᶜnegligible, ᶜh_tot - ᶜK, ᶜsgsʲ.mse)
+            ᶜq_totʲ = @. ifelse(
+                ᶜnegligible,
+                specific(Yc.ρq_tot, Yc.ρ),
+                min(max(zero_FT, ᶜsgsʲ.q_tot), max(zero_FT, Yc.ρq_tot) / ᶜρa),
             )
-            @. Y.c.sgsʲs.:($$j).q_lcl *= ratio
-            @. Y.c.sgsʲs.:($$j).q_icl *= ratio
-            @. Y.c.sgsʲs.:($$j).q_rai *= ratio
-            @. Y.c.sgsʲs.:($$j).q_sno *= ratio
+            @. ᶜsgsʲ.q_tot = ᶜq_totʲ
+            MatrixFields.unrolled_foreach(χ_names) do χ_name
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+                @. ᶜχʲ = ifelse(
+                    ᶜnegligible,
+                    specific(ᶜρχ, Yc.ρ),
+                    min(max(zero_FT, ᶜχʲ), max(zero_FT, ᶜρχ) / ᶜρa),
+                )
+            end
+            # Within-subdomain condensate rescaling: ensure
+            # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The bound above already
+            # clipped each χʲ ≥ 0, and multiplying by a ratio ≤ 1 preserves
+            # ρaχʲ ≤ ρχ.
+            microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+                continue
+            ᶜq_cond = @. ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl + ᶜsgsʲ.q_rai + ᶜsgsʲ.q_sno
+            ᶜratio = @. condensate_rescale_ratio(ᶜq_cond, ᶜq_totʲ, ϵ)
+            @. ᶜsgsʲ.q_lcl *= ᶜratio
+            @. ᶜsgsʲ.q_icl *= ᶜratio
+            @. ᶜsgsʲ.q_rai *= ᶜratio
+            @. ᶜsgsʲ.q_sno *= ᶜratio
         end
     end
     return nothing

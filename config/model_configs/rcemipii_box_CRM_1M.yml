@@ -5,7 +5,7 @@ insolation: rcemipii
 initial_condition: RCEMIPIIProfile_300
 config: box
 rad: allskywithclear
-approximate_linear_solve_iters: 2  # only valid when implicit_diffusion=true
+approximate_linear_solve_iters: 2  # active for moist configs, implicit diffusion, or prognostic ρtke
 rayleigh_sponge: true  # set sponge level in toml file
 
 # Diffusion
@@ -18,7 +18,7 @@ smagorinsky_lilly: "UV_W"  # horizontal + vertical
 
 # Upwinding mode
 tracer_upwinding: vanleer_limiter  # is default (alt: `first_order`)
-energy_q_tot_upwinding: vanleer_limiter  # is default (alt: `first_order`)
+energy_humidity_upwinding: vanleer_limiter  # is default (alt: `first_order`)
 
 reproducibility_test: true
 

@@ -105,4 +105,37 @@ end
             @test all(isapprox.(computed, reference[i]; atol = sqrt(eps(FT))))
         end
     end
+
+    @testset "Subsurface volume reflectance (R_sub)" begin
+        for FT_test in (Float32, Float64)
+            model_default = ClimaAtmos.RegressionFunctionAlbedo{FT_test}()
+            model_rsub =
+                ClimaAtmos.RegressionFunctionAlbedo{FT_test}(; R_sub = FT_test(0.007))
+            @test model_default.R_sub === zero(FT_test)
+            @test model_rsub.R_sub === FT_test(0.007)
+
+            α_dir_0 = ClimaAtmos.surface_albedo_direct(model_default)
+            α_dir_rsub = ClimaAtmos.surface_albedo_direct(model_rsub)
+            α_dif_0 = ClimaAtmos.surface_albedo_diffuse(model_default)
+            α_dif_rsub = ClimaAtmos.surface_albedo_diffuse(model_rsub)
+
+            # Sun above horizon (cosθ > 0): R_sub reflects the transmitted light
+            for cosθ in (FT_test(0.2), FT_test(0.5), FT_test(1.0)),
+                u in (FT_test(0), FT_test(7))
+
+                α_dir_s = α_dir_0(zero(FT_test), cosθ, u)
+                α_dif_s = α_dif_0(zero(FT_test), cosθ, u)
+                @test α_dir_rsub(zero(FT_test), cosθ, u) ≈
+                      α_dir_s + (1 - α_dir_s) * FT_test(0.007)
+                @test α_dif_rsub(zero(FT_test), cosθ, u) ≈
+                      α_dif_s + (1 - α_dif_s) * FT_test(0.007)
+            end
+
+            # Sun at or below horizon (cosθ <= 0): exact zero
+            for cosθ in (zero(FT_test), -FT_test(0.3))
+                @test α_dir_rsub(zero(FT_test), cosθ, FT_test(5)) === zero(FT_test)
+                @test α_dif_rsub(zero(FT_test), cosθ, FT_test(5)) === zero(FT_test)
+            end
+        end
+    end
 end

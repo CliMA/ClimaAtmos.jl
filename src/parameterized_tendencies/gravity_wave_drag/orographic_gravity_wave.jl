@@ -346,6 +346,48 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
 end
 
 """
+    _semi_implicit_gw_drag(du, dv, uvw, dt)
+
+Evaluate the effective horizontal momentum tendency of an orographic
+gravity-wave drag vector `(du, dv)` [m/s²] by applying backward-Euler Rayleigh
+damping to its decelerating component parallel to the horizontal wind
+`(uvw.u, uvw.v)`. With `s = |uₕ|`, `û = uₕ / s`, and the deceleration
+`d = max(0, -D ⋅ û)` along the wind, the parallel component `D_∥ = -d û` is
+replaced by
+
+    D_∥ / (1 + dt d / s) = -û d s / (s + dt d),
+
+whose exact magnitude is below `s / dt` for every `s > 0`, so in exact
+arithmetic a forward-Euler step of size `dt` cannot reverse the horizontal wind
+at any wind speed (multi-stage IMEX tableaus combine explicit stage tendencies
+with their `b_exp` weights). The perpendicular component `D_⊥` (turning the wind
+without changing its speed) and any accelerating component (`D ⋅ uₕ ≥ 0`) are
+left unchanged; as `s → 0⁺` with opposing drag the result tends to `D_⊥`, and at
+`s = 0`, where `û` is undefined, it is `D`. Reduces to `(du, dv)` at first order
+when `dt d / s ≪ 1`. Evaluated in the orthogonal basis `(û, n̂)` with
+`n̂ = (-v̂, û)` and `D_⊥ = (D ⋅ n̂) n̂` so `D_⊥ - û d s / (s + dt d)` avoids
+cancelling `D` against `-D_∥` along `û` when `s ≲ eps(FT) dt d` (rounding of
+`(û, n̂)` leaves at most `O(eps(FT) |D_⊥| + eps(FT)^2 |D|)` along `û`); the
+reciprocal `1 / s` is taken only above `floatmin`, so subnormal winds return `D`
+in `Float32`.
+"""
+@inline function _semi_implicit_gw_drag(du, dv, uvw, dt)
+    u = uvw.u
+    v = uvw.v
+    s = hypot(u, v)
+    s <= floatmin(s) && return Geometry.UVVector(du, dv)
+    inv_s = inv(s)
+    û = u * inv_s
+    v̂ = v * inv_s
+    d_par = du * û + dv * v̂
+    d_par >= zero(s) && return Geometry.UVVector(du, dv)
+    d = -d_par
+    d_perp = -du * v̂ + dv * û
+    d_eff = (d * s) / (s + dt * d)
+    return Geometry.UVVector(-d_perp * v̂ - û * d_eff, d_perp * û - v̂ * d_eff)
+end
+
+"""
     orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, ::Nothing)
     orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, ::OrographicGravityWave)
 
@@ -358,6 +400,9 @@ integrator step:
     [m/s²]. It is refreshed only on the `dt_ogw` callback by
     `orographic_gravity_wave_compute_tendency!`, which also limits its magnitude to
     3e-3·√2 m/s² (preserving direction); between callbacks the same forcing is reapplied.
+    Its decelerating component along the current wind is damped by
+    `_semi_implicit_gw_drag`, so a forward-Euler step of size `dt` cannot reverse the
+    horizontal wind.
   - The Beljaars (2004) turbulent orographic form drag, evaluated from the current wind
     `Y.c.uₕ` with the static drag coefficient `ᶜtofd_Cd` and the backward-Euler rate
     `tofd_implicit_rate`. Near the surface over steep orography its damping time is far
@@ -374,12 +419,20 @@ function orographic_gravity_wave_apply_tendency!(
     ::OrographicGravityWave,
 )
     (; ᶜuforcing, ᶜvforcing, ᶜtofd_Cd, ogw_params) = p.orographic_gravity_wave
+    (; ᶜu) = p.precomputed
+    FT = Spaces.undertype(axes(Yₜ.c))
+    dt = FT(p.dt)
 
-    @. Yₜ.c.uₕ +=
-        C12.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
+    @. Yₜ.c.uₕ += C12(
+        _semi_implicit_gw_drag(
+            ᶜuforcing,
+            ᶜvforcing,
+            Geometry.UVWVector(ᶜu),
+            dt,
+        ),
+    )
 
     iszero(ogw_params.topo_a_tofd) && return nothing
-    dt = eltype(ᶜtofd_Cd)(p.dt)
     @. Yₜ.c.uₕ -=
         tofd_implicit_rate(ᶜtofd_Cd, sqrt(norm_sqr(Y.c.uₕ)), dt) * Y.c.uₕ
     return nothing
@@ -699,10 +752,10 @@ the model top face, `z_ref` is the model top face. If `z_start` is `Inf` (no cel
 the PBL-top cell), `z_ref` is `Inf` and the column gets no blocked drag.
 
 The mask keeps the cells whose top face is at or above `z_start` and whose bottom face is
-below `z_ref`, so the lowest blocked cell is always in it, and drops cells of zero weight,
-which contribute nothing to the pressure-weighted sum. The tendency is then
-`g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to zero in columns where
-the mask is empty. `Δp` is each cell's own pressure thickness, the difference of `ᶠp`
+below `z_ref`, so the lowest blocked cell is always in it, and drops cells of zero or `NaN`
+weight, which contribute nothing to the pressure-weighted sum or would propagate `NaN`.
+The tendency is then `g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to
+zero in columns where the mask is empty or the weight sum is `NaN`. `Δp` is each cell's own pressure thickness, the difference of `ᶠp`
 across its two faces, and `wtsum = Σ Δp·weight`, both as in GFDL `topo_drag`, so the
 column-integrated blocked stress `Σ (du/dt)·Δp/g` equals `τ_x·τ_np/τ_l` exactly.
 
@@ -826,11 +879,11 @@ function calc_nonpropagating_forcing!(
     # Each cell's own pressure thickness (GFDL topo_drag: dp = phalf(k+1) - phalf(k))
     @. ᶜdiff = ᶜbottom_bias(ᶠp) - ᶜtop_bias(ᶠp)
 
-    # Exclude cells with zero weight: p == p_ref there, so they contribute
-    # nothing to the pressure-weighted sum or the forcing anyway.
-    @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
+    # Exclude cells with zero weight (p == p_ref there, so they contribute nothing to
+    # the pressure-weighted sum) and NaN weight (no z_ref found, so ᶠp_ref is NaN).
+    @. ᶜmask = ᶜmask && (!iszero(ᶜweights)) && (!isnan(ᶜweights))
 
-    ᶜweights .= ᶜweights .* ᶜmask
+    @. ᶜweights = ifelse(ᶜmask, ᶜweights, FT(0))
 
     # Column stress sum wtsum = Σ Δp·weight (GFDL topo_drag: `wtsum += dp*weight`).
     # The forcing below divides by wtsum, so the column-integrated blocked stress
@@ -845,16 +898,15 @@ function calc_nonpropagating_forcing!(
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
-    # Compute drag, handling empty mask case (wtsum=0) gracefully
-    # When wtsum=0, the mask is empty (no cell above the PBL-top cell),
-    # so we set forcing to 0 for those columns
+    # Zero the tendency in columns where the mask is empty (wtsum == 0: no cell above
+    # the PBL-top cell) or wtsum is NaN.
     @. ᶜuforcing += ifelse(
-        iszero(ᶜwtsum),
+        iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
         grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
-        iszero(ᶜwtsum),
+        iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )

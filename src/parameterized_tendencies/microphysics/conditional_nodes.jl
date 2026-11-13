@@ -150,14 +150,14 @@ end
 """
     ConditionalNode{FT}
 
-One node of the conditional-moment rule: the state `(T, q)` [K, kg/kg] the
-evaluator receives, the centred saturation excess `S′` [kg/kg] it recovers
-from that state, the probability weight `w`, and the shaft flag (`1` inside
-the precipitation shaft, `0` outside).
+One node of the conditional-moment rule: its temperature `T` [K], the centred
+saturation excess `S′` [kg/kg] the evaluator recovers at it, the probability
+weight `w`, and the shaft flag (`1` inside the precipitation shaft, `0`
+outside). The total water the evaluator receives is set per temperature point
+by `_point_value`, which is also where the node's `S′` is recovered from.
 """
 struct ConditionalNode{FT}
     T::FT
-    q::FT
     S′::FT
     w::FT
     shaft::FT
@@ -203,19 +203,17 @@ The three values in nondecreasing order.
 end
 
 """
-    _conditional_interval_nodes(thp, ρ, T, mu_S, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min, q_max)
+    _conditional_interval_nodes(T, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min)
 
 The two nodes of the rule on the interval `[lo, hi]` of the centred saturation
 excess, with the upper tail probabilities `Qlo`, `Qhi` of its standardized
 edges: the two-point Gauss rule where the interval carries actual cloud
 (`cloudy`), otherwise one node at the conditional mean with the full weight
 and a second node of zero weight. The node temperature is the regression
-`T + β_T S′` floored at `T_min`, and the node total water is set so that the
-evaluator, which recovers `S′ = q − q_sat(T_node, ρ) − μ_S`, lands on the
-node's `S′` exactly; `q` is clamped to `[0, q_max]`.
+`T + β_T S′` floored at `T_min`.
 """
 @inline function _conditional_interval_nodes(
-    thp, ρ, T, mu_S, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min, q_max,
+    T, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min,
 )
     FT = typeof(σ_S)
     (w, x₁, p₁, x₂, p₂) = _truncated_normal_gauss2(lo / σ_S, hi / σ_S, Qlo, Qhi)
@@ -226,38 +224,30 @@ node's `S′` exactly; `q` is clamped to `[0, q_max]`.
     w₁ = w * ifelse(cloudy, p₁, one(FT))
     w₂ = w * ifelse(cloudy, p₂, zero(FT))
     return (
-        _conditional_node(thp, ρ, T, mu_S, β_T, S′₁, w₁, shaft, T_min, q_max),
-        _conditional_node(thp, ρ, T, mu_S, β_T, S′₂, w₂, shaft, T_min, q_max),
+        _conditional_node(T, β_T, S′₁, w₁, shaft, T_min),
+        _conditional_node(T, β_T, S′₂, w₂, shaft, T_min),
     )
 end
 
 """
-    _conditional_node(thp, ρ, T, mu_S, β_T, S′, w, shaft, T_min, q_max)
+    _conditional_node(T, β_T, S′, w, shaft, T_min)
 
 The `ConditionalNode` at centred saturation excess `S′` [kg/kg] with
 probability weight `w`: its temperature is the regression on `S′`,
-`T + β_T S′` floored at `T_min` [K], and its total water is set so that the
-evaluator, which recovers `S′ = q − q_sat(T_node, ρ) − μ_S`, lands on the
-node's `S′` exactly, clamped to `[0, q_max]` [kg/kg]. The Boolean `shaft` becomes
-the node's shaft flag, `1` or `0`.
+`T + β_T S′` floored at `T_min` [K]. The Boolean `shaft` becomes the node's
+shaft flag, `1` or `0`.
 """
-@inline function _conditional_node(thp, ρ, T, mu_S, β_T, S′, w, shaft, T_min, q_max)
+@inline function _conditional_node(T, β_T, S′, w, shaft, T_min)
     FT = typeof(S′)
     T_node = max(T_min, T + β_T * S′)
-    q_node = clamp(
-        TD.q_vap_saturation(_unwrapped(thp), T_node, ρ) + mu_S + S′, zero(FT), q_max,
-    )
-    return ConditionalNode(T_node, q_node, S′, w, ifelse(shaft, one(FT), zero(FT)))
+    return ConditionalNode(T_node, S′, w, ifelse(shaft, one(FT), zero(FT)))
 end
 
 """
-    conditional_rule(
-        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
-    )
+    conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, T_min)
 
-The `ConditionalRule` of a cell with mean temperature `T` [K], density `ρ`,
-linearized mean saturation excess `mu_S` [kg/kg], linearized width `σ_S` [kg/kg]
-of the centred excess `S′`, temperature regression slope `β_T`
+The `ConditionalRule` of a cell with mean temperature `T` [K], linearized width
+`σ_S` [kg/kg] of the centred excess `S′`, temperature regression slope `β_T`
 (`sgs_temperature_regression`) and the thresholds on `S′` [kg/kg], each of
 which may be infinite:
 
@@ -271,9 +261,7 @@ The thresholds, sorted, bound four intervals; each gets the nodes of
 one node at its conditional mean otherwise, for eight node slots in all. The
 weights sum to one; an interval of zero width contributes zero weight.
 """
-@inline function conditional_rule(
-    thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
-)
+@inline function conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, T_min)
     FT = typeof(σ_S)
     # A sliver interval between nearly coincident actual and equilibrium
     # cloud edges, |t_e − t_a| < 10⁻³ σ_S, collapses onto the actual edge. Its
@@ -303,8 +291,8 @@ weights sum to one; an interval of zero width contributes zero weight.
         # an interval between sorted thresholds lies entirely on one side of
         # each threshold, so its lower bound decides every flag
         _conditional_interval_nodes(
-            thp, ρ, T, mu_S, σ_S, β_T, lo, hi, Qs[i], Qs[i + 1],
-            lo >= t_a, lo >= t_p, T_min, q_max,
+            T, σ_S, β_T, lo, hi, Qs[i], Qs[i + 1],
+            lo >= t_a, lo >= t_p, T_min,
         )
     end
     return ConditionalRule(
@@ -388,29 +376,28 @@ end
 """
     _point_value(f, n, t, spread)
 
-`f(T, q, shaft)` at the temperature point of the node `n` offset by `t` [-],
-in units of the spread `σ⊥` at fixed saturation excess (`_temperature_points`):
-the point's temperature is `n.T + t σ⊥` floored at `spread.T_min` [K], and its
-total water is set from the `TemperatureSpread` `spread` so that the evaluator
-recovers the node's `S′`, clamped to `[0, spread.q_max]` [kg/kg]. The value is
-wrapped for accumulation (`add_auto_broadcasters`), so `f` may return a
-scalar or a `NamedTuple` of scalars.
+`f(T, q, shaft, q_sat)` at the temperature point of the node `n` offset by `t`
+[-], in units of the spread `σ⊥` at fixed saturation excess
+(`_temperature_points`): the point's temperature is `n.T + t σ⊥` floored at
+`spread.T_min` [K], and its total water is set from the `TemperatureSpread`
+`spread` so that the evaluator recovers the node's `S′`, clamped to
+`[0, spread.q_max]` [kg/kg]. The saturation specific humidity the point's total
+water was built from is passed to `f`, which needs the same value to recover
+`S′`. The value is wrapped for accumulation (`add_auto_broadcasters`), so `f`
+may return a scalar or a `NamedTuple` of scalars.
 """
 @inline function _point_value(f, n, t, spread)
     FT = typeof(n.w)
     T_pt = max(spread.T_min, n.T + t * spread.σ⊥)
-    q_pt = clamp(
-        TD.q_vap_saturation(_unwrapped(spread.thp), T_pt, spread.ρ) + spread.mu_S + n.S′,
-        zero(FT),
-        spread.q_max,
-    )
-    return add_auto_broadcasters(f(T_pt, q_pt, n.shaft))
+    q_sat_pt = TD.q_vap_saturation(_unwrapped(spread.thp), T_pt, spread.ρ)
+    q_pt = clamp(q_sat_pt + spread.mu_S + n.S′, zero(FT), spread.q_max)
+    return add_auto_broadcasters(f(T_pt, q_pt, n.shaft, q_sat_pt))
 end
 
 """
     sum_over_conditional_nodes(f, rule, spread)
 
-Weighted sum of `f(T, q, shaft)` over the nodes of a `ConditionalRule` and,
+Weighted sum of `f(T, q, shaft, q_sat)` over the nodes of a `ConditionalRule` and,
 for each node, over its points in temperature at fixed saturation excess
 (`_temperature_points`, with the `TemperatureSpread` `spread`); a point's
 total water is set so that the evaluator recovers the node's `S′`. The first

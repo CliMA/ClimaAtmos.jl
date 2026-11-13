@@ -1,4 +1,4 @@
-461
+468
 
 # **README**
 #
@@ -32,7 +32,7 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
-461
+468
 - Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
   the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
   `topo_drag`) with each cell's own pressure thickness (hydrostatic pressures on
@@ -44,6 +44,59 @@
   orographic form drag (IFS form, `ogw_tofd_coefficient = 2.7` from ClimaParams
   1.3.9) is on by default when `topography` is `Earth`. Changes the output of
   `aquaplanet_equil_allsky_gw_raw`.
+
+467
+- Fused slab and column loops (advection, the turbulent and hyperdiffusive
+  fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the
+  gravity wave drag, AMD) change the order of floating-point operations.
+
+466
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; unified implicit vertical transport across dry and moist models
+  with central `ᶠρ u³ ᶠinterp(e_tot) + u³ ᶠinterp(p)`, `q_tot`, and sedimenting
+  microphysics tracers in the Newton residual (with central velocity Jacobian
+  blocks), first-order upwind `ρtke` in the Newton residual with tridiagonal
+  advection-diffusion-dissipation diagonal (omitting velocity blocks so `u³`
+  sign reversals preserve M-matrix positivity), and post-Newton
+  `1 + 2 C_γ`-weighted implicit first-order upwind dissipation plus
+  Courant-limited `energy_humidity_upwinding` antidiffusion (Zalesak-limited for
+  `vanleer_limiter`) on `e_tot - Φ`, `q_tot`, and sedimenting tracers at the
+  solved velocity; `dt`-independent van Leer slopes (`zero(dt)`); stage-weighted
+  surface precipitation fluxes and slab-ocean coupling; backward-Euler damping
+  of parallel-decelerating orographic gravity-wave drag and `NaN` / zero-weight
+  mask guard in `calc_nonpropagating_forcing!`; incremental implicit-stage
+  condensate predictor, two-pass updraft area predictor, Picard cache refresh,
+  per-species condensate and `q_tot` floors in 1M microphysics, Beres latent
+  heating, and non-equilibrium thermodynamics, and floor plus proportional
+  rescaling of updraft condensates to `q_totʲ` after the Picard microphysics
+  increment (`rescale_condensates_to_total!`); stabilized implicit 1M
+  microphysics Jacobian (`-Γ · C / q_sat` saturation feedback, `Float32`-safe
+  denominator floors, `SGSQuadrature` `INP_limiter` unblocking, and
+  `PrognosticEDMFX` `(c.ρq_x, c.sgsʲs.:(1).q_x)` off-diagonal coupling); and
+  non-negative clamping of grid-mean, updraft, and environment sedimentation
+  fluxes. All change results.
+
+465
+- The `TRMM_LBA` radiation takes the height profile at the current time and interpolates
+  it in height on every device. This changes SCM TRMM results at the level of Float32
+  rounding.
+
+464
+- Implicit Jacobian for 1M rain evaporation (`ρq_rai` diagonal: `tend/q_rai`)
+  and snow sublimation/deposition (`ρq_sno` diagonal: `tend/q_sno` for
+  sublimation; ventilation-integral prefactor `C = 4πn₀G/(ρλ²)·vent` for
+  deposition, computed without dividing by S).
+
+463
+- `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
+  results at the level of Float32 rounding.
+
+462
+- 1M rain and snow are placed on the precipitation shaft by default
+  (`sgs_precip_incloud_fraction = 1`, `sgs_precip_fraction_floor = 0.1`).
+
+461
+- Update dependencies for v0.42.18
 
 460
 - CI moves from Julia 1.11 to 1.13.3, which changes results.

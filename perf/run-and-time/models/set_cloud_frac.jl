@@ -119,9 +119,8 @@ function case_run(state)
         thermo_params = CA.CAP.thermodynamics_params(p.params)
         materialize = turbconv_model isa CA.PrognosticEDMFX
         env_state = CA.cloud_env_state(Y, p, thermo_params; materialize)
-        (; ᶜtemp_scalar_4, ᶜtemp_scalar_7) = p.scratch
         CA.set_quadrature_cloud_fraction!(
-            Y, p, env_state, ᶜtemp_scalar_4, ᶜtemp_scalar_7, Val(false),
+            Y, p, env_state, p.scratch.ᶜtemp_scalar_4, Val(false),
         )
     else
         CA.set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
