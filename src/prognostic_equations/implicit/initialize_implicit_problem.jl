@@ -734,17 +734,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
-
     turbconv_params = CAP.turbconv_params(p.params)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence, computed in one column loop
     # per draft:
@@ -797,6 +789,15 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         ) do ᶜoffset, ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
         ᶜρ_diffʲ, rates, ᶜr_mass_column, mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
             (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            FT = eltype(ᶜρʲ)
+            (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
+            detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+            entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+            detr_massflux_vertdiv_coeff = CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
             ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
             ᶜJ = Fields.local_geometry_field(axes(ᶜρaʲ)).J
             ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
@@ -881,8 +882,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
-            init = FT(0),
+            init = zero(eltype(p.params)),
         ) do ρa_prev, (offset, factor, ρ_cell)
+            a_max = CAP.max_area(turbconv_params)
             return clamp(offset + factor * ρa_prev, zero(ρa_prev), a_max * ρ_cell)
         end
     end
