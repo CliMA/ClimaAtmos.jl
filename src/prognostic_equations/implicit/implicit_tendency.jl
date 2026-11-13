@@ -456,7 +456,8 @@ end
 end
 
 """
-    add_antidiffusive_upwind1_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, ᶜρ, p, dtγ, upwinding)
+    add_antidiffusive_upwind1_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, ᶜρ, dtγ, upwinding)
+    _add_antidiffusive_upwind1_transport_column!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, ᶜρ, dtγ, upwinding)
 
 Add the Courant-limited post-Newton high-order antidiffusive correction
 `-ᶜadvdivᵥ(ᶠF_anti)` to `ᶜρχₜ`, relative to the first-order upwind flux. For
@@ -469,17 +470,17 @@ stage `χ*` is, such as in nondivergent interior flow) while
 remaining scale- and shift-equivariant (`χ → a + b χ` for all `a, b ∈ ℝ`); at
 `dtγ = 0`, the unconstrained flux difference is added. `Val(:third_order)`
 applies the linear unlimited third-order upwind antidiffusion (which is not
-positive or monotone on discontinuities). Uses `p.scratch.ᶠtemp_CT3`,
-`p.scratch.ᶠtemp_scalar`, `p.scratch.ᶠtemp_scalar_2`, `p.scratch.ᶜtemp_scalar_3`,
-and `p.scratch.ᶜtemp_scalar_4`. A no-op for `Val(:first_order)` and `Val(:none)`.
+positive or monotone on discontinuities). A no-op for `Val(:first_order)` and
+`Val(:none)`. The first form loops over the columns of the fields; the second
+adds the correction in one column of a fused loop, where the raw and limited
+fluxes and the Zalesak ratios are column temporaries.
 """
-@inline function add_antidiffusive_upwind1_transport!(
+@inline function _add_antidiffusive_upwind1_transport_column!(
     ᶜρχₜ,
     ᶠρ,
     ᶠu³,
     ᶜχ,
     ᶜρ,
-    p,
     dtγ,
     ::Val{:vanleer_limiter},
 )
@@ -494,48 +495,42 @@ and `p.scratch.ᶜtemp_scalar_4`. A no-op for `Val(:first_order)` and `Val(:none
     end
     ᶜJ = Fields.local_geometry_field(axes(ᶜρχₜ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    ᶠF_raw = p.scratch.ᶠtemp_CT3
-    ᶠΦ = p.scratch.ᶠtemp_scalar
-    ᶠΔχ = p.scratch.ᶠtemp_scalar_2
-    ᶜR_plus = p.scratch.ᶜtemp_scalar_3
-    ᶜR_minus = p.scratch.ᶜtemp_scalar_4
     ᶠset_zero_ct3_bcs = Operators.SetBoundaryOperator(;
         top = Operators.SetValue(CT3(z)),
         bottom = Operators.SetValue(CT3(z)),
     )
-    @. ᶠF_raw = ᶠset_zero_ct3_bcs(
+    ᶠF_raw = @. ᶠset_zero_ct3_bcs(
         ᶠρ *
         _courant_limiter(ᶠu³, dtγ_ft) *
         (ᶠlin_vanleer(ᶠu³, ᶜχ, z) - ᶠupwind1(ᶠu³, ᶜχ)),
     )
-    @. ᶠΦ = dtγ_ft * ᶠJ * _ct3_scalar(ᶠF_raw)
-    @. ᶠΔχ = _c3_scalar(ᶠgradᵥ(ᶜχ))
-    @. ᶜR_plus = _fct_ratio(
+    ᶠΦ = @. dtγ_ft * ᶠJ * _ct3_scalar(ᶠF_raw)
+    ᶠΔχ = @. _c3_scalar(ᶠgradᵥ(ᶜχ))
+    ᶜR_plus = @. _fct_ratio(
         max(z, ᶜbottom_bias(ᶠΦ)) - min(z, ᶜtop_bias(ᶠΦ)),
         ᶜρ * ᶜJ * max(z, -(ᶜbottom_bias(ᶠΔχ)), ᶜtop_bias(ᶠΔχ)),
     )
-    @. ᶜR_minus = _fct_ratio(
+    ᶜR_minus = @. _fct_ratio(
         max(z, ᶜtop_bias(ᶠΦ)) - min(z, ᶜbottom_bias(ᶠΦ)),
         ᶜρ * ᶜJ * max(z, ᶜbottom_bias(ᶠΔχ), -(ᶜtop_bias(ᶠΔχ))),
     )
     ᶠb_bias = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(z))
     ᶠt_bias = Operators.TopBiasedC2F(; top = Operators.SetValue(z))
-    @. ᶠF_raw =
+    @. ᶜρχₜ -= ᶜadvdivᵥ(
         ifelse(
             _ct3_scalar(ᶠF_raw) >= z,
             min(ᶠb_bias(ᶜR_minus), ᶠt_bias(ᶜR_plus)),
             min(ᶠb_bias(ᶜR_plus), ᶠt_bias(ᶜR_minus)),
-        ) * ᶠF_raw
-    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠF_raw)
+        ) * ᶠF_raw,
+    )
     return nothing
 end
-@inline add_antidiffusive_upwind1_transport!(
+@inline _add_antidiffusive_upwind1_transport_column!(
     ᶜρχₜ,
     ᶠρ,
     ᶠu³,
     ᶜχ,
     ᶜρ,
-    p,
     dtγ,
     ::Val{:third_order},
 ) = (
@@ -546,13 +541,50 @@ end
     );
     nothing
 )
-@inline add_antidiffusive_upwind1_transport!(
+@inline _add_antidiffusive_upwind1_transport_column!(
     ᶜρχₜ,
     ᶠρ,
     ᶠu³,
     ᶜχ,
     ᶜρ,
-    p,
+    dtγ,
+    ::Union{Val{:first_order}, Val{:none}},
+) = nothing
+
+function add_antidiffusive_upwind1_transport!(
+    ᶜρχₜ,
+    ᶠρ,
+    ᶠu³,
+    ᶜχ,
+    ᶜρ,
+    dtγ,
+    upwinding::Union{Val{:vanleer_limiter}, Val{:third_order}},
+)
+    DataLayouts.foreach_column(
+        ᶜρχₜ,
+        ᶠρ,
+        ᶠu³,
+        ᶜχ,
+        ᶜρ,
+    ) do ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, ᶜρ
+        _add_antidiffusive_upwind1_transport_column!(
+            ᶜρχₜ,
+            ᶠρ,
+            ᶠu³,
+            ᶜχ,
+            ᶜρ,
+            dtγ,
+            upwinding,
+        )
+    end
+    return nothing
+end
+add_antidiffusive_upwind1_transport!(
+    ᶜρχₜ,
+    ᶠρ,
+    ᶠu³,
+    ᶜχ,
+    ᶜρ,
     dtγ,
     ::Union{Val{:first_order}, Val{:none}},
 ) = nothing
@@ -649,11 +681,11 @@ sedimenting microphysics species at the solved velocity
 
  1. the implicit first-order dissipation step
     `(I - dtγ 𝒟) ρχ* = ρχ`, with the tridiagonal operator
-    `𝒟 ρχ = -ᶜadvdivᵥ(ᶠρ (1 + 2 |u³| dtγ) (ᶠupwind1(u³, χ) - u³ ᶠinterp(χ)))`
-    (`add_implicit_upwind1_dissipation!`), whose tendency `𝒟 ρχ*` is added;
+    `𝒟 ρχ = -ᶜadvdivᵥ(ᶠρ (1 + 2 |u³| dtγ) (ᶠupwind1(u³, χ) - u³ ᶠinterp(χ)))`,
+    whose tendency `𝒟 ρχ*` is added;
  2. the Courant-limited antidiffusion `F_hi - ᶠupwind1` of the
     `energy_humidity_upwinding` reconstruction at `χ* = ρχ* / ρ`
-    (`add_antidiffusive_upwind1_transport!`, Zalesak-limited for
+    (`_add_antidiffusive_upwind1_transport_column!`, Zalesak-limited for
     `vanleer_limiter`).
 
 `𝒟` vanishes on a uniform `χ`, so the correction conserves each column
@@ -668,9 +700,8 @@ corrected flux is the full `upwinding` flux. Returns immediately when
 Newton residual regardless). `tracer_upwinding` applies to the passive tracers,
 which are advected explicitly. Writes `p.scratch.ᶜupwind_dissipation_matrix`,
 `p.scratch.ᶜupwind_dissipation_system`,
-`p.scratch.ᶜupwind_dissipation_solver_cache`, `p.scratch.ᶜtemp_scalar`,
-`p.scratch.ᶜtemp_scalar_2`, `p.scratch.ᶜtemp_scalar_3`,
-`p.scratch.ᶜtemp_scalar_4`, and `p.scratch.ᶠtemp_CT3`. Returns `nothing`.
+`p.scratch.ᶜupwind_dissipation_solver_cache`, `p.scratch.ᶜtemp_scalar`, and
+`p.scratch.ᶜtemp_scalar_2`. Returns `nothing`.
 """
 function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
     (; energy_humidity_upwinding) = p.atmos.numerics
@@ -716,25 +747,37 @@ function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
     solver_cache = p.scratch.ᶜupwind_dissipation_solver_cache
 
     @inline add_scalar_correction!(ᶜρχₜ, ᶜρχ) = begin
-        add_implicit_upwind1_dissipation!(
+        MatrixFields.single_field_solve!(
+            solver_cache,
+            ᶜρχ_dissipated,
+            ᶜA,
+            ᶜρχ,
+        )
+        DataLayouts.foreach_column(
             ᶜρχₜ,
             ᶜρχ_dissipated,
             ᶜ𝒟,
-            ᶜA,
-            ᶜρχ,
-            solver_cache,
-        )
-        ᶜχ = @. lazy(specific(ᶜρχ_dissipated, ᶜρ))
-        add_antidiffusive_upwind1_transport!(
-            ᶜρχₜ,
-            ᶠρ,
             ᶠu³,
-            ᶜχ,
             ᶜρ,
-            p,
-            dtγ,
-            energy_humidity_upwinding,
-        )
+        ) do ᶜρχₜ, ᶜρχ_dissipated, ᶜ𝒟, ᶠu³, ᶜρ
+            @. ᶜρχₜ += ᶜ𝒟 * ᶜρχ_dissipated
+            # Names distinct from the locals `ᶜJ`, `ᶠJ`, and `ᶠρ` of the
+            # enclosing function keep the closure from rebinding (and boxing)
+            # them.
+            ᶜJ_col = Fields.local_geometry_field(axes(ᶜρ)).J
+            ᶠJ_col = Fields.local_geometry_field(axes(ᶠu³)).J
+            ᶠρ_col = @. ᶠinterp(ᶜρ * ᶜJ_col) / ᶠJ_col
+            ᶜχ = @. lazy(specific(ᶜρχ_dissipated, ᶜρ))
+            _add_antidiffusive_upwind1_transport_column!(
+                ᶜρχₜ,
+                ᶠρ_col,
+                ᶠu³,
+                ᶜχ,
+                ᶜρ,
+                dtγ,
+                energy_humidity_upwinding,
+            )
+        end
         return nothing
     end
 
@@ -752,30 +795,5 @@ function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
             MatrixFields.get_field(Y.c, ρχ_name),
         )
     end
-    return nothing
-end
-
-"""
-    add_implicit_upwind1_dissipation!(ᶜρχₜ, ᶜρχ_dissipated, ᶜ𝒟, ᶜA, ᶜρχ, solver_cache)
-
-Solve the implicit first-order dissipation step `ᶜA ρχ* = ρχ` for `ρχ*` into
-`ᶜρχ_dissipated`, with `ᶜA = I - dtγ 𝒟` and the tridiagonal dissipation
-operator `ᶜ𝒟` of `add_vertical_advection_corrections!`, and add its tendency
-`𝒟 ρχ*` to `ᶜρχₜ`. `solver_cache` is the `MatrixFields.single_field_solve!`
-cache of `ᶜA` (on GPUs, `single_field_solve!` dispatches to a shared-memory
-parallel cyclic reduction kernel that reduces `ᶜA` and `ᶜρχ` jointly across the
-column's `N_z` threads in `⌈log₂(N_z)⌉` steps without a separate factorization
-pass). Returns `nothing`.
-"""
-function add_implicit_upwind1_dissipation!(
-    ᶜρχₜ,
-    ᶜρχ_dissipated,
-    ᶜ𝒟,
-    ᶜA,
-    ᶜρχ,
-    solver_cache,
-)
-    MatrixFields.single_field_solve!(solver_cache, ᶜρχ_dissipated, ᶜA, ᶜρχ)
-    @. ᶜρχₜ += ᶜ𝒟 * ᶜρχ_dissipated
     return nothing
 end
