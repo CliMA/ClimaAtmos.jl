@@ -334,14 +334,16 @@ Split `(p₁, t₁, p₂, t₂)` of the temperature spread at fixed saturation e
 `p₂ = 1 − p₁` of the two sides, `t★ = (T_freeze − T_node)/σ⊥`, and the
 conditional means `t₁ = −φ(t★)/p₁`, `t₂ = φ(t★)/p₂` of the half-normals, in
 units of `σ⊥`; otherwise a single point, `(1, 0, 0, 0)`. Both forms keep the
-mean temperature.
+mean temperature. Since `Φ(−2.1) < 0.02`, a node with `|t★| ≥ 2.1` has a
+single point, and nothing else is evaluated for it.
 """
 @inline function _freezing_split(T_node, σ⊥, T_freeze)
     FT = typeof(T_node)
     t★ = (T_freeze - T_node) / max(σ⊥, ϵ_numerics(FT))
-    p₁ = normal_cdf(t★)
+    abs(t★) < FT(2.1) || return (one(FT), zero(FT), zero(FT), zero(FT))
+    φ★ = normal_pdf(t★)
+    p₁ = normal_cdf(t★, φ★)
     p₂ = one(FT) - p₁
-    φ★ = exp(-t★ * t★ / 2) / sqrt(2 * FT(π))
     split = (σ⊥ > ϵ_numerics(FT)) & (p₁ > FT(0.02)) & (p₂ > FT(0.02))
     return (
         ifelse(split, p₁, one(FT)),
