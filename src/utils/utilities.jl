@@ -553,12 +553,17 @@ Return the component of a vector of type `V` whose physical length is 1.
 
 `V` must be a single-component vector type, i.e. a basis-vector type such as
 `CT3`. Multiplying by this factor converts a physical magnitude into the
-component of `V`.
+component of `V`. For `C3`, whose unit component is `1 / √g³³`, only that
+component of the stored metric `gⁱʲ` is read; the general method converts the
+vector to the local basis, which inverts `∂x∂ξ` at every point.
 """
 function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
     FT = Geometry.undertype(typeof(local_geometry))
     return FT(1) / Geometry._norm(V(FT(1)), local_geometry)
 end
+
+unit_basis_vector_data(::Type{C3}, local_geometry) =
+    inv(sqrt(parent(local_geometry.gⁱʲ)[end, end]))
 
 """
     projected_vector_data(::Type{V}, vector, local_geometry)
