@@ -23,8 +23,8 @@ env:
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2 (the coupler commit
   # that the end-to-end performance pipeline pins resolves CUDA 5.11 and GPUCompiler 1.17)
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_MAIN_COMMIT: "b717c7bae14dcfc3396ca3b838adf332718eb870"
-  CLIMAATMOS_PR_COMMIT: "36defd8058d2f8ed348514870d9c0fe0d2965d51"
+  CLIMAATMOS_MAIN_COMMIT: "012f10d7aeafee9b2dafb9dc844b475bcbde89f5"
+  CLIMAATMOS_PR_COMMIT: "7bab6eab0deed467ad260e52faaf930e45902266"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -82,7 +82,7 @@ steps:
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
-      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = name == "CloudMicrophysics" ? "dy/microphysics_fusion" : "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
       - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest.toml || true
