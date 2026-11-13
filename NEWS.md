@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
+  exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
+  layer's flux is divided by the mean mass of the two cells it spans (the model's own
+  `ρ·J/ΔA`, which grows with height on a deep-atmosphere grid) before being split between
+  them; it was divided by `√(ρ_k ρ_{k+1})·Δz`, which left an error of order the change in
+  cell mass between levels. This changes the results of every run with
+  `non_orographic_gravity_wave` enabled.
+- ![][badge-✨feature/enhancement] A warning is logged when `dt_nogw` or `dt_ogw` is not a
+  whole number of model steps, giving the actual times between drag updates.
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.
