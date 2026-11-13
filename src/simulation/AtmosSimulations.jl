@@ -37,7 +37,7 @@ ClimaComms.context(sim::AtmosSimulation) =
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
 """
-    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, dt, t_start, t_end,
+    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, t_start, t_end,
                                   start_date, output_dir; verbose = false)
 
 Build the scheduled diagnostics and the writers they output to.
@@ -60,7 +60,6 @@ function setup_diagnostics_and_writers(
     model,
     Y,
     p,
-    dt,
     t_start,
     t_end,
     start_date,
@@ -94,14 +93,13 @@ function setup_diagnostics_and_writers(
         z_sampling_method,
         horizontal_method,
         sync_schedule = CAD.EveryStepSchedule(),
-        init_time = t_start,
         start_date,
     )
     writers = (CAD.DictWriter(), CAD.HDF5Writer(output_dir), netcdf_writer)
 
     # Add default diagnostics if enabled
     if default
-        sim_duration = t_end - dt
+        sim_duration = t_end
         default_diag_list = CAD.default_diagnostics(
             model,
             sim_duration,
@@ -117,7 +115,7 @@ function setup_diagnostics_and_writers(
 
     # Add debug tendency diagnostics if enabled
     if debug_tendency
-        sim_duration = t_end - dt
+        sim_duration = t_end
         tendency_diag_list = CAD.tendency_debug_default_diagnostics(
             netcdf_writer,
             sim_duration,
@@ -158,7 +156,6 @@ function setup_diagnostics_and_writers(
                     z_sampling_method = pressure_z_sampling,
                     horizontal_method,
                     sync_schedule = CAD.EveryStepSchedule(),
-                    init_time = t_start,
                     start_date,
                 )
                 writers = (writers..., pressure_netcdf_writer)
@@ -272,13 +269,17 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 ### Numerics
 
   - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
-  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm
+  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 2)`: Jacobian algorithm
     for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
   - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
   - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
-  - `update_constrain_state_every = "step"`: When state constraints are applied,
-    `"stage"`, `"step"`, or `"dss"`.
+  - `update_constrain_state_every = "stage"`: When state constraints are applied,
+    `"stage"`, `"step"`, or `"dss"`. With `PrognosticEDMFX`, 1-moment microphysics,
+    and `updraft_picard_rounds > 0`, `"dss"` re-clamps the warm-started grid-mean
+    condensates of the Newton guess after the stage-entering state is copied, which
+    can produce an upward surface precipitation flux in a single-iteration Newton
+    solve.
 
 ### Diagnostics helpers
 
@@ -334,10 +335,10 @@ function AtmosSimulation(
     # Diagnostics
     diagnostics = CAD.DiagnosticsConfig(),
     # Numerics
-    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
+    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 2),
     debug_jacobian = false,
     update_cache_every = "stage",
-    update_constrain_state_every = "step",
+    update_constrain_state_every = "stage",
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
@@ -395,7 +396,10 @@ function AtmosSimulation(
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, resolved_steady_state_velocity,
+        Y, model, params, dt, start_date, resolved_steady_state_velocity;
+        ode_algo = ode_config,
+        jacobian,
+        update_cache_every,
     )
 
     # Combine all callbacks
@@ -436,7 +440,7 @@ function AtmosSimulation(
     all_diagnostics, writers, periods_reductions =
         @timed_log verbose "Set up diagnostics" setup_diagnostics_and_writers(
             diagnostics, model,
-            Y, p, dt,
+            Y, p,
             t_start, t_end, start_date,
             output_dir;
             verbose,

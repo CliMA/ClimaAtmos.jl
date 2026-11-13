@@ -82,6 +82,9 @@ const EXCEPTED_KEYS = Set([
     "diagnostics",
 ])
 
+# Keys that take one value per column of a multi-column run, as a list
+const PER_COLUMN_KEYS = Set(["site_latitude", "site_longitude", "cfsite_number"])
+
 """
     coerce_to_default(::Type{T}, v) -> T
 
@@ -118,7 +121,8 @@ coerce_to_default(Bool, "yes")        # 2 → throws ArgumentError
 # Notes
 
 Keys whose schema default is `nothing` or that appear in `EXCEPTED_KEYS` bypass
-coercion entirely and pass through unchanged.
+coercion entirely and pass through unchanged. Keys in `PER_COLUMN_KEYS` also take
+a list, whose elements are coerced one by one.
 """
 coerce_to_default(::Type{T}, v::T) where {T} = v
 coerce_to_default(::Type{Bool}, v::AbstractString) = parse(Bool, v)
@@ -141,6 +145,7 @@ function override_default_config(config_dict::AbstractDict;)
         else
             default_type = typeof(default_config[k])
             config[k] = try
+                k in PER_COLUMN_KEYS ? coerce_to_default.(default_type, v) :
                 coerce_to_default(default_type, v)
             catch e
                 e isa Union{MethodError, ArgumentError} || rethrow(e)

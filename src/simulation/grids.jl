@@ -4,7 +4,7 @@ using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
 
-export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
+export SphereGrid, ColumnGrid, MultiColumnGrid, BoxGrid, PlaneGrid
 
 """
     SphereGrid(::Type{FT}; kwargs...)
@@ -20,9 +20,14 @@ Create an ExtrudedCubedSphereGrid with topography support.
   - `context = ClimaComms.context()`: the ClimaComms communications context
   - `z_elem = 10`: the number of z-points
   - `z_max = 30000.0`: the domain maximum along the z-direction
-  - `z_stretch = true`: whether to use vertical stretching
-  - `dz_bottom = 500.0`: bottom layer thickness for stretching
-  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `z_stretch = false`: whether to stretch the vertical mesh with the two-scale
+    rule of [`get_z_mesh`](@ref)
+  - `dz_bottom = 500.0`: bottom layer thickness of the two-scale stretching
+  - `dz_top = 3000.0`: top layer thickness of the two-scale stretching
+  - `z_pbl = 2200.0`: scale height of the boundary-layer refinement of the
+    two-scale stretching
+  - `z_mesh`: a custom z-mesh; by default, [`get_z_mesh`](@ref) builds it from
+    `z_elem`, `z_max`, `z_stretch`, `dz_bottom`, `dz_top`, and `z_pbl`
   - `radius = 6.371229e6`: the radius of the cubed sphere
   - `h_elem = 6`: the number of horizontal elements per side of every panel (6
     panels in total)
@@ -44,8 +49,10 @@ function SphereGrid(
     context = ClimaComms.context(),
     z_elem = 10,
     z_max = 30000.0,
-    z_stretch = true,
+    z_stretch = false,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     radius = 6.371229e6,
     h_elem = 6,
     nh_poly = 3,
@@ -55,9 +62,7 @@ function SphereGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
-    ),
+    z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
 ) where {FT}
     n_quad_points = nh_poly + 1
     hypsography_fun = hypsography_function_from_topography(
@@ -103,20 +108,25 @@ Create a ColumnGrid.
   - `context = ClimaComms.context()`: the ClimaComms communications context
   - `z_elem = 10`: the number of z-points
   - `z_max = 30000.0`: the domain maximum along the z-direction
-  - `z_stretch = true`: whether to use vertical stretching
-  - `dz_bottom = 500.0`: bottom layer thickness for stretching
-  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `z_stretch = false`: whether to stretch the vertical mesh with the two-scale
+    rule of [`get_z_mesh`](@ref)
+  - `dz_bottom = 500.0`: bottom layer thickness of the two-scale stretching
+  - `dz_top = 3000.0`: top layer thickness of the two-scale stretching
+  - `z_pbl = 2200.0`: scale height of the boundary-layer refinement of the
+    two-scale stretching
+  - `z_mesh`: a custom z-mesh; by default, [`get_z_mesh`](@ref) builds it from
+    `z_elem`, `z_max`, `z_stretch`, `dz_bottom`, `dz_top`, and `z_pbl`
 """
 function ColumnGrid(
     ::Type{FT};
     context = ClimaComms.context(),
     z_elem = 10,
     z_max = 30000.0,
-    z_stretch = true,
+    z_stretch = false,
     dz_bottom = 500.0,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
-    ),
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
+    z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
 ) where {FT}
     grid = CommonGrids.ColumnGrid(
         FT;
@@ -126,6 +136,56 @@ function ColumnGrid(
     )
 
     return grid
+end
+
+"""
+    MultiColumnGrid(::Type{FT}; n_columns, kwargs...)
+
+Create a grid of `n_columns` independent columns, each with the vertical
+discretization of a [`ColumnGrid`](@ref).
+
+# Arguments
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
+
+# Keyword Arguments
+
+  - `n_columns`: the number of columns
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `z_stretch = false`: whether to stretch the vertical mesh with the two-scale
+    rule of [`get_z_mesh`](@ref)
+  - `dz_bottom = 500.0`: bottom layer thickness of the two-scale stretching
+  - `dz_top = 3000.0`: top layer thickness of the two-scale stretching
+  - `z_pbl = 2200.0`: scale height of the boundary-layer refinement of the
+    two-scale stretching
+  - `z_mesh`: a custom z-mesh; by default, [`get_z_mesh`](@ref) builds it from
+    `z_elem`, `z_max`, `z_stretch`, `dz_bottom`, `dz_top`, and `z_pbl`
+"""
+function MultiColumnGrid(
+    ::Type{FT};
+    n_columns,
+    context = ClimaComms.context(),
+    z_elem = 10,
+    z_max = 30000.0,
+    z_stretch = false,
+    dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
+    z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
+) where {FT}
+    context isa ClimaComms.SingletonCommsContext ||
+        error("Multi-column grids can only be created on Singleton contexts.")
+    n_columns ≥ 1 || error("`n_columns` must be at least 1, got $n_columns")
+    return CommonGrids.MultiColumnGrid(
+        FT;
+        # Placeholder coordinates: setups that read latitude or longitude see
+        # (0°, 0°)
+        points = fill(Geometry.LatLongPoint(FT(0), FT(0)), n_columns),
+        z_elem, z_min = 0, z_max, z_mesh,
+        device = ClimaComms.device(context),
+    )
 end
 
 """
@@ -148,9 +208,14 @@ Create a Box3DGrid with topography support.
   - `z_max = 30000.0`: the domain maximum along the z-direction
   - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
     1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-  - `z_stretch = true`: whether to use vertical stretching
+  - `z_stretch = false`: whether to stretch the vertical mesh with the two-scale
+    rule of [`get_z_mesh`](@ref)
   - `dz_bottom = 500.0`: bottom layer thickness for vertical stretching
-  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `dz_top = 3000.0`: top layer thickness of the two-scale stretching
+  - `z_pbl = 2200.0`: scale height of the boundary-layer refinement of the
+    two-scale stretching
+  - `z_mesh`: a custom z-mesh; by default, [`get_z_mesh`](@ref) builds it from
+    `z_elem`, `z_max`, `z_stretch`, `dz_bottom`, `dz_top`, and `z_pbl`
   - `bubble = false`: enables the "bubble correction" for more accurate element
     areas when computing the spectral element space.
   - `periodic_x = true`: use periodic domain along x-direction
@@ -172,8 +237,10 @@ function BoxGrid(
     z_elem = 10,
     z_max = 30000.0,
     nh_poly = 3,
-    z_stretch = true,
+    z_stretch = false,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     bubble = false,
     periodic_x = true,
     periodic_y = true,
@@ -181,9 +248,7 @@ function BoxGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
-    ),
+    z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
 ) where {FT}
     n_quad_points = nh_poly + 1
     hypsography_fun = hypsography_function_from_topography(
@@ -220,11 +285,16 @@ Create a SliceXZGrid with topography support.
   - `x_max = 300000.0`: the domain maximum along the x-direction
   - `z_elem = 10`: the number of z-points
   - `z_max = 30000.0`: the domain maximum along the z-direction
-  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `z_mesh`: a custom z-mesh; by default, [`get_z_mesh`](@ref) builds it from
+    `z_elem`, `z_max`, `z_stretch`, `dz_bottom`, `dz_top`, and `z_pbl`
   - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
     1D within each horizontal element is then `n_quad_points = nh_poly + 1`
-  - `z_stretch = true`: whether to use vertical stretching
-  - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `z_stretch = false`: whether to stretch the vertical mesh with the two-scale
+    rule of [`get_z_mesh`](@ref)
+  - `dz_bottom = 500.0`: bottom layer thickness of the two-scale stretching
+  - `dz_top = 3000.0`: top layer thickness of the two-scale stretching
+  - `z_pbl = 2200.0`: scale height of the boundary-layer refinement of the
+    two-scale stretching
   - `periodic_x = true`: use periodic domain along x-direction
   - `topography = NoTopography()`: topography type
   - `topography_damping_factor = 5.0`: factor by which smallest resolved
@@ -241,16 +311,16 @@ function PlaneGrid(
     z_elem = 10,
     z_max = 30000.0,
     nh_poly = 3,
-    z_stretch = true,
+    z_stretch = false,
     dz_bottom = 500.0,
+    dz_top = 3000.0,
+    z_pbl = 2200.0,
     periodic_x = true,
     topography::AbstractTopography = NoTopography(),
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = LinearWarp(),
     topo_smoothing = false,
-    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
-        stretch = get_stretching(FT, z_stretch, dz_bottom),
-    ),
+    z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
 ) where {FT}
     n_quad_points = nh_poly + 1
     hypsography_fun = hypsography_function_from_topography(
@@ -353,8 +423,39 @@ function hypsography_function_from_topography(
     end
 end
 
-get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
-    z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
+"""
+    get_z_mesh(::Type{FT}; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl)
+
+Build the vertical mesh of `z_elem` elements between the surface and `z_max` [m]
+for [`SphereGrid`](@ref), [`ColumnGrid`](@ref), [`BoxGrid`](@ref), and
+[`PlaneGrid`](@ref).
+
+With `z_stretch = false`, the elements are uniform. Otherwise, they follow the
+two-scale [`ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`](@extref),
+which refines the boundary layer with scale height `z_pbl` [m] while matching
+the element spacing `dz_bottom` [m] at the surface and `dz_top` [m] at the top.
+The rule admits `z_elem` within a range set by `dz_bottom`, `dz_top`, `z_pbl`,
+and `z_max`; the mesh constructor throws an `ArgumentError` that names the
+range when `z_elem` lies outside it. The 10-level default grid with
+`dz_bottom = 500` m up to 30 km lies below the range, so the grid constructors
+default to `z_stretch = false`.
+"""
+function get_z_mesh(
+    ::Type{FT};
+    z_max,
+    z_elem,
+    z_stretch,
+    dz_bottom,
+    dz_top,
+    z_pbl,
+) where {FT}
+    stretch = if z_stretch
+        Meshes.BoundaryLayerHyperbolicTangentStretching{FT}(dz_bottom, dz_top, z_pbl)
+    else
+        Meshes.Uniform()
+    end
+    return CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem, stretch)
+end
 
 """
     get_spaces(grid)
@@ -362,21 +463,11 @@ get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
 Create the center and face spaces of a ClimaCore grid, returned as
 `(; center_space, face_space)`.
 
-Supports extruded grids (sphere, box, plane) and single-column finite difference grids;
-any other grid type raises an error.
+Supports every grid with a vertical staggering: extruded grids (sphere, box, plane),
+single-column finite difference grids, and multi-column grids.
 """
 function get_spaces(grid)
-    if grid isa Grids.ExtrudedFiniteDifferenceGrid
-        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    elseif grid isa Grids.FiniteDifferenceGrid
-        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
-    else
-        error(
-            """Unsupported grid type: $(typeof(grid)). Expected \
-            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
-        )
-    end
+    center_space = Spaces.space(grid, Grids.CellCenter())
+    face_space = Spaces.space(grid, Grids.CellFace())
     return (; center_space, face_space)
 end

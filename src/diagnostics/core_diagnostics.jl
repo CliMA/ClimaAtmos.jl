@@ -256,10 +256,15 @@ add_diagnostic_variable!(short_name = "bgrad", units = "s^-2",
 )
 
 ###
-# Strain rate magnitude (3d)
+# Vertical shear of the horizontal wind (3d)
 ###
 add_diagnostic_variable!(short_name = "strain", units = "s^-2",
-    long_name = "String Rate Magnitude",
+    long_name = "Squared Vertical Shear of the Horizontal Wind",
+    comments = """
+    |∂uₕ/∂z|² / 2, the squared strain-rate norm of the vertical gradient of
+    the horizontal wind (`vertical_shear_norm_sqr`); twice this quantity is
+    the shear term of the gradient Richardson number.
+    """,
     compute = (_, cache, _) -> cache.precomputed.ᶜstrain_rate_norm,
 )
 
@@ -1172,7 +1177,7 @@ function compute_covariance_diagnostics(_, cache, _, type)
         return ᶜT′T′
     elseif type == :T_qt
         # covariance consistent with the correlation the quadrature samples
-        # (constant or diagnosed); see `set_tq_correlation!`
+        # (constant or diagnosed); see `set_covariance_cache!`
         return @. lazy(ᶜcorr_Tq * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
     else
         error("Unknown variance type")

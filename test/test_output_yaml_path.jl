@@ -12,6 +12,7 @@ using Test
             "job_id" => job_id,
             "output_dir" => output_dir,
             "config" => "box",
+            "z_stretch" => false,
             "toml" => [input_toml_path],
             "x_elem" => 2,
             "y_elem" => 2,

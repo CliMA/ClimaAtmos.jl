@@ -1,10 +1,10 @@
 name: Restore Julia depot
 description: >-
-  Restore the cached Julia depot for `prefix-cpu-target-hash`, or the most
-  recent one whose key starts with `prefix-cpu-target-`, and set
+  Restore the most recent cached Julia depot whose key starts with
+  `prefix-cpu-target-hash-`, falling back to `prefix-cpu-target-`, and set
   `JULIA_CPU_TARGET` for the rest of the job. Pair with `julia-depot-save`,
-  which saves only from pushes to main, so every run reads the cache that main
-  wrote.
+  which saves a new cache on every push to main, so every run reads the cache
+  that the latest main build wrote.
 inputs:
   prefix:
     description: Key prefix, unique per workflow, Julia version, and runner OS.
@@ -22,7 +22,7 @@ inputs:
     default: haswell
 outputs:
   key:
-    description: Full cache key, `prefix-cpu-target-hash`.
+    description: Full cache key, `prefix-cpu-target-hash-run_id`.
     value: ${{ steps.restore.outputs.cache-primary-key }}
   cache-hit:
     description: Whether a cache with the full key was restored.
@@ -45,5 +45,7 @@ runs:
           ~/.julia/packages
           ~/.julia/registries
           ~/.julia/scratchspaces
-        key: ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}
-        restore-keys: ${{ inputs.prefix }}-${{ inputs.cpu-target }}-
+        key: ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}-
+          ${{ inputs.prefix }}-${{ inputs.cpu-target }}-

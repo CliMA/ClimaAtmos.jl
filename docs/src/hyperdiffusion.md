@@ -24,21 +24,15 @@ third derivative of the field,
 with a hyperdiffusion coefficient ``\nu_\psi`` and the horizontal del operator
 ``\nabla_h`` taken along terrain-following coordinate surfaces.
 
-A vertically varying reference state ``\psi_r`` is subtracted from dry static
-energy and total specific humidity. This reduces the spurious vertical mixing
-that arises when diffusion acts along coordinate surfaces that warp over steep
-topography [Herrington2022](@cite). The reference state is built from the
-reference temperature profile ``T_r(\Pi)`` used for the pressure-gradient
-force (see [Governing Equations](equations.md)): the reference dry static
-energy is
-
-```math
-s_{d,r} = c_{pd} (T_r - T_0) + \Phi_r ,
-```
-
-with ``\Phi_r`` the associated reference geopotential, and the reference total
-specific humidity is the specific humidity at a constant relative humidity of
-50% along that profile,
+A vertically varying reference state ``\psi_r`` is subtracted from
+temperature, geopotential, and total specific humidity. This reduces the
+spurious vertical mixing that arises when diffusion acts along coordinate
+surfaces that warp over steep topography [Herrington2022](@cite). The reference
+state is built from the reference temperature profile ``T_r(\Pi)`` used for the
+pressure-gradient force (see [Governing Equations](equations.md)), with
+``\Phi_r`` the associated hydrostatic reference geopotential, and the reference
+total specific humidity is the specific humidity at a constant relative
+humidity of 50% along that profile,
 
 ```math
 q_{t,r} = 0.5 \, q_v^*(T_r, p) ,
@@ -50,7 +44,9 @@ zero above 250 hPa, where the reference profile is no longer a useful
 approximation to the moisture field.
 
 The same reference geopotential ``\Phi_r`` appears in the pressure-gradient
-force; see [Governing Equations](equations.md).
+force; see [Governing Equations](equations.md). Because ``\Phi_r`` is a
+function of the evolving pressure, ``\nabla_h^2 (\Phi - \Phi_r)`` is recomputed
+every step along with ``\nabla_h^2 (T - T_r)``.
 
 The tendency is applied as two successive Laplacians with the inter-element
 completion step applied in between (direct stiffness summation on the
@@ -89,36 +85,46 @@ snow:
 The water vapor tendency follows implicitly, since its specific humidity is
 diagnosed from the total and the condensate specific humidities.
 
-The implementation adds two details to the expression above. The share each
-cloud species receives is clipped to the interval ``[0, 1]``, so a species'
-specific humidity exceeding the suspended total through limiter or round-off
-effects cannot produce a share above one. The quantities attached to a cloud
-mass species follow it in proportion: the cloud droplet and ice number densities
-of the two-moment schemes, which keeps the mean particle mass, and the rime mass
-and rime volume of the P3 ice scheme, which keeps the rime fraction and rime
-density. Rain number density, like rain and snow mass, receives no
-hyperdiffusion. With the microphysics species covered by the distribution
-above, the generic ``\nabla^4`` tendency applies to the passive tracers that
-remain.
+The implementation adds two details to the expression above. First, the
+proportional partition takes the place of the own-gradient species diffusion of
+second-order [Diffusion](diffusion.md): the biharmonic operator
+(``\nabla_h^4``) is non-monotone and creates dispersive overshoots at sharp
+cloud boundaries where ``q_l^{\mathrm{cl}}`` or ``q_i^{\mathrm{cl}}`` vanishes,
+whereas scaling a single ``\nabla_h^4 q_t^{\mathrm{eff}}`` tendency by the
+local suspended mass fraction ``q_\mu^{\mathrm{cl}} / q_t^{\mathrm{cl}}``
+vanishes identically outside cloud and avoids four extra cached Laplacian fields
+and DSS passes. The share each cloud species receives is clipped to the interval
+``[0, 1]``, so a species' specific humidity exceeding the suspended total
+through limiter or round-off effects cannot produce a share above one. Second,
+the quantities attached to a cloud mass species follow it in proportion: the
+cloud droplet and ice number densities of the two-moment schemes, which keeps
+the mean particle mass, and the rime mass and rime volume of the P3 ice scheme,
+which keeps the rime fraction and rime density. Rain number density, like rain
+and snow mass, receives no hyperdiffusion. With the microphysics species covered
+by the distribution above, the generic ``\nabla^4`` tendency applies to the
+passive tracers that remain.
 
 ## Energy: an enthalpy-consistent flux
 
-The total hyperdiffusive enthalpy flux is built from two components, in parallel
-with the turbulent enthalpy flux described in
-[Thermodynamics and the Working Fluid](thermodynamics.md). It is not the
-diffusion of a lumped total enthalpy:
+The total hyperdiffusive enthalpy flux is built from three components, in
+parallel with the second-order turbulent enthalpy flux of
+[Diffusion](diffusion.md). It is not the diffusion of a lumped total enthalpy:
 
 ```math
-\boldsymbol{\mathcal{H}}_h = \boldsymbol{\mathcal{H}}_{s_d}
+\boldsymbol{\mathcal{H}}_h = c_p \boldsymbol{\mathcal{H}}_T
+  + \boldsymbol{\mathcal{H}}_\Phi
   + h_{\mathrm{tot,cl}} \, \boldsymbol{\mathcal{H}}_{q_t}
-= \nu_h \nabla_h \left[ \nabla_h^2 (s_d - s_{d,r}) \right]
+= \nu_h \left\{ c_p \nabla_h \left[ \nabla_h^2 (T - T_r) \right]
+  + \nabla_h \left[ \nabla_h^2 (\Phi - \Phi_r) \right] \right\}
   + h_{\mathrm{tot,cl}} \, \boldsymbol{\mathcal{H}}_{q_t} .
 ```
 
-The first term hyperdiffuses the dry static energy ``s_d = h_d + \Phi``. The
-second accounts for the enthalpy transported by the hyperdiffusive flux of total
-water, weighted by the mass-weighted average specific total enthalpy of the
-suspended water species,
+The first term is the sensible heat, with ``c_p`` the heat capacity of the
+suspended mixture (vapor, cloud liquid, and cloud ice, with the remaining mass
+at ``c_{pd}``; ``c_p = c_{pd}`` in dry runs) multiplying the Laplacian gradient
+of temperature; the second is the geopotential. The third accounts for the
+enthalpy transported by the hyperdiffusive flux of total water, weighted by the
+mass-weighted average specific total enthalpy of the suspended water species,
 
 ```math
 h_{\mathrm{tot,cl}} = \frac{q_v h_{\mathrm{tot},v}
@@ -126,10 +132,19 @@ h_{\mathrm{tot,cl}} = \frac{q_v h_{\mathrm{tot},v}
 ```
 
 Given the water partitioning above, this expression for the water-enthalpy flux
-is exact. In the code, these are the cache fields `ᶜ∇²s_d` and `ᶜ∇²q_tot_eff`,
-with the weighting held in `ᶜh_eff_plus_Φ` (the average
-``h_{\mathrm{tot,cl}}`` includes the geopotential); energy hyperdiffusion does
-not act on a lumped `h_tot`.
+is exact. In the code, the DSSed Laplacians are the cache fields `ᶜ∇²T`, `ᶜ∇²Φ`,
+and `ᶜ∇²q_tot_eff`, with the coefficients held in `ᶜcp_diffusing!` and
+`ᶜh_eff_plus_Φ!` (the average ``h_{\mathrm{tot,cl}}`` includes the
+geopotential) and applied outside the second Laplacian; energy hyperdiffusion
+does not act on a lumped `h_tot`. For intensive updraft moist static energy
+``h_s^j``, the same split gives
+``\nabla h_s^j = c_p^j \nabla T^j + \nabla \Phi + \sum_\mu (h_\mu - h_d) \nabla q_\mu^j``:
+changing ``q_t^j`` at fixed temperature and phase partitioning substitutes water
+for dry air (`∂h_s^j/\partial q_{v,l,i}^j|_T = h_{v,l,i}(T^j) - h_d(T^j)`), so
+the updraft water-enthalpy hyperdiffusion term weights ``\boldsymbol{\mathcal{H}}_{q_t^j}``
+by ``h_{\mathrm{tot,cl}}^j - h_d(T^j) - \Phi`` (`ᶜh_eff_minus_h_d!`), preserving
+exact invariance under a Kirchhoff reference-temperature shift ``T_0 \to T_0 + \Delta T_0``.
+The updrafts share the grid-mean ``\nabla_h^2 (\Phi - \Phi_r)``.
 
 The decomposition allows total energy and water to be conserved together.
 Hyperdiffusing potential temperature or another intensive thermodynamic variable
@@ -138,8 +153,8 @@ to offset them. Here, each hyperdiffusive term is a flux divergence along a
 coordinate surface, so the operators redistribute quantities and conserve the
 global total.
 
-The hyperdiffusion coefficients for dry static energy and total specific
-humidity are equal, which corresponds to a turbulent Lewis number of one.
+The hyperdiffusion coefficients for temperature and total specific humidity
+are equal, which corresponds to a turbulent Lewis number of one.
 
 ## Momentum
 

@@ -17,16 +17,17 @@ microphysics_model: "2M"
 use_sgs_quadrature: false
 config: "column"
 z_max: 4e3
+z_elem: 45
+dz_bottom: 28.0
+dz_top: 440.0
 x_elem: 2
 y_elem: 2
-z_elem: 100
-z_stretch: false
 perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
-netcdf_interpolation_num_points: [8, 8, 100]
+netcdf_interpolation_num_points: [8, 8, 45]
 prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, cdnc, hussfc, evspsbl, pr]

@@ -1,5 +1,4 @@
 h_elem: 12
-z_elem: 25
 rayleigh_sponge: false
 viscous_sponge: false
 dt: "1secs"

@@ -16,9 +16,9 @@ prognostic_tke: true
 microphysics_model: "0M"
 config: "column"
 z_max: 40e3
-z_elem: 60
-z_stretch: true
-dz_bottom: 30
+z_elem: 74
+dz_bottom: 28.0
+dz_top: 2400.0
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
@@ -26,6 +26,6 @@ t_end: "6hours"
 dt_save_state_to_disk: "6hours"
 toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [2, 2, 60]
+netcdf_interpolation_num_points: [2, 2, 74]
 rad: allskywithclear
 ode_algo: "ARS222"

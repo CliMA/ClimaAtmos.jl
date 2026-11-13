@@ -10,6 +10,7 @@ import Logging
     # These match the values from https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
     config = CA.AtmosConfig(
         Dict(
+            "z_stretch" => false,
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.1857,
             "hyperdiffusion_prandtl_number" => 0.2,
@@ -35,6 +36,7 @@ import Logging
     # Test that CAM_SE throws an error when user tries to set different coefficients
     config_wrong = CA.AtmosConfig(
         Dict(
+            "z_stretch" => false,
             "hyperdiff" => "CAM_SE",
             "vorticity_hyperdiffusion_coefficient" => 0.18571, # deliberately wrong value
             "hyperdiffusion_prandtl_number" => 0.2,
@@ -59,7 +61,11 @@ end
 
 @testset "Setup components applied to the model via get_atmos" begin
     config = CA.AtmosConfig(
-        Dict("config" => "column", "initial_condition" => "Bomex"),
+        Dict(
+            "config" => "column",
+            "z_stretch" => false,
+            "initial_condition" => "Bomex",
+        ),
         job_id = "test_setup_components_bomex",
     )
     params = CA.ClimaAtmosParameters(config)
@@ -153,6 +159,10 @@ end
         @test ogw isa CA.FullOrographicGravityWave
         @test ogw.topo_info == Val(Symbol(name))
         @test ogw.α_smoothing == ogw_params.α_smoothing
+        @test ogw.a_tofd == ogw_params.a_tofd
+        # TOFD is on by default at 2.7 times the IFS amplitude
+        # (`ogw_tofd_coefficient = 2.7`, ClimaParams 1.3.9).
+        @test ogw.a_tofd == 2.7
     end
 
     @test CA.get_orographic_gravity_wave_model(
@@ -182,6 +192,7 @@ end
             a1 = 3.0,
             Fr_crit = 0.7,
             α_smoothing = α,
+            a_tofd = 0.0,
             topo_info = Val(:raw_topo),
             topography,
         )
@@ -198,4 +209,31 @@ end
     @test_logs (:warn,) CA.warn_if_stale_raw_topo_artifact(
         mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
     )
+end
+
+@testset "n_columns" begin
+    function center_space(n_columns)
+        config = CA.AtmosConfig(
+            Dict("config" => "column", "n_columns" => n_columns, "z_stretch" => false);
+            job_id = "test_n_columns",
+        )
+        grid = CA.get_grid(config, CA.ClimaAtmosParameters(config))
+        return CA.get_spaces(grid).center_space
+    end
+    @test center_space(1) isa CA.Spaces.FiniteDifferenceSpace
+    @test center_space(3) isa CA.Spaces.MultiColumnFiniteDifferenceSpace
+    @test CA.Spaces.ncolumns(center_space(3)) == 3
+end
+
+@testset "Per-column site keys" begin
+    parsed_args(config) =
+        CA.AtmosConfig(config; job_id = "test_per_column_keys").parsed_args
+    sites = parsed_args(
+        Dict("site_latitude" => [17, 17], "site_longitude" => [-149, -150.5]),
+    )
+    @test sites["site_latitude"] == [17.0, 17.0]
+    @test sites["site_latitude"] isa Vector{Float64}
+    @test parsed_args(Dict("site_latitude" => 17))["site_latitude"] == 17.0
+    # Other keys take one value
+    @test_throws ErrorException parsed_args(Dict("z_elem" => [10, 20]))
 end

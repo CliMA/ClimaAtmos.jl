@@ -50,10 +50,15 @@ giving about 550 km at `h_elem: 6`, 206 km at 16, 110 km at 30, and 55 km
 at 60.
 
 Vertical resolution is set by `z_elem` layers between the surface and a model
-top at `z_max`. With `z_stretch: true`, the default, layers are stretched with a
-hyperbolic tangent profile anchored on `dz_bottom`, the thickness of the lowest
-layer, so that the boundary layer has high vertical resolution that becomes
-coarser aloft.
+top at `z_max`. With `z_stretch: true`, the default, the layer thickness grows
+from `dz_bottom` at the surface to `dz_top` (default 3000 m) at the model top,
+with a boundary-layer refinement of scale height `z_pbl` (default 2200 m), so
+that the boundary layer has high vertical resolution that becomes coarser
+aloft. This two-scale profile admits `z_elem` within a range set by the three
+thicknesses and `z_max`, and building the grid raises an error that names the
+range otherwise. The 10-level default grid lies below the range, so
+`numerics_sphere_he6ze10.yml` sets `dz_top: 6500.0`, near the top spacing of
+the single-scale profile with the same `dz_bottom`, which the rule admits.
 
 Start from one of the numerical configurations in `config/common_configs/`,
 which pair a resolution with a timestep and a matching set of numerics:
@@ -62,9 +67,9 @@ which pair a resolution with a timestep and a matching set of numerics:
 |:------------------------------ |:------------ |:------ |:--------- |:-------------------- |
 | `numerics_sphere_he6ze10.yml`  | 550 km       | 10     | 30 km     | none                 |
 | `numerics_sphere_he6ze31.yml`  | 550 km       | 31     | 60 km     | Rayleigh and viscous |
-| `numerics_sphere_he16ze63.yml` | 206 km       | 63     | 60 km     | Rayleigh and viscous |
+| `numerics_sphere_he16ze79.yml` | 206 km       | 79     | 60 km     | Rayleigh and viscous |
 | `numerics_sphere_he30ze43.yml` | 110 km       | 43     | 30 km     | none                 |
-| `numerics_sphere_he30ze63.yml` | 110 km       | 63     | 60 km     | Rayleigh and viscous |
+| `numerics_sphere_he30ze79.yml` | 110 km       | 79     | 60 km     | Rayleigh and viscous |
 
 Model top and sponges are chosen together. A 60 km top puts the rigid lid in
 the mesosphere, where upward-propagating waves have to be absorbed before they
@@ -86,8 +91,12 @@ fall on each side of it.
 
 Two related keys matter at these resolutions:
 
-  - `ode_algo` selects the implicit–explicit scheme, `ARS343` by default. The
-    PROPHET production runs use `ARS222`.
+  - `ode_algo` selects the implicit–explicit scheme, `ARS343` by default.
+    `ARS222` has fewer stages per step, but its explicit tableau amplifies
+    undamped oscillatory modes, so it is only selected in 1D column setups
+    (which have no horizontal modes) and in 3D configurations whose horizontal
+    damping per step is strong enough to absorb that (such as
+    `amip_target.yml` and the aquaplanet setups).
   - `dt_rad` sets how often radiation is called, 6 hours by default and 1 hour
     in the production configurations. Radiation takes more run time than any
     other parameterization in a global run, so this interval needs to be set
@@ -124,16 +133,16 @@ They are the best starting points for a new global run.
 
 | Configuration                                        | Common numerics                      | Length   | Physics                                                                                         |
 |:---------------------------------------------------- |:------------------------------------ |:-------- |:----------------------------------------------------------------------------------------------- |
-| `longrun_hydrostatic_balance.yml`                    | he30ze63                             | 360 days | Dynamics only, 55 km top                                                                        |
+| `longrun_hydrostatic_balance.yml`                    | he30ze79                             | 360 days | Dynamics only, 55 km top                                                                        |
 | `longrun_dry_baroclinic_wave_he60.yml`               | he30ze43, overridden to `h_elem: 60` | 30 days  | Dry dynamics at 55 km resolution                                                                |
 | `longrun_moist_baroclinic_wave_he60.yml`             | he30ze43, overridden to `h_elem: 60` | 30 days  | 0-moment microphysics                                                                           |
-| `longrun_dry_held_suarez.yml`                        | he30ze63                             | 360 days | Held–Suarez forcing                                                                             |
-| `longrun_moist_held_suarez.yml`                      | he30ze63                             | 360 days | Held–Suarez, moist, prescribed vertical diffusion                                               |
-| `longrun_aquaplanet_allsky_1M.yml`                   | he16ze63                             | 120 days | Eddy-diffusivity-only EDMFX, 1-moment microphysics, all-sky radiation                           |
-| `longrun_aquaplanet_allsky_progedmf_0M.yml`          | he16ze63                             | 360 days | PROPHET, 0-moment microphysics                                                                  |
-| `longrun_aquaplanet_allsky_progedmf_1M.yml`          | he16ze63                             | 120 days | PROPHET, 1-moment microphysics                                                                  |
-| `longrun_aquaplanet_allsky_tvinsol_0M_slabocean.yml` | he16ze63                             | 360 days | Time-varying insolation, slab ocean                                                             |
-| `amip_target.yml`                                    | he16ze63                             | 60 days  | Earth topography, PROPHET, 1-moment microphysics, prescribed aerosols, time-varying trace gases |
+| `longrun_dry_held_suarez.yml`                        | he30ze79                             | 360 days | Held–Suarez forcing                                                                             |
+| `longrun_moist_held_suarez.yml`                      | he30ze79                             | 360 days | Held–Suarez, moist, prescribed vertical diffusion                                               |
+| `longrun_aquaplanet_allsky_1M.yml`                   | he16ze79                             | 120 days | Eddy-diffusivity-only EDMFX, 1-moment microphysics, all-sky radiation                           |
+| `longrun_aquaplanet_allsky_progedmf_0M.yml`          | he16ze79                             | 360 days | PROPHET, 0-moment microphysics                                                                  |
+| `longrun_aquaplanet_allsky_progedmf_1M.yml`          | he16ze79                             | 120 days | PROPHET, 1-moment microphysics                                                                  |
+| `longrun_aquaplanet_allsky_tvinsol_0M_slabocean.yml` | he16ze79                             | 360 days | Time-varying insolation, slab ocean                                                             |
+| `amip_target.yml`                                    | he16ze79                             | 60 days  | Earth topography, PROPHET, 1-moment microphysics, prescribed aerosols, time-varying trace gases |
 
 Run one of them by combining it with its numerical configuration:
 
@@ -142,7 +151,7 @@ import ClimaAtmos as CA
 
 config = CA.AtmosConfig(
     [
-        "config/common_configs/numerics_sphere_he16ze63.yml",
+        "config/common_configs/numerics_sphere_he16ze79.yml",
         "config/longrun_configs/longrun_aquaplanet_allsky_progedmf_1M.yml",
     ];
     job_id = "my_aquaplanet",

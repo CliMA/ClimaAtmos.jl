@@ -1,0 +1,925 @@
+#=
+Checks `solve_sgs_updraft_tracers_implicit_stage_analytic!`, the semi-implicit
+upwind predictor for the updraft scalars in the EDMFX implicit stage, against
+the recurrence its docstring states: upwind advection with the round's `u₃`,
+entrainment toward the environment value, the explicit and implicit 1M
+microphysics sources evaluated at the transported state (from
+`ᶜmp_tendencyʲs` and `ᶜmp_tendency_implicitʲs`), and the cell-1 surface
+relaxation of `mse` and `q_tot`. A nonzero covariant `u₃` at the surface face,
+as over sloped terrain, leaves cell 1 unadvected. Two limits follow: fast
+entrainment pulls every scalar to the environment value, and with advection
+and entrainment off only cell 1 of `mse` and `q_tot` moves, to the
+surface-relaxed value, while each condensate moves by `dtγ` times the sum of
+its explicit and implicit cached sources. The grid-mean warm start keeps the
+environment cloud liquid of the Newton guess at its stage-initial value.
+=#
+using Test
+import ClimaComms
+ClimaComms.@import_required_backends
+import ClimaAtmos as CA
+import ClimaAtmos.Parameters as CAP
+import ClimaCore: Fields, MatrixFields
+import ClimaCore.MatrixFields: @name
+using ClimaCore.Utilities: half
+
+include("../test_helpers.jl")
+
+column(f) = vec(Array(parent(f)))
+
+@testset "EDMFX implicit-stage updraft tracer predictor (Bomex column)" begin
+    config = CA.AtmosConfig(
+        Dict{String, Any}(
+            "initial_condition" => "Bomex",
+            "FLOAT_TYPE" => "Float64",
+            "config" => "column",
+            "turbconv" => "prognostic_edmfx",
+            "edmfx_entr_model" => "Generalized",
+            "edmfx_detr_model" => "Generalized",
+            "edmfx_sgs_mass_flux" => true,
+            "edmfx_sgs_diffusive_flux" => true,
+            "edmfx_nh_pressure" => true,
+            "implicit_diffusion" => true,
+            "prognostic_tke" => true,
+            "microphysics_model" => "1M",
+            # `implicit_microphysics: true` routes cond/subl into
+            # `ᶜmp_tendency_implicitʲs` so the predictor sweep adds its
+            # cached contribution on top of `ᶜmp_tendencyʲs`.
+            "implicit_microphysics" => true,
+            "z_max" => 3000.0,
+            "z_elem" => 30,
+            "z_stretch" => false,
+            "dt" => "1secs",
+            "t_end" => "10secs",
+            "ode_algo" => "ARS222",
+            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "output_default_diagnostics" => false,
+        );
+        job_id = "edmfx_tracer_predictor_test",
+    )
+    (; Y, p, simulation) = generate_test_simulation(config)
+    t = simulation.integrator.t
+    FT = eltype(Y)
+    dtγ = FT(60)
+    a_min = CAP.min_area(CAP.turbconv_params(p.params))
+    sgsʲ = Y.c.sgsʲs.:(1)
+    ᶠu₃ʲ = Y.f.sgsʲs.:(1).u₃.components.data.:1
+    (; sfc_mass_flux_sourceʲs, sfc_mse_buoyantʲs, sfc_q_tot_buoyantʲs) =
+        p.precomputed
+
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    ᶠdz = Fields.Δz_field(axes(Y.f))
+    z_max = FT(3000)
+
+    # Grid-mean cloud species and a rising draft with structure in every
+    # solved scalar. The draft condensate exceeds the grid mean in parts of
+    # the column, so the diagnosed environment condensate is negative there.
+    @. Y.c.ρtke = FT(0.5) * Y.c.ρ
+    @. Y.c.ρq_lcl = Y.c.ρ * FT(2e-4) * (1 + sin(FT(2π) * ᶜz / z_max))
+    @. Y.c.ρq_icl = Y.c.ρ * FT(1e-4) * (1 + sin(FT(2π) * ᶜz / z_max + 1))
+    @. Y.c.ρq_rai = Y.c.ρ * FT(1e-5) * (1 + sin(FT(2π) * ᶜz / z_max + 2))
+    @. Y.c.ρq_sno = Y.c.ρ * FT(5e-6) * (1 + sin(FT(2π) * ᶜz / z_max + 3))
+    @. Y.c.ρq_tot =
+        Y.c.ρ *
+        FT(8e-3) *
+        (1 + FT(0.2) * sin(FT(2π) * ᶜz / z_max + FT(0.5))) +
+        Y.c.ρq_rai +
+        Y.c.ρq_sno
+    @. sgsʲ.ρa = Y.c.ρ * (FT(0.08) + FT(0.04) * cos(FT(2π) * ᶜz / z_max))
+    @. sgsʲ.q_lcl = FT(3e-4) * (1 + FT(0.5) * cos(FT(2π) * ᶜz / z_max))
+    @. sgsʲ.q_icl = FT(1e-4) * (1 + FT(0.5) * cos(FT(2π) * ᶜz / z_max + 1))
+    @. sgsʲ.q_rai = FT(2e-5) * (1 + sin(FT(2π) * ᶜz / z_max + FT(1.2)))
+    @. sgsʲ.q_sno = FT(1e-5) * (1 + sin(FT(2π) * ᶜz / z_max + FT(0.4)))
+    @. sgsʲ.q_tot =
+        FT(1e-2) * (1 + FT(0.15) * cos(FT(2π) * ᶜz / z_max)) +
+        sgsʲ.q_rai +
+        sgsʲ.q_sno
+    # Covariant `u₃ = w Δz` with `w` [m/s] rising through the column.
+    @. ᶠu₃ʲ = FT(1.5) * sin(FT(π) * ᶠz / z_max) * ᶠdz
+    CA.set_precomputed_quantities!(Y, p, t)
+    # The draft `mse` is the grid-mean `h_tot - K` plus a small offset.
+    ᶜmse = Fields.Field(FT, axes(Y.c))
+    @. ᶜmse = p.precomputed.ᶜh_tot - p.precomputed.ᶜK
+    @. sgsʲ.mse = ᶜmse + FT(500) + FT(300) * sin(FT(2π) * ᶜz / z_max)
+    CA.set_precomputed_quantities!(Y, p, t)
+
+    # Prescribed surface values so the cell-1 relaxation is exercised.
+    F_sfc = FT(2e-3)
+    mse_sfc = column(ᶜmse)[1] + FT(1000)
+    q_tot_sfc = FT(1.2e-2)
+    @. $(Fields.field_values(Fields.level(sfc_mass_flux_sourceʲs.:(1), 1))) =
+        F_sfc
+    @. $(Fields.field_values(Fields.level(sfc_mse_buoyantʲs.:(1), 1))) =
+        mse_sfc
+    @. $(Fields.field_values(Fields.level(sfc_q_tot_buoyantʲs.:(1), 1))) =
+        q_tot_sfc
+    # A nonzero surface `u₃`, as `set_velocity_at_surface!` leaves it over
+    # sloped terrain; the predictor leaves cell 1 unadvected by it.
+    @. $(Fields.level(ᶠu₃ʲ, half)) = FT(0.3) * $(Fields.level(ᶠdz, half))
+
+    Y_init = similar(Y)
+    Y_init .= Y
+    sgs_tracers = (
+        (@name(mse), nothing),
+        (@name(q_tot), nothing),
+        (@name(q_lcl), @name(dq_lcl_dt)),
+        (@name(q_icl), @name(dq_icl_dt)),
+        (@name(q_rai), @name(dq_rai_dt)),
+        (@name(q_sno), @name(dq_sno_dt)),
+    )
+    sfc_forced(χ_name) = χ_name === @name(mse) || χ_name === @name(q_tot)
+    χ_sfc(χ_name) = χ_name === @name(mse) ? mse_sfc : q_tot_sfc
+
+    # Reference inputs from the pre-sweep state.
+    ᶠw = Fields.Field(FT, axes(Y.f))
+    @. ᶠw = ᶠu₃ʲ / ᶠdz
+    ᶜtmp = Fields.Field(FT, axes(Y.c))
+    @. ᶜtmp = CA.ᶜbottom_bias(ᶠw) / ᶜdz
+    α = column(ᶜtmp)
+    @test α[1] != 0
+    α[1] = 0
+    @. ᶜtmp =
+        CA.compute_entrainment(
+            p.precomputed.ᶜentr_vel_scaleʲs.:(1),
+            p.precomputed.ᶜentr_nonvel_rateʲs.:(1),
+            p.precomputed.ᶜarea_bounding_entr_detrʲs.:(1),
+            CA.ᶜinterp(ᶠw),
+        ) + p.precomputed.ᶜturb_entrʲs.:(1)
+    ε = column(ᶜtmp)
+    @test all(>(0), ε)
+    nz = length(α)
+    ρa₁ = column(sgsʲ.ρa)[1]
+    ρʲ₁ = column(p.precomputed.ᶜρʲs.:(1))[1]
+    r_sfc = F_sfc / max(ρa₁, ρʲ₁ * a_min)
+    @test CA.edmfx_sfc_relaxation_rate(F_sfc, ρa₁, ρʲ₁, a_min) == r_sfc
+    χ_old = Dict{Any, Vector{FT}}()
+    χ⁰ = Dict{Any, Vector{FT}}()
+    S = Dict{Any, Vector{FT}}()
+    for (χ_name, S_name) in sgs_tracers
+        χ_old[χ_name] = column(MatrixFields.get_field(sgsʲ, χ_name))
+        ᶜχ⁰ =
+            χ_name === @name(mse) ? CA.ᶜspecific_env_mse(Y, p) :
+            CA.ᶜspecific_env_value(χ_name, Y, p)
+        @. ᶜtmp = ᶜχ⁰
+        # The sweep entrains the non-negative part of the diagnosed
+        # environment value of every tracer other than `mse`.
+        χ⁰[χ_name] =
+            χ_name === @name(mse) ? column(ᶜtmp) : max.(FT(0), column(ᶜtmp))
+        S[χ_name] = zeros(FT, nz)
+    end
+    ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:(1)
+    ᶜmp_tendency_implicitʲ = p.precomputed.ᶜmp_tendency_implicitʲs.:(1)
+    S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
+
+    # `implicit_microphysics: true` moves the four phase-change processes
+    # (`cloud_liquid_formation`, `cloud_ice_formation`,
+    # `rain_condensation_evaporation`, and `snow_deposition_sublimation`) to
+    # `microphysics_1m_implicit_params`, so the second CM BMT call inside the
+    # predictor fills `ᶜmp_tendency_implicitʲs` at the transported state.
+    mp_imp = CAP.microphysics_1m_implicit_params(p.params)
+    @test !isnothing(mp_imp.processes.cloud_liquid_formation)
+    @test !isnothing(mp_imp.processes.cloud_ice_formation)
+    @test !isnothing(mp_imp.processes.rain_condensation_evaporation)
+    @test !isnothing(mp_imp.processes.snow_deposition_sublimation)
+
+    # Transport-only result of the recurrence, swept bottom to top.
+    function predicted_transport(χ_name; α = α, ε = ε, r_sfc = r_sfc)
+        χ_new = similar(α)
+        χ_prev = zero(FT)
+        for i in 1:nz
+            r = i == 1 && sfc_forced(χ_name) ? r_sfc : zero(FT)
+            num =
+                χ_old[χ_name][i] / dtγ + ε[i] * χ⁰[χ_name][i] +
+                r * χ_sfc(χ_name) + α[i] * χ_prev
+            χ_new[i] = num / (1 / dtγ + α[i] + ε[i] + r)
+            χ_prev = χ_new[i]
+        end
+        return χ_new
+    end
+
+    # Full prediction: transport + `dtγ · (S_bulk + S_impl)`, followed for the
+    # four condensates by per-species flooring at zero and proportional
+    # rescaling so their sum does not exceed `max(0, q_totʲ)`. `S_impl` holds
+    # the four implicit 1M phase-change processes (`cloud_liquid_formation`,
+    # `cloud_ice_formation`, `rain_condensation_evaporation`, and
+    # `snow_deposition_sublimation`) under `implicit_microphysics: true`.
+    cond_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
+    S_impl = Dict{Any, Vector{FT}}(
+        @name(mse) => zeros(FT, nz),
+        @name(q_tot) => zeros(FT, nz),
+        @name(q_lcl) => zeros(FT, nz),
+        @name(q_icl) => zeros(FT, nz),
+        @name(q_rai) => zeros(FT, nz),
+        @name(q_sno) => zeros(FT, nz),
+    )
+    function apply_post_source_bounds(tr_dict, S_dict, S_impl_dict)
+        out = Dict{Any, Vector{FT}}()
+        out[@name(mse)] = copy(tr_dict[@name(mse)])
+        out[@name(q_tot)] = copy(tr_dict[@name(q_tot)])
+        for cn in cond_names
+            out[cn] =
+                max.(zero(FT), tr_dict[cn] .+ dtγ .* (S_dict[cn] .+ S_impl_dict[cn]))
+        end
+        q_tot_pos = max.(zero(FT), out[@name(q_tot)])
+        q_sum =
+            out[@name(q_lcl)] .+ out[@name(q_icl)] .+ out[@name(q_rai)] .+
+            out[@name(q_sno)]
+        scale =
+            ifelse.(q_sum .> q_tot_pos, q_tot_pos ./ max.(q_sum, eps(FT)), one(FT))
+        for cn in cond_names
+            out[cn] .*= scale
+        end
+        return out
+    end
+
+    @testset "matches the documented recurrence" begin
+        CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        # The explicit and implicit sources the sweep evaluates at the
+        # transported state stay cached.
+        for (χ_name, S_name) in sgs_tracers
+            isnothing(S_name) && continue
+            S[χ_name] = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+            if MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name)
+                S_impl[χ_name] = column(
+                    MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                )
+            end
+        end
+        @test any(!=(0), S[@name(q_lcl)])
+        @test S[@name(q_lcl)] != S_cached
+        # The implicit split places cond/subl/evap in `ᶜmp_tendency_implicitʲs`,
+        # not in the bulk cache.
+        @test any(!=(0), S_impl[@name(q_lcl)])
+        tr_pred = Dict{Any, Vector{FT}}(
+            χ_name => predicted_transport(χ_name) for (χ_name, _) in sgs_tracers
+        )
+        # Subcloud evaporation drives the un-clamped post-source rain negative,
+        # exercising the per-species floor at zero.
+        @test any(
+            cn -> any(<(0), tr_pred[cn] .+ dtγ .* (S[cn] .+ S_impl[cn])),
+            cond_names,
+        )
+        pred = apply_post_source_bounds(tr_pred, S, S_impl)
+        for (χ_name, _) in sgs_tracers
+            @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈
+                  pred[χ_name] rtol = 1e-12
+        end
+        # Draft area and velocity are untouched.
+        @test parent(sgsʲ.ρa) == parent(Y_init.c.sgsʲs.:(1).ρa)
+        ᶠu₃ʲ_init = Y_init.f.sgsʲs.:(1).u₃.components.data.:1
+        @test parent(ᶠu₃ʲ) == parent(ᶠu₃ʲ_init)
+    end
+
+    @testset "fast entrainment relaxes to the environment value" begin
+        Y .= Y_init
+        # ε dtγ = 6e4, so the stage term leaves a relative transport residual
+        # of ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
+        @. p.precomputed.ᶜturb_entrʲs.:(1) = FT(1e3)
+        CA._sweep_sgs_updraft_tracers!(Y, p, dtγ, map(first, sgs_tracers))
+        for (χ_name, _) in sgs_tracers
+            χ_tr = column(MatrixFields.get_field(sgsʲ, χ_name))
+            # Cell 1 of `mse` and `q_tot` also feels the surface relaxation.
+            i₀ = sfc_forced(χ_name) ? 2 : 1
+            @test χ_tr[i₀:end] ≈ χ⁰[χ_name][i₀:end] rtol = 1e-3
+        end
+        Y .= Y_init
+        CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        S_fast = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        S_fast_impl = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        for (χ_name, S_name) in sgs_tracers
+            isnothing(S_name) && continue
+            S_fast[χ_name] =
+                column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+            S_fast_impl[χ_name] =
+                MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name) ?
+                column(MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name)) :
+                zeros(FT, nz)
+        end
+        pred_fast = apply_post_source_bounds(χ⁰, S_fast, S_fast_impl)
+        for (χ_name, _) in sgs_tracers
+            χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
+            i₀ = sfc_forced(χ_name) ? 2 : 1
+            @test χ_new[i₀:end] ≈ pred_fast[χ_name][i₀:end] rtol = 1e-3 atol =
+                FT(1e-8)
+        end
+    end
+
+    @testset "advection and entrainment off" begin
+        Y .= Y_init
+        parent(ᶠu₃ʲ) .= 0
+        for ᶜrate in (
+            p.precomputed.ᶜentr_vel_scaleʲs.:(1),
+            p.precomputed.ᶜentr_nonvel_rateʲs.:(1),
+            p.precomputed.ᶜarea_bounding_entr_detrʲs.:(1),
+            p.precomputed.ᶜturb_entrʲs.:(1),
+        )
+            parent(ᶜrate) .= 0
+        end
+        CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        tr_off = Dict{Any, Vector{FT}}()
+        S_off = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        S_off_impl = Dict{Any, Vector{FT}}(
+            @name(mse) => zeros(FT, nz),
+            @name(q_tot) => zeros(FT, nz),
+        )
+        for (χ_name, S_name) in sgs_tracers
+            if sfc_forced(χ_name)
+                v = copy(χ_old[χ_name])
+                v[1] =
+                    (χ_old[χ_name][1] / dtγ + r_sfc * χ_sfc(χ_name)) /
+                    (1 / dtγ + r_sfc)
+                tr_off[χ_name] = v
+            else
+                tr_off[χ_name] = copy(χ_old[χ_name])
+                S_off[χ_name] =
+                    column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+                S_off_impl[χ_name] =
+                    MatrixFields.has_field(ᶜmp_tendency_implicitʲ, S_name) ?
+                    column(
+                        MatrixFields.get_field(ᶜmp_tendency_implicitʲ, S_name),
+                    ) : zeros(FT, nz)
+            end
+        end
+        pred_off = apply_post_source_bounds(tr_off, S_off, S_off_impl)
+        for (χ_name, _) in sgs_tracers
+            χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
+            if sfc_forced(χ_name)
+                @test χ_new[1] ≈ pred_off[χ_name][1] rtol = 1e-12
+                @test χ_new[1] != χ_old[χ_name][1]
+                @test χ_new[2:end] ≈ χ_old[χ_name][2:end] rtol = 1e-14
+            else
+                @test χ_new ≈ pred_off[χ_name] rtol = 1e-12
+            end
+        end
+    end
+
+    @testset "Jacobian diagonals use CM state-dependent τ for q_lcl / q_icl" begin
+        # Build the full implicit-stage Jacobian via the real cache builder,
+        # zero the four cond/subl-affected blocks, run just the implicit
+        # microphysics update, and verify each diagonal entry matches the
+        # state-dependent `-dtγ / τ_vap_to_q_lcl` / `-dtγ / τ_vap_to_q_icl`
+        # evaluated at the matching (grid-mean or updraft) state.
+        import CloudMicrophysics.MicrophysicsNonEq as CMNe
+        import ClimaAtmos: TD
+        alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
+        cache = CA.jacobian_cache(alg, Y, p.atmos)
+        matrix = cache.matrix.matrix
+        # Grid-mean block + one entry per updraft; second element is the
+        # updraft index (0 = grid-mean).
+        liq_blocks = Any[(matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)], 0)]
+        ice_blocks = Any[(matrix[@name(c.ρq_icl), @name(c.ρq_icl)], 0)]
+        for j in 1:CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
+            χ_liq = @name(c.sgsʲs.:($j).q_lcl)
+            χ_ice = @name(c.sgsʲs.:($j).q_icl)
+            MatrixFields.has_field(Y, χ_liq) || continue
+            push!(liq_blocks, (matrix[χ_liq, χ_liq], j))
+            push!(ice_blocks, (matrix[χ_ice, χ_ice], j))
+        end
+        for (block, _) in vcat(liq_blocks, ice_blocks)
+            parent(block) .= 0
+        end
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+
+        thp = CAP.thermodynamics_params(p.params)
+        mp_i = CAP.microphysics_1m_implicit_params(p.params)
+        function state_cols(j)
+            if j == 0
+                # With PrognosticEDMFX the Jacobian uses environment state for
+                # the grid-mean blocks (ᶜmp_tendency_implicit is never populated).
+                if p.atmos.turbconv_model isa CA.PrognosticEDMFX
+                    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
+                        p.precomputed
+                    ρ⁰ = [
+                        TD.air_density(thp, T, pp, q_tot, q_liq, q_ice)
+                        for (T, pp, q_tot, q_liq, q_ice) in zip(
+                            column(ᶜT⁰), column(ᶜp), column(ᶜq_tot_nonneg⁰),
+                            column(ᶜq_liq⁰), column(ᶜq_ice⁰))
+                    ]
+                    # ᶜspecific_env_value returns a lazy broadcast; materialize
+                    # into a concrete field before calling column().
+                    _lcl = similar(Y.c.ρ)
+                    _lcl .= CA.ᶜspecific_env_value(@name(q_lcl), Y, p)
+                    _icl = similar(Y.c.ρ)
+                    _icl .= CA.ᶜspecific_env_value(@name(q_icl), Y, p)
+                    _rai = similar(Y.c.ρ)
+                    _rai .= CA.ᶜspecific_env_value(@name(q_rai), Y, p)
+                    _sno = similar(Y.c.ρ)
+                    _sno .= CA.ᶜspecific_env_value(@name(q_sno), Y, p)
+                    return (
+                        ρ⁰, column(ᶜT⁰), column(ᶜq_tot_nonneg⁰),
+                        column(_lcl), column(_icl), column(_rai), column(_sno),
+                    )
+                else
+                    return (
+                        column(Y.c.ρ), column(p.precomputed.ᶜT),
+                        column(p.precomputed.ᶜq_tot_nonneg),
+                        column(Y.c.ρq_lcl) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_icl) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_rai) ./ column(Y.c.ρ),
+                        column(Y.c.ρq_sno) ./ column(Y.c.ρ),
+                    )
+                end
+            else
+                sgs = Y.c.sgsʲs.:($j)
+                return (
+                    column(p.precomputed.ᶜρʲs.:($j)),
+                    column(p.precomputed.ᶜTʲs.:($j)),
+                    column(p.precomputed.ᶜq_tot_nonnegʲs.:($j)),
+                    column(sgs.q_lcl), column(sgs.q_icl),
+                    column(sgs.q_rai), column(sgs.q_sno),
+                )
+            end
+        end
+        _micro(q_tot, q_lcl, q_icl, q_rai, q_sno) =
+            (; q_tot, q_lcl = max(0, q_lcl), q_icl = max(0, q_icl),
+                q_rai = max(0, q_rai), q_sno = max(0, q_sno))
+        for (block, j) in liq_blocks
+            ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno = state_cols(j)
+            expected = [
+                -dtγ / CMNe.τ_vap_to_q_lcl(
+                    mp_i.processes.cloud_liquid_formation, mp_i, thp,
+                    _micro(q_tot[i], q_lcl[i], q_icl[i], q_rai[i], q_sno[i]),
+                    (; ρ = ρ[i], T = T[i]),
+                ) for i in 1:length(T)
+            ]
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+        for (block, j) in ice_blocks
+            ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno = state_cols(j)
+            tend_icl = column(
+                j == 0 ?
+                (
+                    p.atmos.turbconv_model isa CA.PrognosticEDMFX ?
+                    p.precomputed.ᶜmp_tendency_implicit⁰.dq_icl_dt :
+                    p.precomputed.ᶜmp_tendency_implicit.dq_icl_dt
+                ) : p.precomputed.ᶜmp_tendency_implicitʲs.:($j).dq_icl_dt,
+            )
+            expected = [
+                -dtγ / CA._implicit_mp_τ_icl(
+                    mp_i, thp, ρ[i], T[i], q_tot[i],
+                    q_lcl[i], q_icl[i], q_rai[i], q_sno[i], tend_icl[i],
+                ) for i in 1:length(T)
+            ]
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+        # Equal grid-mean and draft diagonals map a residual of the draft
+        # source alone, R_ρq_lcl = ρaʲ R_q_lclʲ, to Δρq_lcl = ρaʲ Δq_lclʲ, so
+        # one Newton step leaves the environment cloud liquid unchanged.
+        @test vec(sum(parent(liq_blocks[1][1]); dims = 4)) ==
+              vec(sum(parent(liq_blocks[2][1]); dims = 4))
+    end
+
+    @testset "Jacobian diagonals for q_rai / q_sno (evaporation and sublimation/deposition)" begin
+        import CloudMicrophysics.Microphysics1M as CM1
+        import ClimaAtmos: TD
+        alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
+        cache = CA.jacobian_cache(alg, Y, p.atmos)
+        matrix = cache.matrix.matrix
+
+        rai_blocks = Any[(matrix[@name(c.ρq_rai), @name(c.ρq_rai)], 0)]
+        sno_blocks = Any[(matrix[@name(c.ρq_sno), @name(c.ρq_sno)], 0)]
+        for j in 1:CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
+            χ_rai = @name(c.sgsʲs.:($j).q_rai)
+            χ_sno = @name(c.sgsʲs.:($j).q_sno)
+            MatrixFields.has_field(Y, χ_rai) || continue
+            push!(rai_blocks, (matrix[χ_rai, χ_rai], j))
+            push!(sno_blocks, (matrix[χ_sno, χ_sno], j))
+        end
+        for (block, _) in vcat(rai_blocks, sno_blocks)
+            parent(block) .= 0
+        end
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+
+        thp = CAP.thermodynamics_params(p.params)
+        mp_i = CAP.microphysics_1m_implicit_params(p.params)
+        function rai_sno_state_cols(j)
+            if j == 0
+                tend = p.precomputed.ᶜmp_tendency_implicit⁰
+                (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+                ρ = [
+                    TD.air_density(thp, T, pp, q_tot, q_liq, q_ice)
+                    for (T, pp, q_tot, q_liq, q_ice) in zip(
+                        column(ᶜT⁰), column(ᶜp), column(ᶜq_tot_nonneg⁰),
+                        column(ᶜq_liq⁰), column(ᶜq_ice⁰))
+                ]
+                T = column(ᶜT⁰)
+                _rai = similar(Y.c.ρ)
+                _rai .= CA.ᶜspecific_env_value(@name(q_rai), Y, p)
+                _sno = similar(Y.c.ρ)
+                _sno .= CA.ᶜspecific_env_value(@name(q_sno), Y, p)
+                return tend, ρ, T, column(_rai), column(_sno)
+            else
+                tend = p.precomputed.ᶜmp_tendency_implicitʲs.:($j)
+                ρ = column(p.precomputed.ᶜρʲs.:($j))
+                T = column(p.precomputed.ᶜTʲs.:($j))
+                sgs = Y.c.sgsʲs.:($j)
+                return tend, ρ, T, column(sgs.q_rai), column(sgs.q_sno)
+            end
+        end
+        for (block, j) in rai_blocks
+            tend, ρ, T, q_rai, _ = rai_sno_state_cols(j)
+            dq_rai_dt = column(tend.dq_rai_dt)
+            expected = map(1:length(T)) do i
+                td_i = dq_rai_dt[i]
+                if td_i >= 0
+                    zero(FT)
+                else
+                    C = CA._rain_evap_coeff(mp_i, thp, q_rai[i], ρ[i], T[i])
+                    q_sat = TD.q_vap_saturation(thp, T[i], ρ[i], TD.Liquid())
+                    Γ = CA._psychrometric_gamma_liq(thp, T[i], q_sat)
+                    dtγ * (
+                        td_i / max(q_rai[i], CA.CMU.ϵ_numerics(FT)) -
+                        Γ * C / max(q_sat, sqrt(floatmin(FT)))
+                    )
+                end
+            end
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+        for (block, j) in sno_blocks
+            tend, ρ, T, _, q_sno = rai_sno_state_cols(j)
+            dq_sno_dt = column(tend.dq_sno_dt)
+            expected = map(1:length(T)) do i
+                td_i = dq_sno_dt[i]
+                if iszero(td_i)
+                    zero(FT)
+                else
+                    C =
+                        q_sno[i] > CA.CMU.ϵ_numerics(FT) ?
+                        CM1._snow_subl_dep_coeff(mp_i, thp, q_sno[i], ρ[i], T[i]) :
+                        zero(FT)
+                    q_sat = TD.q_vap_saturation(thp, T[i], ρ[i], TD.Ice())
+                    Γ = CA._psychrometric_gamma_ice(thp, T[i], q_sat)
+                    sat_term = -Γ * C / max(q_sat, sqrt(floatmin(FT)))
+                    dtγ * (
+                        td_i < 0 ?
+                        td_i / max(q_sno[i], CA.CMU.ϵ_numerics(FT)) + sat_term :
+                        sat_term
+                    )
+                end
+            end
+            @test vec(sum(parent(block); dims = 4)) ≈ expected rtol = 1e-12
+        end
+
+        # Off-diagonal `(c.ρq_x, c.sgsʲs.:(1).q_x)` coupling `dtγ ρa¹ (r¹ - r⁰)`
+        # maps a pure updraft residual `R_ρq = ρa¹ R_q¹` to `Δρq = ρa¹ Δq¹`,
+        # leaving the environment condensate `q⁰` unchanged when `r⁰ = 0`.
+        for (gs_n, sgs_n) in (
+            (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+            (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+            (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+            (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+        )
+            parent(matrix[gs_n, gs_n]) .= 0
+            parent(matrix[sgs_n, sgs_n]) .= 0
+            parent(matrix[gs_n, sgs_n]) .= 0
+        end
+        # Put rain and snow in the draft and zero in the environment so `r¹ < 0`
+        # while `r⁰ == 0` for `rai` and `sno` (and `r¹ != r⁰` for `icl`).
+        @. sgsʲ.q_rai = FT(3e-3)
+        @. sgsʲ.q_sno = FT(3e-3)
+        @. sgsʲ.q_icl = FT(1e-3)
+        @. Y.c.ρq_rai = sgsʲ.ρa * sgsʲ.q_rai
+        @. Y.c.ρq_sno = sgsʲ.ρa * sgsʲ.q_sno
+        @. Y.c.ρq_icl = sgsʲ.ρa * sgsʲ.q_icl
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+        ρa¹_col = column(sgsʲ.ρa)
+        for (gs_n, sgs_n) in (
+            (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+            (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+            (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+            (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+        )
+            d_gs = vec(sum(parent(matrix[gs_n, gs_n]); dims = 4))
+            d_sgs = vec(sum(parent(matrix[sgs_n, sgs_n]); dims = 4))
+            off = vec(sum(parent(matrix[gs_n, sgs_n]); dims = 4))
+            @test off ≈ ρa¹_col .* (d_sgs .- d_gs) rtol = 1e-12 atol = 1e-15
+            # Solve `(-1 + d_sgs) Δq¹ = R_q¹` and
+            # `(-1 + d_gs) Δρq + off Δq¹ = ρa¹ R_q¹` for `Δρq == ρa¹ Δq¹`.
+            R_q¹ = fill(FT(-1e-4), length(ρa¹_col))
+            Δq¹ = R_q¹ ./ (-one(FT) .+ d_sgs)
+            Δρq = (ρa¹_col .* R_q¹ .- off .* Δq¹) ./ (-one(FT) .+ d_gs)
+            @test Δρq ≈ ρa¹_col .* Δq¹ rtol = 1e-12 atol = 1e-15
+        end
+        @test any(
+            <(FT(-0.1)),
+            vec(
+                sum(
+                    parent(matrix[@name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_rai)]);
+                    dims = 4,
+                ),
+            ),
+        )
+
+        # Saturation-limited rain evaporation bound: heavy rain (`5 g/kg`) in
+        # near-saturated air (`q_sat - q_vap ≈ 0.2 g/kg`) cannot evaporate more
+        # than `(q_sat - q_vap) / Γ_liq` in a single Newton step at large `dtγ`.
+        ρ_sat = FT(1.0)
+        T_sat = FT(285.0)
+        q_rai_heavy = FT(5e-3)
+        q_sat_l = TD.q_vap_saturation(thp, T_sat, ρ_sat, TD.Liquid())
+        deficit = FT(2e-4)
+        q_tot_near = (q_sat_l - deficit) + q_rai_heavy
+        tend_evap = CM1.conv_q_rai_to_q_vap(
+            mp_i.processes.rain_condensation_evaporation, mp_i, thp,
+            (; q_tot = q_tot_near, q_lcl = zero(FT), q_icl = zero(FT),
+                q_rai = q_rai_heavy, q_sno = zero(FT)),
+            (; ρ = ρ_sat, T = T_sat),
+        )
+        @test tend_evap < 0
+        r_evap = CA._implicit_mp_evap_cond_rai(
+            mp_i, tend_evap, q_rai_heavy, thp, ρ_sat, T_sat,
+        )
+        Γ_l = CA._psychrometric_gamma_liq(thp, T_sat, q_sat_l)
+        dtγ_stiff = FT(240.0)
+        Δq_rai_step = dtγ_stiff * tend_evap / (one(FT) - dtγ_stiff * r_evap)
+        @test -Δq_rai_step < deficit / Γ_l
+        @test -Δq_rai_step < q_rai_heavy
+
+        # SGS quadrature `INP_limiter` unblocking: when cell-mean `T = 275 K`
+        # (`> T_dep_max`) with `q_tot > q_sat_ice`, `CMNe.τ_vap_to_q_icl`
+        # returns `Inf`, whereas any nonzero SGS quadrature `tend_icl` (either
+        # net deposition `tend_icl > 0` or net sublimation `tend_icl < 0`)
+        # unblocks `_implicit_mp_τ_icl` to `CMNe.τ_relax`.
+        τ_blocked = CA._implicit_mp_τ_icl(
+            mp_i, thp, FT(0.9), FT(275.0), FT(8e-3),
+            zero(FT), FT(1e-5), zero(FT), zero(FT), zero(FT),
+        )
+        τ_unblocked_pos = CA._implicit_mp_τ_icl(
+            mp_i, thp, FT(0.9), FT(275.0), FT(8e-3),
+            zero(FT), FT(1e-5), zero(FT), zero(FT), FT(1e-6),
+        )
+        τ_unblocked_neg = CA._implicit_mp_τ_icl(
+            mp_i, thp, FT(0.9), FT(275.0), FT(8e-3),
+            zero(FT), FT(1e-5), zero(FT), zero(FT), -FT(1e-6),
+        )
+        @test isinf(τ_blocked)
+        @test isfinite(τ_unblocked_pos) && τ_unblocked_pos > 0
+        @test τ_unblocked_neg == τ_unblocked_pos
+
+        # Finite-difference check against `microphysics_tendency!` at fixed
+        # `(ρ, ρq_tot, ρe_tot)`: the rain depletion + saturation Jacobian rate
+        # `r_jac` satisfies `r_jac <= fd_rate < 0` (with `tend / q` bounding the
+        # power-law derivative `p * tend / q` from below in signed value, i.e.
+        # larger damping magnitude `|r_jac| >= |fd_rate|`), and the EDMF
+        # off-diagonal `(c.ρq_rai, c.sgsʲs.:(1).q_rai)` matches the difference
+        # between updraft and environment perturbations.
+        @. sgsʲ.q_lcl = zero(FT)
+        @. sgsʲ.q_icl = zero(FT)
+        @. sgsʲ.q_sno = zero(FT)
+        @. sgsʲ.q_rai = FT(1e-3)
+        @. Y.c.ρq_lcl = zero(FT)
+        @. Y.c.ρq_icl = zero(FT)
+        @. Y.c.ρq_sno = zero(FT)
+        @. Y.c.ρq_rai = FT(0.5) * Y.c.ρ * FT(1e-3) + FT(0.5) * sgsʲ.ρa * sgsʲ.q_rai
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        parent(matrix[@name(c.ρq_rai), @name(c.ρq_rai)]) .= 0
+        parent(matrix[@name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_rai)]) .= 0
+        parent(matrix[@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)]) .= 0
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, FT(1))
+        r_gs_jac = vec(sum(parent(matrix[@name(c.ρq_rai), @name(c.ρq_rai)]); dims = 4))
+        r_sgs_jac = vec(
+            sum(
+                parent(matrix[@name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_rai)]);
+                dims = 4,
+            ),
+        )
+        Yₜ_mp_plus = similar(Y)
+        Yₜ_mp_minus = similar(Y)
+        δ_fd = FT(1e-8)
+        ρq_rai_orig = copy(Y.c.ρq_rai)
+        @. Y.c.ρq_rai = ρq_rai_orig + δ_fd
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        fill!(Yₜ_mp_plus, zero(FT))
+        CA.microphysics_tendency!(
+            Yₜ_mp_plus,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        @. Y.c.ρq_rai = ρq_rai_orig - δ_fd
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        fill!(Yₜ_mp_minus, zero(FT))
+        CA.microphysics_tendency!(
+            Yₜ_mp_minus,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        @. Y.c.ρq_rai = ρq_rai_orig
+        fd_gs = (column(Yₜ_mp_plus.c.ρq_rai) .- column(Yₜ_mp_minus.c.ρq_rai)) ./ (2 * δ_fd)
+        evap_lvls = findall(<(-FT(1e-10)), fd_gs)
+        @test !isempty(evap_lvls)
+        for k in evap_lvls
+            # On SGS quadrature levels where only a fraction `f ≤ 1` of nodes
+            # is subsaturated, cell-mean `-Γ C / q_sat` is at least as damping
+            # as the node-weighted finite-difference rate (`r_gs_jac ≤ fd_gs`);
+            # on uniformly subsaturated subcloud levels (`f == 1`), `r_gs_jac`
+            # stays within `1 / p` (`≤ 3×`) of `fd_gs`.
+            @test r_gs_jac[k] <= fd_gs[k] * FT(0.8)
+            if fd_gs[k] < -FT(3e-4)
+                @test r_gs_jac[k] >= fd_gs[k] * FT(3.0)
+            end
+        end
+        q_rai_sgs_orig = copy(sgsʲ.q_rai)
+        @. sgsʲ.q_rai = q_rai_sgs_orig + δ_fd
+        @. Y.c.ρq_rai = ρq_rai_orig + sgsʲ.ρa * δ_fd
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        fill!(Yₜ_mp_plus, zero(FT))
+        CA.microphysics_tendency!(
+            Yₜ_mp_plus,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        @. sgsʲ.q_rai = q_rai_sgs_orig - δ_fd
+        @. Y.c.ρq_rai = ρq_rai_orig - sgsʲ.ρa * δ_fd
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        fill!(Yₜ_mp_minus, zero(FT))
+        CA.microphysics_tendency!(
+            Yₜ_mp_minus,
+            Y,
+            p,
+            t,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+        @. sgsʲ.q_rai = q_rai_sgs_orig
+        @. Y.c.ρq_rai = ρq_rai_orig
+        CA.set_implicit_precomputed_quantities!(Y, p, t)
+        fd_sgs =
+            (
+                column(Yₜ_mp_plus.c.sgsʲs.:(1).q_rai) .-
+                column(Yₜ_mp_minus.c.sgsʲs.:(1).q_rai)
+            ) ./ (2 * δ_fd)
+        sgs_evap_lvls = findall(<(-FT(1e-10)), fd_sgs)
+        for k in sgs_evap_lvls
+            @test r_sgs_jac[k] <= fd_sgs[k] * FT(0.8)
+            @test r_sgs_jac[k] >= fd_sgs[k] * FT(2.5)
+        end
+
+        # `Float32` cold-tropopause (`T = 165 K`, `q_sat_ice << eps(Float32)`)
+        # and trace-condensate (`q = 1f-10`) damping matches `Float64`.
+        td32 = CA.CP.create_toml_dict(Float32)
+        ps32 = CA.ClimaAtmosParameters(
+            td32;
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            implicit_microphysics = true,
+        )
+        mp32 = CAP.microphysics_1m_implicit_params(ps32)
+        thp32 = CAP.thermodynamics_params(ps32)
+        r32_cold = CA._implicit_mp_subl_dep_sno(
+            mp32, -1.0f-8, 1.0f-6, thp32, 0.2f0, 165.0f0,
+        )
+        r64_cold = CA._implicit_mp_subl_dep_sno(
+            mp_i, -1e-8, 1e-6, thp, 0.2, 165.0,
+        )
+        @test isfinite(r32_cold)
+        @test Float64(r32_cold) ≈ r64_cold rtol = 1e-4
+        r32_trace = CA._implicit_mp_evap_cond_rai(
+            mp32, -1.0f-11, 1.0f-10, thp32, 1.0f0, 280.0f0,
+        )
+        @test r32_trace <= -0.1f0
+
+        # `edmfx_sgs_mass_flux = false` allocates `(c.ρq_x, c.sgsʲs.:(1).q_x)`
+        # only for `sedimenting_mass_names`, zero-initializes them, and zeros
+        # inactive blocks when implicit 1M processes are disabled so the linear
+        # solve has no uninitialized entries.
+        import LinearAlgebra
+        for imp_mp in (true, false)
+            cfg_nomf = CA.AtmosConfig(
+                Dict{String, Any}(
+                    "initial_condition" => "Bomex",
+                    "FLOAT_TYPE" => "Float64",
+                    "config" => "column",
+                    "turbconv" => "prognostic_edmfx",
+                    "edmfx_entr_model" => "Generalized",
+                    "edmfx_detr_model" => "Generalized",
+                    "edmfx_sgs_mass_flux" => false,
+                    "edmfx_sgs_diffusive_flux" => true,
+                    "edmfx_nh_pressure" => true,
+                    "implicit_diffusion" => true,
+                    "prognostic_tke" => true,
+                    "microphysics_model" => "1M",
+                    "implicit_microphysics" => imp_mp,
+                    "z_max" => 3000.0,
+                    "z_elem" => 10,
+                    "z_stretch" => false,
+                    "dt" => "1secs",
+                    "t_end" => "2secs",
+                    "ode_algo" => "ARS222",
+                    "toml" =>
+                        [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                    "output_default_diagnostics" => false,
+                );
+                job_id = "edmfx_nomf_imp_$(imp_mp)",
+            )
+            res_nm = generate_test_simulation(cfg_nomf)
+            Y_nm, p_nm, sim_nm = res_nm.Y, res_nm.p, res_nm.simulation
+            cache_nm = CA.jacobian_cache(alg, Y_nm, p_nm.atmos)
+            mat_nm = cache_nm.matrix.matrix
+            @test !haskey(
+                mat_nm,
+                (@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)),
+            )
+            for (gs_n, sgs_n) in (
+                (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+                (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+            )
+                @test haskey(mat_nm, (gs_n, sgs_n))
+                @test all(iszero, parent(mat_nm[gs_n, sgs_n]))
+                # Dirty the block before `update_jacobian!` to confirm
+                # `sgs_mass_flux == false` overwrites (or zeros) it cleanly.
+                parent(mat_nm[gs_n, sgs_n]) .= FT(NaN)
+            end
+            CA.set_precomputed_quantities!(Y_nm, p_nm, sim_nm.integrator.t)
+            CA.update_jacobian!(
+                alg, cache_nm, Y_nm, p_nm, dtγ, sim_nm.integrator.t,
+            )
+            for (gs_n, sgs_n) in (
+                (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+                (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+            )
+                if imp_mp
+                    @test all(isfinite, parent(mat_nm[gs_n, sgs_n]))
+                else
+                    @test all(iszero, parent(mat_nm[gs_n, sgs_n]))
+                end
+            end
+            b_nm = similar(Y_nm)
+            b_nm .= Y_nm
+            x_nm = similar(Y_nm)
+            x_nm .= zero(FT)
+            LinearAlgebra.ldiv!(x_nm, cache_nm.matrix, b_nm)
+            @test all(isfinite, parent(x_nm.c))
+            @test all(isfinite, parent(x_nm.f))
+        end
+    end
+
+    @testset "grid-mean cloud liquid warm start keeps q_lcl⁰" begin
+        Y .= Y_init
+        turbconv_model = p.atmos.turbconv_model
+        function env_q_lcl(Y)
+            @. ᶜtmp = CA.specific(
+                CA.env_value(Y.c.ρq_lcl, s -> s.ρa * s.q_lcl, Y.c.sgsʲs),
+                CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),
+                Y.c.ρq_lcl,
+                Y.c.ρ,
+                turbconv_model,
+            )
+            return column(ᶜtmp)
+        end
+        # A depleted grid mean aloft leaves a negative environment value there.
+        @. Y.c.ρq_lcl *= ifelse(ᶜz > 3 * z_max / 4, FT(0.1), FT(1))
+        q_lcl⁰_old = env_q_lcl(Y)
+        @test any(<(0), q_lcl⁰_old) && any(>(0), q_lcl⁰_old)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_old = column(ᶜtmp)
+        Y_old = similar(Y)
+        Y_old .= Y
+        p.precomputed.ᶜsgsʲs_picard_snapshot.:(1) .= sgsʲ
+        # The draft grows in the lower half of the column and decays above,
+        # and condenses throughout, as after a Picard round.
+        @. sgsʲ.ρa *= ifelse(ᶜz < z_max / 2, FT(1.5), FT(0.5))
+        @. sgsʲ.q_lcl += FT(4e-4)
+        CA.warm_start_grid_mean_tracers!(Y, p)
+        @. ᶜtmp = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        ρa⁰_new = column(ᶜtmp)
+        # A non-negative environment value is kept; a negative one is left in
+        # place (the area change is scaled by `max(0, q_lcl⁰_old) = 0`), so it
+        # persists scaled by the environment area ratio.
+        expected = ifelse.(
+            q_lcl⁰_old .>= 0,
+            q_lcl⁰_old,
+            q_lcl⁰_old .* ρa⁰_old ./ ρa⁰_new,
+        )
+        @test env_q_lcl(Y) ≈ expected rtol = 1e4 * eps(FT) atol = eps(FT)
+        @test parent(Y.c.ρq_lcl) != parent(Y_old.c.ρq_lcl)
+        # `warm_start_grid_mean_tracers!` also rewrites `ρq_icl`, `ρq_rai`,
+        # `ρq_sno`, `ρq_tot`, and `ρe_tot` so the predictor's updraft move
+        # flows through to the grid mean while each environment specific
+        # content (and `mse⁰`) keeps its stage-initial value. Only `ρ` is
+        # unchanged.
+        @test parent(Y.c.ρ) == parent(Y_old.c.ρ)
+    end
+end

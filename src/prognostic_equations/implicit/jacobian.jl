@@ -42,6 +42,8 @@ Subtypes:
 """
 abstract type SparseJacobian <: JacobianAlgorithm end
 
+# Mutable (with const fields) for the same compile-time reason as `AtmosCache`.
+
 """
     Jacobian(alg, Y, atmos; [verbose])
 
@@ -51,9 +53,9 @@ and invert the Jacobian. ClimaTimeSteppers.jl interacts with it through
 linear solve). The optional `verbose` flag specifies whether debugging
 information should be printed during initialization.
 """
-struct Jacobian{A <: JacobianAlgorithm, C}
-    alg::A
-    cache::C
+mutable struct Jacobian{A <: JacobianAlgorithm, C}
+    const alg::A
+    const cache::C
 end
 function Jacobian(alg, Y, atmos; verbose = false)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
@@ -144,9 +146,9 @@ function first_column_rescaling_arrays(Y, p, t)
     for block_key in Iterators.product(scalar_names, scalar_names)
         (block_row_name, block_column_name) = block_key
         block_row_Yₜ_values =
-            parent(MatrixFields.get_field(column_Yₜ, block_row_name))
+            vec(parent(MatrixFields.get_field(column_Yₜ, block_row_name)))
         block_column_Yₜ_values =
-            parent(MatrixFields.get_field(column_Yₜ, block_column_name))
+            vec(parent(MatrixFields.get_field(column_Yₜ, block_column_name)))
         safe_inverse = x -> iszero(x) || issubnormal(x) ? zero(x) : inv(x)
         rescaling_arrays[block_key] =
             Array(safe_inverse.(block_row_Yₜ_values) .* block_column_Yₜ_values')

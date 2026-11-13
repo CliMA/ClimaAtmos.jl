@@ -58,6 +58,26 @@ directly by default; setting `use_krylov_method` solves it instead with a
 Jacobian-free Krylov method, which forms Jacobian-vector products by finite
 differences and uses the Jacobian below as a left preconditioner.
 
+Two stage hooks surround the Newton solve on each implicit stage:
+
+  - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
+    resets the stage-weighted precipitation accumulator at the start of a step
+    and, for prognostic PROPHET (`PrognosticEDMFX`), runs the closed-form
+    updraft predictor and warm-starts ``Y[0]``; see
+    [PROPHET Discretization and Time Stepping](prophet_numerics.md).
+  - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
+    stage-weighted surface precipitation fluxes, applies
+    `correct_implicit_advection_tendency!` — which performs the implicit
+    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
+    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
+    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
+    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
+    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
+    microphysics tracers at the solved velocity — and updates a prognostic
+    slab ocean with the post-Newton precipitation increment when the
+    `ManualSparseJacobian` stage accumulator is active; see
+    [Discretization and Operators](discretization.md).
+
 ## Jacobian algorithms
 
 The matrix ``\partial R / \partial Y`` is held in a
@@ -89,8 +109,10 @@ treated implicitly. Which blocks are nonzero follows from the `AtmosModel` —
 the presence of topography, the diffusion mode, and the prognostic variables in
 ``Y`` — and is fixed when the cache is built, not configured by the user.
 
-When grid-scale diffusion is implicit, the linear solve is itself approximate;
-`approximate_linear_solve_iters` sets how many iterations it takes.
+When grid-scale diffusion is implicit, the configuration is moist, or prognostic
+`ρtke` is active, the linear solve is itself approximate;
+`approximate_linear_solve_iters` (default `2`) sets how many iterations it
+takes.
 
 ### Automatic differentiation
 

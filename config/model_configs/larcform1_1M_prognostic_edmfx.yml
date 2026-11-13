@@ -25,6 +25,7 @@ z_max: 9000.0
 z_elem: 90
 z_stretch: true # clw and z-banding both appear very sensitive to this
 dz_bottom: 10.0
+dz_top: 250.0 # 9 km domain; the 3000 m default puts 2 km layers aloft
 
 # Solver #
 approximate_linear_solve_iters: 2

@@ -25,6 +25,8 @@ config.parsed_args["h_elem"] = 8;
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
+# This grid lies outside the range the two-scale stretching admits.
+config.parsed_args["z_stretch"] = false;
 
 params = CA.ClimaAtmosParameters(config)
 setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
@@ -59,6 +61,7 @@ a0 = 0.9
 a1 = 3.0
 Fr_crit = 0.7
 α_smoothing = 0.15
+a_tofd = 0.0
 topo_info = Val(:gfdl_restart)
 topography = Val(:Earth)
 FT = eltype(Y.c.ρ)
@@ -73,6 +76,7 @@ ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
     a1,
     Fr_crit,
     α_smoothing,
+    a_tofd,
     topo_info,
     topography,
 )

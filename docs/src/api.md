@@ -44,8 +44,10 @@ ClimaAtmos.Presets.aquaplanet
 ```@docs
 ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
+ClimaAtmos.MultiColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
+ClimaAtmos.get_z_mesh
 ```
 
 ## Topography
@@ -130,11 +132,9 @@ ClimaAtmos.SGSQuadrature
 ClimaAtmos.AbstractSGSDistribution
 ClimaAtmos.GridMeanSGS
 ClimaAtmos.GaussianSGS
-ClimaAtmos.LogNormalSGS
 ClimaAtmos.AbstractPhysicalPointTransform
 ClimaAtmos.GridMeanPhysicalPointTransform
 ClimaAtmos.GaussianPhysicalPointTransform
-ClimaAtmos.LogNormalPhysicalPointTransform
 ClimaAtmos.create_physical_transform
 ClimaAtmos.integrate_over_sgs
 ```
@@ -424,6 +424,7 @@ ARM VARANAL and GCM cfsite converters. See the
 ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
 ClimaAtmos.ColumnDatasets.InMemoryColumnData
+ClimaAtmos.ColumnDatasets.PerColumnDatasets
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile

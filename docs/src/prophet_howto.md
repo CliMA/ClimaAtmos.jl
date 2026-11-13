@@ -57,22 +57,23 @@ mass-flux contribution, and as a lighter boundary-layer scheme.
 | `prognostic_tke`                      | `false`           | Carry ``\rho \kappa_{\mathrm{iso}}`` as a prognostic variable. Required for the mixing-length closure to be meaningful.                                                        |
 | `edmfx_sgs_mass_flux`                 | `false`           | Apply the coherent mass-flux part of the SGS fluxes to the grid mean.                                                                                                          |
 | `edmfx_sgs_diffusive_flux`            | `false`           | Apply the diffusive part of the SGS fluxes to the grid mean, plus TKE transport and dissipation.                                                                               |
-| `edmfx_vertical_diffusion`            | `false`           | Also apply the same *specific* diffusive tendency to each draft scalar.                                                                                                        |
+| `edmfx_vertical_diffusion`            | `false`           | Diffuse each draft scalar down its own vertical gradient, and include the draft diffusive fluxes in the subdomain-decomposed grid-mean flux.                                   |
 | `edmfx_nh_pressure`                   | `false`           | Include the form-drag term in the draft momentum equation. The virtual-mass buoyancy reduction ``(1-\alpha_b)`` is always applied.                                             |
 | `edmfx_filter`                        | `false`           | Run the draft state filters after each stage (see [Regularizations](prophet_numerics.md#Regularizations-and-state-filters)).                                                   |
 | `edmfx_entr_model`                    | `"Generalized"`   | Entrainment closure: `Generalized` ([`InvZEntrainment`](@ref ClimaAtmos.InvZEntrainment)) or `PiGroups` ([`PiGroupsEntrainment`](@ref ClimaAtmos.PiGroupsEntrainment)).        |
 | `edmfx_detr_model`                    | `"Generalized"`   | Detrainment closure. Only `Generalized` is implemented.                                                                                                                        |
 | `edmfx_scale_blending`                | `"SmoothMinimum"` | How the mixing-length scales are blended; `HardMinimum` is the non-smooth alternative.                                                                                         |
-| `edmfx_mse_q_tot_upwinding`           | `"first_order"`   | Vertical reconstruction for the draft ``h_s`` and ``q_t``. `none` is central, `third_order` also available.                                                                    |
-| `edmfx_tracer_upwinding`              | `"first_order"`   | Vertical reconstruction for the remaining draft tracers.                                                                                                                       |
+| `edmfx_mse_humidity_upwinding`        | `"first_order"`   | Vertical reconstruction for the draft ``h_s``, ``q_t``, and condensate masses and numbers. `none` is central.                                                                  |
+| `edmfx_tracer_upwinding`              | `"first_order"`   | Vertical reconstruction for the remaining (passive) draft tracers.                                                                                                             |
 | `edmfx_sgsflux_upwinding`             | `"none"`          | Reconstruction of the SGS mass flux applied to the grid mean.                                                                                                                  |
 | `edmfx_sgs_horizontal_diffusive_flux` | `false`           | Add the horizontal component of the diffusive SGS flux. See [Horizontal Diffusion](prophet_horizontal_diffusion.md).                                                           |
-| `edmfx_horizontal_diffusion`          | `false`           | Apply the grid-mean horizontal diffusion tendencies to the drafts. Requires the flag above.                                                                                    |
+| `edmfx_horizontal_diffusion`          | `false`           | Diffuse each draft scalar down its own horizontal gradient, and include the draft horizontal diffusive fluxes in the grid-mean flux. Requires the flag above.                  |
 | `cloud_model`                         | `"quadrature"`    | `grid_scale` evaluates cloud fraction at the mean state; `quadrature` integrates over the SGS distribution; `MLCloud` uses a network.                                          |
 | `use_sgs_quadrature`                  | `true`            | Integrate microphysical rates over the SGS distribution rather than at the mean state.                                                                                         |
-| `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian`, `lognormal`, or `mean`.                                                                                                  |
+| `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian` (the conditional-moment node rule for the 1M microphysics, Gauss–Hermite for 0M) or `mean`.                               |
 | `quadrature_order`                    | `3`               | Gauss–Hermite order per dimension, 1–5.                                                                                                                                        |
 | `sgs_variance_curvature`              | `false`           | Evaluate the equilibrium condensate under the vertical displacement of the curved saturation-excess profile, which bounds the moist tail. See [Closures](prophet_closures.md). |
+| `sgs_variance_fidelity_model`         | `"equilibrium"`   | Closure for the variance fidelity ``\alpha``: `equilibrium` or `updraft` (from the updraft condensate; PrognosticEDMFX only). See [Closures](prophet_closures.md).             |
 
 The generated [Configuration Options](configuration_options.md) table is the
 authoritative list; the help strings there come from
@@ -143,9 +144,9 @@ the largest effect, roughly in order:
     profile: how quickly drafts dilute with height and where they terminate.
   - `diagnostic_covariance_coeff` (``c_\sigma``),
     `sgs_variance_vertical_velocity_floor` (``w_{\mathrm{ref}}``),
-    `sgs_variance_floor_time_scale` (``\tau_0``),
-    `sgs_variance_horizontal_scale_factor` (``c_{\Delta x}``) and
-    `cloud_fraction_eps_rel` control cloud fraction at fixed condensate.
+    `sgs_variance_floor_time_scale` (``\tau_0``) and
+    `sgs_variance_horizontal_scale_factor` (``c_{\Delta x}``) control cloud
+    fraction at fixed condensate.
   - `EDMF_min_area`, `EDMF_max_area`, `EDMF_max_surface_area` are
     bounds, not tuning knobs: moving them changes what the limiters do rather
     than the physics.
@@ -209,7 +210,7 @@ including the per-subdomain microphysics process rates. Prepend one to a case
 configuration:
 
 ```bash
-julia +1.11 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
+julia +1.13 --project=.buildkite .buildkite/ci_driver.jl --config_file config/common_configs/diagnostics_column_progedmf_1M.yml --config_file config/model_configs/prognostic_edmfx_bomex_column.yml --job_id bomex
 ```
 
 Later `--config_file` arguments win on conflicting keys; see

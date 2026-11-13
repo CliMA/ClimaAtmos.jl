@@ -100,6 +100,34 @@ const gs_sedimenting_mass_candidates =
     (@name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno))
 
 """
+    suspended_cloud_species
+    precipitation_species
+
+Pairs `(χ_name, ρχ_name)` of the specific (subdomain) and density-weighted
+(grid-scale, relative to `Y.c`) names of the microphysics species that
+second-order turbulent diffusion transports down their own gradients.
+
+`suspended_cloud_species` are cloud liquid and cloud ice, their number
+concentrations, and the P3 rime mass and rime volume, which are carried by cloud
+ice; every second-order closure diffuses them. `precipitation_species` are
+rain, snow, and rain number, which only the LES closures diffuse (see
+`ᶜdiffusing_water_phases`).
+"""
+const suspended_cloud_species = (
+    (@name(q_lcl), @name(ρq_lcl)),
+    (@name(q_icl), @name(ρq_icl)),
+    (@name(n_lcl), @name(ρn_lcl)),
+    (@name(n_ice), @name(ρn_ice)),
+    (@name(q_rim), @name(ρq_rim)),
+    (@name(b_rim), @name(ρb_rim)),
+)
+const precipitation_species = (
+    (@name(q_rai), @name(ρq_rai)),
+    (@name(q_sno), @name(ρq_sno)),
+    (@name(n_rai), @name(ρn_rai)),
+)
+
+"""
     sgs_sedimenting_tracer_candidates
 
 SGS `@name`s (relative to `Y.c.sgsʲs.:(1)`) of every updraft tracer that can
@@ -175,7 +203,7 @@ sedimenting_sgs_tracer_names(Y) =
 
 Return a `Tuple` of the `@name`s (relative to `Y.c.sgsʲs.:(1)`) of the
 sedimenting SGS condensate *mass* tracers, whose sedimentation couples to the
-updraft `q_tot`.
+updraft `q_tot` and `mse`.
 
 Returns `()` when prognostic EDMF is not active.
 """
@@ -235,11 +263,35 @@ internal_energy_function(::TD.Ice) = TD.internal_energy_ice
 Return the `Thermodynamics` function that computes the specific enthalpy [J/kg]
 of a condensate with the given phase, `TD.Liquid()` or `TD.Ice()`.
 
-Used by the dry-static-energy plus water-enthalpy decomposition of the diffusive
+Used by the water-enthalpy part of the diffusive
 enthalpy flux and of its Jacobian.
 """
 enthalpy_function(::TD.Liquid) = TD.enthalpy_liquid
 enthalpy_function(::TD.Ice) = TD.enthalpy_ice
+
+"""
+    condensate_heat_capacity(phase, thermo_params)
+
+Return the specific heat capacity [J/(kg K)] of a condensate with the given
+phase, `TD.Liquid()` or `TD.Ice()`: the temperature derivative of
+`enthalpy_function(phase)`.
+"""
+condensate_heat_capacity(::TD.Liquid, thermo_params) =
+    TD.Parameters.cp_l(thermo_params)
+condensate_heat_capacity(::TD.Ice, thermo_params) =
+    TD.Parameters.cp_i(thermo_params)
+
+"""
+    latent_heat_function(phase)
+
+Return the `Thermodynamics` function that computes the latent heat [J/kg] of
+the transition from vapor to a condensate with the given phase,
+`TD.latent_heat_vapor` for `TD.Liquid()` and `TD.latent_heat_sublim` for
+`TD.Ice()`. Divided by `cp_m`, it is the temperature change per unit
+condensate mass fraction at fixed enthalpy and `q_tot`.
+"""
+latent_heat_function(::TD.Liquid) = TD.latent_heat_vapor
+latent_heat_function(::TD.Ice) = TD.latent_heat_sublim
 
 """
     condensate_e_int_offset(phase, params)
@@ -285,9 +337,11 @@ condensate_cv_difference(::TD.Ice, params) =
 """
     advected_gs_scalar_names(Y)
 
-Return a `Tuple` of the `@name`s (relative to `Y.c`) of the grid-scale scalars
-whose vertical advection with the grid-mean velocity is treated implicitly:
-`ρ`, `ρe_tot`, and `ρq_tot` when moisture is active.
+Return a `Tuple` of the `@name`s (relative to `Y.c`) of the active thermodynamic
+and mass grid-scale scalars advected implicitly with the grid-mean velocity:
+`ρ`, `ρe_tot`, and `ρq_tot` when moisture is active. The sedimenting
+microphysics species (`sedimenting_tracer_names`) and `ρtke` are also advected
+implicitly with the grid-mean velocity.
 """
 advected_gs_scalar_names(Y) = (
     @name(ρ),
@@ -329,9 +383,11 @@ that are neither `ρq_tot` nor sedimenting microphysics species, e.g. passive
 chemistry tracers such as `ρq_gas_A`.
 
 These are diffused with the eddy diffusivity `K_h`, both in the tendencies and
-in the implicit Jacobian. The sedimenting species are handled separately: cloud
-condensate takes a share of the aggregate water tendency, and rain and snow are
-not diffused at all.
+in the implicit Jacobian. The sedimenting species are handled separately: the
+`suspended_cloud_species` diffuse down their own specific gradients in
+second-order diffusion and take a proportional share of the aggregate water
+tendency in fourth-order hyperdiffusion, while the `precipitation_species`
+diffuse only under the LES closures.
 """
 passive_gs_tracer_names(Y) =
     unrolled_filter(

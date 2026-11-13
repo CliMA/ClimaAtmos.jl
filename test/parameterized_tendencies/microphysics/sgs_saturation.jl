@@ -123,12 +123,13 @@ import ClimaParams as CP
                     @test result.T == T_mean
                 end
 
-                @testset "Single quadrature point = grid-mean" begin
-                    # Use GaussianSGS: only Gaussian has χ=0 → (μ_T, μ_q)
+                @testset "GridMeanSGS = grid-mean" begin
+                    # Without SGS sampling σ_S is the floor, so the result is the
+                    # grid-mean one even with nonzero (co)variances.
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     result = ClimaAtmos.compute_sgs_saturation_adjustment(
@@ -136,7 +137,7 @@ import ClimaParams as CP
                         FT(1.0), FT(1e-6), FT(0),
                     )
 
-                    # Even with variance, single point should give grid-mean
+                    # Even with variance, no SGS sampling gives the grid mean
                     @test result.q_liq ≈ q_liq_gm rtol = FT(1e-4)
                     @test result.q_ice ≈ q_ice_gm rtol = FT(1e-4)
                 end

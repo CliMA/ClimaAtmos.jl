@@ -14,8 +14,9 @@ prognostic_tke: false
 microphysics_model: "1M"
 config: "column"
 z_max: 4e3
-z_elem: 40
-z_stretch: false
+z_elem: 45
+dz_bottom: 28.0
+dz_top: 440.0
 perturb_initstate: false
 dt: "30secs"
 t_end: "12hours"

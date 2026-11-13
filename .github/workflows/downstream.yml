@@ -7,6 +7,7 @@ on:
   pull_request:
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
@@ -21,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.11'
+          - '1.13'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7

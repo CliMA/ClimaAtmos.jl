@@ -229,8 +229,8 @@ diagnosable from the subdomain velocities already in the state. It is
 ``\kappa_{\mathrm{iso}}`` that the model prognoses, as `Y.c.ρtke` (enabled by
 `prognostic_tke`).
 
-Because the diffusive fluxes are grid-mean quantities applied uniformly across
-subdomains, a single grid-mean ``\kappa_{\mathrm{iso}}`` suffices, and the
+The eddy diffusivity is closed from a single grid-mean ``\kappa_{\mathrm{iso}}``
+(scaled by `edmfx_updraft_kh_diffusion_factor` in the drafts), because the
 inter-subdomain transfers of isotropic TKE redistribute energy within the cell
 and sum to zero over it [Tan2018, Lopez2020](@cite). Two of those transfers are
 nonetheless sources of grid-mean TKE, because they convert *coherent* subdomain
@@ -336,18 +336,22 @@ column rather than only in the surface layer.
     ``\kappa_{\mathrm{iso}}`` ↔ ``e_{\mathrm{tot}}`` chain exactly.
     ``\kappa_{\mathrm{coh}}`` is also not currently diagnosed.
 
-    The strain rate itself is not the deviatoric one either, and on the default
-    path it is built from vertical gradients only
-    (`compute_strain_rate_center_vertical`), so
-    ``\|\boldsymbol{\mathcal{E}}_D\|_F^2`` above is in practice the vertical
-    shear. Horizontal shear production is added only under
+    The strain rate itself is not the deviatoric one either. On the default
+    path, the shear production is the work of the vertical momentum flux, which
+    acts on the horizontal wind only, so
+    ``\|\boldsymbol{\mathcal{E}}_D\|_F^2`` above (and in ``\mathrm{Ri}``) is
+    the vertical shear ``\tfrac{1}{2} |\partial_z \boldsymbol{u}_h|^2``
+    (`vertical_shear_norm_sqr`). Horizontal shear production is added only under
     `edmfx_sgs_horizontal_diffusive_flux`; see
     [Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
     What *is* implemented, in `edmfx_tke_sources!`, is shear and buoyancy
-    production evaluated from the same face diffusivities and face buoyancy
-    gradient as the fluxes they parameterize, so the discrete conversions mirror
-    the discrete fluxes. Transport and dissipation are applied in
+    production evaluated at the faces from the same face diffusivities, face
+    strain rate, and face buoyancy gradient as the fluxes they parameterize,
+    and then interpolated to the centers, so the discrete conversions mirror
+    the discrete fluxes: summed over a column, the shear production equals the
+    kinetic energy the momentum flux removes from the horizontal wind, up to
+    the interpolation of ``\rho``. Transport and dissipation are applied in
     `edmfx_sgs_diffusive_flux_tendency!`.
 
 ### Mixing-length scales
@@ -593,11 +597,14 @@ variances vanish the diagnosed value falls back to the prescribed
 `Tq_correlation_coefficient`, which `tq_correlation_model: constant` uses
 everywhere.
 
-The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``),
-because a wider Gaussian places a quadrature node at negative total water, and
-condensing the clamped excess can drive the grid-mean vapor negative. The σ_q
-bound rescales ``\Sigma_{T q_t}`` by the same factor so the diagnosed
-correlation is invariant under the clamp.
+The total-water standard deviation is then bounded by
+``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``), with ``q_t`` the mean of
+the subdomain on which the quadrature is centred (the environment under
+`PrognosticEDMFX`, the grid mean otherwise), because a wider Gaussian places a
+quadrature node at negative total water, and condensing the clamped excess can
+drive the subdomain vapor negative. The ``\sigma_q`` bound rescales
+``\Sigma_{T q_t}`` by the same factor so the diagnosed correlation is invariant
+under the clamp.
 
 The total grid-mean subgrid covariance adds the inter-subdomain spread to this
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),
@@ -623,7 +630,9 @@ assumed to relax onto the saturation curve
 reconstructed excess can be blended with its subdomain mean through the
 parameters `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`.
 The equilibrium condensate the reconstruction relaxes toward is the expected
-saturation excess ``\mathbb{E}[\max(0, S)]`` of the Gaussian, or, with
+saturation excess ``\mathbb{E}[\max(0, S)]`` of the Gaussian displacement
+truncated at ``c`` standard deviations (`sgs_displacement_truncation`,
+default 3), or, with
 `sgs_variance_curvature: true`, of the vertical displacement acting on the
 curved profile of the saturation excess. To second order in the displacement
 ``\delta = \ell_v x``,
@@ -645,16 +654,95 @@ profile reaches; the moist tail is then thinner than Gaussian and the
 condensate stops growing with ``\sigma_S``. The expectation is the
 truncated-Gaussian value plus the change the curvature makes to it, with the
 vertical model in closed form (`displacement_condensate`).
+
+The truncation bounds how far the displacement extrapolates the linearized
+profiles. The displacement ``x`` is a standard normal truncated to ``[-c, c]``
+and stretched by ``s = (1 - 2 c \phi(c) / Z)^{-1/2}``, with
+``Z = \Phi(c) - \Phi(-c)``, so that its variance remains that of the covariance
+closure, and
+
+```math
+\mathbb{E}[\max(0, S)] = \frac{1}{Z}
+  \left[\mu_S \left(\Phi(c) - \Phi(a)\right)
+  + s \sigma_S \left(\phi(a) - \phi(c)\right)\right],
+\qquad a = \max\!\left(-c, -\frac{\mu_S}{s \sigma_S}\right)
+```
+
+(`truncated_displacement_condensate`), which vanishes for
+``\mu_S \le -s c \sigma_S``, where no displaced parcel reaches saturation.
+Where a capping inversion is resolved by one or two cells, the displacement is
+longer than the layer over which the gradient holds, and the linear profile
+beyond a few standard deviations lies outside the air the displacement reaches.
+With the default ``c = 3`` (``s c \approx 3.04``), the condensate of a cell
+comes from within three standard deviations of its mean excess.
+``c = \infty`` restores the Gaussian.
 The cloud fraction is then the fraction of the distribution carrying positive
-local condensate, evaluated with a variance augmented by a non-equilibrium floor
-that scales with the saturation specific humidity and is released as the
-subdomain mean saturates. That floor keeps the cloud fraction from being driven
-to one by a vanishing equilibrium variance, and loosely parallels the
-critical-relative-humidity scaling of
-statistical cloud schemes [Quaas2012](@cite). Microphysical rates are evaluated
-at each quadrature point and aggregated linearly, which preserves total water
+local condensate. Its width ``\sigma_{\mathrm{aug}}`` is the gradient width
+floored by an absolute ``\sigma_{\mathrm{abs}}`` (`_sgs_augmented_sigma`).
+Condensate up to the equilibrium amount ``\min(q_c, q_{c,\mathrm{eq}})``, which
+the subdomain's own saturation-excess fluctuations support, is normalized by
+``\sigma_{\mathrm{aug}}``; in subsaturated air, ``q_{c,\mathrm{eq}}`` vanishes
+faster than ``\sigma_S`` as the deficit grows, so this part stays patchy on its
+own. Condensate beyond it, ``\max(0, q_c - q_{c,\mathrm{eq}})``, such as
+condensate detrained from updrafts into subsaturated air, is normalized by
+``\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}``, with the
+subsaturation deficit ``\delta_{\mathrm{sub}} = \max(0, -\mu_S)`` of the
+cloud-available water (`_compute_cloud_fraction`), because filling the clear
+fraction at mean deficit ``\delta_{\mathrm{sub}}`` takes condensate of that
+order. Subsaturated air with detrained or residual condensate therefore stays
+patchy, and quiescent saturated decks become overcast. Microphysical rates are
+evaluated at each node and aggregated linearly, which preserves total water
 and total energy at the subdomain level because the bulk rates preserve them
 pointwise.
+
+The one-moment microphysics nodes are placed from the conditional moments of
+the Gaussian. Every quantity the one-moment evaluator reads at a node is a
+function of the centred saturation excess ``S' \sim N(0, \sigma_S^2)`` alone
+(the temperature is regressed on it), and three thresholds partition ``S'``:
+the edge of the actual condensate, ``-\lambda/\alpha``, the edge of the
+equilibrium condensate, ``-\lambda_{\mathrm{eq}}``, and the edge of the
+precipitation shaft. On each of the at most four intervals between them, both
+condensates are linear in ``S'`` and the shaft flag is constant, so one node at
+the conditional mean of the interval integrates them exactly for any cloud
+fraction, and the intervals that carry condensate receive the two-point Gauss
+rule of the truncated distribution, which reproduces the conditional mean,
+variance, and third moment that a power-law collision rate responds to. The
+Lagrange multipliers are then the continuous ones, ``\lambda_{\mathrm{eq}}``
+being the mean cloud excess itself. The temperature also varies at fixed
+``S'``, with the part ``\sigma_\perp`` of its spread that the regression does not
+carry; the rates respond to it mainly at the freezing point, so a node whose
+temperature spread straddles ``T_{\mathrm{freeze}}`` is split there into the
+conditional means of the two half-normals, and every other node keeps one
+temperature. The width ``\sigma_S`` is the linearized one,
+``\sigma_S^2 = \sigma_q^2 - 2\gamma\rho_{Tq}\sigma_q\sigma_T + \gamma^2\sigma_T^2``,
+with ``\gamma = \partial q_{\mathrm{sat}}/\partial T``, so neither the nodes nor
+the cloud fraction need a quadrature pass.
+The zero-moment microphysics is integrated with the Gauss–Hermite tensor rule.
+
+The slope ``\alpha`` of the condensate ramp ``\max(0, \lambda + \alpha S')`` is
+the variance fidelity ``\alpha_{\mathrm{Da}} \alpha_{\mathrm{eq}}``
+(`sgs_variance_fidelity`). With `sgs_variance_fidelity_model: updraft`
+(PrognosticEDMFX with non-equilibrium microphysics), the ramp width is instead
+set by the in-cloud condensate of the updrafts,
+``\alpha \sigma_S = c_u q_{c,\mathrm{up}}``, bounded to
+``[\alpha_{\min}, 1/(1 - w_{\mathrm{eq}})]`` and blended in by the updrafts'
+cloud cover and EDMF lower area-limiter factor (`updraft_variance_fidelity`): in
+cumulus, environmental cloud is mostly detrained, and its spread follows the
+updraft condensate rather than the variance closure. ``c_u = 0.6`` is
+provisional, from FastEddy BOMEX and SGP environment liquid.
+
+The rule follows from the shape of the integrand: the
+node evaluator is piecewise linear in ``S'`` between the three edges, so the
+edges set where the nodes go. It was developed offline
+against a ``24 \times 24`` Gauss–Hermite reference on the instantaneous states
+and subgrid covariances of a coarse AMIP simulation, and each variant
+was scored by its liquid, ice, rain, and snow tendency errors per latitude band
+and pressure layer. The freezing split entered there, because the cells near
+the freezing point carried most of the rain and snow error of a rule with one
+temperature per node; a rule with the Gauss pair only in the highest cloudy
+interval lost the in-cloud spread below it, and a rule with a Gauss pair on each
+side of freezing cost about as much as the tensor rule. The linearized
+``\sigma_S`` scored as well as the width sampled at the Gauss–Hermite points.
 
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure
@@ -663,12 +751,13 @@ by a guarded Aitken ``\Delta^2`` extrapolation, which is applied only when
 successive increments change sign, so that the accelerated value lies between
 computed iterates.
 
-The grid-mean cloud fraction is the volume-fraction-weighted sum
-``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation the
-cloud fraction is a single-domain quantity: the environment's PDF
-inversion is applied to the grid-mean cloud condensate,
-``f_c = f_c^0\!\left(a^0 q_c^0 + \sum_j a^j q_c^j\right)``, with no area weighting and
-no separate draft term.
+The grid-mean cloud fraction is the area-fraction-weighted sum
+``f_c^{\mathrm{tot}} = a^0 f_c^0 + \sum_j a^j f_c^j``
+(`_edmf_weight_cloud_fraction!`), where ``f_c^0`` is the truncated-Gaussian
+cover of the environment cloud condensate ``q_c^0`` and ``f_c^j``
+(`_updraft_cloud_fraction`) is binary under equilibrium microphysics and the
+truncated-Gaussian cover against the updraft vapor subsaturation deficit under
+non-equilibrium microphysics.
 
 !!! note "Under active development"
 
@@ -682,8 +771,8 @@ no separate draft term.
     with the microphysics coupling in
     [Microphysics](microphysics.md); the configuration keys are `cloud_model`,
     `use_sgs_quadrature`, `sgs_distribution`, `quadrature_order`,
-    `tq_correlation_model` (default `diagnosed`), and `sgs_variance_curvature`
-    (default `false`).
+    `tq_correlation_model` (default `diagnosed`), `sgs_variance_curvature`
+    (default `false`), and `sgs_variance_fidelity_model` (default `equilibrium`).
 
 ## Boundary conditions
 
@@ -810,11 +899,13 @@ covariance, quadrature and cloud-fraction closures,
 | ``c_d``                                                                                         | `tke_dissipation_coefficient` (derived)                                                                                                                                                                                              | —                                                                                                       |
 | ``\mathrm{Pr}_n``, ``\omega_{\mathrm{pr}}``, ``\mathrm{Pr}_{\max}``                             | `Prandtl_number_0`, `Prandtl_number_scale`, `Pr_max`                                                                                                                                                                                 | `mixing_length_Prandtl_number_0`, `mixing_length_Prandtl_number_scale`, `mixing_length_Prandtl_maximum` |
 | ``c_k``                                                                                         | `tke_surf_flux_coeff`                                                                                                                                                                                                                | `mixing_length_tke_surf_flux_coeff`                                                                     |
+| ``f_m``                                                                                         | `edmfx_updraft_kh_diffusion_factor`                                                                                                                                                                                                  | `edmfx_updraft_kh_diffusion_factor`                                                                     |
 | ``c_\sigma``                                                                                    | `diagnostic_covariance_coeff` (``\ell_v^2 = 2 c_\sigma l_d^2``)                                                                                                                                                                      | `diagnostic_covariance_coeff`                                                                           |
 | ``r_{T,q_t}``                                                                                   | `Tq_correlation_coefficient`                                                                                                                                                                                                         | `Tq_correlation_coefficient`                                                                            |
 | ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_0`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
 | ``r_{\Delta x,\theta}``, ``r_{v,\theta}``, ``r_{h,\theta q}``                                   | `sgs_variance_theta_horizontal_scale_ratio`, `sgs_variance_theta_vertical_scale_ratio`, `sgs_variance_horizontal_cross_correlation`                                                                                                  | —, —, —                                                                                                 |
 | ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
+| ``c``                                                                                           | `sgs_displacement_truncation` (displacement truncation, in standard deviations)                                                                                                                                                      | —                                                                                                       |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of
@@ -822,14 +913,15 @@ these to change first.
 
 ## Where this is implemented
 
-| Closure                                              | Source                                                                                                                                         |
-|:---------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Entrainment, detrainment, area limiters              | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                             |
-| Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                       |
-| Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)             |
-| Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                             |
-| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                         |
-| Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl) |
-| SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl) |
-| Surface conditions for the drafts                    | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)           |
-| Closure parameter set                                | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                      |
+| Closure                                              | Source                                                                                                                                                   |
+|:---------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrainment, detrainment, area limiters              | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                                       |
+| Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                                 |
+| Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)                       |
+| Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                                       |
+| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                                   |
+| Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl)           |
+| In-cloud condensate inhomogeneity for SW radiation   | [microphysics/cloud_inhomogeneity.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_inhomogeneity.jl) |
+| SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl)           |
+| Surface conditions for the drafts                    | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)                     |
+| Closure parameter set                                | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                                |

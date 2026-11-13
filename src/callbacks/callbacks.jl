@@ -8,10 +8,11 @@ import ClimaCore as CC
 import ClimaCore.Spaces
 import .Parameters as CAP
 import ClimaCore: InputOutput
+import Logging
 using Dates
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
-import UnrolledUtilities: unrolled_foreach
+import UnrolledUtilities: unrolled_foreach, unrolled_any
 
 
 include("callback_helpers.jl")
@@ -85,9 +86,11 @@ import RRTMGP
 
 Run the RRTMGP radiative transfer solve and store the resulting net flux.
 
-Pushes the current atmospheric state into the solver, refreshes the insolation
-(`set_insolation_variables!`) and the surface albedo (`set_surface_albedo!`), solves, and
-copies the net flux into `p.radiation.ᶠradiation_flux`. That field is then held fixed and
+Diagnoses the shortwave subgrid inhomogeneity factor of the in-cloud water paths
+(`set_sw_cloud_optical_depth_factor!`), pushes the current atmospheric state into the
+solver, refreshes the insolation (`set_insolation_variables!`) and the surface albedo
+(`set_surface_albedo!`), solves both bands (`RRTMGPI.solve_fluxes!`), and copies the
+net flux into `p.radiation.ᶠradiation_flux`. That field is then held fixed and
 reused by the tendencies until the next radiation call, which is why the `dt_rad` cadence
 is much longer than the timestep.
 
@@ -98,15 +101,15 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
-    FT = eltype(Y)
     (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
 
+    set_sw_cloud_optical_depth_factor!(Y, p)
     RRTMGPI.update_atmospheric_state!(integrator)
 
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGP.update_fluxes!(rrtmgp_solver, UInt32(floor(FT(t) / integrator.p.dt)))
+    RRTMGPI.solve_fluxes!(integrator)
     Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_solver)
     return nothing
 end
@@ -167,11 +170,6 @@ Dispatches on `p.atmos.insolation`:
     the column coordinates, falling back to the equator on a flat space.
   - `ExternalTVInsolation`: values read from the external forcing, with the TOA flux
     reconstructed as `rsdt / coszen`.
-
-!!! note
-
-    RRTMGP requires a strictly positive cosine zenith angle, so the modes that can reach
-    zero clamp it to `eps(FT)` rather than letting it vanish.
 """
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
@@ -198,7 +196,7 @@ end
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     FT = Spaces.undertype(axes(Y.c))
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    if issphere(axes(Y.c))
         latitude = Fields.field2array(bottom_coords.lat)
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -217,7 +215,7 @@ end
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_solver) = p.radiation
-    RRTMGP.cos_zenith(rrtmgp_solver) .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    RRTMGP.cos_zenith(rrtmgp_solver) .= FT(0) # polar night
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(0)
 end
 
@@ -242,7 +240,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     )
 
     # Use Insolation API: insolate_tuple = insolation(datetime, lat, lon, params)
-    # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
+    # Insolation.jl clamps μ to [0, 1], so night-side columns get μ = 0.
     if !isnothing(tvi.latitude) && !isnothing(tvi.longitude)
         # Explicit lat/lon override (e.g. single-column setups whose coordinate
         # system doesn't carry lat/lon).
@@ -254,7 +252,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
                 insolation_params,
             ),
         )
-    elseif eltype(bottom_coords) <: Geometry.LatLongZPoint
+    elseif issphere(axes(Y.c))
         @. insolation_tuple = Insolation.insolation(
             current_datetime,
             bottom_coords.lat,
@@ -270,7 +268,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
             insolation_params,
         ))
     end
-    @. cos_zenith = max(insolation_tuple.μ, eps(FT))
+    @. cos_zenith = insolation_tuple.μ
     @. toa_flux = insolation_tuple.S
 end
 
@@ -400,32 +398,74 @@ end
 """
     check_nans(integrator)
 
-Abort the simulation if any prognostic variable has gone to `NaN`.
+Abort the simulation if any prognostic variable has gone to `NaN` on any rank.
 
-On failure, walks the state and logs which `Y.<subfield>.<variable>` contain `NaN` and how
-many elements of each, then errors. Naming the affected variables is the point of the
-extra pass: it usually identifies the guilty tendency without a rerun.
+Scans each top-level field of `integrator.u` locally and logs every
+`Y.<subfield>.<variable>` (and `sgsʲs` subfield) that holds a `NaN`, with
+element counts. Non-root MPI ranks under `OnlyRootLogger` have a `NullLogger`,
+so the report falls back to `ConsoleLogger(stderr)`. The local flag is combined
+with `ClimaComms.allreduce` before the report, and every rank throws
+`error("Found NaN")` together, so no rank hangs in a later collective.
 
-Returns `nothing` when the state is clean. Installed by `nan_checking_callback`, whose
-`check_nan_every` cadence trades detection latency against the cost of scanning the whole
-state.
+Returns `nothing` when no field holds a `NaN`. Installed by
+`nan_checking_callback`, whose `check_nan_every` cadence sets how often the
+state is scanned and so how soon a `NaN` is detected.
 """
 function check_nans(integrator)
-    if any(isnan, parent(integrator.u))
-        # Identify which field(s) have NaN
-        Y = integrator.u
-        for pn in propertynames(Y)
-            sub = getproperty(Y, pn)
-            for fn in propertynames(sub)
-                field = getproperty(sub, fn)
-                if any(isnan, parent(field))
-                    n_nan = count(isnan, parent(field))
-                    n_tot = length(parent(field))
-                    @info "NaN found in Y.$pn.$fn: $n_nan / $n_tot elements"
+    Y = integrator.u
+    # Scan the top-level Fields with an unrolled loop over the FieldVector's
+    # value tuple: `parent(Y)` allocates a FieldVectorView wrapper on every
+    # call, and `getproperty(Y, ::Symbol)` with a runtime name is not inferable.
+    local_has_nan = unrolled_any(Tuple(Fields.field_vector_values(Y))) do field
+        any(isnan, parent(field))
+    end
+    # The collective comes before the local report, so an exception while
+    # logging on one rank cannot leave the other ranks waiting in it.
+    comms_ctx = ClimaComms.context(Y.c)
+    any_has_nan = ClimaComms.allreduce(comms_ctx, Int(local_has_nan), +) > 0
+    if local_has_nan
+        rank = ClimaComms.mypid(comms_ctx)
+        t = integrator.t
+        logger =
+            Logging.current_logger() isa Logging.NullLogger ?
+            Logging.ConsoleLogger(stderr) : Logging.current_logger()
+        Logging.with_logger(logger) do
+            for pn in propertynames(Y)
+                sub = getproperty(Y, pn)
+                for fn in propertynames(sub)
+                    field = getproperty(sub, fn)
+                    if any(isnan, parent(field))
+                        n_nan = count(isnan, parent(field))
+                        n_tot = length(parent(field))
+                        @error(
+                            "NaN found on rank $rank in Y.$pn.$fn: " *
+                            "$n_nan / $n_tot elements (t = $t)"
+                        )
+                        if fn == :sgsʲs
+                            for j in propertynames(field)
+                                sgsʲ = getproperty(field, j)
+                                for sfn in propertynames(sgsʲ)
+                                    subfield = getproperty(sgsʲ, sfn)
+                                    if any(isnan, parent(subfield))
+                                        n_sub_nan =
+                                            count(isnan, parent(subfield))
+                                        n_sub_tot = length(parent(subfield))
+                                        @error(
+                                            "NaN found on rank $rank in " *
+                                            "Y.$pn.sgsʲs.:($j).$sfn: " *
+                                            "$n_sub_nan / $n_sub_tot " *
+                                            "elements (t = $t)"
+                                        )
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
-        error("Found NaN")
+        flush(stderr)
     end
+    any_has_nan && error("Found NaN")
     return nothing
 end

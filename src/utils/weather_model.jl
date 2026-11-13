@@ -17,12 +17,11 @@ import ..parse_date
 
 Return the path to the ERA5-derived initial-condition file for `start_date`.
 
-Without `era5_initial_condition_dir`, the path is taken from the
-`wxquest_initial_conditions` artifact and returned without checking that the
-file exists.
+Without `era5_initial_condition_dir`, the file from the
+`wxquest_initial_conditions` artifact is used if present. Otherwise the
+directory falls back to `ClimaInitialConditions.ERA5.cache_dir()`.
 
-With `era5_initial_condition_dir`, a preprocessed file in that directory is
-used if present. Otherwise the raw ERA5 file is interpolated to
+A preprocessed file in the directory is used if present. Otherwise the raw ERA5 file is interpolated to
 `target_levels`, by `to_z_levels_3d_model` for model levels and
 `to_z_levels_1d` for pressure levels. A missing raw file is fetched from the
 Copernicus Climate Data Store by `ClimaInitialConditions.ERA5`.
@@ -33,7 +32,8 @@ Copernicus Climate Data Store by `ClimaInitialConditions.ERA5`.
     `DateTime`; parsed by `parse_date`.
   - `target_levels`: Target altitude levels [m].
   - `era5_initial_condition_dir = nothing`: Directory holding preprocessed or raw
-    ERA5 files; `nothing` selects the artifact path.
+    ERA5 files; `nothing` selects the artifact, then the
+    `ClimaInitialConditions` cache.
   - `comms_ctx = ClimaComms.context()`: The download and the interpolation run
     on the root rank only, with a barrier before the path is returned.
 
@@ -65,48 +65,47 @@ function weather_model_data_path(
     start_date_str = Dates.format(dt, "yyyymmdd")
     start_time = Dates.format(dt, "HHMM") # Note: this is not the same as `start_time` in the coupler!
 
-    # Determine source/destination and whether generation is needed
-    local raw_data_path::String
-    local ic_data_path::String
-
-    if !isnothing(era5_initial_condition_dir)
-        # User-provided directory
-        ic_data_path = joinpath(
-            era5_initial_condition_dir,
-            "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
-        )
-        if isfile(ic_data_path)
-            @info "Using existing interpolated IC file: $ic_data_path"
-            return ic_data_path
-        end
-        raw_data_path = joinpath(
-            era5_initial_condition_dir,
-            "era5_raw_$(start_date_str)_$(start_time).nc",
-        )
-        if !isfile(raw_data_path)
-            # Downloads, processes, validates and caches all six files
-            if ClimaComms.iamroot(comms_ctx)
-                @info "No ERA5 initial condition found; fetching from CDS" (
-                    dir = era5_initial_condition_dir,
-                    date = dt,
-                )
-                ClimaInitialConditions.ERA5.fetch_initial_conditions(
-                    dt;
-                    dir = era5_initial_condition_dir,
-                )
-            end
-            ClimaComms.barrier(comms_ctx)
-            isfile(raw_data_path) || error(
-                "ClimaInitialConditions.ERA5 ran but produced no $(raw_data_path).",
-            )
-        end
-    else
-        # Artifact-based paths
-        ic_data_path = joinpath(
+    if isnothing(era5_initial_condition_dir)
+        artifact_path = joinpath(
             @clima_artifact("wxquest_initial_conditions"),
             "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
         )
+        isfile(artifact_path) && return artifact_path
+        era5_initial_condition_dir = ClimaInitialConditions.ERA5.cache_dir()
+        @info "ERA5 initial condition not in the artifact; using the ClimaInitialConditions cache" (
+            dir = era5_initial_condition_dir,
+            date = dt,
+        )
+    end
+
+    ic_data_path = joinpath(
+        era5_initial_condition_dir,
+        "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
+    )
+    if isfile(ic_data_path)
+        @info "Using existing interpolated IC file: $ic_data_path"
         return ic_data_path
+    end
+    raw_data_path = joinpath(
+        era5_initial_condition_dir,
+        "era5_raw_$(start_date_str)_$(start_time).nc",
+    )
+    if !isfile(raw_data_path)
+        # Downloads, processes, validates and caches all six files
+        if ClimaComms.iamroot(comms_ctx)
+            @info "No ERA5 initial condition found; fetching from CDS" (
+                dir = era5_initial_condition_dir,
+                date = dt,
+            )
+            ClimaInitialConditions.ERA5.fetch_initial_conditions(
+                dt;
+                dir = era5_initial_condition_dir,
+            )
+        end
+        ClimaComms.barrier(comms_ctx)
+        isfile(raw_data_path) || error(
+            "ClimaInitialConditions.ERA5 ran but produced no $(raw_data_path).",
+        )
     end
 
     # No preprocessed file, so build one from the raw download. Which path

@@ -50,10 +50,10 @@ using ClimaAtmos
                 quad5 = ClimaAtmos.SGSQuadrature(
                     FT;
                     quadrature_order = 5,
-                    distribution = ClimaAtmos.LogNormalSGS(),
+                    distribution = ClimaAtmos.GaussianSGS(),
                 )
                 @test ClimaAtmos.quadrature_order(quad5) == 5
-                @test quad5.dist isa ClimaAtmos.LogNormalSGS
+                @test quad5.dist isa ClimaAtmos.GaussianSGS
 
                 # GridMeanSGS: 0th-order quadrature (grid-mean only)
                 quad_gridmean =
@@ -226,14 +226,6 @@ using ClimaAtmos
                 @test T_hat ≈ μ_T atol = FT(0.1)
                 @test q_hat ≈ μ_q atol = FT(0.001)
 
-                # LogNormalSGS
-                ln_t = ClimaAtmos.create_physical_transform(
-                    ClimaAtmos.LogNormalSGS(), μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max,
-                )
-                T_hat_ln, q_hat_ln = ln_t(FT(0), FT(0))
-                @test T_hat_ln ≈ μ_T atol = FT(0.1)
-                @test q_hat_ln > 0  # log-normal is always positive
-
                 # GridMeanSGS always returns grid mean regardless of χ values
                 gm_t = ClimaAtmos.create_physical_transform(
                     ClimaAtmos.GridMeanSGS(), μ_q, μ_T, σ_q, σ_T, corr, T_min, q_max,
@@ -347,14 +339,14 @@ using ClimaAtmos
                 nsubs = 1
                 nsubs_quad = 1
 
-                # Test 1: Single quadrature point should match grid-mean evaluation.
-                # With 1-point quadrature all weight is at the mean, S′_hat = 0,
-                # so shifted_excess = λ_lagrange = q_c → q_lcl_hat = λ·q_c = q_lcl_mean.
-                @testset "Single Point = Grid Mean" begin
+                # Test 1: Without SGS sampling (GridMeanSGS) the quadrature form is the
+                # grid-mean evaluation: shifted_excess = λ_lagrange = q_c at the mean
+                # → q_lcl_hat = λ·q_c = q_lcl_mean.
+                @testset "GridMeanSGS = Grid Mean" begin
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     result_quad = microphysics_tendencies_1m(
@@ -384,11 +376,11 @@ using ClimaAtmos
                 # independent of q_rai / q_sno.
                 # Mixed-phase T so both the liquid (vs q_rai) and ice (vs q_sno)
                 # partitions are exercised.
-                @testset "Single Point = Grid Mean (precipitating)" begin
+                @testset "GridMeanSGS = Grid Mean (precipitating)" begin
                     quad_1pt = ClimaAtmos.SGSQuadrature(
                         FT;
                         quadrature_order = 1,
-                        distribution = ClimaAtmos.GaussianSGS(),
+                        distribution = ClimaAtmos.GridMeanSGS(),
                     )
 
                     T_mix = FT(263.15)  # mixed-phase: 0 < λ < 1
@@ -427,7 +419,7 @@ using ClimaAtmos
                     @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
                 end
 
-                # Test 2: Zero variance collapses to single-point → same as grid mean.
+                # Test 2: Zero variance collapses the nodes onto the mean → same as grid mean.
                 @testset "Zero Variance = Grid Mean" begin
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
 
@@ -490,9 +482,9 @@ using ClimaAtmos
                     @test isfinite(result_no_var.dq_lcl_dt)
                 end
 
-                # Test 4b: Subsaturated tail (μ_S < -√3 σ_S) with λ_eq from
-                # _compute_sgs_moments condenses toward q_c_eq > 0 when q_c = 0,
-                # eliminating the discrete 3-point GH support cutoff.
+                # Test 4b: Subsaturated tail (μ_S < -√3 σ_S, beyond every node of a
+                # 3-point Gauss–Hermite rule): λ_eq is the mean cloud excess, and the
+                # node rule's supersaturated tail condenses toward q_c_eq > 0 when q_c = 0.
                 @testset "Subsaturated Tail Condensation (μ_S < -√3 σ_S)" begin
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
                     σ_q = FT(1e-3)
@@ -502,7 +494,7 @@ using ClimaAtmos
                         quad, FT(0), σ_q^2, FT(0), FT(1),
                     )
                     @test q_tot_sub - q_sat_mean < -sqrt(FT(3)) * m_sub.sigma_S
-                    @test m_sub.λ_eq > FT(-sqrt(FT(3))) * m_sub.sigma_S
+                    @test m_sub.λ_eq == q_tot_sub - q_sat_mean
                     opts = ClimaAtmos.SGSMicrophysicsOptions(
                         FT(0), FT(0), FT(0), FT(0.5),
                     )
@@ -705,7 +697,7 @@ using ClimaAtmos
                     q_rai, q_sno,
                     λ, FT(0), FT(0), FT(0), FT(0),
                     λ_lagrange, mu_S, FT(1),
-                    FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                    FT(0), FT(1),   # β_precip, shaft_frac: no placement
                     dt, nsubs_quad,
                     ())
 
@@ -716,10 +708,10 @@ using ClimaAtmos
                 # Verify it's callable
                 T_hat = FT(280.0)
                 q_tot_hat = FT(0.01)
-                @test applicable(evaluator, T_hat, q_tot_hat)
+                @test applicable(evaluator, T_hat, q_tot_hat, FT(0))
 
                 # Call it and verify result
-                result = evaluator(T_hat, q_tot_hat)
+                result = evaluator(T_hat, q_tot_hat, FT(0))   # node outside the shaft
                 @test result isa NamedTuple
                 @test isfinite(result.dq_lcl_dt)
                 @test isfinite(result.dq_icl_dt)
