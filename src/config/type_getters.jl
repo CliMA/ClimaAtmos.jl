@@ -7,9 +7,10 @@ import Logging, NVTX
 
 Translate a configuration into a typed `ClimaAtmosParameters`.
 
-The microphysics model, the 1-moment process options, and the gravity-wave toggles are
-resolved from the config first, so the underlying constructor only loads the parameter
-sets that the run will actually use.
+The microphysics model, the 1-moment process options, the 0-moment precipitation
+evaporation option, and the gravity-wave toggles are resolved from the config
+first, so the underlying constructor only loads the parameter sets that the run
+will actually use.
 """
 function ClimaAtmosParameters(config::AtmosConfig)
     pa = config.parsed_args
@@ -17,6 +18,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
         implicit_microphysics = get(pa, "implicit_microphysics", true),
+        precipitation_evaporation_0m = get_precipitation_evaporation_0m(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),

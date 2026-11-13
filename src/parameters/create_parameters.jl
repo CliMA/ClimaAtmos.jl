@@ -13,6 +13,7 @@ import StaticArrays as SA
         toml_dict;
         microphysics_model = nothing,
         implicit_microphysics = true,
+        precipitation_evaporation_0m = false,
         has_non_orographic_gw = false,
         has_orographic_gw = false,
         has_beres_source = false,
@@ -48,6 +49,9 @@ set is loaded only when its flag is `true`. Passing `microphysics_model = nothin
     `default_config.yml`'s `implicit_microphysics: true`, so direct
     constructor calls (e.g. in `test/parameter_tests.jl`) agree with the
     config-driven path.
+  - `precipitation_evaporation_0m = false`: Build the parameters of the
+    below-cloud evaporation of the 0-moment precipitation flux (config key
+    `precipitation_evaporation_0m`); see `microphysics_0m_parameters`.
   - `has_non_orographic_gw = false`: Load the non-orographic gravity-wave
     parameters.
   - `has_orographic_gw = false`: Load the orographic gravity-wave parameters.
@@ -71,6 +75,7 @@ function ClimaAtmosParameters(
     toml_dict::TD;
     microphysics_model = nothing,
     implicit_microphysics::Bool = true,
+    precipitation_evaporation_0m::Bool = false,
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
     has_beres_source::Bool = false,
@@ -105,7 +110,11 @@ function ClimaAtmosParameters(
     microphysics_cloud_params = cloud_parameters(toml_dict)
     MPC = typeof(microphysics_cloud_params)
 
-    microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    microphysics_0m_params = microphysics_0m_parameters(
+        toml_dict;
+        microphysics_model,
+        precipitation_evaporation_0m,
+    )
     # Two 1M parameter sets: `bulk` carries the user's process choices for CM
     # BMT; `implicit` carries only `cloud_liquid_formation`, `cloud_ice_formation`,
     # `rain_condensation_evaporation`, and `snow_deposition_sublimation` (all
@@ -334,6 +343,54 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
     aml = aerosol_ml_parameters(toml_dict),
     activation = CM.Parameters.AerosolActivationParameters(toml_dict),
 )
+
+"""
+    microphysics_0m_parameters(
+        toml_dict;
+        microphysics_model = nothing,
+        precipitation_evaporation_0m = false,
+    )
+
+Build the `CloudMicrophysics` 0-moment parameter set, `CMP.Microphysics0MParams`.
+
+The below-cloud evaporation of the precipitation flux is a model option (config
+key `precipitation_evaporation_0m`): with `precipitation_evaporation_0m = false`
+the evaporation parameters are `nothing` and no `precipitation_evaporation_*`
+parameter is read. With `true` they are read from `toml_dict` (ClimaParams
+defaults unless overridden), and `precipitation_evaporation_coefficient` must
+be positive; otherwise this errors. The option applies only to
+`EquilibriumMicrophysics0M` and errors for any other `microphysics_model`
+(`nothing` is allowed).
+"""
+function microphysics_0m_parameters(
+    toml_dict;
+    microphysics_model = nothing,
+    precipitation_evaporation_0m::Bool = false,
+)
+    if precipitation_evaporation_0m && !(
+        isnothing(microphysics_model) ||
+        microphysics_model isa EquilibriumMicrophysics0M
+    )
+        error(
+            "`precipitation_evaporation_0m` applies only to \
+             `microphysics_model: \"0M\"` (got $(nameof(typeof(microphysics_model))))",
+        )
+    end
+    mp0 = CM.Parameters.Microphysics0MParams(
+        toml_dict;
+        with_evaporation = precipitation_evaporation_0m,
+    )
+    if precipitation_evaporation_0m && !(mp0.evaporation.k_E > 0)
+        error(
+            "`precipitation_evaporation_0m` is on, but \
+             `precipitation_evaporation_coefficient` = \
+             $(mp0.evaporation.k_E), which gives no evaporation; set a \
+             positive value [1/s] in the parameter TOML, or remove the \
+             entry to use the ClimaParams default",
+        )
+    end
+    return mp0
+end
 
 """
     microphysics_1m_options(microphysics_model)

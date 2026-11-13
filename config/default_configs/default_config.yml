@@ -240,6 +240,9 @@ dt_save_state_to_disk:
 microphysics_model:
   help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
   value: "dry"
+precipitation_evaporation_0m:
+  help: "Below-cloud evaporation of the precipitation flux for 0M microphysics [`Kessler`, ~ (default)]. Reads the `precipitation_evaporation_*` parameters (ClimaParams defaults unless set in the parameter TOML); `precipitation_evaporation_coefficient` must be positive."
+  value: ~
 divergence_damping_factor:
   help: "Divergence damping factor"
   value: 5.0
