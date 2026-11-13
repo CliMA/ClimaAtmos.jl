@@ -41,21 +41,6 @@ function edmfx_sgs_mass_flux_tendency!(
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    eps_FT = eps(eltype(thermo_params))
-    ᶜρ⁰ = @. lazy(
-        max(
-            eps_FT,
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        ),
-    )
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_mass_flux
         # Fluxes of enthalpy, total water, and the SGS tracers, as one fused
@@ -66,7 +51,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
-        (; ᶜh_tot) = p.precomputed
+        (; ᶜh_tot, ᶜK) = p.precomputed
         χ_names = sgs_tracer_names(Y)
         ρχ_names = unrolled_map(get_ρχ_name, χ_names)
 
@@ -85,13 +70,32 @@ function edmfx_sgs_mass_flux_tendency!(
             end
         end
 
-        # Environment
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-        ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
+        # Environment. Its density and specific values are lazy fields of the
+        # loop body: a lazy field that is an argument of the loop carries its own
+        # copy of the scalars it captures (here, of the weight parameter of
+        # `turbconv_model`) into the kernel, with the values derived from each.
         DataLayouts.foreach_column(
-            Yₜ.c, Y.c, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s,
-        ) do Yₜc, Yc, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s
+            Yₜ.c, Y.c, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜK,
+            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+        ) do Yₜc, Yc, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜK, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+            ϵ_FT = eps(eltype(ᶜp))
+            ᶜρ⁰ = @inline @. lazy(
+                max(
+                    ϵ_FT,
+                    TD.air_density(
+                        thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                    ),
+                ),
+            )
+            ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+            ᶜmse⁰ = @inline @. lazy(
+                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model),
+            )
+            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Yc, ᶜρa⁰, turbconv_model)
+            ᶜχ⁰s = unrolled_map(χ_names) do χ_name
+                @inline
+                ᶜspecific_env_value(χ_name, Yc, ᶜρa⁰, turbconv_model)
+            end
             ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
             add_sgs_mass_flux_tendencies!(
                 Yₜc, Yc, ᶜρ⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰,
