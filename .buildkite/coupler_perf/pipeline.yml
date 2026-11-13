@@ -19,8 +19,8 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_BASE_COMMIT: "102b7b477"
-  CLIMAATMOS_NEW_COMMIT: "53732ba13"
+  CLIMAATMOS_BASE_COMMIT: "102b7b47794bbdbbd9accf47a4bb023bd0af9903"
+  CLIMAATMOS_NEW_COMMIT: "53732ba1316efc35dd2fbd6ba2478aa0c60e7855"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
