@@ -23,8 +23,8 @@ env:
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2 (the coupler commit
   # that the end-to-end performance pipeline pins resolves CUDA 5.11 and GPUCompiler 1.17)
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_MAIN_COMMIT: "012f10d7aeafee9b2dafb9dc844b475bcbde89f5"
-  CLIMAATMOS_PR_COMMIT: "7bab6eab0deed467ad260e52faaf930e45902266"
+  CLIMAATMOS_MAIN_COMMIT: "a7a7ca259efd97680f92676016799a8be6cce4e7"
+  CLIMAATMOS_PR_COMMIT: "052781cd958019c9c59151b1a60a5104ef2a7314"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -82,7 +82,7 @@ steps:
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
-      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = name == "CloudMicrophysics" ? "dy/microphysics_fusion" : "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev) for (name, rev) in (("ClimaParams", "dy/params_macro"), ("Thermodynamics", "dy/params_macro"), ("SurfaceFluxes", "dy/params_macro"), ("CloudMicrophysics", "dy/microphysics_fusion"))])'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
       - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest.toml || true
@@ -113,7 +113,7 @@ steps:
       - nvidia-smi -L
       - |
         available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
             echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
         done
@@ -150,7 +150,7 @@ steps:
       - nvidia-smi -L
       - |
         available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
             echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
         done
