@@ -302,84 +302,62 @@ updraft increment is nonzero, its central grid-mean vertical advection is not
 compensated by the `1 + 2 C_γ` post-Newton dissipation weight).
 
 Applies with `PrognosticEDMFX` 1M microphysics, regardless of which
-implicit microphysics sources are on. Writes `p.scratch.ᶜtemp_scalar`.
+implicit microphysics sources are on. All tracers are moved in one point loop.
 """
 function warm_start_grid_mean_tracers!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
     microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
+    (; ᶜh_tot, ᶜK) = p.precomputed
     ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
-    ᶜq⁰_old = p.scratch.ᶜtemp_scalar
-    FT = eltype(p.params)
-    zero_FT = zero(FT)
+    zero_FT = zero(eltype(p.params))
 
-    condensate_names = (
-        (@name(c.ρq_lcl), @name(q_lcl)),
-        (@name(c.ρq_icl), @name(q_icl)),
-        (@name(c.ρq_rai), @name(q_rai)),
-        (@name(c.ρq_sno), @name(q_sno)),
+    tracer_names = (
+        (@name(ρq_lcl), @name(q_lcl)),
+        (@name(ρq_icl), @name(q_icl)),
+        (@name(ρq_rai), @name(q_rai)),
+        (@name(ρq_sno), @name(q_sno)),
+        (@name(ρq_tot), @name(q_tot)),
     )
-    MatrixFields.unrolled_foreach(condensate_names) do (gm_name, sgs_name)
-        MatrixFields.has_field(Y, gm_name) || return nothing
-        ρq_χ = MatrixFields.get_field(Y, gm_name)
-        contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
-        @. ᶜq⁰_old = max(
-            zero_FT,
-            specific(
-                env_value(ρq_χ, contrib, ᶜsnapshot),
-                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model),
-                ρq_χ,
-                Y.c.ρ,
-                turbconv_model,
-            ),
-        )
-        @. ρq_χ +=
-            (
-                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) -
-                ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model)
-            ) * ᶜq⁰_old +
-            draft_sum(contrib, Y.c.sgsʲs) - draft_sum(contrib, ᶜsnapshot)
-        return nothing
-    end
+    DataLayouts.foreach_point(Y.c, ᶜsnapshot, ᶜh_tot, ᶜK) do Yc, ᶜsnapshot, ᶜh_tot, ᶜK
+        ᶜρa⁰_old = @. ρa⁰(Yc.ρ, ᶜsnapshot, turbconv_model)
+        ᶜΔρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model) - ᶜρa⁰_old
+        MatrixFields.unrolled_foreach(tracer_names) do (gm_name, sgs_name)
+            @inline
+            MatrixFields.has_field(Yc, gm_name) || return
+            ρq_χ = MatrixFields.get_field(Yc, gm_name)
+            contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
+            ᶜq⁰_old = @. max(
+                zero_FT,
+                specific(
+                    env_value(ρq_χ, contrib, ᶜsnapshot),
+                    ᶜρa⁰_old,
+                    ρq_χ,
+                    Yc.ρ,
+                    turbconv_model,
+                ),
+            )
+            @. ρq_χ +=
+                ᶜΔρa⁰ * ᶜq⁰_old + draft_sum(contrib, Yc.sgsʲs) -
+                draft_sum(contrib, ᶜsnapshot)
+        end
 
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ρq_tot = Y.c.ρq_tot
-        contrib_qt(sgsʲ) = sgsʲ.ρa * sgsʲ.q_tot
-        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
-        @. ᶜq⁰_old = max(
-            zero_FT,
-            specific(
-                env_value(ρq_tot, contrib_qt, ᶜsnapshot),
-                ᶜρa⁰_old,
-                ρq_tot,
-                Y.c.ρ,
-                turbconv_model,
-            ),
-        )
-        @. ρq_tot +=
-            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜq⁰_old +
-            draft_sum(contrib_qt, Y.c.sgsʲs) -
-            draft_sum(contrib_qt, ᶜsnapshot)
+        # Energy warm-start. The EDMFX decomposition
+        #   ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
+        # follows from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`.
+        # Holding `mse⁰` and `(ρK − p)` at their stage-initial values while
+        # swapping in the predictor's updated `ρaʲ`, `mseʲ`, `ρa⁰` gives
+        #   Δρe_tot = (ρa⁰_new − ρa⁰_old)·mse⁰_old
+        #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
+        if MatrixFields.has_field(Yc, @name(ρe_tot))
+            ᶜmse⁰_old = @. specific_env_mse(
+                Yc.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model,
+            )
+            @. Yc.ρe_tot +=
+                ᶜΔρa⁰ * ᶜmse⁰_old +
+                draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Yc.sgsʲs) -
+                draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsnapshot)
+        end
     end
-
-    # Energy warm-start. The EDMFX decomposition
-    #   ρe_tot = ρa⁰·mse⁰ + Σⱼ ρaʲ·mseʲ + (ρK − p)
-    # follows from `ρ·mse_bar = ρ·(h_tot − K)` and `ρe_tot = ρ·h_tot − p`.
-    # Holding `mse⁰` and `(ρK − p)` at their stage-initial values while
-    # swapping in the predictor's updated `ρaʲ`, `mseʲ`, `ρa⁰` gives
-    #   Δρe_tot = (ρa⁰_new − ρa⁰_old)·mse⁰_old
-    #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
-    if MatrixFields.has_field(Y, @name(c.ρe_tot))
-        (; ᶜh_tot, ᶜK) = p.precomputed
-        ᶜmse⁰_old = p.scratch.ᶜtemp_scalar
-        ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
-        @. ᶜmse⁰_old =
-            specific_env_mse(Y.c.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model)
-        @. Y.c.ρe_tot +=
-            (ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old) * ᶜmse⁰_old +
-            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs) -
-            draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsnapshot)
-    end
-
     return nothing
 end
 
@@ -415,8 +393,14 @@ function sgs_u₃_implicit_tendency!(
 
     # Use the implied tendency cached during implicit-stage initialization.
     # This keeps the analytically solved u₃ value fixed during the ODE solve.
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ = ᶠu₃_tendencyʲs.:($$j)
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (Yₜ.f.sgsʲs.:($j).u₃, ᶠu₃_tendencyʲs.:($j))
+    end
+    DataLayouts.foreach_point(drafts) do drafts
+        for (ᶠu₃ₜʲ, ᶠu₃_tendencyʲ) in drafts
+            @. ᶠu₃ₜʲ = ᶠu₃_tendencyʲ
+        end
     end
 end
 
@@ -493,16 +477,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
     ) = p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT) = (zero(FT), one(FT))
     inv_dtγ = 1 / dtγ
 
     turbconv_params = CAP.turbconv_params(params)
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     nh_pressure = p.atmos.edmfx_model.nh_pressure
     (sponge, ᶠz) =
         isnothing(rayleigh_sponge) ? ((), ()) :
@@ -529,6 +506,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             @inline
             (ᶜentr_vel_scaleʲ, ᶜarea_bounding_entr_detrʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) =
                 rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            (zero_FT, one_FT) = (zero(eltype(ᶠdz)), one(eltype(ᶠdz)))
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+            a_min = CAP.min_area(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
+            scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft
             # case). Guard against unphysical extrapolated areas (ρa is solved
             # analytically AFTER u₃, so the u₃ solve sees a possibly
@@ -597,7 +583,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         Operators.column_accumulate!(
             ᶠu₃ʲ,
             input;
-            init = C3(zero_FT),
+            init = C3(zero(eltype(params))),
         ) do u₃_prev_face, (B_face, K_face, C_face)
             return C3(
                 -B_face +
@@ -728,17 +714,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
         p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
-
     turbconv_params = CAP.turbconv_params(p.params)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence, computed in one column loop
     # per draft:
@@ -791,6 +769,15 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         ) do ᶜoffset, ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
         ᶜρ_diffʲ, rates, ᶜr_mass_column, mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
             (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            FT = eltype(ᶜρʲ)
+            (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
+            detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+            entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+            detr_massflux_vertdiv_coeff = CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
             ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
             ᶜJ = Fields.local_geometry_field(axes(ᶜρaʲ)).J
             ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
@@ -875,8 +862,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
-            init = FT(0),
+            init = zero(eltype(p.params)),
         ) do ρa_prev, (offset, factor, ρ_cell)
+            a_max = CAP.max_area(turbconv_params)
             return clamp(offset + factor * ρa_prev, zero(ρa_prev), a_max * ρ_cell)
         end
     end
@@ -955,7 +943,7 @@ is swept bottom-to-top with `Operators.column_accumulate!` as
 
 `α[1]` is zero: the bottom face of cell 1 is the surface, through which there
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
-(`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
+(`set_velocity_at_boundaries!`). The entrainment rate uses the `u₃` iterate of
 the current Picard round, which is the velocity the Newton solve's entrainment
 tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. The entrained
 value `χ⁰` and the stage-initial `χ` of every tracer other than `mse` enter

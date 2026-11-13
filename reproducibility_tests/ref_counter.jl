@@ -33,6 +33,11 @@
 
 #=
 470
+- More fused loops (the implicit-stage precomputed quantities, water advection,
+  hyperdiffusion, explicit vertical advection, the post-Newton corrections, the
+  microphysics Jacobian, surface and boundary statements) and the rearranged 1M
+  microphysics (fewer repeated evaluations, CloudMicrophysics.jl#852) change the
+  order of floating-point operations.
 - Parameter values are constant-folded during compilation (`ClimaParams.@params`),
   which changes the deep convection column (TRMM) at the level of roundoff on
   x86 CPUs; it is bitwise unchanged on ARM CPUs.

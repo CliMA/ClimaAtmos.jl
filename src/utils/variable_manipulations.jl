@@ -46,7 +46,9 @@ specific(ρχ, ρ) = ρχ / ρ
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
-    return specific(ρaχ, ρa, ρχ, ρ, sgs_weight_function(ρa / ρ, turbconv_model.a_half))
+    # The weight is evaluated only where it is used
+    return ρa < eps(typeof(ρ)) ? ρχ / ρ :
+           specific(ρaχ, ρa, ρχ, ρ, sgs_weight_function(ρa / ρ, turbconv_model.a_half))
 end
 function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
     # If ρa is exactly zero, the weight is zero, making the first term NaN (0 * … / 0).

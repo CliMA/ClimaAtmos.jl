@@ -114,7 +114,7 @@ column(f) = vec(Array(parent(f)))
         mse_sfc
     @. $(Fields.field_values(Fields.level(sfc_q_tot_buoyantʲs.:(1), 1))) =
         q_tot_sfc
-    # A nonzero surface `u₃`, as `set_velocity_at_surface!` leaves it over
+    # A nonzero surface `u₃`, as `set_velocity_at_boundaries!` leaves it over
     # sloped terrain; the predictor leaves cell 1 unadvected by it.
     @. $(Fields.level(ᶠu₃ʲ, half)) = FT(0.3) * $(Fields.level(ᶠdz, half))
 

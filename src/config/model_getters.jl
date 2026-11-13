@@ -1149,7 +1149,7 @@ function check_case_consistency(parsed_args)
 
     if !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
-            "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
+            "Prescribed flow elides `set_velocity_at_boundaries!` \
              which is needed for topography. Thus, prescribed flow must have flat surface."
         )
         @assert(

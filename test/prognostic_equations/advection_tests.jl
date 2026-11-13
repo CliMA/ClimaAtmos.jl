@@ -6,8 +6,7 @@ both the surface and model top. Over sloped terrain-following coordinates
 this is non-trivial because the horizontal wind projects onto the vertical
 contravariant component (ᶠuₕ³ ≠ 0).
 
-See src/cache/precomputed_quantities.jl for set_velocity_at_surface! and
-set_velocity_at_top!.
+See src/cache/precomputed_quantities.jl for set_velocity_at_boundaries!.
 =#
 
 using Test
@@ -409,6 +408,9 @@ end
             "implicit_diffusion" => false,
             "prognostic_tke" => false,
             "microphysics_model" => "1M",
+            # A cloud ice velocity that varies in space, which the Jacobian
+            # replaces with its running column max (a `Fixed` one is uniform).
+            "cloud_ice_terminal_velocity" => "Chen2022",
             "z_max" => 3000.0,
             "z_elem" => 15,
             "z_stretch" => false,

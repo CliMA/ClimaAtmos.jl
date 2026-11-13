@@ -83,35 +83,34 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot,
         ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
         Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
-            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
-            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            ᶜρa⁰ = @inline @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+            # The thermodynamic state is evaluated before the first store, with
+            # the SGS weight of the environment evaluated once, so that every
+            # input is loaded once.
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+            ᶜweight⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, turbconv_model.a_half)
             @inline function ᶜχ⁰(name) # the environment value of a specific tracer
                 ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(name))
                 return @inline @. lazy(
-                    specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
+                    specific_env_value(name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜweight⁰),
                 )
             end
-            @. ᶜq_liq⁰ =
-                max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
-            @. ᶜq_ice⁰ =
-                max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
+            ᶜq_liq = @. max(0, $(ᶜχ⁰(@name(q_lcl)))) + max(0, $(ᶜχ⁰(@name(q_rai))))
+            ᶜq_ice = @. max(0, $(ᶜχ⁰(@name(q_icl)))) + max(0, $(ᶜχ⁰(@name(q_sno))))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, $(ᶜχ⁰(@name(q_tot))))
+            ᶜq_tot = @. max(ᶜq_liq + ᶜq_ice, $(ᶜχ⁰(@name(q_tot))))
             ᶜh⁰ = @inline @. lazy(
-                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model) - ᶜΦ,
+                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, ᶜweight⁰) - ᶜΦ,
             )
-            @. ᶜT⁰ = max(
+            ᶜT = @. max(
                 T_min_sgs,
-                TD.air_temperature(
-                    thermo_params,
-                    TD.ph(),
-                    ᶜh⁰,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_liq⁰,
-                    ᶜq_ice⁰,
-                ),
+                TD.air_temperature(thermo_params, TD.ph(), ᶜh⁰, ᶜq_tot, ᶜq_liq, ᶜq_ice),
             )
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
+            @. ᶜq_liq⁰ = ᶜq_liq
+            @. ᶜq_ice⁰ = ᶜq_ice
+            @. ᶜq_tot_nonneg⁰ = ᶜq_tot
+            @. ᶜT⁰ = ᶜT
         end
     else
         ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -182,15 +181,37 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     ) = p.precomputed
 
     T_min_sgs = CAP.T_min_sgs(p.params)
-    # One column loop per draft: velocities and kinetic energies, then the draft
-    # thermodynamic state.
-    for j in 1:n
-        DataLayouts.foreach_column(
+    drafts = unrolled_map(StaticOneTo(n)) do j
+        @inline
+        (
             ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), ᶜTʲs.:($j),
             ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), ᶜρʲs.:($j),
             Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
-        ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-        ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+        )
+    end
+    # One fused column loop for every draft: velocities and kinetic energies,
+    # then the draft thermodynamic state.
+    DataLayouts.foreach_column(drafts) do drafts
+        for (
+                ᶜuʲ,
+                ᶠu³ʲ,
+                ᶜKʲ,
+                ᶠKᵥʲ,
+                ᶜTʲ,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+                ᶜρʲ,
+                ᶜsgsʲ,
+                ᶠu₃ʲ,
+                ᶜuₕ,
+                ᶠuₕ³,
+                ᶜΦ,
+                ᶜp,
+            ) in drafts
+
+            (ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp) =
+                register_copy((ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp))
             set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
             @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
             set_draft_thermo_column!(
@@ -220,22 +241,24 @@ adjustment. The density is diagnosed at the grid-mean pressure.
 )
     if microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
-        @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
+        # Every value is evaluated before the first store, so that none is
+        # read back.
+        ᶜq_liq = @. max(0, ᶜsgsʲ.q_lcl) + max(0, ᶜsgsʲ.q_rai)
+        ᶜq_ice = @. max(0, ᶜsgsʲ.q_icl) + max(0, ᶜsgsʲ.q_sno)
         # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-        @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-        ᶜhʲ = @inline @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-        @. ᶜTʲ = max(
+        ᶜq_tot = @. max(ᶜq_liq + ᶜq_ice, ᶜsgsʲ.q_tot)
+        ᶜT = @. max(
             T_min_sgs,
             TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜhʲ,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
+                thermo_params, TD.ph(), ᶜsgsʲ.mse - ᶜΦ, ᶜq_tot, ᶜq_liq, ᶜq_ice,
             ),
         )
+        ᶜρ = @. TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+        @. ᶜq_liqʲ = ᶜq_liq
+        @. ᶜq_iceʲ = ᶜq_ice
+        @. ᶜq_tot_nonnegʲ = ᶜq_tot
+        @. ᶜTʲ = ᶜT
+        @. ᶜρʲ = ᶜρ
     else
         @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
         ᶜsa_resultʲ = @. saturation_adjustment_tuple(
@@ -248,15 +271,9 @@ adjustment. The density is diagnosed at the grid-mean pressure.
         @. ᶜTʲ = ᶜsa_resultʲ.T
         @. ᶜq_liqʲ = ᶜsa_resultʲ.q_liq
         @. ᶜq_iceʲ = ᶜsa_resultʲ.q_ice
+        @. ᶜρʲ =
+            TD.air_density(thermo_params, ᶜTʲ, ᶜp, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
     end
-    @. ᶜρʲ = TD.air_density(
-        thermo_params,
-        ᶜTʲ,
-        ᶜp,
-        ᶜq_tot_nonnegʲ,
-        ᶜq_liqʲ,
-        ᶜq_iceʲ,
-    )
     return nothing
 end
 
@@ -318,8 +335,8 @@ entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
 entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
 [-]. It also writes the squared norm of the vertical shear of the horizontal
-wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm_column!`, the
-surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
+wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm_column!`, and
+(via `set_edmfx_surface_conditions!`) the surface TKE flux `ρtke_flux` and the
 per-updraft surface payload at level 1.
 
 The total entrainment rate is not stored: it is assembled at each tendency call
@@ -351,7 +368,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; ᶜp, ᶠu³, ᶜstrain_rate_norm) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
@@ -365,7 +381,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜturb_entrʲs,
         ᶜρ_diffʲs,
     ) = p.precomputed
-    (; ustar) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -458,22 +473,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
     end
 
-    # Surface BC payload per updraft at level 1 (capped mass flux +
-    # buoyant-air mse/q_tot values).
+    # Surface TKE flux and surface BC payload per updraft at level 1 (capped
+    # mass flux + buoyant-air mse/q_tot values).
     set_edmfx_surface_conditions!(Y, p)
-
-    ρtke_flux_values = Fields.field_values(ρtke_flux)
-    ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value
-    ustar_values = Fields.field_values(ustar)
-    sfc_local_geometry_values = Fields.field_values(
-        Fields.level(Fields.local_geometry_field(Y.f), half),
-    )
-    @. ρtke_flux_values = surface_flux_tke(
-        turbconv_params,
-        ρ_sfc_values,
-        ustar_values,
-        sfc_local_geometry_values,
-    )
 
     return nothing
 end

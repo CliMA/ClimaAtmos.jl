@@ -240,32 +240,26 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶠω¹² = p.scratch.ᶠtemp_CT12
-    ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
+    ᶠω¹²ₕ = p.scratch.ᶠtemp_CT12
+    ᶠω¹²ₕʲs = p.scratch.ᶠtemp_CT12ʲs
 
-    # The vertical curl and its copies for the drafts in one column loop.
-    if n > 0
-        DataLayouts.foreach_column(ᶠω¹², ᶠω¹²ʲs, Y.c.uₕ) do ᶠω¹², ᶠω¹²ʲs, ᶜuₕ
-            @. ᶠω¹² = ᶠcurlᵥ(ᶜuₕ)
-            ntuple(n_val) do j
-                @inline
-                ᶠω¹²ʲ = getproperty(ᶠω¹²ʲs, j)
-                @. ᶠω¹²ʲ = ᶠω¹²
-            end
+    # The curls of the grid-mean and draft vertical velocities in one face slab
+    # loop. The vertical curl of uₕ, which every
+    # vorticity shares, is added in the fused column loop below. Without the
+    # CT12(), the right-hand sides would be CT1 or CT2 vectors in 2D space.
+    DataLayouts.foreach_slab(ᶠω¹²ₕ, n > 0 ? ᶠω¹²ₕʲs : (), Y.f) do ᶠω¹²ₕ, ᶠω¹²ₕʲs, Yf
+        @. ᶠω¹²ₕ = CT12(wcurlₕ(Yf.u₃))
+        for j in 1:n_prognostic_mass_flux_subdomains(turbconv_model)
+            ᶠω¹²ₕʲ = getproperty(ᶠω¹²ₕʲs, j)
+            ᶠu₃ʲ = getproperty(Yf.sgsʲs, j).u₃
+            @. ᶠω¹²ₕʲ = CT12(wcurlₕ(ᶠu₃ʲ))
         end
-    else
-        @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
     end
-    @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
-    for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) += CT12(wcurlₕ(Y.f.sgsʲs.:($$j).u₃))
-    end
-    # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
-        @. Yₜ.c.ρq_tot += vtt_bc
+        vtt_bc isa NullBroadcasted || @. Yₜ.c.ρq_tot += vtt_bc
     end
 
     # Vertical advection of passive non-water tracers with the grid-mean flow.
@@ -273,17 +267,21 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # and ρtke are advected in `implicit_vertical_advection_tendency!`.
     tracer_names = passive_gs_tracer_names(Y)
     drafts = ntuple(
-        j -> (ᶠω¹²ʲs.:($j), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), Yₜ.f.sgsʲs.:($j).u₃),
+        j -> (
+            getproperty(ᶠω¹²ₕʲs, j), ᶜuʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j),
+            Yₜ.f.sgsʲs.:($j).u₃,
+        ),
         n_val,
     )
 
-    # The passive-tracer transports and vector-invariant momentum advection in
-    # one fused column loop: the face density is a loop temporary shared by
-    # every transport, and the vorticity is read from scratch once.
+    # The passive-tracer transports and the vector-invariant momentum advection
+    # in one fused column loop.
     DataLayouts.foreach_column(
-        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹², drafts,
+        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹²ₕ, drafts,
         something(ᶠf¹², ()),
-    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹², drafts, ᶠf¹²
+    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹²ₕ, drafts, ᶠf¹²
+        (ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹²ₕ, ᶠf¹²) =
+            register_copy((ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶠω¹²ₕ, ᶠf¹²))
         ᶜρ = Yc.ρ
         ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
 
@@ -291,22 +289,25 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             @inline
             ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
-            ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+            ᶜχ = @inline @. lazy(specific(ᶜρχ, ᶜρ))
             add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            return nothing
         end
 
+        ᶠcurlᵥuₕ = @. ᶠcurlᵥ(Yc.uₕ)
+        ᶠω¹² = @. ᶠcurlᵥuₕ + ᶠω¹²ₕ
         # In a deep atmosphere, the vorticity carries the horizontal Coriolis term.
-        ᶠω¹²_tot = ᶠf¹² === () ? ᶠω¹² : (@. lazy(ᶠf¹² + ᶠω¹²))
+        ᶠω¹²_tot = ᶠf¹² === () ? ᶠω¹² : (@inline @. lazy(ᶠf¹² + ᶠω¹²))
         ᶜu¹² = @. CT12(ᶜu)
         @. Yₜc.uₕ -= ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ)
         @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
-        MatrixFields.unrolled_foreach(drafts) do (ᶠω¹²ʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ)
-            @inline
-            ᶠω¹²ʲ_tot = ᶠf¹² === () ? ᶠω¹²ʲ : (@. lazy(ᶠf¹² + ᶠω¹²ʲ))
+        for (ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ) in drafts
+            (ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ) = register_copy((ᶠω¹²ₕʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ))
+            ᶠω¹²ʲ = @inline @. lazy(ᶠcurlᵥuₕ + ᶠω¹²ₕʲ)
+            ᶠω¹²ʲ_tot = ᶠf¹² === () ? ᶠω¹²ʲ : (@inline @. lazy(ᶠf¹² + ᶠω¹²ʲ))
             @. ᶠu₃ʲₜ -=
                 ᶠω¹²ʲ_tot × ᶠinterp(CT12(ᶜuʲ)) + ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
         end
-        return nothing
     end
 end
 
@@ -734,7 +735,8 @@ function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
         ᶜwʲ =
             MatrixFields.get_field(p.precomputed, sgs_sedimentation_velocity_name(name))
         column_max =
-            name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)
+            (name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)) &&
+            !has_uniform_terminal_velocity(p.atmos, name)
         column_max && fill_column_max!(ᶜwʲ_max, ᶜwʲ)
         return (
             MatrixFields.get_field(Y.c.sgsʲs.:(1), name),
