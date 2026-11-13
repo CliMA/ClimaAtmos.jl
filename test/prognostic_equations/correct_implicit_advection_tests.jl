@@ -125,7 +125,6 @@ end
             ᶠu³,
             ᶜχ_star,
             Y.c.ρ,
-            p,
             dtγ,
             upwinding,
         )

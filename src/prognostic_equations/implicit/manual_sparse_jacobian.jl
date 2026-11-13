@@ -2187,186 +2187,247 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
         end
     end
     (has_cond || has_subl || has_evap || has_subl_sno) || return nothing
-    thp = CAP.thermodynamics_params(p.params)
-    # TODO: Fuse the per-species scratch evaluations with the matrix block
-    # updates and fold `mp_i` / `thp` via `_fold` to reduce kernel launches and
-    # GPU parameter footprint.
-    ᶜr⁰ = p.scratch.ᶜtemp_scalar
-    ᶜrʲ = p.scratch.ᶜtemp_scalar_2
+    # The kernels take the parameters folded for the device (see `_fold`).
+    dev = ClimaComms.device(Y.c)
+    vmp_i = _fold(dev, mp_i)
+    vthp = _fold(dev, CAP.thermodynamics_params(p.params))
+
+    n_sub = is_edmf ? n_mass_flux_subdomains(p.atmos.turbconv_model) : 0
+    j_indices = StaticOneTo(n_sub)
+    # For each species, the diagonal block of its grid-mean density and the
+    # draft blocks: the diagonal blocks of its specific content in every draft
+    # and the block of the grid-mean density with respect to the draft-1
+    # content, the only grid-mean-draft coupling block of the Jacobian. The
+    # entry is `()` when the process is off, and the draft blocks are
+    # `((), ())` when the drafts do not carry the species.
+    species_blocks(active, ρχ_name, χ_name) =
+        active ?
+        (
+            matrix[ρχ_name, ρχ_name],
+            is_edmf && MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) ?
+            (
+                unrolled_map(j_indices) do j
+                    @inline
+                    χʲ_name = MatrixFields.append_internal_name(
+                        @name(c.sgsʲs.:($j)),
+                        χ_name,
+                    )
+                    matrix[χʲ_name, χʲ_name]
+                end,
+                matrix[
+                    ρχ_name,
+                    MatrixFields.append_internal_name(
+                        @name(c.sgsʲs.:(1)),
+                        χ_name,
+                    ),
+                ],
+            ) : ((), ()),
+        ) : ()
+    blocks = (
+        species_blocks(has_cond, @name(c.ρq_lcl), @name(q_lcl)),
+        species_blocks(has_subl, @name(c.ρq_icl), @name(q_icl)),
+        species_blocks(has_evap, @name(c.ρq_rai), @name(q_rai)),
+        species_blocks(has_subl_sno, @name(c.ρq_sno), @name(q_sno)),
+    )
+    rates = (
+        _implicit_mp_rate_lcl,
+        _implicit_mp_rate_icl,
+        _implicit_mp_rate_rai,
+        _implicit_mp_rate_sno,
+    )
+    zero_FT = zero(FT)
 
     # State inputs for the grid-mean Jacobian blocks. Under PrognosticEDMFX the
     # grid-mean implicit tendency cache is never populated; use environment state
     # and the environment tendency instead.
     if is_edmf
-        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜT = ᶜT⁰
+        (;
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜTʲs,
+            ᶜρʲs,
+            ᶜq_tot_nonnegʲs,
+            ᶜmp_tendency_implicitʲs,
+        ) = p.precomputed
+        ᶜmp_tend⁰ = p.precomputed.ᶜmp_tendency_implicit⁰
         eps_FT = eps(FT)
-        ᶜρ = @. lazy(
-            max(
+        tm = p.atmos.turbconv_model
+        env_thermo = (ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        # The draft index is static, so that every draft field and block name
+        # is inferred.
+        draft_states = unrolled_map(j_indices) do j
+            @inline
+            (
+                Y.c.sgsʲs.:($j),
+                ᶜρʲs.:($j),
+                ᶜTʲs.:($j),
+                ᶜq_tot_nonnegʲs.:($j),
+                ᶜmp_tendency_implicitʲs.:($j),
+            )
+        end
+
+        DataLayouts.foreach_column(
+            Y.c,
+            env_thermo,
+            ᶜmp_tend⁰,
+            draft_states,
+            blocks,
+        ) do Yc_col,
+        (ᶜT⁰_col, ᶜp_col, ᶜq_tot⁰_col, ᶜq_liq⁰_col, ᶜq_ice⁰_col),
+        ᶜmp_tend⁰_col,
+        drafts_col,
+        blocks_col
+            mp = _unwrapped(vmp_i)
+            thp = _unwrapped(vthp)
+            ᶜρ_col = Yc_col.ρ
+            ᶜsgsʲs_col = Yc_col.sgsʲs
+            ᶜρ⁰ = @. max(
                 eps_FT,
-                TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
-            ),
-        )
-        ᶜq_tot_nonneg = ᶜq_tot_nonneg⁰
-        ᶜq_lcl = ᶜspecific_env_value(@name(q_lcl), Y, p)
-        ᶜq_icl = ᶜspecific_env_value(@name(q_icl), Y, p)
-        ᶜq_rai = ᶜspecific_env_value(@name(q_rai), Y, p)
-        ᶜq_sno = ᶜspecific_env_value(@name(q_sno), Y, p)
-        ᶜmp_tend = p.precomputed.ᶜmp_tendency_implicit⁰
-    else
-        (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
-        ᶜρ = Y.c.ρ
-        ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-        ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-        ᶜmp_tend = p.precomputed.ᶜmp_tendency_implicit
+                TD.air_density(
+                    thp,
+                    ᶜT⁰_col,
+                    ᶜp_col,
+                    ᶜq_tot⁰_col,
+                    ᶜq_liq⁰_col,
+                    ᶜq_ice⁰_col,
+                ),
+            )
+            ᶜρa⁰ = @. ρa⁰(ᶜρ_col, ᶜsgsʲs_col, tm)
+            ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / ᶜρ_col, tm.a_half)
+            ᶜq_lcl⁰ = @. specific_env_value(
+                @name(q_lcl), Yc_col.ρq_lcl, ᶜρ_col, ᶜsgsʲs_col, ᶜρa⁰, ᶜw⁰,
+            )
+            ᶜq_icl⁰ = @. specific_env_value(
+                @name(q_icl), Yc_col.ρq_icl, ᶜρ_col, ᶜsgsʲs_col, ᶜρa⁰, ᶜw⁰,
+            )
+            ᶜq_rai⁰ = @. specific_env_value(
+                @name(q_rai), Yc_col.ρq_rai, ᶜρ_col, ᶜsgsʲs_col, ᶜρa⁰, ᶜw⁰,
+            )
+            ᶜq_sno⁰ = @. specific_env_value(
+                @name(q_sno), Yc_col.ρq_sno, ᶜρ_col, ᶜsgsʲs_col, ᶜρa⁰, ᶜw⁰,
+            )
+            env_state = (
+                ᶜρ⁰, ᶜT⁰_col, ᶜq_tot⁰_col, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜmp_tend⁰_col,
+            )
+            MatrixFields.unrolled_foreach(rates, blocks_col) do rate, blocks_χ
+                @inline
+                _add_implicit_mp_jacobian_column!(
+                    blocks_χ, rate, mp, thp, env_state, drafts_col, j_indices,
+                    dtγ, zero_FT, has_sgs_mf,
+                )
+            end
+        end
+        return nothing
     end
 
-    if has_cond
-        @. ᶜr⁰ =
-            -inv(
-                _implicit_mp_τ_lcl(
-                    mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
-                    ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-                ),
-            )
-        ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
-        @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-                χ = @name(c.sgsʲs.:($j).q_lcl)
-                MatrixFields.has_field(Y, χ) || continue
-                sgsʲ = Y.c.sgsʲs.:($j)
-                ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
-                @. ᶜrʲ =
-                    -inv(
-                        _implicit_mp_τ_lcl(
-                            mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                            sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                        ),
-                    )
-                ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ = matrix[χ, χ]
-                @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
-                if j == 1
-                    _add_edmf_mp_offdiag!(
-                        matrix[@name(c.ρq_lcl), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
-                        dtγ, FT, has_sgs_mf,
-                    )
-                end
-            end
-        end
-    end
-    if has_subl
-        @. ᶜr⁰ =
-            -inv(
-                _implicit_mp_τ_icl(
-                    mp_i, thp, ᶜρ, ᶜT, ᶜq_tot_nonneg,
-                    ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜmp_tend.dq_icl_dt,
-                ),
-            )
-        ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
-        @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendency_implicitʲs) =
-                p.precomputed
-            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-                χ = @name(c.sgsʲs.:($j).q_icl)
-                MatrixFields.has_field(Y, χ) || continue
-                sgsʲ = Y.c.sgsʲs.:($j)
-                ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
-                ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
-                @. ᶜrʲ =
-                    -inv(
-                        _implicit_mp_τ_icl(
-                            mp_i, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲ,
-                            sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai, sgsʲ.q_sno,
-                            ᶜtendʲ.dq_icl_dt,
-                        ),
-                    )
-                ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ = matrix[χ, χ]
-                @. ∂ᶜq_iclʲ_err_∂ᶜq_iclʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
-                if j == 1
-                    _add_edmf_mp_offdiag!(
-                        matrix[@name(c.ρq_icl), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
-                        dtγ, FT, has_sgs_mf,
-                    )
-                end
-            end
-        end
-    end
-    if has_evap
-        @. ᶜr⁰ = _implicit_mp_evap_cond_rai(
-            mp_i, ᶜmp_tend.dq_rai_dt, ᶜq_rai, thp, ᶜρ, ᶜT,
+    (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
+    ᶜmp_tend = p.precomputed.ᶜmp_tendency_implicit
+    DataLayouts.foreach_column(
+        Y.c,
+        ᶜT,
+        ᶜq_tot_nonneg,
+        ᶜmp_tend,
+        blocks,
+    ) do Yc_col, ᶜT_col, ᶜq_tot_col, ᶜmp_tend_col, blocks_col
+        mp = _unwrapped(vmp_i)
+        thp = _unwrapped(vthp)
+        ᶜρ_col = Yc_col.ρ
+        gm_state = (
+            ᶜρ_col,
+            ᶜT_col,
+            ᶜq_tot_col,
+            (@. lazy(specific(Yc_col.ρq_lcl, ᶜρ_col))),
+            (@. lazy(specific(Yc_col.ρq_icl, ᶜρ_col))),
+            (@. lazy(specific(Yc_col.ρq_rai, ᶜρ_col))),
+            (@. lazy(specific(Yc_col.ρq_sno, ᶜρ_col))),
+            ᶜmp_tend_col,
         )
-        ∂ᶜρq_rai_err_∂ᶜρq_rai = matrix[@name(c.ρq_rai), @name(c.ρq_rai)]
-        @. ∂ᶜρq_rai_err_∂ᶜρq_rai += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
-            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-                χ = @name(c.sgsʲs.:($j).q_rai)
-                MatrixFields.has_field(Y, χ) || continue
-                sgsʲ = Y.c.sgsʲs.:($j)
-                ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
-                @. ᶜrʲ = _implicit_mp_evap_cond_rai(
-                    mp_i, ᶜtendʲ.dq_rai_dt, sgsʲ.q_rai,
-                    thp, ᶜρʲ, ᶜTʲ,
-                )
-                ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ = matrix[χ, χ]
-                @. ∂ᶜq_raiʲ_err_∂ᶜq_raiʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
-                if j == 1
-                    _add_edmf_mp_offdiag!(
-                        matrix[@name(c.ρq_rai), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
-                        dtγ, FT, has_sgs_mf,
-                    )
-                end
-            end
-        end
-    end
-    if has_subl_sno
-        @. ᶜr⁰ = _implicit_mp_subl_dep_sno(
-            mp_i, ᶜmp_tend.dq_sno_dt, ᶜq_sno, thp, ᶜρ, ᶜT,
-        )
-        ∂ᶜρq_sno_err_∂ᶜρq_sno = matrix[@name(c.ρq_sno), @name(c.ρq_sno)]
-        @. ∂ᶜρq_sno_err_∂ᶜρq_sno += DiagonalMatrixRow(dtγ * ᶜr⁰)
-        if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
-            for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
-                χ = @name(c.sgsʲs.:($j).q_sno)
-                MatrixFields.has_field(Y, χ) || continue
-                sgsʲ = Y.c.sgsʲs.:($j)
-                ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
-                @. ᶜrʲ = _implicit_mp_subl_dep_sno(
-                    mp_i, ᶜtendʲ.dq_sno_dt, sgsʲ.q_sno,
-                    thp, ᶜρʲ, ᶜTʲ,
-                )
-                ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ = matrix[χ, χ]
-                @. ∂ᶜq_snoʲ_err_∂ᶜq_snoʲ += DiagonalMatrixRow(dtγ * ᶜrʲ)
-                if j == 1
-                    _add_edmf_mp_offdiag!(
-                        matrix[@name(c.ρq_sno), χ], sgsʲ.ρa, ᶜr⁰, ᶜrʲ,
-                        dtγ, FT, has_sgs_mf,
-                    )
-                end
-            end
+        MatrixFields.unrolled_foreach(rates, blocks_col) do rate, blocks_χ
+            @inline
+            _add_implicit_mp_jacobian_column!(
+                blocks_χ, rate, mp, thp, gm_state, (), j_indices, dtγ,
+                zero_FT, has_sgs_mf,
+            )
         end
     end
     return nothing
 end
 
+"""
+    _add_implicit_mp_jacobian_column!(
+        blocks, rate, mp, thp, state, drafts, j_indices, dtγ, z, has_sgs_mf,
+    )
+
+Add `dtγ` times the linearized rate `r` of one 1M species to its blocks in one
+column: `rate` evaluated at the grid-mean (or, under `PrognosticEDMFX`,
+environment) `state` on the grid-mean diagonal, and, when the drafts carry the
+species, `rate` at each draft state on that draft's diagonal and
+`ρa¹ (r¹ − r⁰)` on the grid-mean-draft-1 coupling block. `blocks` is the
+species' entry of the block tuple built in
+`update_implicit_microphysics_jacobian!`; an empty `blocks` adds nothing.
+"""
+@inline function _add_implicit_mp_jacobian_column!(
+    blocks, rate, mp, thp, state, drafts, j_indices, dtγ, z, has_sgs_mf,
+)
+    isempty(blocks) && return nothing
+    (∂ᶜρχ_diag, (∂ᶜχʲs_diag, ∂ᶜρχ_∂ᶜχ¹)) = blocks
+    (ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜtend) = state
+    if isempty(∂ᶜχʲs_diag)
+        @. ∂ᶜρχ_diag += DiagonalMatrixRow(
+            dtγ * rate(
+                mp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜtend,
+            ),
+        )
+        return nothing
+    end
+    ᶜr⁰ = @. rate(
+        mp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno, ᶜtend,
+    )
+    @. ∂ᶜρχ_diag += DiagonalMatrixRow(dtγ * ᶜr⁰)
+    MatrixFields.unrolled_foreach(j_indices) do j
+        @inline
+        (sgsʲ, ᶜρʲ, ᶜTʲ, ᶜq_totʲ, ᶜtendʲ) = drafts[j]
+        ᶜrʲ = @. rate(
+            mp, thp, ᶜρʲ, ᶜTʲ, ᶜq_totʲ, sgsʲ.q_lcl, sgsʲ.q_icl, sgsʲ.q_rai,
+            sgsʲ.q_sno, ᶜtendʲ,
+        )
+        ∂ᶜχʲ_diag = ∂ᶜχʲs_diag[j]
+        @. ∂ᶜχʲ_diag += DiagonalMatrixRow(dtγ * ᶜrʲ)
+        if j == 1
+            _add_edmf_mp_offdiag!(
+                ∂ᶜρχ_∂ᶜχ¹, sgsʲ.ρa, ᶜr⁰, ᶜrʲ, dtγ, z, has_sgs_mf,
+            )
+        end
+    end
+    return nothing
+end
+
+# The linearized rates `r` of the four 1M species, with one signature so that
+# `_add_implicit_mp_jacobian_column!` treats the species alike. `tend` is the
+# implicit microphysics tendency at the same state.
+@inline _implicit_mp_rate_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend) =
+    -inv(_implicit_mp_τ_lcl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno))
+@inline _implicit_mp_rate_icl(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend) =
+    -inv(
+        _implicit_mp_τ_icl(
+            mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend.dq_icl_dt,
+        ),
+    )
+@inline _implicit_mp_rate_rai(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend) =
+    _implicit_mp_evap_cond_rai(mp, tend.dq_rai_dt, q_rai, thp, ρ, T)
+@inline _implicit_mp_rate_sno(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, tend) =
+    _implicit_mp_subl_dep_sno(mp, tend.dq_sno_dt, q_sno, thp, ρ, T)
+
+# `has_sgs_mf` is a runtime flag, tested inside the column loop: a `Val` of it
+# would leave the type of the loop body uninferred, and the loop would be
+# dispatched dynamically.
 @inline function _add_edmf_mp_offdiag!(
-    off_block, ᶜρaʲ, ᶜr⁰, ᶜrʲ, dtγ, ::Type{FT}, has_sgs_mf::Bool,
-) where {FT}
-    z = zero(FT)
+    off_block, ᶜρaʲ, ᶜr⁰, ᶜrʲ, dtγ, z, has_sgs_mf::Bool,
+)
     if has_sgs_mf
         @. off_block += DiagonalMatrixRow(dtγ * ᶜρaʲ * (ᶜrʲ - ᶜr⁰))
     else
