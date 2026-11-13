@@ -3,7 +3,7 @@
 # (main 52dfab8de + Beres-G), with main's EDMF parameters (toml/prognostic_edmfx.toml)
 # and the Beres amplitude in toml/nogw_beres_aquaplanet.toml.
 #
-# Twin of aquaplanet_beres_c_present_v2.yml. Seed: copy the C run's day-360
+# Twin of aquaplanet_beres_c_present_v2.yml. Seed: copy the C run's one-year (day-365)
 # checkpoint into this run's output_0000/ before the first leg; detect_restart_file
 # then starts from it, so both runs share one spin-up.
 #
@@ -34,7 +34,9 @@ max_newton_iters_ode: 1
 ode_algo: "ARS222"
 dt: "120secs"
 t_end: "4015days"           # ~11 years (11 * 365)
-dt_save_state_to_disk: "30days"
+# Checkpoints fall on month boundaries, so every restart leg starts a fresh monthly
+# average exactly where the previous one ended (averages are not carried across a restart).
+dt_save_state_to_disk: "1months"
 detect_restart_file: true   # auto-resume from the latest checkpoint on resubmit
 output_dir: "/scratch/chew/aquaplanet_beres_g_present_v2"
 

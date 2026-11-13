@@ -2,8 +2,8 @@
 # (main 52dfab8de + Beres-G), with main's EDMF parameters (toml/prognostic_edmfx.toml)
 # and the Beres amplitude in toml/nogw_beres_aquaplanet.toml.
 #
-# Twin: aquaplanet_beres_g_present_v2.yml, seeded from this run's day-360
-# checkpoint so both runs share one spin-up.
+# Twin: aquaplanet_beres_g_present_v2.yml, seeded from this run's one-year
+# (day-365) checkpoint so both runs share one spin-up and the same calendar months.
 #
 # Vertical grid: the same keys as the first 11-yr runs (63 levels, dz_bottom 30 m).
 # Since #4957 the stretching rule places these levels up to ~1.3 km differently, but
@@ -32,7 +32,9 @@ max_newton_iters_ode: 1
 ode_algo: "ARS222"
 dt: "120secs"
 t_end: "4015days"           # ~11 years (11 * 365)
-dt_save_state_to_disk: "30days"
+# Checkpoints fall on month boundaries, so every restart leg starts a fresh monthly
+# average exactly where the previous one ended (averages are not carried across a restart).
+dt_save_state_to_disk: "1months"
 detect_restart_file: true   # auto-resume from the latest checkpoint on resubmit
 output_dir: "/scratch/chew/aquaplanet_beres_c_present_v2"
 
