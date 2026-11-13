@@ -196,6 +196,7 @@ scratch = (;
     ᶜtemp_scalar_3 = similar(ᶜz, FT),
     ᶜtemp_scalar_4 = similar(ᶜz, FT),
     ᶜtemp_scalar_5 = similar(ᶜz, FT),
+    ᶜtemp_scalar_6 = similar(ᶜz, FT),
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 

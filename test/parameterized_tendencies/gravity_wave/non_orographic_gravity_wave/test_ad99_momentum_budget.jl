@@ -17,21 +17,19 @@
 #
 #     Σ_k ρ_k·Δz_k·a_k  =  F_launch  =  source_ampl · Σ_n B0[n] / Σ_n |B0[n]|,
 #
-# apart from one small, known effect of how the scheme shares each layer's drag
-# between its two neighbouring cells (test 1 below). These tests use a uniform
-# grid and density falling off exponentially, where that effect is the exact
-# factor cosh(Δz/2H) ≈ 1.0026, so each budget is checked against an exact
-# target. There are four independent ways the code could break this budget, so
-# there are four tests:
+# to round-off, where the column integral is the model's own (`ρ·J/ΔA` per
+# cell, so on a deep-atmosphere grid it includes the growth of each cell's area
+# with height). Tests 1-3 run on a uniform grid, on a stretched grid, and on a
+# deep-atmosphere sphere. There are four independent ways the code could break
+# this budget, so there are four tests:
 #
 # 1. Interior deposition. When a wave breaks between two cell centres, the
-#    code converts its flux into a drag by dividing by that layer's mass
-#    (geometric-mean density times the spacing), and `postprocess_and_accumulate!` gives
-#    half of that drag to the cell below and half to the cell above. The
-#    halves do not land on cells with exactly the mass that was divided by,
-#    so a small known residual remains: for a uniform grid with density
-#    falling off as exp(-z/H) it is exactly cosh(Δz/2H). The test checks the
-#    budget closes to within that predicted factor.
+#    kernel converts its flux into a drag, and `postprocess_and_accumulate!`
+#    divides it by the mean mass of the two cells and gives half to each, so
+#    the two cells together receive exactly the layer's flux. Dividing by any
+#    other mass (the kernel's own `√(ρ_k ρ_{k+1})·Δz`, say) leaves a residual
+#    of second order on a uniform grid and of first order on a stretched or
+#    deep grid, which the round-off tolerance catches.
 #
 # 2. Escaped flux. The wind and stability are set so that no wave breaks on
 #    the way up: everything reaches the top and goes through the forced-break
@@ -93,13 +91,15 @@ const FT = Float64
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 
-# 50 uniform 1 km levels, shared by the column and the sphere so that the closed
-# form cosh(Δz/2H) is the same number in both.
+# 50 levels over 50 km: uniform 1 km levels, or, when `z_stretch` is set,
+# stretched by the two-scale rule from 100 m at the surface to 2.5 km at the top
+# (a combination the rule admits for 50 levels in 50 km).
 const Z_MAX = FT(50000)
 const Z_ELEM = 50
+const STRETCH = (; dz_bottom = FT(100), dz_top = FT(2500), z_pbl = FT(2200))
 
 # Imposed density profile, rather than one taken from a model state, so that the
-# expected second-order interior error is known exactly.
+# test does not depend on a model run.
 const H_ρ = FT(7000)
 const ρ0 = FT(1.2)
 
@@ -150,17 +150,18 @@ per_column(level_field) = copy(vec(Array(parent(level_field))))
 # Everything `non_orographic_gravity_wave_forcing` needs for `kind` (`:column`
 # or `:sphere`), with no simulation: the cache, a minimal `p`, the imposed-state
 # scratch fields, and the grid geometry as plain arrays. The sphere is
-# deliberately tiny (2 elements per panel edge) and
-# shallow-atmosphere, so the measure `column_integral_definite!` uses is the
-# plain mesh spacing.
-function build_state(kind::Symbol)
+# deliberately tiny (2 elements per panel edge). `z_stretch` selects the stretched
+# vertical grid and `deep_atmosphere` the deep-atmosphere sphere, whose cell areas
+# grow with height.
+function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
     grid = if kind == :column
         CA.ColumnGrid(
             FT;
             context = comms_ctx,
             z_elem = Z_ELEM,
             z_max = Z_MAX,
-            z_stretch = false,
+            z_stretch,
+            STRETCH...,
         )
     elseif kind == :sphere
         CA.SphereGrid(
@@ -168,9 +169,10 @@ function build_state(kind::Symbol)
             context = comms_ctx,
             z_elem = Z_ELEM,
             z_max = Z_MAX,
-            z_stretch = false,
+            z_stretch,
+            STRETCH...,
             h_elem = 2,
-            deep_atmosphere = false,
+            deep_atmosphere,
         )
     else
         error("unknown grid kind $kind")
@@ -197,6 +199,7 @@ function build_state(kind::Symbol)
         ᶜtemp_scalar_3 = similar(ᶜρ_t),    # ᶜu_p1
         ᶜtemp_scalar_4 = similar(ᶜρ_t),    # ᶜv_p1
         ᶜtemp_scalar_5 = similar(ᶜρ_t),    # ᶜbf_p1
+        ᶜtemp_scalar_6 = similar(ᶜρ_t),    # ᶜlayer_ratio
         temp_field_level = similar(gwc.damp_level), # gw_deposit_scale
     )
     p = (; non_orographic_gravity_wave = gwc, scratch)
@@ -504,24 +507,27 @@ end
 
 const COLUMN_STATE = build_state(:column)
 const SPHERE_STATE = build_state(:sphere)
+const STRETCHED_COLUMN_STATE = build_state(:column; z_stretch = true)
+const DEEP_SPHERE_STATE = build_state(:sphere; deep_atmosphere = true)
 const NLEV = COLUMN_STATE.nlev
 
-# Arithmetic/geometric mean ratio of two neighbouring cell masses, which on a
-# uniform grid with ρ ∝ exp(-z/H) is cosh(Δz/2H).
-const INTERIOR_EXPECTED = cosh(COLUMN_STATE.Δz_cell[end] / (2 * H_ρ))
+# The budget closes to round-off on every grid.
+const RTOL_CLOSURE = 1e-10
 
-# The interior tests assert deposited/launched = INTERIOR_EXPECTED to within
-# RTOL_CLOSURE. Momentum measures at slightly different ratios depending on
-# the route it took: waves broken inside the column carry the small
-# geometric-vs-arithmetic mass bias (ratio INTERIOR_EXPECTED), while flux
-# put back by `gw_deposit` uses the same mass integral the test measures
-# with, so it cancels exactly (ratio 1). Any escape therefore blends the
-# measurement toward 1, by f·(INTERIOR_EXPECTED - 1)/INTERIOR_EXPECTED for an
-# escaped fraction f. MAX_ESCAPED_FRAC caps that blend at 10% of the
-# tolerance; deriving it from RTOL_CLOSURE keeps guard and assertion in step.
-const RTOL_CLOSURE = 1e-4
-const MAX_ESCAPED_FRAC =
-    FT(0.1) * RTOL_CLOSURE * INTERIOR_EXPECTED / (INTERIOR_EXPECTED - 1)
+# Setup guard for the interior tests: the escaped-flux route must carry almost
+# none of the launched flux, so that the test measures the interior route.
+const MAX_ESCAPED_FRAC = 1e-3
+
+# The grids tests 1-3 run on. The stretched grid has uneven cell masses even
+# where the density changes slowly, and the deep sphere has cell areas that grow
+# with height; the old half-and-half split of the kernel's drag got both wrong at
+# first order.
+const INTERIOR_CASES = (
+    ("column", COLUMN_STATE, NLEV),
+    ("stretched column", STRETCHED_COLUMN_STATE, NLEV),
+    ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
+    ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
+)
 
 # ============================================================================
 # Test 1 — interior budget: nothing escapes, nothing saturates at the launch
@@ -531,8 +537,7 @@ const MAX_ESCAPED_FRAC =
 # at a critical level before the model top (no test-2 escape). The only
 # machinery left running is the interior path — the kernel putting drag on
 # half-levels, then `postprocess_and_accumulate!` moving it to full levels — whose
-# deposited/launched ratio is not exactly 1 but the known mass-mismatch
-# factor cosh(Δz/2H).
+# deposited/launched ratio must be 1 on every grid.
 #
 # Shrinking `Bw` does not shrink the launched total: the intermittency `ε`
 # renormalises by Σ|B0|, so the launch is always `Bt_0`. `Bw` only moves
@@ -545,10 +550,7 @@ const MAX_ESCAPED_FRAC =
     @test lf.asymmetry > 0.1        # setup guard: spectrum is not degenerate
     @test launch_level_saturated_flux(U_SOURCE, Bw) == 0  # test 3's effect absent
 
-    for (name, st, damp_spec) in (
-        ("column", COLUMN_STATE, NLEV),
-        ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
-    )
+    for (name, st, damp_spec) in INTERIOR_CASES
         # Setup guard: no wind above the source coincides with a bin.
         @test !any(u -> any(==(u), GW_C), winds_above_source(st))
 
@@ -556,17 +558,12 @@ const MAX_ESCAPED_FRAC =
         ratios = res.deposited_u ./ lf.F_launch
         escaped_frac = maximum(abs, res.escaped ./ lf.F_launch)
 
-        @info "Test 1 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), cosh(Δz/2H) = $(round(INTERIOR_EXPECTED; digits = 6)), escaped fraction = $(round(escaped_frac; sigdigits = 3))"
+        @info "Test 1 ($name): deposited / F_launch = $(round(ratios[1]; digits = 12)), escaped fraction = $(round(escaped_frac; sigdigits = 3))"
 
         # Setup guard: the redistribution must not be what this test measures.
         @test escaped_frac < MAX_ESCAPED_FRAC
 
-        # Asserting against the closed form is far sharper than closure to 1 %.
-        @test all(isapprox.(ratios, INTERIOR_EXPECTED; rtol = RTOL_CLOSURE))
-
-        # The physics requirement: second order in Δz/H is acceptable, first
-        # order is not.
-        @test all(isapprox.(ratios, 1; atol = 0.01))
+        @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
 
         # The meridional spectrum is exactly antisymmetric (v_source = 0, bins
         # symmetric about zero), so it must deposit no net momentum. Catches
@@ -601,7 +598,9 @@ end
     for (name, st, damp_spec) in (
         ("column, damp_level = $NLEV", COLUMN_STATE, NLEV),
         ("column, damp_level = $(NLEV - 3)", COLUMN_STATE, NLEV - 3),
+        ("stretched column, damp_level = $(NLEV - 3)", STRETCHED_COLUMN_STATE, NLEV - 3),
         ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
+        ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
     )
         res = run_case!(st; Bw, wind = :constant, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
@@ -615,7 +614,7 @@ end
 
         # The requirement: the redistribution deposits exactly the flux it was
         # handed, in every column.
-        @test all(isapprox.(ratios, 1; atol = 1e-4))
+        @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
 
         # The hand-back is one uniform acceleration over the receiving levels,
         # as `gw_deposit` documents.
@@ -640,8 +639,8 @@ end
 # ClimaParams default). At this strength the bins nearest the launch wind are
 # already over their breaking limit the moment they are launched. The scheme
 # must treat them like any other breaking wave and deposit their momentum in
-# the layer just above the launch; the budget then closes at cosh(Δz/2H)
-# exactly as in test 1.
+# the layer just above the launch; the budget then closes exactly as in
+# test 1.
 #
 # Why this deserves its own test: the kernel used to start its loop at
 # `source_level - 1`, which applies the AD99 launch-level test and throws these
@@ -664,20 +663,16 @@ end
     # launch level, or the test proves nothing.
     @test would_have_been_deleted > 0.01
 
-    for (name, st, damp_spec) in (
-        ("column", COLUMN_STATE, NLEV),
-        ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
-    )
+    for (name, st, damp_spec) in INTERIOR_CASES
         res = run_case!(st; Bw, wind = :reversing, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
 
-        @info "Test 3 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), cosh(Δz/2H) = $(round(INTERIOR_EXPECTED; digits = 6)), flux the old code would have lost = $(round(would_have_been_deleted; digits = 5)) of F_launch"
+        @info "Test 3 ($name): deposited / F_launch = $(round(ratios[1]; digits = 12)), flux the old code would have lost = $(round(would_have_been_deleted; digits = 5)) of F_launch"
 
         # Setup guard: still nothing escaping the top.
         @test maximum(abs, res.escaped ./ lf.F_launch) < MAX_ESCAPED_FRAC
 
-        @test all(isapprox.(ratios, INTERIOR_EXPECTED; rtol = RTOL_CLOSURE))
-        @test all(isapprox.(ratios, 1; atol = 0.01))
+        @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
 
         # The launch-saturated waves go into the first layer above the launch
         # level, so no drag lands below it. Moving the loop start back to
@@ -697,7 +692,8 @@ end
 # launch level), but the wind steps through the phase-speed bins exactly, so
 # every wave is absorbed through the `c_hat == 0` branch rather than the
 # sign-change test. A version of that branch that dropped the flux would give a
-# ratio far below 1; the deposit must close at the same cosh(Δz/2H) as test 1.
+# ratio far below 1; the deposit must close exactly, as in test 1. Uniform grids
+# only, because the on-bin wind is indexed on the uniform levels.
 # ============================================================================
 @testset "AD99 column momentum budget — exact critical levels (c = u)" begin
     Bw = FT(1e-4)
@@ -715,10 +711,10 @@ end
         res = run_case!(st; Bw, wind = :on_bins, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
 
-        @info "Test 4 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), cosh(Δz/2H) = $(round(INTERIOR_EXPECTED; digits = 6))"
+        @info "Test 4 ($name): deposited / F_launch = $(round(ratios[1]; digits = 12))"
 
         @test maximum(abs, res.escaped ./ lf.F_launch) < MAX_ESCAPED_FRAC
-        @test all(isapprox.(ratios, INTERIOR_EXPECTED; rtol = RTOL_CLOSURE))
+        @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
 end
