@@ -499,16 +499,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
     ) = p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT) = (zero(FT), one(FT))
     inv_dtγ = 1 / dtγ
 
     turbconv_params = CAP.turbconv_params(params)
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     nh_pressure = p.atmos.edmfx_model.nh_pressure
     (sponge, ᶠz) =
         isnothing(rayleigh_sponge) ? ((), ()) :
@@ -535,6 +528,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             @inline
             (ᶜentr_vel_scaleʲ, ᶜarea_bounding_entr_detrʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) =
                 rates
+            # Constants of the parameters, evaluated in the loop so that the kernel
+            # folds them: a scalar that the loop captures is a run-time value, and
+            # every value derived from it stays in a register through the loop.
+            (zero_FT, one_FT) = (zero(eltype(ᶠdz)), one(eltype(ᶠdz)))
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+            a_min = CAP.min_area(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
+            scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft
             # case). Guard against unphysical extrapolated areas (ρa is solved
             # analytically AFTER u₃, so the u₃ solve sees a possibly
@@ -603,7 +605,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         Operators.column_accumulate!(
             ᶠu₃ʲ,
             input;
-            init = C3(zero_FT),
+            init = C3(zero(eltype(params))),
         ) do u₃_prev_face, (B_face, K_face, C_face)
             return C3(
                 -B_face +
