@@ -913,10 +913,14 @@ function _set_covariance_cache_loop!(
         @. ᶜT′T′ =
             ᶜ∂T_∂θ^2 *
             displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², _3(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂θ∂z)
+        # The Clausius–Clapeyron slope at the mean state, evaluated once for the
+        # curvature coefficients and for each of its factors in the spread of
+        # the saturation excess.
+        ᶜγ =
+            has_curvature || has_α && !is_0m ?
+            (@. TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean)) : zero_FT
         if has_curvature
-            ᶜχ = @inline @. lazy(
-                r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT_mean, ᶜρ_mean) * ᶜ∂T_∂θ,
-            )
+            ᶜχ = @inline @. lazy(r_v_θ * ᶜγ * ᶜ∂T_∂θ)
             @. ᶜdisp_S = displacement_curvature_coefficients(
                 sqrt(2 * c_σ) * ᶜl_d,
                 ᶜχ,
@@ -947,9 +951,6 @@ function _set_covariance_cache_loop!(
             if is_0m
                 @. ᶜα = one_FT / A
             else
-                ᶜγ = @inline @. lazy(
-                    TD.∂q_vap_sat_∂T(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)),
-                )
                 ᶜsigma_S = @inline @. lazy(
                     sqrt(
                         max(
