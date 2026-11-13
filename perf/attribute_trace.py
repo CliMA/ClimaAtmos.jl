@@ -33,7 +33,7 @@ def kernel_source(name):
     m = re.search(r"_FILE_(Clima[A-Za-z]+)", name)
     if m:
         return m.group(1)
-    for key in ("rrtmgp", "RRTMGP"):
+    for key in ("rrtmgp", "RRTMGP", "rte_lw", "rte_sw"):
         if key in name:
             return "RRTMGP"
     return "other"

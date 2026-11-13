@@ -1,7 +1,8 @@
 # Temporary comparison pipeline (not for merging), on one A100 per job: perf/profile_amip_steps.jl
 # traces 20 coupling steps of the flagship AMIP benchmark in two environments that differ only in
-# ClimaAtmos, main before the column loop fusion (CLIMAATMOS_MAIN_COMMIT) and after it
-# (CLIMAATMOS_PR_COMMIT), in the AMIP environment of ClimaCoupler main (CUDA 6, GPUCompiler 2),
+# ClimaAtmos and its parameter packages: main (CLIMAATMOS_MAIN_COMMIT) and the @params branch
+# (CLIMAATMOS_PR_COMMIT, with the dy/params_macro branches of ClimaParams, Thermodynamics,
+# SurfaceFluxes, and CloudMicrophysics that its [sources] pin, in "type" mode),
 # with the ClimaCore that the coupler environment resolves and the cache, tendency, and Jacobian
 # functions marked with NVTX ranges (perf/annotate_components.py). It sums the Nsight Compute
 # counters of one coupling step and of the RRTMGP kernels in the one radiation call of the traced
@@ -19,9 +20,11 @@ env:
   CLIMACOMMS_DEVICE: "CUDA"
   CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
+  # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2 (the coupler commit
+  # that the end-to-end performance pipeline pins resolves CUDA 5.11 and GPUCompiler 1.17)
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_MAIN_COMMIT: "7eacbde078a3a0e5b84eaca15b9be3d7de816cf7"
-  CLIMAATMOS_PR_COMMIT: "d9da6bfdf119872c4c7b5b3c3838c0d8630437c7"
+  CLIMAATMOS_MAIN_COMMIT: "d622e8b33daf0ec3f62fbb0542ef28af6bec60ad"
+  CLIMAATMOS_PR_COMMIT: "89910c06f410a4dbd48f1378f2a0aa1aba6c3a19"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -30,7 +33,7 @@ env:
 timeout_in_minutes: 480
 
 steps:
-  - label: "init: ClimaAtmos of main and the column loop fusion"
+  - label: "init: ClimaAtmos of main and the @params branch"
     key: "init_trees"
     command:
       - mkdir -p $$PROFILE_DIR
@@ -73,9 +76,12 @@ steps:
       - echo "--- main (ClimaAtmos main)"
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_main")); Pkg.add("MPI")'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- pr (the column loop fusion)"
+      - echo "--- pr (the @params branch)"
       - cp -r $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_pr"))'
+      # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
+      # (which do not apply to direct dependencies of this project)
+      - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
       - diff $$PROFILE_DIR/coupler_main/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_pr/experiments/AMIP/Manifest.toml || true
@@ -123,7 +129,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), the column loop fusion: CUDA trace of 20 coupling steps"
+  - label: "flagship AMIP components (A100), the @params branch: CUDA trace of 20 coupling steps"
     key: "trace_pr"
     depends_on: "init_amip"
     command:
@@ -136,7 +142,7 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
-  - label: "flagship AMIP components (A100), the column loop fusion: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
+  - label: "flagship AMIP components (A100), the @params branch: Nsight Compute counters of one coupling step and of the RRTMGP kernels"
     key: "ncu_pr"
     depends_on: "init_amip"
     command:
