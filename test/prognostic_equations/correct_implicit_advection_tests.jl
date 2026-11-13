@@ -832,7 +832,14 @@ end
     T_up1 = Array(parent(p.precomputed.ᶜTʲs.:(1)))[1]
     T_en1 = Array(parent(p.precomputed.ᶜT⁰))[1]
     ρ_up1 = Array(parent(p.precomputed.ᶜρʲs.:(1)))[1]
-    ρ_en1 = Array(parent(p.scratch.sfc_precip_env_density))[1]
+    (; ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    ρ_en1 = max(
+        eps(FT),
+        CA.TD.air_density(
+            thp, T_en1, Array(parent(ᶜp))[1], Array(parent(ᶜq_tot_nonneg⁰))[1],
+            Array(parent(ᶜq_liq⁰))[1], Array(parent(ᶜq_ice⁰))[1],
+        ),
+    )
     ρa_up1 = Array(parent(Y.c.sgsʲs.:(1).ρa))[1]
     f_e_sgs_exact = FT(0)
     for (q_sym, ρq_sym, wʲ_sym, w_sym, e_fn) in (

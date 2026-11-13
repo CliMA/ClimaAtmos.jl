@@ -95,10 +95,7 @@ function precipitation_surface_flux_accumulator_quantities(
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
         col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
-        sfc_precip_env_density = zeros(sfc_space),
         c_lev1_uvw = Fields.Field(UVW{FT}, c_lev1_space),
-        c_lev1_uvwʲ = Fields.Field(UVW{FT}, c_lev1_space),
-        c_lev1_uvw⁰ = Fields.Field(UVW{FT}, c_lev1_space),
     )
 end
 function precipitation_surface_flux_accumulator_quantities(

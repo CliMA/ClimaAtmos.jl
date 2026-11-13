@@ -258,18 +258,16 @@ end
 Write into the surface-level field `dest` the subdomain correction to the
 bottom-face sedimentation energy flux at the Newton linearization state, summed
 over the four condensate species [W/m²]. `gm` holds the surface-level grid-mean
-inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
-`int_T`, `int_uvw`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
+inputs of `record_stage_precipitation_linearization!` (`sfc_lev`,
+`int_T`, `int_u`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
 `J_ratio (ρʲ fʲ + ρ⁰ f⁰)` with `fʲ` and `f⁰` from `updraft_precip_energy_flux`
 and `environment_precip_energy_flux`, which is the value of the column
 correction flux through the surface face. Zero for every turbulence-convection
 model other than `PrognosticEDMFX`, and for a `PrognosticEDMFX` whose updrafts
 carry no prognostic condensate species.
 
-The environment density is first stored in `p.scratch.sfc_precip_env_density`,
-and the species terms are added in separate broadcasts: a single fused
-broadcast repeats the lazy density in every term and exceeds the 4 KiB kernel
-parameter limit of some GPUs.
+The environment density and the velocities of the subdomains and the grid mean
+are temporaries of one point loop, which adds the term of every species.
 """
 @inline function _sfc_sgs_species_energy_flux(
     J_ratio,
@@ -305,7 +303,6 @@ set_sfc_sgs_precip_energy_flux!(dest, Y, p, _, gm) =
     fill!(dest, zero(eltype(p.params)))
 function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
     FT = eltype(p.params)
-    fill!(dest, zero(FT))
     sgs_species = unrolled_filter(
         ((q_name, _, _, _, _),) ->
             MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
@@ -328,82 +325,63 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
             ),
         ),
     )
-    isempty(sgs_species) && return nothing
+    isempty(sgs_species) && return fill!(dest, zero(FT))
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
-    (; sfc_lev, J_ratio, int_T, int_uvw) = gm
+    (; sfc_lev, int_T, int_u) = gm
+    sfc_J = Fields.level(Fields.local_geometry_field(Y.f).J, Fields.half)
     thp = CAP.thermodynamics_params(p.params)
-
-    int_ρʲ = sfc_lev(ᶜρʲs.:(1))
-    int_Tʲ = sfc_lev(ᶜTʲs.:(1))
-    int_uvwʲ = if hasproperty(p.scratch, :c_lev1_uvwʲ)
-        @. p.scratch.c_lev1_uvwʲ =
-            Geometry.UVWVector($(Fields.level(ᶜuʲs.:(1), 1)))
-        Fields.Field(Fields.field_values(p.scratch.c_lev1_uvwʲ), axes(dest))
-    else
-        @. lazy(Geometry.UVWVector($(sfc_lev(ᶜuʲs.:(1)))))
-    end
-    int_T⁰ = sfc_lev(ᶜT⁰)
-    int_uvw⁰ = if hasproperty(p.scratch, :c_lev1_uvw⁰)
-        @. p.scratch.c_lev1_uvw⁰ = Geometry.UVWVector($(Fields.level(ᶜu⁰, 1)))
-        Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw⁰), axes(dest))
-    else
-        @. lazy(Geometry.UVWVector($(sfc_lev(ᶜu⁰))))
-    end
-    int_ρ⁰ =
-        hasproperty(p.scratch, :sfc_precip_env_density) ?
-        p.scratch.sfc_precip_env_density :
-        Fields.Field(Fields.field_values(p.scratch.temp_field_level), axes(dest))
     eps_FT = eps(FT)
-    @. int_ρ⁰ = max(
-        eps_FT,
-        TD.air_density(
-            thp,
-            int_T⁰,
-            $(sfc_lev(ᶜp)),
-            $(sfc_lev(ᶜq_tot_nonneg⁰)),
-            $(sfc_lev(ᶜq_liq⁰)),
-            $(sfc_lev(ᶜq_ice⁰)),
-        ),
-    )
-    int_ρaʲ = sfc_lev(Y.c.sgsʲs.:(1).ρa)
-
-    MatrixFields.unrolled_foreach(
-        sgs_species,
-    ) do (q_name, wʲ_name, int_ρq, sfc_w, e_int)
-        int_qʲ = sfc_lev(MatrixFields.get_field(Y.c.sgsʲs.:(1), q_name))
-        sfc_wʲ = sfc_lev(MatrixFields.get_field(p.precomputed, wʲ_name))
-        # The 1-tuple broadcasts the function as a scalar without a heap `Ref`.
-        e_int_func = (e_int,)
-        @. dest += _sfc_sgs_species_energy_flux(
-            J_ratio,
-            int_qʲ,
-            sfc_wʲ,
-            int_ρq,
-            sfc_w,
-            int_T,
-            int_uvw,
-            int_Tʲ,
-            int_uvwʲ,
-            int_ρʲ,
-            int_T⁰,
-            int_uvw⁰,
-            int_ρ⁰,
-            int_ρaʲ,
-            e_int_func,
-            thp,
+    # The loop takes the values of the fields: a point of a field would compare
+    # its space with those of the other points in every statement.
+    int_val(x) = Fields.field_values(sfc_lev(x))
+    species_fields = unrolled_map(sgs_species) do (q_name, wʲ_name, int_ρq, sfc_w, _)
+        int_qʲ = int_val(MatrixFields.get_field(Y.c.sgsʲs.:(1), q_name))
+        sfc_wʲ = int_val(MatrixFields.get_field(p.precomputed, wʲ_name))
+        (int_qʲ, sfc_wʲ, Fields.field_values(int_ρq), Fields.field_values(sfc_w))
+    end
+    # The 1-tuples broadcast the functions as scalars without a heap `Ref`.
+    e_int_funcs = unrolled_map(species -> (last(species),), sgs_species)
+    DataLayouts.foreach_point(
+        Fields.field_values(dest), Fields.field_values(sfc_J),
+        Fields.field_values(int_T), Fields.field_values(int_u),
+        int_val(Fields.local_geometry_field(Y.c)), int_val(ᶜρʲs.:(1)),
+        int_val(ᶜTʲs.:(1)), int_val(ᶜuʲs.:(1)), int_val(Y.c.sgsʲs.:(1).ρa), int_val(ᶜT⁰),
+        int_val(ᶜu⁰), int_val(ᶜp), int_val(ᶜq_tot_nonneg⁰), int_val(ᶜq_liq⁰),
+        int_val(ᶜq_ice⁰), species_fields,
+    ) do dest, sfc_J, int_T, int_u, int_lg, int_ρʲ, int_Tʲ, int_uʲ, int_ρaʲ, int_T⁰,
+    int_u⁰, int_p, int_q_tot⁰, int_q_liq⁰, int_q_ice⁰, species_fields
+        # The velocities are converted with the local geometry of the first
+        # cell, which the surface space does not hold.
+        J_ratio = @. int_lg.J / sfc_J
+        int_uvw = @. Geometry.UVWVector(int_u, int_lg)
+        int_uvwʲ = @. Geometry.UVWVector(int_uʲ, int_lg)
+        int_uvw⁰ = @. Geometry.UVWVector(int_u⁰, int_lg)
+        int_ρ⁰ = @. max(
+            eps_FT,
+            TD.air_density(thp, int_T⁰, int_p, int_q_tot⁰, int_q_liq⁰, int_q_ice⁰),
         )
+        @. dest = zero(int_T)
+        MatrixFields.unrolled_foreach(
+            species_fields, e_int_funcs,
+        ) do (int_qʲ, sfc_wʲ, int_ρq, sfc_w), e_int_func
+            @inline
+            @. dest += _sfc_sgs_species_energy_flux(
+                J_ratio, int_qʲ, sfc_wʲ, int_ρq, sfc_w, int_T, int_uvw, int_Tʲ,
+                int_uvwʲ, int_ρʲ, int_T⁰, int_uvw⁰, int_ρ⁰, int_ρaʲ, e_int_func, thp,
+            )
+        end
     end
     return nothing
 end
 
 @inline function _precip_lin_nt(
     thp,
-    int_J,
+    int_lg,
     sfc_J,
     int_T,
     int_Φ,
-    int_uvw,
+    int_u,
     ρq_lcl_guess,
     ρq_icl_guess,
     ρq_rai_guess,
@@ -417,7 +395,8 @@ end
     sfc_wₛ_jac,
 )
     zero_FT = zero(int_T)
-    J_ratio = int_J / sfc_J
+    J_ratio = int_lg.J / sfc_J
+    int_uvw = Geometry.UVWVector(int_u, int_lg)
     w_lcl_base = -sfc_wₗ * J_ratio
     w_icl_base = -sfc_wᵢ * J_ratio
     w_rai_base = -sfc_wᵣ * J_ratio
@@ -518,11 +497,8 @@ function record_stage_precipitation_linearization!(Y, p)
     sfc_lev(x) =
         Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
 
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    int_J = sfc_lev(ᶜJ)
-    sfc_J = Fields.level(ᶠJ, Fields.half)
-    J_ratio = @. lazy(int_J / sfc_J)
+    int_lg = sfc_lev(Fields.local_geometry_field(Y.c))
+    sfc_J = Fields.level(Fields.local_geometry_field(Y.f).J, Fields.half)
 
     int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
     int_ρq_icl = sfc_lev(Y.c.ρq_icl)
@@ -530,34 +506,40 @@ function record_stage_precipitation_linearization!(Y, p)
     int_ρq_sno = sfc_lev(Y.c.ρq_sno)
     int_T = sfc_lev(ᶜT)
     int_Φ = sfc_lev(ᶜΦ)
-    @. p.scratch.c_lev1_uvw = Geometry.UVWVector($(Fields.level(ᶜu, 1)))
-    int_uvw = Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw), sfc_space)
+    int_u = sfc_lev(ᶜu)
     sfc_wₗ = sfc_lev(ᶜwₗ)
     sfc_wᵢ = sfc_lev(ᶜwᵢ)
     sfc_wᵣ = sfc_lev(ᶜwᵣ)
     sfc_wₛ = sfc_lev(ᶜwₛ)
 
-    # TODO: Replace the three 3D `fill_column_max!` scans with level-1
-    # `Operators.column_reduce!(max, ...)` (skipping explicit-stage and
-    # diagnostic calls), and reuse `sfc_precip_lin_state` in
-    # `surface_precipitation_tendency!` for `SlabOceanTemperature`.
-    fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwᵣ)
+    # The column maxima of the rain, snow, and cloud ice velocities in one
+    # column loop, stored in the first level of scratch fields.
+    # TODO: Skip them in explicit-stage and diagnostic calls, and reuse
+    # `sfc_precip_lin_state` in `surface_precipitation_tendency!` for
+    # `SlabOceanTemperature`.
     sfc_wᵣ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_3)
-    fill_column_max!(p.scratch.ᶜtemp_scalar_4, ᶜwₛ)
     sfc_wₛ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_4)
-    fill_column_max!(p.scratch.ᶜtemp_scalar_5, ᶜwᵢ)
     sfc_wᵢ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_5)
+    DataLayouts.foreach_column(
+        unrolled_map(Fields.field_values, (sfc_wᵣ_jac, sfc_wₛ_jac, sfc_wᵢ_jac)),
+        unrolled_map(Fields.field_values, (ᶜwᵣ, ᶜwₛ, ᶜwᵢ)),
+    ) do sfc_w_jacs, ᶜws
+        MatrixFields.unrolled_foreach(sfc_w_jacs, ᶜws) do sfc_w_jac, ᶜw
+            @inline
+            fill!(sfc_w_jac, reduce(max, ᶜw))
+        end
+    end
 
     # `_precip_lin_nt` computes the linearization fields from the pointwise
     # inputs so each input `Field` enters the broadcast kernel once (staying
     # within the 4 KiB CUDA kernel parameter limit).
     @. sfc_precip_lin_state = _precip_lin_nt(
         thp,
-        int_J,
+        int_lg,
         sfc_J,
         int_T,
         int_Φ,
-        int_uvw,
+        int_u,
         int_ρq_lcl,
         int_ρq_icl,
         int_ρq_rai,
@@ -571,7 +553,7 @@ function record_stage_precipitation_linearization!(Y, p)
         sfc_wₛ_jac,
     )
     gm = (;
-        sfc_lev, J_ratio, int_T, int_uvw,
+        sfc_lev, int_T, int_u,
         int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
         sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
     )
