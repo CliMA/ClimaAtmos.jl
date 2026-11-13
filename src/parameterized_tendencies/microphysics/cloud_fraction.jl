@@ -1186,7 +1186,12 @@ Expected saturation excess `E[max(0, S)] = μ_S Φ(z) + σ_S φ(z)` with
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     σ = max(FT(sigma_S), ϵ_numerics(FT))
     z = mu_S / σ
-    return max(zero(FT), mu_S * normal_cdf(z) + σ * exp(-z^2 / 2) * inv_sqrt2π)
+    # One exponential for the density of the CDF and for the second term
+    exp_z = exp(-z^2 / 2)
+    return max(
+        zero(FT),
+        mu_S * normal_cdf(z, exp_z * inv_sqrt2π) + σ * exp_z * inv_sqrt2π,
+    )
 end
 
 """
@@ -1202,7 +1207,7 @@ truncated to `[−c, c]` is stretched to keep unit variance; `1` for `c = Inf`.
     # the finite-`c` arm, where `c φ(c)` would be `Inf * 0`.
     c_finite = ifelse(isfinite(c), c, one(FT))
     φc = exp(-c_finite^2 / 2) * inv_sqrt2π
-    Z = one(FT) - 2 * normal_cdf(-c_finite)
+    Z = one(FT) - 2 * normal_cdf(-c_finite, φc)
     return ifelse(isfinite(c), sqrt(Z / (Z - 2 * c_finite * φc)), one(FT))
 end
 
@@ -1223,17 +1228,21 @@ gradients. `c = Inf` returns `truncated_gaussian_condensate(μ_S, σ_S)` exactly
 The factors that depend on `c` alone keep the parameter's type.
 """
 @inline function truncated_displacement_condensate(mu_S, sigma_S, c)
-    FT = typeof(mu_S)
+    FT, FT_c = typeof(mu_S), typeof(c)
     isfinite(c) || return truncated_gaussian_condensate(mu_S, sigma_S)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    Z = one(c) - 2 * normal_cdf(-c)
+    # One exponential at each end, for the density of its CDF and for `I₁`
+    exp_c = exp(-c^2 / 2)
+    Φ_c = normal_cdf(-c, exp_c * (one(FT_c) / sqrt(FT_c(2) * FT_c(π))))
+    Z = one(c) - 2 * Φ_c
     σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
     a = clamp(-mu_S / σ, -c, c)
     # Upper-tail differences, accurate where `a` approaches `c`. Each difference
     # takes the same expression at both ends, so it vanishes exactly where `a`
     # is clamped to `c`.
-    I₀ = normal_cdf(-a) - normal_cdf(-c)
-    I₁ = (exp(-a^2 / 2) - exp(-c^2 / 2)) * inv_sqrt2π
+    exp_a = exp(-a^2 / 2)
+    I₀ = normal_cdf(-a, exp_a * inv_sqrt2π) - Φ_c
+    I₁ = (exp_a - exp_c) * inv_sqrt2π
     return max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
 end
 
@@ -1249,11 +1258,9 @@ callers pass `c = Inf` (`equilibrium_condensate_truncation`), so a cell with
 `curv = 0`, such as the bottom and top cells, has the Gaussian expectation, the
 limit of the curvature-aware one as `curv → 0`.
 """
-@inline equilibrium_condensate(mu_S, sigma_S, lin, curv, c) = ifelse(
-    iszero(curv),
-    truncated_displacement_condensate(mu_S, sigma_S, c),
-    displacement_condensate(mu_S, sigma_S, lin, curv),
-)
+@inline equilibrium_condensate(mu_S, sigma_S, lin, curv, c) =
+    iszero(curv) ? truncated_displacement_condensate(mu_S, sigma_S, c) :
+    displacement_condensate(mu_S, sigma_S, lin, curv)
 
 """
     equilibrium_condensate_truncation(p)
@@ -1499,10 +1506,9 @@ excess the displaced profile reaches.
 @inline function displacement_condensate(mu_S, sigma_S, lin, curv)
     FT = typeof(mu_S)
     σ = max(FT(sigma_S), ϵ_numerics(FT))
-    gaussian = truncated_gaussian_condensate(mu_S, σ)
     # The Gaussian expectation is the exact result without curvature, and the
     # early return skips the two Gauss–Hermite rules there.
-    curv == zero(FT) && return gaussian
+    curv == zero(FT) && return truncated_gaussian_condensate(mu_S, σ)
     v_lin = FT(lin)^2
     v_curv = FT(curv)^2 / 2
     # `s² = u` solves `v_curv u² + v_lin u = σ²`, in the form that stays
