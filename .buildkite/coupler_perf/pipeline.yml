@@ -23,8 +23,8 @@ env:
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2 (the coupler commit
   # that the end-to-end performance pipeline pins resolves CUDA 5.11 and GPUCompiler 1.17)
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_MAIN_COMMIT: "d622e8b33daf0ec3f62fbb0542ef28af6bec60ad"
-  CLIMAATMOS_PR_COMMIT: "89910c06f410a4dbd48f1378f2a0aa1aba6c3a19"
+  CLIMAATMOS_MAIN_COMMIT: "80aea9d45b95649f2d3dd00b25a67e11dac32e5a"
+  CLIMAATMOS_PR_COMMIT: "a7a7ca259efd97680f92676016799a8be6cce4e7"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -112,9 +112,9 @@ steps:
       - nvidia-smi -L
       - |
         available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
-            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+            echo "$$available" | grep -qx $$m && metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         done
         echo "metrics: $$metrics"
         echo "--- one coupling step"
@@ -149,9 +149,9 @@ steps:
       - nvidia-smi -L
       - |
         available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
-            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+            echo "$$available" | grep -qx $$m && metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
         done
         echo "metrics: $$metrics"
         echo "--- one coupling step"
