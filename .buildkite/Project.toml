@@ -43,7 +43,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [sources]
 ClimaAtmos = {path = ".."}
 ClimaParams = {rev = "dy/params_macro", url = "https://github.com/CliMA/ClimaParams.jl"}
-CloudMicrophysics = {rev = "dy/params_macro", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
+CloudMicrophysics = {rev = "dy/microphysics_fusion", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
 PrecompileCI = {path = "PrecompileCI"}
 SurfaceFluxes = {rev = "dy/params_macro", url = "https://github.com/CliMA/SurfaceFluxes.jl"}
 Thermodynamics = {rev = "dy/params_macro", url = "https://github.com/CliMA/Thermodynamics.jl"}

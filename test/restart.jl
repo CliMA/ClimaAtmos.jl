@@ -109,7 +109,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜT′T′,
             :ᶜq′q′,
             :ᶜcorr_Tq,
-            :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
@@ -176,7 +175,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜT′T′,
             :ᶜq′q′,
             :ᶜcorr_Tq,
-            :ᶜT′q′,
             # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
             :ᶠsgsʲs_picard_snapshot,
             :ᶜsgsʲs_picard_snapshot,

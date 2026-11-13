@@ -95,10 +95,7 @@ function precipitation_surface_flux_accumulator_quantities(
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
         col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
-        sfc_precip_env_density = zeros(sfc_space),
         c_lev1_uvw = Fields.Field(UVW{FT}, c_lev1_space),
-        c_lev1_uvwʲ = Fields.Field(UVW{FT}, c_lev1_space),
-        c_lev1_uvw⁰ = Fields.Field(UVW{FT}, c_lev1_space),
     )
 end
 function precipitation_surface_flux_accumulator_quantities(
@@ -199,19 +196,18 @@ function temporary_quantities(
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
-        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
+        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²ₕ, the curl of u₃
         ᶠtemp_CT12ʲs = Fields.Field(
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
-        ), # ᶠω¹²ʲs
+        ), # ᶠω¹²ₕʲs, the curls of the draft u₃
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # ᶜΔu, vertical velocity differences
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # ᶠΔu, vertical velocity differences
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠτ_smag
         # Post-Newton implicit upwind dissipation
-        # (`add_vertical_advection_corrections!`): the operator, the system
-        # `I - dtγ 𝒟`, and the tridiagonal solver cache.
-        ᶜupwind_dissipation_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        # (`add_vertical_advection_corrections!`): the system `I - dtγ 𝒟` and
+        # the tridiagonal solver cache.
         ᶜupwind_dissipation_system = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜupwind_dissipation_solver_cache = MatrixFields.single_field_solver_cache(
             similar(Y.c, TridiagonalMatrixRow{FT}),

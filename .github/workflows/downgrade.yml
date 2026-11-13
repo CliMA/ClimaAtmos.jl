@@ -49,7 +49,7 @@ jobs:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica, ClimaParams, Thermodynamics, SurfaceFluxes, CloudMicrophysics, Aqua
           mode: 'forcedeps'
       # Temporary: remove when the parameter packages with `@params` are released.
-      - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
+      - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev) for (name, rev) in (("ClimaParams", "dy/params_macro"), ("Thermodynamics", "dy/params_macro"), ("SurfaceFluxes", "dy/params_macro"), ("CloudMicrophysics", "dy/microphysics_fusion"))])
         shell: julia --color=yes --project=. {0}
 
       - uses: julia-actions/julia-buildpkg@latest

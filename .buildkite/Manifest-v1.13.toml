@@ -2,7 +2,7 @@
 
 julia_version = "1.13.3"
 manifest_format = "2.1"
-project_hash = "4d1de0c5e38542e02d4117aa34e1365e0d988a68"
+project_hash = "4e4888d9e895dbc9333fcccc72cc80037cb20094"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -536,8 +536,8 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["Adapt", "ClimaParams", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "5603237c8984e1d9c5890e72f2faa68e2f3b091a"
-repo-rev = "dy/params_macro"
+git-tree-sha1 = "99d5cfc601dda1b8969762db942c2f047f205e92"
+repo-rev = "dy/microphysics_fusion"
 repo-url = "https://github.com/CliMA/CloudMicrophysics.jl"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.49.1"

@@ -166,7 +166,7 @@ function surface_precipitation_tendency!(
 
     f_e_sgs = Fields.Field(Fields.field_values(p.scratch.ᶠtemp_field_level), sfc_space)
     gm = (;
-        sfc_lev, J_ratio, int_T, int_uvw,
+        sfc_lev, int_T, int_u = sfc_lev(ᶜu),
         int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
         sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
     )
