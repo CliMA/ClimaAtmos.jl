@@ -74,6 +74,18 @@ velocity_mode(atmos, ::MatrixFields.FieldName{(:q_rai,)}) =
 velocity_mode(atmos, ::MatrixFields.FieldName{(:q_sno,)}) =
     atmos.terminal_velocity_snow
 
+"""
+    has_uniform_terminal_velocity(atmos, name)
+
+Whether the terminal velocity of the species `name` is the same constant at
+every point, as that of a 1-moment species with [`FixedTerminalVelocity`](@ref).
+The running column max of such a velocity is the velocity itself.
+"""
+has_uniform_terminal_velocity(atmos, name) =
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+    name in (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno)) &&
+    velocity_mode(atmos, name) isa FixedTerminalVelocity
+
 # Liquid, 1M
 """
     terminal_velocity(microphysics_model, tv_mode, var_name, cmc, cmp, ρ, q)

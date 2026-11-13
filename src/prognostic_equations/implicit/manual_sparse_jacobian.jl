@@ -1127,7 +1127,8 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     ᶜwᵣ_max = p.scratch.ᶜtemp_scalar_3
     ᶜwₛ_max = p.scratch.ᶜtemp_scalar_4
     ᶜwₙᵣ_max = p.scratch.ᶜtemp_scalar_5
-    ᶜwᵢ_max = p.scratch.ᶜtemp_scalar_6
+    uniform_wᵢ = has_uniform_terminal_velocity(p.atmos, @name(q_icl))
+    ᶜwᵢ_max = uniform_wᵢ ? p.precomputed.ᶜwᵢ : p.scratch.ᶜtemp_scalar_6
     ᶜwnᵢ_max = p.scratch.ᶜtemp_scalar_2
     if MatrixFields.has_field(Y.c, @name(ρq_rai))
         fill_column_max!(ᶜwᵣ_max, p.precomputed.ᶜwᵣ)
@@ -1138,7 +1139,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     if MatrixFields.has_field(Y.c, @name(ρn_rai))
         fill_column_max!(ᶜwₙᵣ_max, p.precomputed.ᶜwₙᵣ)
     end
-    if MatrixFields.has_field(Y.c, @name(ρq_icl))
+    if MatrixFields.has_field(Y.c, @name(ρq_icl)) && !uniform_wᵢ
         fill_column_max!(ᶜwᵢ_max, p.precomputed.ᶜwᵢ)
     end
     if MatrixFields.has_field(Y.c, @name(ρn_ice))
@@ -1743,6 +1744,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             sgs_sedimentation_velocity_name(χ_name),
         )
         ᶜwʲ_max =
+            has_uniform_terminal_velocity(p.atmos, χ_name) ? nothing :
             χ_name == @name(q_icl) ? p.scratch.ᶜtemp_scalar_6 :
             χ_name == @name(q_rai) ? p.scratch.ᶜtemp_scalar_3 :
             χ_name == @name(q_sno) ? p.scratch.ᶜtemp_scalar_4 :

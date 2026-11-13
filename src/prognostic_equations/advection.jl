@@ -735,7 +735,8 @@ function updraft_sedimentation_rate!(ᶜr, Y, p, j, dtγ)
         ᶜwʲ =
             MatrixFields.get_field(p.precomputed, sgs_sedimentation_velocity_name(name))
         column_max =
-            name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)
+            (name == @name(q_icl) || name == @name(q_rai) || name == @name(q_sno)) &&
+            !has_uniform_terminal_velocity(p.atmos, name)
         column_max && fill_column_max!(ᶜwʲ_max, ᶜwʲ)
         return (
             MatrixFields.get_field(Y.c.sgsʲs.:(1), name),
