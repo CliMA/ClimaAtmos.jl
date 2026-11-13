@@ -1,0 +1,6 @@
+# Beres convective gravity-wave source amplitude for the aquaplanet Beres runs,
+# layered on top of toml/prognostic_edmfx.toml (EDMF, sponge, precipitation).
+# Calibrated on a frozen aquaplanet state; values much above this make the
+# Beres drag dominate the AD99 background.
+[nogw_beres_scale_factor]
+value = 2.0e-6

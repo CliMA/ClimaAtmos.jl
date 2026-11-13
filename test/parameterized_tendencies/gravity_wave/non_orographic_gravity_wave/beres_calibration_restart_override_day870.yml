@@ -22,7 +22,7 @@ nogw_beres_detailed_diagnostics: true
 # 11-yr trajectory that produced the checkpoint ran with alpha = 2.0e-6; the
 # 1-day continuation steps with the current toml alpha. This barely perturbs the
 # frozen state, and the ladder rebuilds BeresSourceParams per alpha exactly.
-toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_steady_grid.toml]
+toml: [toml/prognostic_edmfx.toml, toml/nogw_beres_aquaplanet.toml, toml/nogw_steady_grid.toml]
 diagnostics:
   # Time-averaged NOGW forcing over the 1-day continuation.
   - short_name: [utendnogw, vtendnogw]
