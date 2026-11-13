@@ -1336,13 +1336,13 @@ end
 # the process; pick whichever 1M mp carries the active formation. With
 # `sgs_cloud_species_constant_timescales > 0`, the constant timescales of the
 # phases replace the relaxation times of the processes.
-cloud_species_blend_params(p) = (;
-    thermo_params = CAP.thermodynamics_params(p.params),
-    cmp = CAP.cloud_formation_1m_params(p.params),
-    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params)),
-    constant_timescales = CAP.sgs_cloud_species_constant_timescales(p.params) > 0,
-    τ_liquid = CAP.condensation_evaporation_timescale(p.params),
-    τ_ice = CAP.sublimation_deposition_timescale(p.params),
+@inline cloud_species_blend_params(params) = (;
+    thermo_params = CAP.thermodynamics_params(params),
+    cmp = CAP.cloud_formation_1m_params(params),
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(params)),
+    constant_timescales = CAP.sgs_cloud_species_constant_timescales(params) > 0,
+    τ_liquid = CAP.condensation_evaporation_timescale(params),
+    τ_ice = CAP.sublimation_deposition_timescale(params),
 )
 
 """
@@ -1653,7 +1653,7 @@ function add_blended_cloud_species_diffusionᵥ!(
     (; microphysics_model) = p.atmos
     (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜl_mix, ᶜp, ᶜsgs_moments) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    blend_params = cloud_species_blend_params(p)
+    blend_params = cloud_species_blend_params(p.params)
     cloud_names = unrolled_filter(
         ((χ_name, ρχ_name),) ->
             !isnothing(cloud_species_phase(χ_name)) &&

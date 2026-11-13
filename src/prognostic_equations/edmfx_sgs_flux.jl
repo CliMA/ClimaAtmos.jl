@@ -386,9 +386,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             # factor `f_j`. Every subdomain shares one fused column loop. Each tendency is updated in the same order as in separate
             # broadcasts, so the result does not depend on the fusion.
             apply_sgs_updraft = p.atmos.edmfx_model.vertical_diffusion
-            f_j = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
             microphysics_model = p.atmos.microphysics_model
-            ϵ_FT = eps(FT)
             nonequil_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
             thermo_params = CAP.thermodynamics_params(p.params)
             (; ᶜT⁰, ᶜTʲs, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
@@ -397,7 +395,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
             blend_fields =
                 blend isa Val{true} ?
                 (p.precomputed.ᶜl_mix, p.precomputed.ᶜp, p.precomputed.ᶜsgs_moments) : ()
-            blend_params = blend isa Val{true} ? cloud_species_blend_params(p) : nothing
             χ_pairs = edmfx_diffused_scalars(Y)
             DataLayouts.foreach_column(
                 Yₜ.c, Y.c, ᶠK_h, p.core.ᶜΦ, ᶜT⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜq_liqʲs,
@@ -449,10 +446,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
                             )
                         if blended
                             (ᶜl_mix, ᶜp, ᶜsgs_moments) = blend_fields
+                            # (the blend parameters are constants of the kernel)
                             add_cloud_species_diffusionᵥ!(
                                 ᶜρχₜ, ᶠw⁰, ᶠF_qt⁰, ᶠF_sl⁰, ᶜT⁰, ᶜq_water⁰, ᶜsgs_moments,
-                                ᶜχ⁰, phase, nothing, blend_params, ᶜl_mix, ᶜp,
-                                (@inline @. lazy(specific(Yc.ρtke, Yc.ρ))),
+                                ᶜχ⁰, phase, nothing, cloud_species_blend_params(params),
+                                ᶜl_mix, ᶜp, (@inline @. lazy(specific(Yc.ρtke, Yc.ρ))),
                             )
                         else
                             @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))
@@ -468,6 +466,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 # Updrafts: each scalar down its own gradient, with the extensive flux
                 # divergence added to the grid mean
                 apply_sgs_updraft || return nothing
+                # Constants, evaluated in the loop so that the kernel folds them (a
+                # scalar that the loop captures is a run-time value).
+                f_j = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
+                ϵ_FT = eps(eltype(ᶠK_h))
                 for j in 1:n_mass_flux_subdomains(turbconv_model)
                     ᶜsgsʲ = Yc.sgsʲs.:($j)
                     ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
