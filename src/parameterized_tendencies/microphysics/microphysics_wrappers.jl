@@ -675,11 +675,10 @@ their sum.
     # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
     # return zero without running the substepped 4x4 linear solver.
     if no_1m_condensate(q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos)
-        q_smin = ifelse(
-            T >= TD.Parameters.T_freeze(thp),
-            TD.q_vap_saturation(thp, T, ρ, TD.Liquid()),
-            TD.q_vap_saturation(thp, T, ρ, TD.Ice()),
-        )
+        q_smin =
+            T >= TD.Parameters.T_freeze(thp) ?
+            TD.q_vap_saturation(thp, T, ρ, TD.Liquid()) :
+            TD.q_vap_saturation(thp, T, ρ, TD.Ice())
         if q_tot_safe < q_smin * (one(FT) - 2 * eps(FT))
             return zero_1m_tendency(FT)
         end
