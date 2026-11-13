@@ -974,6 +974,18 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        # Updraft velocity is physically non-negative; clip the precomputed
+        # contravariant field so that KE, TKE, gravity-wave drag, the Jacobian,
+        # and advection all see only upward motion. The prognostic u₃ is left
+        # untouched — Newton may temporarily undershoot zero, and it is restored
+        # by enforce_edmf_updraft_constraints! at each stage boundary. Tendency
+        # functions that read u₃ directly apply max(0,·) inline.
+        (; ᶠu³ʲs) = p.precomputed
+        FT_local = eltype(p.params)
+        for j in 1:n
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            @. ᶠu³ʲ = CT3(max(ᶠu³ʲ.components.data.:1, zero(FT_local)))
+        end
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
