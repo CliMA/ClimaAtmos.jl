@@ -222,6 +222,10 @@ function set_precipitation_velocities!(
         ρ,
         q,
     )
+    # The sedimentation flux `ρχ w` of the environment, whose velocity is
+    # evaluated only where the environment holds the species
+    env_flux(name, ρχ, ρ, q) =
+        ρχ > 0 ? ρχ * terminal_velocity_function(name, ρ, q) : zero(ρχ)
 
     # Fuse the column loop across all 4 species and the final WVec outputs so
     # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
@@ -265,9 +269,7 @@ function set_precipitation_velocities!(
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
-            @. ᶜw =
-                ᶜρa⁰χ⁰ *
-                terminal_velocity_function(χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
+            @. ᶜw = env_flux(χ_name, ᶜρa⁰χ⁰, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
             for j in draft_indices

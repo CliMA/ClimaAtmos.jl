@@ -86,7 +86,9 @@ Dispatches on the `MatrixFields.FieldName` `var_name`, one of `@name(q_lcl)`,
 ignores the state, while the other modes call the matching CloudMicrophysics closure:
 `StokesTerminalVelocity` for cloud liquid, `Chen2022TerminalVelocity` for cloud ice
 (small ice), rain and snow (large ice), `Blk1MTerminalVelocity` for rain and snow
-(power law). Only these combinations have methods.
+(power law). Only these combinations have methods. The closures return zero where
+`q ≤ ϵ_numerics(FT)`; those of cloud liquid, cloud ice and snow are called only
+above that threshold, so that a point without the species does not evaluate them.
 
 # Arguments
 
@@ -119,7 +121,9 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q)
+) =
+    q > ϵ_numerics(typeof(q)) ? CMNe.terminal_velocity(cmc.liquid, cmc.stokes, ρ, q) :
+    zero(q)
 
 # Ice, 1M
 terminal_velocity(
@@ -139,7 +143,9 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q)
+) =
+    q > ϵ_numerics(typeof(q)) ?
+    CMNe.terminal_velocity(cmc.ice, cmc.Ch2022.small_ice, ρ, q) : zero(q)
 
 # Rain, 1M
 terminal_velocity(
@@ -199,7 +205,9 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q)
+) =
+    q > ϵ_numerics(typeof(q)) ?
+    CM1.terminal_velocity(cmp.precip.snow, cmp.terminal_velocity.snow, ρ, q) : zero(q)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
@@ -210,7 +218,9 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = CM1.terminal_velocity(cmp.precip.snow, cmc.Ch2022.large_ice, ρ, q)
+) =
+    q > ϵ_numerics(typeof(q)) ?
+    CM1.terminal_velocity(cmp.precip.snow, cmc.Ch2022.large_ice, ρ, q) : zero(q)
 
 """
     gs_terminal_velocity(
