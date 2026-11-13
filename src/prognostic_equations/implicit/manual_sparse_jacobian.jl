@@ -2084,18 +2084,15 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
             1,
         ),
     )
-    @. ∂ᶜmseʲ_lvl1 -=
-        dtγ * DiagonalMatrixRow(
-            edmfx_sfc_relaxation_rate(
-                mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
-            ),
+    DataLayouts.foreach_point(
+        ∂ᶜmseʲ_lvl1, ∂ᶜq_totʲ_lvl1, mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val,
+    ) do ∂ᶜmseʲ, ∂ᶜq_totʲ, mass_flux_source, ρaʲ, ρʲ
+        ∂sfc_rate = @. dtγ * DiagonalMatrixRow(
+            edmfx_sfc_relaxation_rate(mass_flux_source, ρaʲ, ρʲ, a_min),
         )
-    @. ∂ᶜq_totʲ_lvl1 -=
-        dtγ * DiagonalMatrixRow(
-            edmfx_sfc_relaxation_rate(
-                mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
-            ),
-        )
+        @. ∂ᶜmseʲ -= ∂sfc_rate
+        @. ∂ᶜq_totʲ -= ∂sfc_rate
+    end
     return nothing
 end
 
