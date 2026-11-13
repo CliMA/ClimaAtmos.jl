@@ -19,8 +19,8 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_BASE_COMMIT: "102b7b47794bbdbbd9accf47a4bb023bd0af9903"
-  CLIMAATMOS_NEW_COMMIT: "53732ba1316efc35dd2fbd6ba2478aa0c60e7855"
+  CLIMAATMOS_BASE_COMMIT: "cffd3e3e6cbfadad408671eef3e6ee3e023c27b7"
+  CLIMAATMOS_NEW_COMMIT: "cffd3e3e6cbfadad408671eef3e6ee3e023c27b7"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -91,66 +91,14 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
-  - label: "flagship AMIP (A100), base tree: CUDA trace of 20 coupling steps"
-    key: "t_base"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - PROFILE_OUT=$$PROFILE_DIR/t_base COUPLER_DIR=$$PROFILE_DIR/coupler_base julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id t_base
-      - tar czf t_base.tgz -C $$PROFILE_DIR t_base
-    artifact_paths: "t_base.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
   - label: "flagship AMIP (A100), new tree: CUDA trace of 20 coupling steps"
-    key: "t_integ"
+    key: "t_jac"
     depends_on: "init_amip"
     command:
       - nvidia-smi -L
-      - PROFILE_OUT=$$PROFILE_DIR/t_integ COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id t_integ
-      - tar czf t_integ.tgz -C $$PROFILE_DIR t_integ
-    artifact_paths: "t_integ.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP (A100), new tree (CA_REGCAP_ENV=102 CA_REGCAP_ENV_I=73 CA_REGCAP_UPD=85 CA_REGCAP_UPD_I=73): CUDA trace of 20 coupling steps"
-    key: "t_capC"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - CA_REGCAP_ENV=102 CA_REGCAP_ENV_I=73 CA_REGCAP_UPD=85 CA_REGCAP_UPD_I=73 PROFILE_OUT=$$PROFILE_DIR/t_capC COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id t_capC
-      - tar czf t_capC.tgz -C $$PROFILE_DIR t_capC
-    artifact_paths: "t_capC.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP (A100), new tree (CA_REGCAP_ENV=85 CA_REGCAP_ENV_I=64 CA_REGCAP_UPD=73 CA_REGCAP_UPD_I=64): CUDA trace of 20 coupling steps"
-    key: "t_capD"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - CA_REGCAP_ENV=85 CA_REGCAP_ENV_I=64 CA_REGCAP_UPD=73 CA_REGCAP_UPD_I=64 PROFILE_OUT=$$PROFILE_DIR/t_capD COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id t_capD
-      - tar czf t_capD.tgz -C $$PROFILE_DIR t_capD
-    artifact_paths: "t_capD.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP (A100), new tree (CA_REGCAP_ENV=73 CA_REGCAP_ENV_I=56 CA_REGCAP_UPD=64 CA_REGCAP_UPD_I=56): CUDA trace of 20 coupling steps"
-    key: "t_capE"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - CA_REGCAP_ENV=73 CA_REGCAP_ENV_I=56 CA_REGCAP_UPD=64 CA_REGCAP_UPD_I=56 PROFILE_OUT=$$PROFILE_DIR/t_capE COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id t_capE
-      - tar czf t_capE.tgz -C $$PROFILE_DIR t_capE
-    artifact_paths: "t_capE.tgz"
+      - PROFILE_OUT=$$PROFILE_DIR/t_jac COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id t_jac
+      - tar czf t_jac.tgz -C $$PROFILE_DIR t_jac
+    artifact_paths: "t_jac.tgz"
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
@@ -158,9 +106,9 @@ steps:
 
   - label: "flagship AMIP: device time per component"
     key: "amip_summary"
-    depends_on: ["t_base", "t_integ", "t_capC", "t_capD", "t_capE"]
+    depends_on: ["t_jac"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && (python3 attribute_trace.py t_base=t_base t_integ=t_integ || true)
+      - cd $$PROFILE_DIR && (python3 attribute_trace.py t_jac=t_jac || true)
     agents:
       slurm_cpus_per_task: 1
