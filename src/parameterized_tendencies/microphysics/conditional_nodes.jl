@@ -50,29 +50,32 @@ normal tail at `x > 0`, evaluated to 32 levels.
 end
 
 """
-    normal_tail_prob(z)
+    normal_tail_prob(z, φ = normal_pdf(z))
 
 Upper tail probability `Q(z) = 1 − Φ(z)` of the standard normal with
-relative accuracy in the tail: for `z ≥ 2` the Laplace continued fraction
+relative accuracy in the tail, from the density `φ` at `z`: for `z ≥ 2` the
+Laplace continued fraction
 `Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms
-(`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), otherwise
+(`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), which is not
+evaluated where `φ` has underflowed to zero, otherwise
 `normal_cdf(−z)`, whose absolute error of `7.5 × 10⁻⁸` is a relative error
 below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
 differences of such probabilities, which the absolute accuracy of `normal_cdf`
 alone does not resolve beyond `z ≈ 2`.
 """
-@inline function normal_tail_prob(z)
+@inline function normal_tail_prob(z, φ = normal_pdf(z))
     FT = typeof(z)
-    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    z_cf = max(z, FT(2))
-    d, _ = _mills_continued_fraction(z_cf)
-    t = z_cf + inv(z_cf + d)
-    q_cf = exp(-FT(0.5) * z_cf * z_cf) * inv_sqrt2π / t
-    return ifelse(z >= FT(2), q_cf, normal_cdf(-z))
+    z >= FT(2) || return normal_cdf(-z, φ)
+    φ > zero(FT) || return zero(FT)
+    d, _ = _mills_continued_fraction(z)
+    return φ / (z + inv(z + d))
 end
 
 """
-    _gaussian_interval_moments4(a, b, Qa = normal_tail_prob(|a|), Qb = normal_tail_prob(|b|))
+    _gaussian_interval_moments4(
+        a, b, φa = normal_pdf(a), φb = normal_pdf(b),
+        Qa = normal_tail_prob(|a|, φa), Qb = normal_tail_prob(|b|, φb),
+    )
 
 Moments `(I₀, I₁, I₂, I₃) = ∫ₐᵇ (1, x, x², x³) φ(x) dx` of the standard normal
 density over `[a, b]`, `a ≤ b`, with `I₃ = (a² + 2) φ(a) − (b² + 2) φ(b)`;
@@ -81,16 +84,14 @@ difference of the tail probabilities of the tail nearer the interval, so that
 the weight and moments of an interval far out in either tail keep their
 relative accuracy: `Qa − Qb` above zero, `Qb − Qa` below it and `1 − Qa − Qb`
 across it, from the upper tail probabilities `Qa = Q(|a|)`, `Qb = Q(|b|)`
-(`normal_tail_prob`), which `conditional_rule` evaluates once per edge.
+(`normal_tail_prob`). `conditional_rule` evaluates the densities `φa`, `φb`
+and the tail probabilities once per edge.
 """
-@inline _gaussian_interval_moments4(a, b) = _gaussian_interval_moments4(
-    a, b, normal_tail_prob(abs(a)), normal_tail_prob(abs(b)),
+@inline function _gaussian_interval_moments4(
+    a, b, φa = normal_pdf(a), φb = normal_pdf(b),
+    Qa = normal_tail_prob(abs(a), φa), Qb = normal_tail_prob(abs(b), φb),
 )
-@inline function _gaussian_interval_moments4(a, b, Qa, Qb)
     FT = typeof(a)
-    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    φa = ifelse(isfinite(a), exp(-a^2 / 2) * inv_sqrt2π, zero(FT))
-    φb = ifelse(isfinite(b), exp(-b^2 / 2) * inv_sqrt2π, zero(FT))
     aφa = ifelse(isfinite(a), a * φa, zero(FT))
     bφb = ifelse(isfinite(b), b * φb, zero(FT))
     a²φa = ifelse(isfinite(a), a * aφa, zero(FT))
@@ -108,7 +109,7 @@ across it, from the upper tail probabilities `Qa = Q(|a|)`, `Qb = Q(|b|)`
 end
 
 """
-    _truncated_normal_gauss2(a, b, Qa = normal_tail_prob(|a|), Qb = normal_tail_prob(|b|))
+    _truncated_normal_gauss2(a, b, φQ...)
 
 Two-point Gauss rule `(w, x₁, p₁, x₂, p₂)` of the standard normal truncated to
 `[a, b]`: `w = Φ(b) − Φ(a)` is the probability of the interval and the nodes
@@ -118,15 +119,12 @@ variance `v` and third central moment `c₃` of `x` on the interval. With
 `p₁ = d₂ / (d₂ − d₁)`, `p₂ = −d₁ / (d₂ − d₁)`; both nodes lie inside `[a, b]`.
 Where the variance is below the rounding level of the moment differences
 (`v ≤ 64 eps · max(m², 1)`), or the interval is empty, both nodes sit at the
-mean with `p₁ = p₂ = ½`. `Qa`, `Qb` are the edge tail probabilities of
-`_gaussian_interval_moments4`.
+mean with `p₁ = p₂ = ½`. `φQ` are the edge densities and tail probabilities
+of `_gaussian_interval_moments4`, if the caller holds them.
 """
-@inline _truncated_normal_gauss2(a, b) = _truncated_normal_gauss2(
-    a, b, normal_tail_prob(abs(a)), normal_tail_prob(abs(b)),
-)
-@inline function _truncated_normal_gauss2(a, b, Qa, Qb)
+@inline function _truncated_normal_gauss2(a, b, φQ...)
     FT = typeof(a)
-    (I₀, I₁, I₂, I₃) = _gaussian_interval_moments4(a, b, Qa, Qb)
+    (I₀, I₁, I₂, I₃) = _gaussian_interval_moments4(a, b, φQ...)
     empty = I₀ <= zero(FT)
     inv_I₀ = ifelse(empty, zero(FT), one(FT) / max(I₀, floatmin(FT)))
     m = I₁ * inv_I₀
@@ -203,20 +201,18 @@ The three values in nondecreasing order.
 end
 
 """
-    _conditional_interval_nodes(T, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min)
+    _conditional_interval_nodes(T, σ_S, β_T, a, b, φQ, cloudy, shaft, T_min)
 
-The two nodes of the rule on the interval `[lo, hi]` of the centred saturation
-excess, with the upper tail probabilities `Qlo`, `Qhi` of its standardized
-edges: the two-point Gauss rule where the interval carries actual cloud
-(`cloudy`), otherwise one node at the conditional mean with the full weight
-and a second node of zero weight. The node temperature is the regression
-`T + β_T S′` floored at `T_min`.
+The two nodes of the rule on the interval of the centred saturation excess
+with the standardized edges `a`, `b` (in units of `σ_S`) and their densities
+and upper tail probabilities `φQ = (φa, φb, Qa, Qb)`: the two-point Gauss rule
+where the interval carries actual cloud (`cloudy`), otherwise one node at the
+conditional mean with the full weight and a second node of zero weight. The
+node temperature is the regression `T + β_T S′` floored at `T_min`.
 """
-@inline function _conditional_interval_nodes(
-    T, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min,
-)
+@inline function _conditional_interval_nodes(T, σ_S, β_T, a, b, φQ, cloudy, shaft, T_min)
     FT = typeof(σ_S)
-    (w, x₁, p₁, x₂, p₂) = _truncated_normal_gauss2(lo / σ_S, hi / σ_S, Qlo, Qhi)
+    (w, x₁, p₁, x₂, p₂) = _truncated_normal_gauss2(a, b, φQ...)
     # the conditional mean is the probability-weighted node position
     m = p₁ * x₁ + p₂ * x₂
     S′₁ = σ_S * ifelse(cloudy, x₁, m)
@@ -276,26 +272,23 @@ kernel does not hold all eight in registers.
         FT(t_a),
         FT(t_e),
     )
-    (b₁, b₂, b₃) = _sort3(FT(t_a), t_e_guarded, FT(t_p))
-    bounds = (FT(-Inf), b₁, b₂, b₃, FT(Inf))
-    # the upper tail probability Q(|b|/σ_S) of each edge, shared by the two
-    # intervals it bounds (zero at the infinite ends)
-    Qs = (
-        zero(FT),
-        normal_tail_prob(abs(b₁ / σ_S)),
-        normal_tail_prob(abs(b₂ / σ_S)),
-        normal_tail_prob(abs(b₃ / σ_S)),
-        zero(FT),
+    # each edge `b` with its standardized value `z = b / σ_S`, the density φ(z)
+    # and the upper tail probability Q(|z|), shared by the two intervals the
+    # edge bounds (zero at the infinite ends)
+    edge(b) = (z = b / σ_S; φ = normal_pdf(z); (b, z, φ, normal_tail_prob(abs(z), φ)))
+    edges = (
+        (FT(-Inf), FT(-Inf) / σ_S, zero(FT), zero(FT)),
+        map(edge, _sort3(FT(t_a), t_e_guarded, FT(t_p)))...,
+        (FT(Inf), FT(Inf) / σ_S, zero(FT), zero(FT)),
     )
     nodes = SA.MVector{8, ConditionalNode{FT}}(undef)
     @inbounds for i in 1:4
-        lo = bounds[i]
-        hi = bounds[i + 1]
+        (lo, a, φa, Qa) = edges[i]
+        (_, b, φb, Qb) = edges[i + 1]
         # an interval between sorted thresholds lies entirely on one side of
         # each threshold, so its lower bound decides every flag
         (nodes[2i - 1], nodes[2i]) = _conditional_interval_nodes(
-            T, σ_S, β_T, lo, hi, Qs[i], Qs[i + 1],
-            lo >= t_a, lo >= t_p, T_min,
+            T, σ_S, β_T, a, b, (φa, φb, Qa, Qb), lo >= t_a, lo >= t_p, T_min,
         )
     end
     return ConditionalRule(SA.SVector(nodes))

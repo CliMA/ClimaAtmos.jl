@@ -1078,10 +1078,18 @@ step to diverge.
 end
 
 """
-    normal_cdf(z)
+    normal_pdf(z)
+
+The standard normal density φ(z) = exp(−z²/2) / √(2π) [-].
+"""
+@inline normal_pdf(z::FT) where {FT} = exp(-z^2 / 2) * (one(FT) / sqrt(FT(2) * FT(π)))
+
+"""
+    normal_cdf(z, φ = normal_pdf(z))
 
 Compute the standard normal CDF Φ(z) [-] with the rational approximation of
-Abramowitz & Stegun (Eq. 26.2.17).
+Abramowitz & Stegun (Eq. 26.2.17), from the density `φ` at `z`, which a caller
+that holds it passes in.
 
 Maximum absolute error ≈ 7.5 × 10⁻⁸ over the full real line.  Uses only
 `exp` and basic arithmetic — no `SpecialFunctions` dependency.
@@ -1093,8 +1101,7 @@ The approximation for z ≥ 0 is
 where `p` is a degree-5 polynomial with the A&S coefficients, and
 `Φ(z) = 1 − Φ(−z)` for z < 0.
 """
-@inline function normal_cdf(z::FT) where {FT}
-    inv_sqrt2pi = one(FT) / sqrt(FT(2) * FT(π))
+@inline function normal_cdf(z::FT, φ = normal_pdf(z)) where {FT}
     z_abs = abs(z)
     t = one(FT) / (one(FT) + FT(0.2316419) * z_abs)
     poly =
@@ -1108,6 +1115,6 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
                 )
             )
         )
-    q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
+    q = φ * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end
