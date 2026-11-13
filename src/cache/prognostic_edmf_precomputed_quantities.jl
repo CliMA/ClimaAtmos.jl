@@ -340,8 +340,8 @@ entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
 entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
 [-]. It also writes the squared norm of the vertical shear of the horizontal
-wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm_column!`, the
-surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
+wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm_column!`, and
+(via `set_edmfx_surface_conditions!`) the surface TKE flux `ρtke_flux` and the
 per-updraft surface payload at level 1.
 
 The total entrainment rate is not stored: it is assembled at each tendency call
@@ -373,7 +373,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; ᶜp, ᶠu³, ᶜstrain_rate_norm) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
@@ -387,7 +386,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜturb_entrʲs,
         ᶜρ_diffʲs,
     ) = p.precomputed
-    (; ustar) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -480,22 +478,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
     end
 
-    # Surface BC payload per updraft at level 1 (capped mass flux +
-    # buoyant-air mse/q_tot values).
+    # Surface TKE flux and surface BC payload per updraft at level 1 (capped
+    # mass flux + buoyant-air mse/q_tot values).
     set_edmfx_surface_conditions!(Y, p)
-
-    ρtke_flux_values = Fields.field_values(ρtke_flux)
-    ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value
-    ustar_values = Fields.field_values(ustar)
-    sfc_local_geometry_values = Fields.field_values(
-        Fields.level(Fields.local_geometry_field(Y.f), half),
-    )
-    @. ρtke_flux_values = surface_flux_tke(
-        turbconv_params,
-        ρ_sfc_values,
-        ustar_values,
-        sfc_local_geometry_values,
-    )
 
     return nothing
 end
