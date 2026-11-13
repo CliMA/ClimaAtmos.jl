@@ -19,8 +19,8 @@ env:
   PROFILE_DIR: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/profile"
   # ClimaCoupler main, whose AMIP environment resolves CUDA 6 and GPUCompiler 2
   COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
-  CLIMAATMOS_BASE_COMMIT: "6ea77beca1b9ab0346c4d21b5a5dc550760d6bf2"
-  CLIMAATMOS_NEW_COMMIT: "6ea77beca1b9ab0346c4d21b5a5dc550760d6bf2"
+  CLIMAATMOS_BASE_COMMIT: "43d14d65bb6b0de5b30ec8aca26d3f3f55110b3d"
+  CLIMAATMOS_NEW_COMMIT: "43d14d65bb6b0de5b30ec8aca26d3f3f55110b3d"
   AMIP_CONFIG: "config/benchmark_configs/amip_progedmf_1m_land_he16.yml"
   # Packages whose [compat] bounds are dropped from the coupler projects at init, as in
   # the end-to-end performance pipeline
@@ -74,13 +74,14 @@ steps:
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
       - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
-      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_params_macro_registers"))'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_m1_cm5"))'
       # The parameter structs take their mode from the preferences of the active project
       - 'printf "[ClimaParams]\nCLIMA_PARAMS_MODE = \"type\"\n" > $$PROFILE_DIR/coupler_base/experiments/AMIP/LocalPreferences.toml'
       - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- new"
       - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_new
       - julia --project=$$PROFILE_DIR/coupler_new/experiments/AMIP -e 'using Pkg; Pkg.develop(path = joinpath(ENV["PROFILE_DIR"], "ClimaAtmos_new"))'
+      - julia --project=$$PROFILE_DIR/coupler_new/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_m1_cm6"))'
       - julia --project=$$PROFILE_DIR/coupler_new/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
       - echo "--- Manifest differences"
       - diff $$PROFILE_DIR/coupler_base/experiments/AMIP/Manifest.toml $$PROFILE_DIR/coupler_new/experiments/AMIP/Manifest.toml || true
@@ -91,16 +92,27 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
-  - label: "flagship AMIP (A100), base tree: Nsight Compute counters of one coupling step"
-    key: "n_sweep"
+  - label: "flagship AMIP (A100), base tree: CUDA trace of 20 coupling steps"
+    key: "m1"
     depends_on: "init_amip"
     command:
       - nvidia-smi -L
-      - |
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,smsp__cycles_active.avg"
-        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/n_sweep COUPLER_DIR=$$PROFILE_DIR/coupler_base ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file n_sweep.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id n_sweep || exit 1
-        cp n_sweep.csv $$PROFILE_DIR/
-    artifact_paths: "n_sweep.csv"
+      - PROFILE_OUT=$$PROFILE_DIR/m1 COUPLER_DIR=$$PROFILE_DIR/coupler_base julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id m1
+      - tar czf m1.tgz -C $$PROFILE_DIR m1
+    artifact_paths: "m1.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), new tree: CUDA trace of 20 coupling steps"
+    key: "m1cm6"
+    depends_on: "init_amip"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/m1cm6 COUPLER_DIR=$$PROFILE_DIR/coupler_new julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_new/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_new/$$AMIP_CONFIG --job_id m1cm6
+      - tar czf m1cm6.tgz -C $$PROFILE_DIR m1cm6
+    artifact_paths: "m1cm6.tgz"
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
@@ -108,9 +120,9 @@ steps:
 
   - label: "flagship AMIP: device time per component"
     key: "amip_summary"
-    depends_on: ["n_sweep"]
+    depends_on: ["m1", "m1cm6"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && (python3 attribute_trace.py  || true)
+      - cd $$PROFILE_DIR && (python3 attribute_trace.py m1=m1 m1cm6=m1cm6 || true)
     agents:
       slurm_cpus_per_task: 1
