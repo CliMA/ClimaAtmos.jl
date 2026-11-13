@@ -51,7 +51,6 @@ The source is selected by `ogw.topo_info`:
     with `compute_ogw_drag_online`, which runs the `compute_OGW_info` preprocessing
     pipeline for Earth topography and falls back to the analytical path for the test
     topographies.
-  - `Val(:linear)`: user-defined analytical drag input, for idealized tests.
 
 Any other value is an error. Called from `orographic_gravity_wave_cache`.
 
@@ -131,12 +130,9 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             ogw.h_frac,
             ogw.α_smoothing,
         )
-    elseif ogw.topo_info == Val(:linear)
-        # For user-defined analytical tests
-        topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
     else
         error(
-            "topo_info must be Val(:gfdl_restart), Val(:raw_topo), Val(:raw_topo_online), or Val(:linear)",
+            "topo_info must be Val(:gfdl_restart), Val(:raw_topo), or Val(:raw_topo_online)",
         )
     end
     return topo_info

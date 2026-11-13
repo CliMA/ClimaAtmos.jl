@@ -1094,21 +1094,6 @@ the subgrid orographic drag tensor is obtained (see `get_topo_info`).
 abstract type OrographicGravityWave <: AbstractGravityWave end
 
 """
-    LinearOrographicGravityWave{S}(; topo_info = Val(:linear))
-
-Orographic gravity-wave drag driven by an analytical drag input, for idealized
-tests. Selected by `orographic_gravity_wave: "linear"`.
-
-# Fields
-
-  - `topo_info`: `Val(:linear)`, selecting the analytical drag input in
-    `get_topo_info`.
-"""
-Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
-    topo_info::S = Val(:linear)
-end
-
-"""
     FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd, topo_info, topography)
 
 Orographic gravity-wave drag following [garner2005](@cite), combining the drag

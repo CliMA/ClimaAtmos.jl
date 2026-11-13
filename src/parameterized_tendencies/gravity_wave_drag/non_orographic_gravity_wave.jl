@@ -321,9 +321,9 @@ Steps, in order:
     ±3e-3 m/s², the same limit the orographic scheme uses.
 
 Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
-clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5`. Described in
-[alexander1999](@cite) and [beres2004](@cite); see the *Non-orographic Gravity Waves* page
-for the derivations.
+clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5` and `temp_field_level`.
+Described in [alexander1999](@cite) and [beres2004](@cite); see the *Non-orographic
+Gravity Waves* page for the derivations.
 """
 non_orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
@@ -973,7 +973,7 @@ and the intermittency factor.
   - `ᶜρ_source`, `ᶜu_source`, `ᶜv_source`: AD99 launch-level density and winds.
   - `gw_ncval`: `Val(nc)` with `nc` the number of phase-speed bins.
   - `p`: Cache; the NOGW cache supplies the source parameters and
-    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5` are clobbered.
+    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_5` and `temp_field_level` are clobbered.
 """
 function non_orographic_gravity_wave_forcing(
     ᶜu,
@@ -1062,6 +1062,21 @@ function non_orographic_gravity_wave_forcing(
     # StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage
     # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
+
+    # Per-column rescaling for the escaped-flux redistribution.
+    gw_deposit_scale = p.scratch.temp_field_level
+    ᶜmasked_ρ = @. lazy(ifelse(ᶜlevel >= damp_level, ᶜρ, FT(0)))
+    Operators.column_integral_definite!(gw_deposit_scale, ᶜmasked_ρ)
+    Fields.field_values(gw_deposit_scale) .=
+        Fields.field_values(ρ_endlevel) .*
+        sqrt.(
+            Fields.field_values(ρ_endlevel) ./
+            Fields.field_values(ρ_endlevel_m1),
+        ) .*
+        (
+            Fields.field_values(z_endlevel) .-
+            Fields.field_values(z_endlevel_m1)
+        ) ./ Fields.field_values(gw_deposit_scale)
 
     # Collect the per-column fields each source mode needs into a broadcasted
     # tuple. Both modes share the same 7 fields in slots 1–7; slots 8–16 hold the
@@ -1189,7 +1204,7 @@ function non_orographic_gravity_wave_forcing(
         )
         postprocess_and_accumulate!(
             uforcing, vforcing, u_waveforcing, v_waveforcing,
-            damp_level, ᶜlevel, level_end,
+            damp_level, ᶜlevel, level_end, gw_deposit_scale,
         )
 
         # --- Beres convective source (when configured) ---
@@ -1206,7 +1221,7 @@ function non_orographic_gravity_wave_forcing(
             )
             postprocess_and_accumulate!(
                 uforcing, vforcing, u_waveforcing, v_waveforcing,
-                damp_level, ᶜlevel, level_end,
+                damp_level, ᶜlevel, level_end, gw_deposit_scale,
             )
         end
     end
@@ -1215,7 +1230,7 @@ end
 
 """
     postprocess_and_accumulate!(uforcing, vforcing, u_waveforcing, v_waveforcing,
-                                damp_level, ᶜlevel, level_end)
+                                damp_level, ᶜlevel, level_end, deposit_scale)
 
 Redistribute the escaped flux of one source and add its drag to the forcing fields.
 
@@ -1227,12 +1242,12 @@ The top level of the half-level drag left by the upward march holds the momentum
 escaped through the model top. The rest of the drag is moved to full levels by averaging
 adjacent half-levels, `½(X[k-1/2] + X[k+1/2])` with zero below the bottom level and at the
 top level, and the escaped flux is spread over the levels at and above `damp_level` by
-`gw_deposit`, so momentum is conserved. On a sphere `damp_level` is a field of level
-indices; single-column tests pass one level index.
+`gw_deposit`, scaled by the per-column `deposit_scale`, so momentum is conserved. On a
+sphere `damp_level` is a field of level indices; single-column tests pass one level index.
 """
 function postprocess_and_accumulate!(
     uforcing, vforcing, u_waveforcing, v_waveforcing,
-    damp_level, ᶜlevel, level_end,
+    damp_level, ᶜlevel, level_end, deposit_scale,
 )
     FT = eltype(uforcing)
     # The drag at the half level below each full level, zero below the bottom level
@@ -1243,9 +1258,10 @@ function postprocess_and_accumulate!(
     (damp_level_fields, damp_level_index) =
         damp_level isa Fields.Field ? ((damp_level,), nothing) : ((), damp_level)
     DataLayouts.foreach_column(
-        uforcing, vforcing, u_waveforcing, v_waveforcing, ᶜlevel, damp_level_fields,
+        uforcing, vforcing, u_waveforcing, v_waveforcing, ᶜlevel, deposit_scale,
+        damp_level_fields,
     ) do ᶜuforcing, ᶜvforcing, ᶜu_waveforcing, ᶜv_waveforcing, ᶜlevel,
-    damp_level_fields
+    ᶜdeposit_scale, damp_level_fields
         @inline
         ᶜdamp_level =
             isnothing(damp_level_index) ? damp_level_fields[1] : damp_level_index
@@ -1264,7 +1280,7 @@ function postprocess_and_accumulate!(
                 ),
                 ᶜdamp_level,
                 ᶜlevel,
-                level_end,
+                ᶜdeposit_scale,
             )
         end
     end
@@ -1372,7 +1388,7 @@ and the intermittency factor at compile time.
 At the bottom level the launch spectrum `B₀(c)` is evaluated once (by
 `compute_ad99_spectrum` or `compute_beres_spectrum`) and then carried upward by the column
 accumulator together with a `StaticBitVector` mask of the phase-speed bins still
-propagating. At each level at or above `source_level - 1`, every unmasked bin is tested in
+propagating. At each level at or above `source_level`, every unmasked bin is tested in
 order and removed from the mask when it fails:
 
  1. Critical level, `ĉ = c[n] - u = 0`.
@@ -1381,9 +1397,17 @@ order and removed from the mask when it fails:
  3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N`, or a sign change of `ĉ` relative to its
     launch-level value (critical-level absorption).
 
-A bin removed at or above the launch level adds its `B₀[n]` to the level's flux sum `fm`;
-at the top level every surviving bin is removed and deposited there, so the flux escaping
-the model top is available to `gw_deposit`. The drag is then
+A bin removed by test 1 or 3 adds its `B₀[n]` to the layer's flux sum `fm`; a reflected
+bin (test 2) is removed without depositing anything, which is the only way the kernel
+discards launched flux. At the top level every surviving bin is removed and deposited
+there, so the flux escaping the model top is available to `gw_deposit`.
+
+No test is applied at the launch level itself: the first one uses the level above it, so a
+bin already unstable at launch deposits into the layer between the launch level and the
+next level. This departs from [alexander1999](@cite), whose Eq. (22) instead removes such
+waves from the launch spectrum; the *Non-orographic Gravity Waves* page gives the reasons.
+
+The drag is then
 `(ρ_source/√(ρ_k·ρ_{k+1}))·fm·ε/(z_{k+1} - z_k)`, zero below the launch level, where the
 intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
 `a_cover/(ρ_source·nk)` for Beres.
@@ -1489,7 +1513,7 @@ function waveforcing_column_accumulate!(
             B0_or_NaNs, Bsum_or_NaN
         end
 
-        if level >= source_level_eff - 1
+        if level >= source_level_eff
             # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
             # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
             # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
@@ -1500,9 +1524,13 @@ function waveforcing_column_accumulate!(
             ) do (mask, fm), (n)
                 if (mask[n]) == true
                     c_hat = c[n] - u_kp1 # c0mu
-                    # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                    # The phase speed matches the wind at this level: this is the wave's
+                    # critical level, so it is absorbed in the layer below and deposits
+                    # its flux there, like the sign-change test further down (which is
+                    # skipped here because the reflection test needs `c_hat ≠ 0`).
                     if c_hat == 0.0
                         mask = Base.setindex(mask, false, n)
+                        fm = fm + B0[n]
                     else
                         c_hat0 = c[n] - u_source_eff
                         # define the criterion which determines if wave is reflected at this level (test).
@@ -1517,9 +1545,7 @@ function waveforcing_column_accumulate!(
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
                                 mask = Base.setindex(mask, false, n)
-                                if level >= source_level_eff
-                                    fm = fm + B0[n]
-                                end
+                                fm = fm + B0[n]
                             else
                                 # if wave is not reflected at this level, determine if it is
                                 # breaking at this level (Foc >= 0), or if wave speed relative to
@@ -1532,9 +1558,7 @@ function waveforcing_column_accumulate!(
                                 Foc = B0[n] / (c_hat)^3 - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
                                     mask = Base.setindex(mask, false, n)
-                                    if level >= source_level_eff
-                                        fm = fm + B0[n]
-                                    end
+                                    fm = fm + B0[n]
                                 end
                             end
                         end # (test >= 0.0)
@@ -1551,13 +1575,12 @@ function waveforcing_column_accumulate!(
             else # MODE == :beres
                 beres_a_cover / (ρ_source_eff * FT1(nk))
             end
-            if level >= source_level_eff
-                rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
-            else
-                wave_forcing = FT1(0.0)
-            end
+            rbh = sqrt(ρ_k * ρ_kp1)
+            wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
         end
+        # Below the launch level the block is skipped and `wave_forcing` passes
+        # through unchanged from the level below. It starts at the `FT(0)` from
+        # `init` at level 1, so every level below the launch level returns zero.
         return (wave_forcing, mask, Bsum, B0)
 
     end
@@ -1581,13 +1604,14 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
 end
 
 """
-    gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+    gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, deposit_scale)
 
 Add the momentum flux that escaped through the model top back into the sponge layer.
 
-Returns `wave_forcing` unchanged below `damp_level`, and `wave_forcing + wave_forcing_top/(height + 2 - damp_level)` at and above it, so the escaped flux is spread
-evenly over the damping layer and column momentum is conserved. Applied pointwise by
-`postprocess_and_accumulate!`.
+Returns `wave_forcing` unchanged below `damp_level`, and
+`wave_forcing + wave_forcing_top * deposit_scale` at and above it, so the escaped flux
+is deposited as a uniform acceleration over the damping layer and column momentum is
+conserved. Applied pointwise by `postprocess_and_accumulate!`.
 
 # Arguments
 
@@ -1595,17 +1619,21 @@ evenly over the damping layer and column momentum is conserved. Applied pointwis
   - `wave_forcing`: Drag already accumulated at this level [m/s²].
   - `damp_level`: Index of the lowest damping level [-].
   - `level`: Index of the current level [-].
-  - `height`: Index of the topmost level, i.e. the number of levels [-].
-
-# Notes
-
-There are `height + 1 - damp_level` levels at and above `damp_level`, so the divisor here
-distributes the escaped flux over one level more than the layer contains.
+  - `deposit_scale`: Per-column ratio of the mass of the top half-level (where
+    `wave_forcing_top` was diagnosed) to the integrated mass of the damping layer [-].
 """
-function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+function gw_deposit(
+    wave_forcing_top,
+    wave_forcing,
+    damp_level,
+    level,
+    deposit_scale,
+)
+    # A heavier level needs more flux for the same acceleration, so `deposit_scale`
+    # rescales `wave_forcing_top` to the acceleration that the receiving levels'
+    # combined mass can support.
     if level >= damp_level
-        wave_forcing =
-            wave_forcing + wave_forcing_top / (height + 2 - damp_level)
+        wave_forcing = wave_forcing + wave_forcing_top * deposit_scale
     end
     return wave_forcing
 end
