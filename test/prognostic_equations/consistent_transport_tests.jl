@@ -241,9 +241,19 @@ end
 
     arr(f) = Array(parent(f))
     ᶜv = @. sin(z_c / FT(700)) + FT(0.5)
-    # The grid-mean advection of every scalar is central and advanced
-    # explicitly by the Newton step, so with zero sedimentation velocities the
-    # scalar diagonals are `-I` and the `(ρe_tot, ρq_tot)` coupling is zero.
+    # With energy_humidity_upwinding != Val(:none), update_sedimentation_jacobian!
+    # initializes the scalar diagonals to the first-order upwind advection Jacobian
+    # minus I (not just -I). This gives an M-matrix diagonal block that is
+    # unconditionally convergent at any CFL, even when the residual uses van Leer.
+    # With zero sedimentation velocities, the diagonal is exactly
+    # dtγ * (-ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜv/ᶜρ))) - ᶜv.
+    @test p.atmos.numerics.energy_humidity_upwinding != Val(:none)
+    ᶜJ_upw = Fields.local_geometry_field(Y.c).J
+    ᶠJ_upw = Fields.local_geometry_field(Y.f).J
+    ᶠρ_upw = Base.materialize(@. CA.ᶠinterp(Y.c.ρ * ᶜJ_upw) / ᶠJ_upw)
+    expected_upwind1_v = Base.materialize(
+        @. dtγ * -(CA.ᶜadvdivᵥ(ᶠρ_upw * CA.ᶠupwind1(p.precomputed.ᶠu³, ᶜv / Y.c.ρ))) - ᶜv
+    )
     for (row_sym, col_sym) in (
         (:ρq_tot, :ρq_tot),
         (:ρe_tot, :ρe_tot),
@@ -254,7 +264,7 @@ end
             MatrixFields.FieldName(:c, row_sym),
             MatrixFields.FieldName(:c, col_sym),
         ]
-        @test arr(@. block * ᶜv) ≈ -arr(ᶜv)
+        @test arr(@. block * ᶜv) ≈ arr(expected_upwind1_v) rtol = 1e-13
     end
     @test maximum(
         abs,
@@ -264,8 +274,10 @@ end
         ),
     ) == 0
 
-    # Velocity blocks: each `(·, u₃)` block is the exact derivative of the
-    # central-face flux `-ᶜadvdivᵥ((ᶠρ ᶠinterp(e_tot) + ᶠinterp(p)) ᶠu³)` or
+    # Velocity blocks: each `(·, u₃)` block uses the central face value
+    # `ᶠinterp(χ)` (not upwind1) so sign reversals of `u³` cannot flip the
+    # donor and break affine consistency. The blocks are the exact derivative of
+    # `-ᶜadvdivᵥ((ᶠρ ᶠinterp(e_tot) + ᶠinterp(p)) ᶠu³)` or
     # `-ᶜadvdivᵥ(ᶠρ ᶠinterp(χ) ᶠu³)` with `e_tot`, `p`, and `χ` held fixed
     # (omitting `K(u₃)` dependence).
     CA.update_advection_jacobian!(matrix, Y, p, dtγ, CA.IgnoreDerivative())
