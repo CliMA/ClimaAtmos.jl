@@ -45,6 +45,17 @@ internal_energy_func(
     },
 ) = TD.internal_energy_ice
 
+# Probe: the register cap of a microphysics loop, from the environment variable `key`
+# (no cap when it is unset).
+regcap(key) = haskey(ENV, key) ? Val(parse(Int, ENV[key])) : Val(:auto)
+
+# Probe: `DataLayouts.foreach_point` with the register cap `regcap(key)`, behind a function
+# barrier, since the cap is only known at run time.
+capped_foreach_point(f::F, key, args::Vararg{Any, N}) where {F, N} =
+    _capped_foreach_point(f, regcap(key), args...)
+@noinline _capped_foreach_point(f::F, cap::Val, args::Vararg{Any, N}) where {F, N} =
+    DataLayouts.foreach_point(f, args...; maxregs = cap)
+
 """
     Kin(ᶜw_precip, ᶜu_air)
 
@@ -1012,7 +1023,8 @@ function update_implicit_1m_tendency!(
     nsubs_quad = mp1m.n_substeps_quad
     mode = BMT.Instantaneous()
 
-    DataLayouts.foreach_point(
+    capped_foreach_point(
+        "CA_REGCAP_UPD",
         Y.c,
         ᶜuʲs,
         ᶜmp_tendency_implicitʲs,
@@ -1098,7 +1110,8 @@ function set_environment_1m_tendency!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
-        DataLayouts.foreach_point(
+        capped_foreach_point(
+            isempty(mode_args) ? "CA_REGCAP_ENV" : "CA_REGCAP_ENV_I",
             ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜu⁰, ᶜq_tot_nonneg⁰,
             ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
             ᶜsgs_moments, ᶜα, ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac,
@@ -1259,7 +1272,8 @@ function update_updraft_microphysics_tendency_cache!(
     cmp_i = CAP.microphysics_1m_implicit_params(p.params)
     nsubs = mp1m.n_substeps
     refresh_implicit = has_implicit_1m_microphysics(p)
-    DataLayouts.foreach_point(
+    capped_foreach_point(
+        "CA_REGCAP_UPD",
         ᶜmp_tendencyʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
     ) do ᶜmp_tendencyʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
         for j in 1:n_mass_flux_subdomains(tm)
@@ -1272,7 +1286,8 @@ function update_updraft_microphysics_tendency_cache!(
             )
         end
     end
-    refresh_implicit && DataLayouts.foreach_point(
+    refresh_implicit && capped_foreach_point(
+        "CA_REGCAP_UPD_I",
         ᶜmp_tendency_implicitʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
     ) do ᶜmp_tendency_implicitʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
         for j in 1:n_mass_flux_subdomains(tm)
