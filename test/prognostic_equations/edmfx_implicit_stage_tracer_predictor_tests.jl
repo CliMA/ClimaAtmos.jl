@@ -621,6 +621,42 @@ column(f) = vec(Array(parent(f)))
             ),
         )
 
+        # When `sgs_mass_flux` is active, the microphysics Jacobian update
+        # accumulates `off` onto the main diagonal of `matrix[gs_n, sgs_n]`
+        # without overwriting the sub- and super-diagonals written by
+        # `update_sgs_massflux_jacobian!`.
+        off_expected = Dict(
+            gs_n => vec(sum(parent(matrix[gs_n, sgs_n]); dims = 4)) for
+            (gs_n, sgs_n) in (
+                (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+                (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+            )
+        )
+        for (gs_n, sgs_n) in (
+            (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+            (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+            (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+            (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+        )
+            @. matrix[gs_n, sgs_n] =
+                CA.TridiagonalMatrixRow(FT(2), FT(3), FT(5))
+        end
+        CA.update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
+        for (gs_n, sgs_n) in (
+            (@name(c.ρq_lcl), @name(c.sgsʲs.:(1).q_lcl)),
+            (@name(c.ρq_icl), @name(c.sgsʲs.:(1).q_icl)),
+            (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai)),
+            (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno)),
+        )
+            p_off = parent(matrix[gs_n, sgs_n])
+            @test all(==(FT(2)), p_off[:, :, :, 1])
+            @test vec(p_off[:, :, :, 2]) ≈ FT(3) .+ off_expected[gs_n] rtol =
+                1e-12 atol = 1e-15
+            @test all(==(FT(5)), p_off[:, :, :, 3])
+        end
+
         # Saturation-limited rain evaporation bound: heavy rain (`5 g/kg`) in
         # near-saturated air (`q_sat - q_vap ≈ 0.2 g/kg`) cannot evaporate more
         # than `(q_sat - q_vap) / Γ_liq` in a single Newton step at large `dtγ`.

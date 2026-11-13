@@ -140,7 +140,7 @@ column_config(; dt = "10secs", kwargs...) = CA.AtmosConfig(
             (Yₜ_corr.c.ρq_lcl, ᶜq_lcl),
         )
             CA.add_antidiffusive_upwind1_transport!(
-                ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, Y.c.ρ, p, dtγ, upwinding,
+                ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, Y.c.ρ, dtγ, upwinding,
             )
         end
         test_affine(Yₜ_corr, "correction")
