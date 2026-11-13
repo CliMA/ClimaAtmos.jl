@@ -313,17 +313,17 @@ function warm_start_grid_mean_tracers!(Y, p)
     zero_FT = zero(FT)
     (; ᶜh_tot, ᶜK) = p.precomputed
 
-    condensate_names = (
+    tracer_names = (
         (@name(ρq_lcl), @name(q_lcl)),
         (@name(ρq_icl), @name(q_icl)),
         (@name(ρq_rai), @name(q_rai)),
         (@name(ρq_sno), @name(q_sno)),
+        (@name(ρq_tot), @name(q_tot)),
     )
-    active_condensates = unrolled_filter(
+    active_tracers = unrolled_filter(
         ((gm_name, _),) -> MatrixFields.has_field(Y.c, gm_name),
-        condensate_names,
+        tracer_names,
     )
-    has_q_tot = MatrixFields.has_field(Y.c, @name(ρq_tot))
     has_e_tot = MatrixFields.has_field(Y.c, @name(ρe_tot))
 
     DataLayouts.foreach_column(
@@ -331,17 +331,15 @@ function warm_start_grid_mean_tracers!(Y, p)
         ᶜsnapshot,
         ᶜh_tot,
         ᶜK,
-    ) do Yc, ᶜsnapshot_col, ᶜh_tot_col, ᶜK_col
-        ᶜρ = Yc.ρ
-        ᶜsgsʲs = Yc.sgsʲs
-        ᶜρa⁰_old = @. ρa⁰(ᶜρ, ᶜsnapshot_col, turbconv_model)
-        ᶜΔρa⁰ = @. ρa⁰(ᶜρ, ᶜsgsʲs, turbconv_model) - ᶜρa⁰_old
+    ) do Yc_col, ᶜsnapshot_col, ᶜh_tot_col, ᶜK_col
+        ᶜρ_col = Yc_col.ρ
+        ᶜsgsʲs_col = Yc_col.sgsʲs
+        ᶜρa⁰_old = @. ρa⁰(ᶜρ_col, ᶜsnapshot_col, turbconv_model)
+        ᶜΔρa⁰ = @. ρa⁰(ᶜρ_col, ᶜsgsʲs_col, turbconv_model) - ᶜρa⁰_old
 
-        MatrixFields.unrolled_foreach(
-            active_condensates,
-        ) do (gm_name, sgs_name)
+        MatrixFields.unrolled_foreach(active_tracers) do (gm_name, sgs_name)
             @inline
-            ρq_χ = MatrixFields.get_field(Yc, gm_name)
+            ρq_χ = MatrixFields.get_field(Yc_col, gm_name)
             contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, sgs_name)
             ᶜq⁰_old = @. max(
                 zero_FT,
@@ -349,32 +347,13 @@ function warm_start_grid_mean_tracers!(Y, p)
                     env_value(ρq_χ, contrib, ᶜsnapshot_col),
                     ᶜρa⁰_old,
                     ρq_χ,
-                    ᶜρ,
+                    ᶜρ_col,
                     turbconv_model,
                 ),
             )
             @. ρq_χ +=
-                ᶜΔρa⁰ * ᶜq⁰_old +
-                draft_sum(contrib, ᶜsgsʲs) - draft_sum(contrib, ᶜsnapshot_col)
-        end
-
-        if has_q_tot
-            ρq_tot = Yc.ρq_tot
-            contrib_qt(sgsʲ) = sgsʲ.ρa * sgsʲ.q_tot
-            ᶜq_tot⁰_old = @. max(
-                zero_FT,
-                specific(
-                    env_value(ρq_tot, contrib_qt, ᶜsnapshot_col),
-                    ᶜρa⁰_old,
-                    ρq_tot,
-                    ᶜρ,
-                    turbconv_model,
-                ),
-            )
-            @. ρq_tot +=
-                ᶜΔρa⁰ * ᶜq_tot⁰_old +
-                draft_sum(contrib_qt, ᶜsgsʲs) -
-                draft_sum(contrib_qt, ᶜsnapshot_col)
+                ᶜΔρa⁰ * ᶜq⁰_old + draft_sum(contrib, ᶜsgsʲs_col) -
+                draft_sum(contrib, ᶜsnapshot_col)
         end
 
         # Energy warm-start. The EDMFX decomposition
@@ -386,16 +365,16 @@ function warm_start_grid_mean_tracers!(Y, p)
         #           + Σⱼ (ρaʲ_new·mseʲ_new − ρaʲ_old·mseʲ_old).
         if has_e_tot
             ᶜmse⁰_old = @. specific_env_mse(
-                ᶜρ,
+                ᶜρ_col,
                 ᶜsnapshot_col,
                 ᶜh_tot_col,
                 ᶜK_col,
                 ᶜρa⁰_old,
                 turbconv_model,
             )
-            @. Yc.ρe_tot +=
+            @. Yc_col.ρe_tot +=
                 ᶜΔρa⁰ * ᶜmse⁰_old +
-                draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsgsʲs) -
+                draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsgsʲs_col) -
                 draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, ᶜsnapshot_col)
         end
     end

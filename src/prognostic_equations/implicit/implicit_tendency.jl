@@ -566,13 +566,13 @@ function add_antidiffusive_upwind1_transport!(
         ᶠu³,
         ᶜχ,
         ᶜρ,
-    ) do ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, ᶜρ
+    ) do ᶜρχₜ_col, ᶠρ_col, ᶠu³_col, ᶜχ_col, ᶜρ_col
         _add_antidiffusive_upwind1_transport_column!(
-            ᶜρχₜ,
-            ᶠρ,
-            ᶠu³,
-            ᶜχ,
-            ᶜρ,
+            ᶜρχₜ_col,
+            ᶠρ_col,
+            ᶠu³_col,
+            ᶜχ_col,
+            ᶜρ_col,
             dtγ,
             upwinding,
         )
@@ -753,27 +753,26 @@ function add_vertical_advection_corrections!(Yₜ, Y, p, dtγ)
             ᶜA,
             ᶜρχ,
         )
+        # The `_col` suffix keeps the loop body from rebinding (and boxing)
+        # locals of the enclosing function, such as `ᶜJ`, `ᶠJ`, and `ᶠρ`.
         DataLayouts.foreach_column(
             ᶜρχₜ,
             ᶜρχ_dissipated,
             ᶜ𝒟,
             ᶠu³,
             ᶜρ,
-        ) do ᶜρχₜ, ᶜρχ_dissipated, ᶜ𝒟, ᶠu³, ᶜρ
-            @. ᶜρχₜ += ᶜ𝒟 * ᶜρχ_dissipated
-            # Names distinct from the locals `ᶜJ`, `ᶠJ`, and `ᶠρ` of the
-            # enclosing function keep the closure from rebinding (and boxing)
-            # them.
-            ᶜJ_col = Fields.local_geometry_field(axes(ᶜρ)).J
-            ᶠJ_col = Fields.local_geometry_field(axes(ᶠu³)).J
-            ᶠρ_col = @. ᶠinterp(ᶜρ * ᶜJ_col) / ᶠJ_col
-            ᶜχ = @. lazy(specific(ᶜρχ_dissipated, ᶜρ))
+        ) do ᶜρχₜ_col, ᶜρχ_dissipated_col, ᶜ𝒟_col, ᶠu³_col, ᶜρ_col
+            @. ᶜρχₜ_col += ᶜ𝒟_col * ᶜρχ_dissipated_col
+            ᶜJ_col = Fields.local_geometry_field(axes(ᶜρ_col)).J
+            ᶠJ_col = Fields.local_geometry_field(axes(ᶠu³_col)).J
+            ᶠρ_col = @. ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col
+            ᶜχ_col = @. lazy(specific(ᶜρχ_dissipated_col, ᶜρ_col))
             _add_antidiffusive_upwind1_transport_column!(
-                ᶜρχₜ,
+                ᶜρχₜ_col,
                 ᶠρ_col,
-                ᶠu³,
-                ᶜχ,
-                ᶜρ,
+                ᶠu³_col,
+                ᶜχ_col,
+                ᶜρ_col,
                 dtγ,
                 energy_humidity_upwinding,
             )
