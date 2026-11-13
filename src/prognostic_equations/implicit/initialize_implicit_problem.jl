@@ -961,7 +961,7 @@ is swept bottom-to-top with `Operators.column_accumulate!` as
 
 `α[1]` is zero: the bottom face of cell 1 is the surface, through which there
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
-(`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
+(`set_velocity_at_boundaries!`). The entrainment rate uses the `u₃` iterate of
 the current Picard round, which is the velocity the Newton solve's entrainment
 tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. The entrained
 value `χ⁰` and the stage-initial `χ` of every tracer other than `mse` enter

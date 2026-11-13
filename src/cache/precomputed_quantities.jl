@@ -549,8 +549,7 @@ velocity `ᶜuₕ`, interpolated from centers to faces with the mass-weighted
 interpolation `ᶠwinterp(ρ J, ·)` [1/s].
 
 This component is nonzero wherever the coordinate surfaces are sloped, and so
-enters the impenetrability conditions applied by `set_velocity_at_surface!` and
-`set_velocity_at_top!`.
+enters the impenetrability conditions applied by `set_velocity_at_boundaries!`.
 """
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
@@ -558,80 +557,30 @@ function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
 end
 
 """
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
 
-Modify `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
-`u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
-the `turbconv_model` is `PrognosticEDMFX`, the `Y.f.sgsʲs` are also modified so
-that each `u₃ʲ` is equal to `u₃` at the surface. Returns `nothing`.
+Modify `Y.f.u₃` so that `ᶠu³` is 0 at the surface and at the model top, in one
+point loop over both levels. Since `u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0
+gives `u₃ = -uₕ³ / g³³`. At the model top, this makes the total contravariant
+flux through the boundary vanish even where terrain-following coordinate
+surfaces are still sloped (`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is
+`PrognosticEDMFX`, the `Y.f.sgsʲs` are also modified so that each `u₃ʲ` is
+equal to `u₃` at both levels. Returns `nothing`.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_u₃ .= surface_velocity(Y.f.u₃, ᶠuₕ³)
-    if turbconv_model isa PrognosticEDMFX
-        DataLayouts.foreach_point(
-            Fields.level(Y.f.sgsʲs, half), sfc_u₃,
-        ) do sfc_sgsʲs, sfc_u₃
-            for j in 1:n_mass_flux_subdomains(turbconv_model)
-                @. sfc_sgsʲs.:($$j).u₃.components.data.:1 = sfc_u₃
-            end
-        end
+function set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
+    function boundary_values(level)
+        Yf = Fields.level(Y.f, level)
+        fields = (Yf, Fields.level(ᶠuₕ³.components.data.:1, level), g³³_field(axes(Yf)))
+        return unrolled_map(Fields.field_values, fields)
     end
-    return nothing
-end
-
-"""
-    surface_velocity(ᶠu₃, ᶠuₕ³)
-
-Return a lazy broadcast of the covariant vertical velocity component at the
-surface that makes the contravariant vertical velocity vanish there,
-`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_surface!`.
-"""
-function surface_velocity(ᶠu₃, ᶠuₕ³)
-    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(axes(sfc_u₃))
-    return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-end
-
-"""
-    top_velocity(ᶠu₃, ᶠuₕ³)
-
-Return a lazy broadcast of the covariant vertical velocity component at the model
-top that makes the contravariant vertical velocity vanish there,
-`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_top!`.
-"""
-function top_velocity(ᶠu₃, ᶠuₕ³)
-    top_level = Spaces.nlevels(axes(ᶠu₃)) - half
-    top_u₃ = Fields.level(ᶠu₃.components.data.:1, top_level)
-    top_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, top_level)
-    top_g³³ = g³³_field(axes(top_u₃))
-    return @. lazy(-top_uₕ³ / top_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-end
-
-"""
-    set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
-
-Modify `Y.f.u₃` so that `ᶠu³` is 0 at the model top. As at the surface,
-since `u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. This
-makes the total contravariant flux through the top boundary vanish even where
-terrain-following coordinate surfaces are still sloped at the model top
-(`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is `PrognosticEDMFX`, the
-`Y.f.sgsʲs` are also modified so that each `u₃ʲ` is equal to `u₃` at the model
-top. Returns `nothing`.
-"""
-function set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
-    top_u₃ = Fields.level(
-        Y.f.u₃.components.data.:1,
-        Spaces.nlevels(axes(Y.c)) + half,
-    )
-    top_u₃ .= top_velocity(Y.f.u₃, ᶠuₕ³)
-    if turbconv_model isa PrognosticEDMFX
-        DataLayouts.foreach_point(
-            Fields.level(Y.f.sgsʲs, Spaces.nlevels(axes(Y.c)) + half), top_u₃,
-        ) do top_sgsʲs, top_u₃
-            for j in 1:n_mass_flux_subdomains(turbconv_model)
-                @. top_sgsʲs.:($$j).u₃.components.data.:1 = top_u₃
+    boundaries = (boundary_values(half), boundary_values(Spaces.nlevels(axes(Y.c)) + half))
+    DataLayouts.foreach_point(boundaries) do boundaries
+        MatrixFields.unrolled_foreach(boundaries) do (Yf, uₕ³, g³³)
+            @inline
+            u₃ = @. -uₕ³ / g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+            @. Yf.u₃.components.data.:1 = u₃
+            for j in 1:n_prognostic_mass_flux_subdomains(turbconv_model)
+                @. Yf.sgsʲs.:($$j).u₃.components.data.:1 = u₃
             end
         end
     end
@@ -842,8 +791,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
 
     # TODO: We might want to move this to constrain_state!
     if !(p.atmos.prescribed_flow isa PrescribedFlow)
-        set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-        set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
+        set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
     end
 
     ᶜJ = Fields.local_geometry_field(Y.c).J

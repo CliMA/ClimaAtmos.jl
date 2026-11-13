@@ -6,8 +6,7 @@ both the surface and model top. Over sloped terrain-following coordinates
 this is non-trivial because the horizontal wind projects onto the vertical
 contravariant component (ᶠuₕ³ ≠ 0).
 
-See src/cache/precomputed_quantities.jl for set_velocity_at_surface! and
-set_velocity_at_top!.
+See src/cache/precomputed_quantities.jl for set_velocity_at_boundaries!.
 =#
 
 using Test
