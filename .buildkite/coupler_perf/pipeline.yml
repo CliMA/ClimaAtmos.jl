@@ -74,7 +74,7 @@ steps:
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
       - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])'
-      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_m1_cm6"))'
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "dy/tmp_m1_cm9"))'
       # The parameter structs take their mode from the preferences of the active project
       - 'printf "[ClimaParams]\nCLIMA_PARAMS_MODE = \"type\"\n" > $$PROFILE_DIR/coupler_base/experiments/AMIP/LocalPreferences.toml'
       - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
@@ -92,28 +92,13 @@ steps:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
   - label: "flagship AMIP (A100), base tree: CUDA trace of 20 coupling steps"
-    key: "i2"
+    key: "i2cm9"
     depends_on: "init_amip"
     command:
       - nvidia-smi -L
-      - PROFILE_OUT=$$PROFILE_DIR/i2 COUPLER_DIR=$$PROFILE_DIR/coupler_base julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id i2
-      - tar czf i2.tgz -C $$PROFILE_DIR i2
-    artifact_paths: "i2.tgz"
-    agents:
-      slurm_gpus: 1
-      slurm_cpus_per_task: 8
-      slurm_mem: 64GB
-
-  - label: "flagship AMIP (A100), base tree: Nsight Compute counters of one coupling step"
-    key: "n_i2"
-    depends_on: "init_amip"
-    command:
-      - nvidia-smi -L
-      - |
-        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum"
-        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/n_i2 COUPLER_DIR=$$PROFILE_DIR/coupler_base ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file n_i2.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id n_i2 || exit 1
-        cp n_i2.csv $$PROFILE_DIR/
-    artifact_paths: "n_i2.csv"
+      - PROFILE_OUT=$$PROFILE_DIR/i2cm9 COUPLER_DIR=$$PROFILE_DIR/coupler_base julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_base/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_base/$$AMIP_CONFIG --job_id i2cm9
+      - tar czf i2cm9.tgz -C $$PROFILE_DIR i2cm9
+    artifact_paths: "i2cm9.tgz"
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
@@ -121,9 +106,9 @@ steps:
 
   - label: "flagship AMIP: device time per component"
     key: "amip_summary"
-    depends_on: ["i2", "n_i2"]
+    depends_on: ["i2cm9"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && (python3 attribute_trace.py i2=i2 || true)
+      - cd $$PROFILE_DIR && (python3 attribute_trace.py i2cm9=i2cm9 || true)
     agents:
       slurm_cpus_per_task: 1
