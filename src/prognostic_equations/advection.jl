@@ -259,7 +259,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
-        @. Yₜ.c.ρq_tot += vtt_bc
+        vtt_bc isa NullBroadcasted || @. Yₜ.c.ρq_tot += vtt_bc
     end
 
     # Vertical advection of passive non-water tracers with the grid-mean flow.
