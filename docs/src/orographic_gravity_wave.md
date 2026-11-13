@@ -192,7 +192,7 @@ Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are empirical shape paramete
 
 ### Saturation profiles for the propagating component
 
-Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer $[z_{\text{pbl}}, z_{\mathrm{ref}})$ (see [Non-propagating component](#Non-propagating-component) below).
+Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer, from the first cell above the PBL-top cell up to $z_{\mathrm{ref}}$ (see [Non-propagating component](#Non-propagating-component) below).
 
 The vertical profile of saturated momentum flux $\tau_{\mathrm{sat}}$ is computed such that the momentum forcing follows from $d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{\mathrm{sat}}/dz$.
 
@@ -304,35 +304,63 @@ Here, $(\tau_x, \tau_y, \tau_l)$ is computed in the base flux calculation, and $
 
 #### Non-propagating component
 
-The non-propagating drag is confined to a finite layer above the PBL top, bounded above by a reference level $z_{\mathrm{ref}}$. To locate $z_{\mathrm{ref}}$, we iterate over face levels above $z_{\text{pbl}}$ and accumulate a wave phase
+The non-propagating drag is confined to a finite layer above the PBL, bounded above by a reference level $z_{\mathrm{ref}}$. Its lowest cell is the cell just above the PBL-top cell (the cell whose center is $z_{\text{pbl}}$), so no PBL cell gets blocked drag. This follows GFDL `topo_drag`, whose `get_pbl` sets `kpbl` to the first level above the PBL and whose blocked drag goes into the levels from `kref` down to `kpbl`. If no level above the lowest one passes the PBL test, $z_{\text{pbl}}$ is the lowest cell center and the blocked layer starts in the second cell, as with the GFDL fallback `kpbl = kdim - 1`.
+
+To locate $z_{\mathrm{ref}}$, we start at $z_{\mathrm{start}}$, the top face of the lowest blocked cell (GFDL `zhalf(kpbl)`), iterate over the face levels above it, and accumulate a wave phase
 
 ```math
-\mathrm{phase} \mathrel{+}= ({}^fz[k] - z_{\text{pbl}}) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
+\mathrm{phase} \mathrel{+}= ({}^fz[k] - {}^fz[k-1]) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
 ```
 
-setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. The pressure weighting below still concentrates most of the drag near the surface.
+with ${}^fz[k-1] = z_{\mathrm{start}}$ for the first face above $z_{\mathrm{start}}$, and
+setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Each layer uses ${}^fN$ and ${}^fV_{\tau}$ at its upper face. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, or $z_{\mathrm{start}}$ is the model top face, $z_{\mathrm{ref}}$ is the model top face. If the PBL-top cell is the top cell, there is no cell above it and the column gets no blocked drag; this cannot happen in practice, because the PBL search only accepts levels with at least half the surface pressure. The pressure weighting below still concentrates most of the drag near the surface.
+
+The phase sum here differs slightly from GFDL `topo_drag`, so the top of the blocked layer can differ from GFDL's by up to one cell.
+
+!!! details "Comparison with GFDL"
+
+    Both codes add up the phase going upward from the same height, the top face of the first cell above the PBL-top cell (GFDL `zhalf(kpbl)`). They differ in where each step lands and in how the top of the blocked layer is picked. For example, with 250 m cells, a PBL-top cell at 750–1000 m, and the first blocked cell at 1000–1250 m:
+
+    |                          | ClimaAtmos                                   | GFDL                                                                                           |
+    |:------------------------ |:-------------------------------------------- |:---------------------------------------------------------------------------------------------- |
+    | start                    | 1250 m (a face)                              | 1250 m (the same face)                                                                         |
+    | steps land on            | faces: 1500, 1750, 2000 m, …                 | cell centers: 1625, 1875, 2125 m, …                                                            |
+    | first step               | 1250 → 1500 m (one cell)                     | 1250 → 1625 m (one and a half cells, past the center at 1375 m)                                |
+    | $N$ and $V_\tau$         | at the top face of each step                 | from the two cell centers of each step                                                         |
+    | top of the blocked layer | the face where the phase first exceeds $\pi$ | the top face of the cell holding the lower center of the step that crosses $\pi$ (GFDL `kref`) |
+
+    Two cases show how the tops compare:
+
+     1. The phase exceeds $\pi$ at 4392 m. ClimaAtmos picks 4500 m, the next face up. GFDL's crossing step runs from 4375 to 4625 m, its lower center lies in the 4250–4500 m cell, so GFDL also picks 4500 m.
+     2. The phase exceeds $\pi$ at 4550 m. ClimaAtmos picks 4750 m. GFDL's crossing step is still 4375 → 4625 m, so GFDL still picks 4500 m, one cell lower.
 
 Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes a single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ keep the wavenumber physical so the layer depth stays sensible.
 
-The drag forcing due to the non-propagating component is confined between the PBL top and $z_{\mathrm{ref}}$ and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
+The drag forcing due to the non-propagating component is confined to the blocked layer and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
 
 ```math
 \mathrm{weight}[k] = \overline{{}^f p - {}^f p_{\mathrm{ref}}}^c,
 ```
 
-where ${}^f p_{\mathrm{ref}}$ is the face pressure at $z_{\mathrm{ref}}$, and the overbar denotes interpolation to cell centers. The pressure layer thickness is similarly interpolated:
+where ${}^f p_{\mathrm{ref}}$ is the face pressure at $z_{\mathrm{ref}}$, and the overbar denotes interpolation to cell centers. The pressure thickness of each cell is the pressure difference across its own two faces, as in GFDL `topo_drag`:
 
 ```math
-\mathrm{diff}[k] = \overline{{}^f p[k-1] - {}^f p[k]}^c,
+\mathrm{diff}[k] = {}^f p_{\mathrm{lower}}[k] - {}^f p_{\mathrm{upper}}[k],
 ```
 
-and the sum of the weights is
+where the subscripts denote the lower and upper faces of cell $k$. Interior face pressures are the mean of the two adjacent cell-center pressures. The bottom and top face pressures are integrated hydrostatically over the half cell from the adjacent center, ${}^f p_{\mathrm{bottom}} = p[1] + \rho[1]\, g\, (z[1] - {}^f z_{\mathrm{bottom}})$ and ${}^f p_{\mathrm{top}} = p[N] - \rho[N]\, g\, ({}^f z_{\mathrm{top}} - z[N])$, because copying the nearest center pressure onto a boundary face would give the lowest and highest cells only about half their pressure thickness. The model keeps no surface pressure, so this half-cell integral is used instead.
+
+The column stress sum is
 
 ```math
-wtsum = \sum_{k \in \mathrm{mask}} \frac{\mathrm{diff}[k]}{\mathrm{weight}[k]}.
+wtsum = \sum_{k \in \mathrm{mask}} \mathrm{diff}[k] \cdot \mathrm{weight}[k],
 ```
 
-The mask selects cells that overlap with the interval $[z_{\text{pbl}}, z_{\mathrm{ref}})$ and have nonzero weights.
+which is the GFDL `topo_drag` normalization (`wtsum += dp*weight`). Dividing the
+forcing by this sum conserves the column-integrated blocked stress:
+$\sum_k (\partial u/\partial t)_k \,\mathrm{diff}[k]/g = \tau_x\,\tau_{np}/\tau_l$.
+
+The mask selects the cells from the lowest blocked cell (top face at $z_{\mathrm{start}}$) up to the cell whose top face is $z_{\mathrm{ref}}$, and drops cells with zero weight. The lowest blocked cell is always selected, so the mask is empty only when there is no cell above the PBL-top cell.
 
 For masked levels, the forcing due to the non-propagating component is
 
@@ -344,31 +372,102 @@ For masked levels, the forcing due to the non-propagating component is
 {}^c \left( \frac{dv}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{\mathrm{weight}[k]}{wtsum} \tau_y,
 ```
 
-where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calculation. When the mask is empty ($wtsum = 0$, i.e. no cells overlap $[z_{\text{pbl}}, z_{\mathrm{ref}})$), the non-propagating forcing is set to zero in that column to avoid division by zero.
+where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calculation. When the mask is empty ($wtsum = 0$, i.e. no cell above the PBL-top cell), the non-propagating forcing is set to zero in that column to avoid division by zero.
+
+### Turbulent orographic form drag (TOFD)
+
+The propagating and blocked components both act at and above the PBL top, so they
+supply no drag in the layer right next to the surface. Small-scale orography
+(scales too short to launch resolved gravity waves) nonetheless exerts a
+form drag there. This turbulent orographic form drag (TOFD) of [beljaars2004](@cite)
+is added as a low-level term, in the form and with the constants of the IFS
+(IFS Documentation CY47R1, Part IV, Section 3.4):
+
+```math
+{}^c \left( \frac{d\mathbf{u}}{dt}[k] \right)_{\mathrm{TOFD}} = - C_d(z)\, |\mathbf{u}|\, \mathbf{u},
+\qquad
+C_d(z) = a_{\mathrm{tofd}}\, \alpha\, \beta\, C_{md}\, C_{\mathrm{corr}}\, 2.109\,
+e^{-(z/1500)^{1.5}}\, a_2\, z^{-1.2},
+\qquad
+a_2 = \frac{\sigma_{\mathrm{flt}}^2\, k_1^{\,n_1-n_2}}{I_H\, k_{\mathrm{flt}}^{\,n_1}},
+```
+
+where $z$ is the height above the local surface (floored at 1 m so $z^{-1.2}$ stays
+finite). The vertical profile is an analytic fit of the drag integrated over a
+power-law orography spectrum with slopes $n_1 = -1.9$ and $n_2 = -2.8$ and a break at
+$k_1 = 3\times10^{-3}\,\mathrm{m^{-1}}$; it concentrates the drag in the lowest
+$\sim 1\,\mathrm{km}$. The other constants are $\beta = 1$, $C_{md} = 0.005$,
+$C_{\mathrm{corr}} = 0.6$, and $\alpha = 35$: [beljaars2004](@cite) obtained 12 from
+large-eddy simulations, and the IFS multiplies it by $1.7^2$ after tuning.
+
+The only geographical input is $\sigma_{\mathrm{flt}}$, the standard deviation of the
+filtered orography, computed at initialization from the 60 arc-second ETOPO 2022
+elevation as in the IFS (IFS Documentation CY47R1, Part IV, Section 11.3.3):
+
+ 1. the orography, with ocean bathymetry set to zero, is smoothed twice with the IFS
+    operator (a top hat of width $\Delta$ with cosine edges of width $\delta = 1$ km),
+    with $\Delta_1 = 2$ km and $\Delta_2 = 20$ km;
+ 2. the squared difference of the two smoothed fields, which keeps horizontal scales
+    of roughly 3 to 22 km (half wavelengths), is averaged over blocks of about the
+    model's horizontal node spacing and regridded to the model surface, giving
+    $\sigma_{\mathrm{flt}}^2$.
+
+$I_H = 1.02\times10^{-3}\,\mathrm{m^{-1}}$ and
+$k_{\mathrm{flt}} = 3.5\times10^{-4}\,\mathrm{m^{-1}}$ are the integral and the
+representative wavenumber of this band-pass filter, so they are tied to this
+definition of $\sigma_{\mathrm{flt}}$. TOFD is computed only when the model surface
+is Earth's orography (`topography` is `Earth` and `orographic_gravity_wave` is
+`gfdl_restart`, `raw_topo`, or `raw_topo_online`). With `NoWarp` the surface is
+flat, so TOFD is off even though the gravity-wave drag can still use Earth orography.
+
+The amplitude $a_{\mathrm{tofd}}$ is the parameter `ogw_tofd_coefficient`:
+$a_{\mathrm{tofd}} = 1$ reproduces the IFS, the default $a_{\mathrm{tofd}} = 2.7$
+is tuned to 0M WeatherBench forecasts, and
+$a_{\mathrm{tofd}} = 0$ disables TOFD.
+
+Near steep orography the damping time $(C_d |\mathbf{u}|)^{-1}$ in the lowest
+model levels is minutes, far shorter than both `dt_ogw` and the integrator step,
+so an explicit, cached tendency would overshoot and reverse the wind. TOFD is
+therefore not part of the cached `dt_ogw` forcing: $C_d(z)$ is precomputed once
+at initialization, and every integrator step applies the backward-Euler form
+
+```math
+{}^c \left( \frac{d\mathbf{u}}{dt}[k] \right)_{\mathrm{TOFD}} = - \frac{r}{1 + r\,\Delta t}\, \mathbf{u},
+\qquad
+r = C_d(z)\, |\mathbf{u}|,
+```
+
+evaluated with the current wind. The factor is a scalar, so the drag stays
+antiparallel to the flow, and its magnitude saturates at $|\mathbf{u}|/\Delta t$,
+so one forward-Euler step can at most bring the wind to rest. TOFD is not subject to the
+magnitude constraint below.
 
 ### Constrain the forcings
 
-The total drag from both components is
+The cached gravity-wave drag combines the propagating and blocked components
 
 ```math
-{}^c \left( \frac{du}{dt} [k] \right)_{\tau} = {}^c \left( \frac{du}{dt} [k] \right)_{p} + {}^c \left( \frac{du}{dt} [k] \right)_{np},
+{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} = {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{p} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{np}.
 ```
+
+To avoid instability from large tendencies under the explicit application, we limit the
+forcing *magnitude* to $\epsilon_V = 3\times10^{-3}\sqrt{2}\,\mathrm{m/s^2}$ while preserving
+its direction, by scaling the horizontal vector by a single factor rather than clipping each
+component independently (which would rotate the drag away from the flow). The cap is the
+diagonal of the $\pm 3\times10^{-3}\,\mathrm{m/s^2}$ per-component box used by GFDL
+`topo_drag` (`max_udt`), so the limiter is isotropic and no tighter than that box in any
+direction:
 
 ```math
-{}^c \left( \frac{dv}{dt} [k] \right)_{\tau} = {}^c \left( \frac{dv}{dt} [k] \right)_{p} + {}^c \left( \frac{dv}{dt} [k] \right)_{np}.
+{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} \leftarrow
+s[k]\, {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau},
+\qquad
+s[k] = \min\!\left(1, \frac{\epsilon_V}{\left| {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} \right|}\right).
 ```
 
-To avoid instability due to large tendencies from the forcing, we constrain the forcing magnitude with $\epsilon_V = 3e-3$, and let
-
-```math
-{}^c \left( \frac{du}{dt} [k] \right)_{\tau} = \max(-\epsilon_V, \min(\epsilon_V, {}^c \left( \frac{du}{dt} [k] \right)_{\pmb{\tau}})),
-```
-
-```math
-{}^c \left( \frac{dv}{dt} [k] \right)_{\tau} = \max(-\epsilon_V, \min(\epsilon_V, {}^c \left( \frac{dv}{dt} [k] \right)_{\pmb{\tau}})).
-```
-
-The tendencies above act on the physical horizontal wind components.
+This is a numerical safety rail, not a physical bound: it conserves the drag direction but,
+where it binds, reduces the column-integrated stress below the parameterized value. The
+tendencies above act on the physical horizontal wind components.
 
 ## Implementation summary
 
@@ -402,32 +501,42 @@ initialization for raw_topo_online:
     └─ regrid_OGW_info          → SpaceVaryingInput to spectral element
   write_computed_drag! → HDF5 artifact (raw_topo; loadable via ClimaArtifacts)
 
+TOFD input, at initialization when a_tofd > 0 (Earth orography only):
+  compute_filtered_orography_variance
+    ├─ calc_filtered_orography_variance_latlon → (S_2km h − S_20km h)² on the ETOPO grid
+    ├─ block_average_latlon                    → average over ~model node spacing
+    └─ SpaceVaryingInput                       → σ_flt² on the model surface
+  tofd_drag_coefficient!                       → ᶜtofd_Cd
+
 Every dt_ogw seconds:
   ogw_model_callback!
     └─ orographic_gravity_wave_compute_tendency!
-        ├─ Compute N(z), find z_pbl
+        ├─ Compute N(z) and face pressure
+        ├─ get_pbl_z!                   → z_pbl, center of the PBL-top cell
+        ├─ blocked_layer_start_height!  → z_start, top face of the cell above it
         ├─ calc_base_flux!              → τ_x, τ_y, τ_l, τ_p, τ_np
         ├─ calc_saturation_profile!     → τ_sat(z)
         ├─ calc_propagate_forcing!      → propagating tendency
         ├─ calc_nonpropagating_forcing! → blocked-flow tendency
-        └─ Clamp forcing to ±3e-3 m/s²
+        └─ Limit forcing magnitude to 3e-3·√2 m/s² (direction preserved)
 
 Every dt (integrator step):
   orographic_gravity_wave_apply_tendency!
-    └─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
+    ├─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
+    └─ Yₜ.c.uₕ -= tofd_implicit_rate(ᶜtofd_Cd, |uₕ|, dt) · uₕ   (if a_tofd > 0)
 ```
 
 For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly at startup using ClimaCore horizontal gradient operators in place of the offline pipeline.
 
 ## Where this is implemented
 
-| Concept                                                                | Source                                                                                                                                                                                                                       |
-|:---------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Base flux, saturation profile, propagating and blocked-flow tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
-| Orographic statistics and tensor helpers                               | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
-| Offline topography preprocessing                                       | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
-| Callback scheduling at `dt_ogw`                                        | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
-| Model types                                                            | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref)                                                                                                                                   |
+| Concept                                                                       | Source                                                                                                                                                                                                                       |
+|:----------------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base flux, saturation profile, propagating, blocked-flow, and TOFD tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
+| Orographic statistics and tensor helpers                                      | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
+| Offline topography preprocessing                                              | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
+| Callback scheduling at `dt_ogw`                                               | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
+| Model types                                                                   | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref)                                                                                                                                   |
 
 The scheme is selected with the `orographic_gravity_wave` key
 (`nothing`, `gfdl_restart`, or `raw_topo`) and its update interval

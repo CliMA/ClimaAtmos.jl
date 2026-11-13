@@ -3,6 +3,32 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The orographic gravity-wave blocked (non-propagating) drag
+  now matches GFDL `topo_drag`: the WKB phase is accumulated layer by layer
+  (`Σ Δz·N/V_τ`) and the column weight sum is `Σ Δp·weight`, where each cell's
+  pressure thickness `Δp` is the difference across its own two faces. The blocked
+  layer starts where GFDL's does: its lowest cell is the first cell above the
+  PBL-top cell, so no PBL cell gets blocked drag, and the phase is counted from
+  that cell's top face, on stretched grids and where the surface lies below sea
+  level too. The bottom and top face pressures are hydrostatic from the adjacent
+  cell, so the lowest and highest cells get their full `Δp`. The blocked layer
+  was too shallow and its tendency too large. This changes the results of every
+  run with `orographic_gravity_wave` enabled.
+- ![][badge-🔥behavioralΔ] The orographic gravity-wave forcing limiter caps the
+  magnitude of the `(u, v)` tendency at `3e-3·√2 m/s²` instead of clamping each
+  component to `±3e-3 m/s²`, so the drag keeps its direction where the limiter binds.
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] The orographic
+  gravity-wave scheme includes the turbulent orographic form drag (TOFD) of
+  Beljaars et al. (2004) in its IFS form, a near-surface drag from orography
+  with scales below about 5 km. Its input, the standard deviation of the
+  filtered orography, is computed at initialization from the 60 arc-second
+  ETOPO 2022 elevation as in the IFS. It is on by default at 2.7 times the IFS
+  amplitude (new ClimaParams parameter `ogw_tofd_coefficient = 2.7`, which
+  requires ClimaParams 1.3.9; `1` gives the IFS drag and `0` disables it)
+  whenever `topography` is `Earth` and the gravity-wave drag uses Earth
+  orography, and it is applied every step with the current wind in a
+  backward-Euler form, so one forward-Euler step cannot reverse the wind. See the
+  Orographic Gravity Waves docs page.
 - ![][badge-🔥behavioralΔ] Change the default `approximate_linear_solve_iters`
   from `1` to `2` and `update_constrain_state_every` from `step` to `stage` in
   `config/default_configs/default_config.yml` and the matching keyword defaults

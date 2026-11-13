@@ -130,8 +130,9 @@ end
         τ_l = fill(FT(1.0), lspace)
         τ_np = fill(FT(0.5), lspace)
         ᶠVτ = fill(FT(10.0), fspace)
-        # Set z_pbl above model top so z_ref stays 0 and ᶠp_ref stays NaN.
-        ᶠz_pbl = fill(FT(9000.0), fspace)
+        # Put the blocked-layer start above the model top so no z_ref is found and
+        # ᶠp_ref stays NaN.
+        ᶠz_start = fill(FT(9000.0), flspace)
         ᶠz_ref = zeros(FT, flspace)
         ᶠp_ref = zeros(FT, flspace)
         ᶜmask = fill(false, cspace)
@@ -141,7 +142,6 @@ end
         ᶠz = CA.Fields.coordinate_field(fspace).z
         ᶠdz = CA.Fields.local_geometry_field(fspace).∂x∂ξ.components.data.:1
         ᶠp = @. FT(1e5) * exp(-(ᶠz) / FT(8000))
-        ᶠp_m1 = @. ᶠp * FT(1.05)
         ᶠN = fill(FT(0.01), fspace)
 
         CA.calc_nonpropagating_forcing!(
@@ -152,7 +152,7 @@ end
             τ_l,
             τ_np,
             ᶠVτ,
-            ᶠz_pbl,
+            ᶠz_start,
             ᶠz_ref,
             ᶠp_ref,
             ᶜmask,
@@ -160,7 +160,6 @@ end
             ᶜdiff,
             ᶜwtsum,
             ᶠp,
-            ᶠp_m1,
             ᶠN,
             ᶠz,
             ᶠdz,

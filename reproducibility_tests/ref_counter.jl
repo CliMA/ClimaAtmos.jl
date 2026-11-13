@@ -1,4 +1,4 @@
-467
+468
 
 # **README**
 #
@@ -32,6 +32,19 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+468
+- Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
+  the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
+  `topo_drag`) with each cell's own pressure thickness (hydrostatic pressures on
+  the bottom and top faces), starts the blocked layer in the first cell above the
+  PBL-top cell and counts the phase from that cell's top face (as GFDL does) on any
+  vertical grid, and the forcing limiter
+  caps the vector magnitude at `3e-3·√2 m/s²` instead of clamping each component,
+  and the turbulent
+  orographic form drag (IFS form, `ogw_tofd_coefficient = 2.7` from ClimaParams
+  1.3.9) is on by default when `topography` is `Earth`. Changes the output of
+  `aquaplanet_equil_allsky_gw_raw`.
+
 467
 - Fused slab and column loops (advection, the turbulent and hyperdiffusive
   fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the

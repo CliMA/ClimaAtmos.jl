@@ -130,6 +130,8 @@ if TEST_GROUP in ("parameterizations", "all")
     # standalone Buildkite steps.
     @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
     @safetestset "OGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_unit.jl") end
+    @safetestset "OGW blocked drag unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_blocked_drag.jl") end
+    @safetestset "OGW TOFD unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_tofd.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
