@@ -89,10 +89,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         fused ? cloud_env_state(Y, p, thermo_params; materialize = is_edmf) :
         nothing
 
-    # Picard iterates: `c0` holds the initial cloud fraction, and the first
+    # Picard iterates: `c0` holds the initial cloud fraction, which the fused
+    # column loop of the first step saves before it replaces it, and the first
     # iterate stays in `ᶜcloud_fraction` until the Aitken step reads it.
     c0 = p.scratch.ᶜtemp_scalar_4
-    @. c0 = ᶜcloud_fraction
+    fused || @. c0 = ᶜcloud_fraction
 
     # One Picard step: fused buoygrad + covariance + l_mix + α, then the cloud
     # fraction. The second step applies the Aitken acceleration.
@@ -1875,7 +1876,8 @@ State of the domain that carries the SGS cloud closure — the environment under
 `_get_condensate_means`, and `_get_precip_mean`).
 
 With `materialize`, the lazy fields are written to `ᶜtemp_scalar`,
-`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_7`; otherwise they stay lazy.
+`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_7` in one column loop (a
+point loop cannot slice their nested expressions); otherwise they stay lazy.
 Without EDMF, the grid-mean mixing length overwrites `ᶜtemp_scalar` and
 `ᶜtemp_scalar_2` in every covariance update, so a state that must outlive one
 update stays lazy.
@@ -1886,15 +1888,23 @@ function cloud_env_state(Y, p, thermo_params; materialize)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     ᶜq_precip = _get_precip_mean(Y, p, turbconv_model, microphysics_model)
     if materialize
-        ᶜρ_env = _materialized(p.scratch.ᶜtemp_scalar, ᶜρ_env)
-        ᶜq_lcl = _materialized(p.scratch.ᶜtemp_scalar_2, ᶜq_lcl)
-        ᶜq_icl = _materialized(p.scratch.ᶜtemp_scalar_3, ᶜq_icl)
-        ᶜq_precip = _materialized(p.scratch.ᶜtemp_scalar_7, ᶜq_precip)
+        (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_7) = p.scratch
+        dests = (ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_7)
+        srcs = (ᶜρ_env, ᶜq_lcl, ᶜq_icl, ᶜq_precip)
+        is_lazy(src) = !(src isa Union{Fields.Field, Number})
+        lazy_pairs =
+            unrolled_filter(((_, src),) -> is_lazy(src), map(tuple, dests, srcs))
+        isempty(lazy_pairs) || DataLayouts.foreach_column(lazy_pairs) do lazy_pairs
+            MatrixFields.unrolled_foreach(lazy_pairs) do (dest, src)
+                @inline
+                @. dest = src
+            end
+        end
+        (ᶜρ_env, ᶜq_lcl, ᶜq_icl, ᶜq_precip) =
+            map((dest, src) -> is_lazy(src) ? dest : src, dests, srcs)
     end
     return (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip)
 end
-_materialized(dest, src::Union{Fields.Field, Number}) = src
-_materialized(dest, src) = (dest .= src)
 
 """
     set_quadrature_cloud_fraction!(Y, p, env_state, c0, ::Val{aitken})
@@ -1904,10 +1914,10 @@ truncated-Gaussian closure with the linearized `σ_S` (see
 `_compute_cloud_fraction`) at the state `env_state` (`cloud_env_state`),
 centred on the cloud-available water (total water less precipitation), with
 EDMF updraft weighting (`_edmf_weight_cloud_fraction!`). Without `aitken`, the
-new iterate replaces the cloud fraction; with it, the guarded Aitken
-acceleration of the initial iterate `c0`, the current cloud fraction (the first
-Picard iterate), and the new iterate does, so the new iterate is not stored
-until the current cloud fraction is read.
+cloud fraction is saved in `c0` and the new iterate replaces it; with `aitken`,
+the guarded Aitken acceleration of the initial iterate `c0`, the current cloud
+fraction (the first Picard iterate), and the new iterate does, so the new
+iterate is not stored until the current cloud fraction is read.
 """
 function set_quadrature_cloud_fraction!(
     Y, p, env_state, c0, ::Val{aitken},
@@ -1943,6 +1953,7 @@ function set_quadrature_cloud_fraction!(
         if aitken
             @. ᶜcloud_fraction = _aitken_picard_helper(c0, ᶜcloud_fraction, ᶜcf)
         else
+            @. c0 = ᶜcloud_fraction
             @. ᶜcloud_fraction = ᶜcf
         end
     end
