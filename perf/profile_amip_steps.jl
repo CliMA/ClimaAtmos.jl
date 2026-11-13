@@ -29,16 +29,6 @@ if get(ENV, "PROFILE_SROA", "0") == "1"
     @info "GPUCompiler.buildCleanupPipeline runs SROA and instcombine first"
 end
 include(joinpath(ENV["COUPLER_DIR"], "experiments", "AMIP", "code_loading.jl"))
-# PROFILE_REGCAP=n (experiment): compile every slice-loop kernel that leaves its register cap
-# at :auto with at most n registers per thread, to find the cap that suits each kernel.
-if haskey(ENV, "PROFILE_REGCAP")
-    let core = only(m for (k, m) in Base.loaded_modules if k.name == "ClimaCore"),
-        cap = parse(Int, ENV["PROFILE_REGCAP"])
-
-        @eval Base.get_extension(core, :ClimaCoreCUDAExt) register_cap(::Val{:auto}, _) = $cap
-        @info "Slice-loop kernels without a register cap are compiled with $cap registers per thread"
-    end
-end
 const NVTX = only(m for (k, m) in Base.loaded_modules if k.name == "NVTX")
 
 table_cell(x::Missing) = ""
