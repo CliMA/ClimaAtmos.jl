@@ -175,8 +175,7 @@ end
 
     # Solving the tridiagonal `(c.ρtke, c.ρtke)` advection block of
     # `update_sedimentation_jacobian!` (with `(c.ρtke, f.u₃)` omitted) keeps a
-    # localized `ρtke` spike nonnegative and conservative at `C_γ = 2.5` while
-    # `correct_implicit_advection_tendency!` leaves `ρtke` untouched.
+    # localized `ρtke` spike nonnegative and conservative at `C_γ = 2.5`.
     u₃_orig = copy(Y.f.u₃)
     tke_orig = copy(Y.c.ρtke)
     ρ_orig = copy(Y.c.ρ)
@@ -188,8 +187,7 @@ end
     # With condensates zeroed so `vertical_advection_of_water_tendency!` adds no
     # sedimentation mass flux to `Yₜ.c.ρ`, solving the tridiagonal
     # `(c.ρtke, c.ρtke)` advection block on a 1-cell `ρtke` spike at `C_γ ≈ 2.5`
-    # keeps `ρtke` nonnegative and conserves column-integrated `ρtke`, while
-    # `correct_implicit_advection_tendency!` leaves `Yₜ.c.ρtke == 0`.
+    # keeps `ρtke` nonnegative and conserves column-integrated `ρtke`.
     cond_orig = (;
         ρq_lcl = copy(Y.c.ρq_lcl),
         ρq_icl = copy(Y.c.ρq_icl),
@@ -220,21 +218,16 @@ end
     CA.update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     Yₜ .= zero(eltype(Yₜ))
     CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    ᶜA_tke = similar(p.scratch.ᶜupwind_dissipation_system)
+    ᶜA_tke = similar(Y.c, CA.MatrixFields.TridiagonalMatrixRow{FT})
     @. ᶜA_tke = -($(matrix[CA.@name(c.ρtke), CA.@name(c.ρtke)]))
     ᶜΔρtke = similar(Y.c.ρtke)
     ᶜrhs_tke = @. dtγ * Yₜ.c.ρtke
-    CA.MatrixFields.single_field_solve!(
-        p.scratch.ᶜupwind_dissipation_solver_cache,
-        ᶜΔρtke,
-        ᶜA_tke,
-        ᶜrhs_tke,
+    tke_solver_cache = CA.MatrixFields.single_field_solver_cache(
+        ᶜA_tke, ᶜrhs_tke,
     )
+    CA.MatrixFields.single_field_solve!(tke_solver_cache, ᶜΔρtke, ᶜA_tke, ᶜrhs_tke)
     Y_solved = copy(Y)
     @. Y_solved.c.ρtke = Y.c.ρtke + ᶜΔρtke
-    Yₜ_post = similar(Y)
-    CA.correct_implicit_advection_tendency!(Yₜ_post, Y_solved, p, t)
-    @test all(iszero, parent(Yₜ_post.c.ρtke))
     tke_spike_end = Array(parent(Y_solved.c.ρtke))
     @test minimum(tke_spike_end) >= -FT(1e-14)
     @test sum(tke_spike_end) ≈ sum(Array(parent(Y.c.ρtke))) rtol = FT(1e-13)

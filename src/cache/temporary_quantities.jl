@@ -68,30 +68,10 @@ function precipitation_surface_flux_accumulator_quantities(
     } || return (;)
     sfc_space = axes(Fields.level(Y.f, half))
     c_lev1_space = axes(Fields.level(Y.c, 1))
-    PrecipLinNT = @NamedTuple{
-        w_lcl_jac::FT,
-        w_icl_jac::FT,
-        w_rai_jac::FT,
-        w_sno_jac::FT,
-        f_guess_lcl::FT,
-        f_guess_icl::FT,
-        f_guess_rai::FT,
-        f_guess_sno::FT,
-        ρq_lcl_guess::FT,
-        ρq_icl_guess::FT,
-        ρq_rai_guess::FT,
-        ρq_sno_guess::FT,
-        e_lcl::FT,
-        e_icl::FT,
-        e_rai::FT,
-        e_sno::FT,
-        f_e_sgs::FT,
-    }
     return (;
         b_imp_stages,
         n_imp_stages,
         precip_stage_idx = Base.RefValue(0),
-        sfc_precip_lin_state = Fields.Field(PrecipLinNT, sfc_space),
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
         col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
@@ -129,7 +109,6 @@ end
     temporary_quantities(
         Y, atmos;
         b_imp_stages = (), n_imp_stages = 0,
-        compensate_explicit_scalar_advection = true,
     )
 
 Allocate the scratch fields stored in `p.scratch`.
@@ -154,8 +133,6 @@ comment on each entry records a representative use.
     `precipitation_surface_flux_accumulator_quantities`.
   - `n_imp_stages = 0`: Number of implicit tableau stages (`0` disables the
     precipitation accumulator).
-  - `compensate_explicit_scalar_advection = true`: Whether post-Newton implicit
-    dissipation weights by `1 + 2 |u³| dtγ` (`_dissipation_weight`).
 
 # Returns
 
@@ -166,14 +143,12 @@ function temporary_quantities(
     atmos;
     b_imp_stages = (),
     n_imp_stages = 0,
-    compensate_explicit_scalar_advection::Bool = true,
 )
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        compensate_explicit_scalar_advection,
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp in the orographic gravity wave drag
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠK of the implicit-stage u₃ solve
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
@@ -208,14 +183,5 @@ function temporary_quantities(
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # ᶠΔu, vertical velocity differences
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠτ_smag
-        # Post-Newton implicit upwind dissipation
-        # (`add_vertical_advection_corrections!`): the operator, the system
-        # `I - dtγ 𝒟`, and the tridiagonal solver cache.
-        ᶜupwind_dissipation_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
-        ᶜupwind_dissipation_system = similar(Y.c, TridiagonalMatrixRow{FT}),
-        ᶜupwind_dissipation_solver_cache = MatrixFields.single_field_solver_cache(
-            similar(Y.c, TridiagonalMatrixRow{FT}),
-            Fields.Field(FT, center_space),
-        ),
     )
 end

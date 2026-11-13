@@ -33,7 +33,6 @@ import ClimaCore.Operators
 
 # Tendency functions live in the parent ClimaAtmos module.
 import ..implicit_vertical_advection_tendency!
-import ..correct_implicit_advection_tendency!
 import ..horizontal_dynamics_tendency!
 import ..horizontal_tracer_advection_tendency!
 import ..explicit_vertical_advection_tendency!
@@ -77,9 +76,6 @@ end
 # contribution into `Yₜ`. The caller is responsible for zeroing `Yₜ` first.
 
 _iva_wrap!(Yₜ, Y, p, t) = implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-
-_corrimp_wrap!(Yₜ, Y, p, t) =
-    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
 _hor_dyn_wrap!(Yₜ, Y, p, t) = horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
@@ -143,7 +139,6 @@ end
 
 const _PROCESS_WRAPPERS = (
     iva = _iva_wrap!,
-    corrimp = _corrimp_wrap!,
     hor_dyn = _hor_dyn_wrap!,
     hor_tracer_adv = _hor_tracer_adv_wrap!,
     exp_vadv = _exp_vadv_wrap!,
@@ -219,11 +214,11 @@ const _GRID_FIELDS = (
             :additional)),
     (name = :ρe_tot, short = "rhoe", units = "W m^-3",
         long = "total air energy",
-        processes = (:iva, :corrimp, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
+        processes = (:iva, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
             :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_tot, short = "rhoqt", units = "kg m^-3 s^-1",
         long = "total air water",
-        processes = (:iva, :corrimp, :hor_tracer_adv, :exp_vadv, :vdiff,
+        processes = (:iva, :hor_tracer_adv, :exp_vadv, :vdiff,
             :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_lcl, short = "rhoqlcl", units = "kg m^-3 s^-1",
         long = "cloud liquid mass",

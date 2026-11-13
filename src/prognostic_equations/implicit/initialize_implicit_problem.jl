@@ -12,7 +12,6 @@ Return `true` when `p.scratch` holds an active stage-weighted surface
 precipitation accumulator (`n_imp_stages > 0`).
 """
 @inline has_precip_stage_accumulator(p) =
-    hasproperty(p.scratch, :sfc_precip_lin_state) &&
     hasproperty(p.scratch, :precip_stage_idx) &&
     hasproperty(p.scratch, :n_imp_stages) &&
     p.scratch.n_imp_stages > 0

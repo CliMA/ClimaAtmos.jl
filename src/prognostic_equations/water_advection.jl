@@ -89,10 +89,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    # Recorded before the EDMF correction, whose early return skips the rest of
-    # this function when the updrafts have no condensate.
-    record_stage_precipitation_linearization!(Y, p)
-
     # For prognostic EDMF, the grid-mean energy flux applied above is corrected
     # so that it equals the sum of the updraft and environment energy fluxes;
     # see `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
@@ -249,8 +245,8 @@ end
 Write into the surface-level field `dest` the subdomain correction to the
 bottom-face sedimentation energy flux at the Newton linearization state, summed
 over the four condensate species [W/m²]. `gm` holds the surface-level grid-mean
-inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
-`int_T`, `int_uvw`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
+inputs (`sfc_lev`, `J_ratio`, `int_T`, `int_uvw`, and the species' `int_ρq_*`
+and `sfc_w_*`). Each term is
 `J_ratio (ρʲ fʲ + ρ⁰ f⁰)` with `fʲ` and `f⁰` from `updraft_precip_energy_flux`
 and `environment_precip_energy_flux`, which is the value of the column
 correction flux through the surface face. Zero for every turbulence-convection
@@ -447,131 +443,4 @@ end
         e_sno,
         f_e_sgs,
     )
-end
-
-"""
-    record_stage_precipitation_linearization!(Y, p)
-
-Cache the level-1 condensate mass densities, specific energies, and SGS bottom
-energy-flux correction at the Newton linearization state `Y = U^g` into
-`p.scratch.sfc_precip_lin_state`. Read after the Newton solve by
-`accumulate_stage_precipitation_surface_fluxes!` to evaluate the stage
-bottom-face sedimentation flux
-
-    F = w_base * max(0, ρq^g) + w_jac * (ρq* - ρq^g),
-
-where `w_base` is the level-1 terminal velocity (`ᶜJ_1 / ᶠJ_{1/2}`-scaled) and
-`w_jac` is the Jacobian terminal velocity: `w_base` for cloud liquid, and the
-column maxima `ᶜwᵢ_max` / `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for cloud
-ice, rain, and snow, matching `update_sedimentation_jacobian!`. This
-linearization matches the discrete column sink applied by the stage under four
-conditions: (1) direct Newton solve without Krylov or line search, with the
-Jacobian refreshed at the final Newton iterate (`update_jacobian_every = "solve"`,
-or `"stage"` when `max_newton_iters_ode == 1`); (2) `ManualSparseJacobian`
-(autodiff uses the pointwise derivative and disables this accumulator);
-(3) direct inversion of the block-lower-triangular scalar submatrix `A₁₁`
-(`ApproximateBlockArrowheadIterativeSolve` wraps `SchurComplementReductionSolve`
-with `alg₁ = BlockLowerTriangularSolve`, approximating only the velocity Schur
-complement whose `ᶜadvdivᵥ` columns integrate to zero over each column, so
-column sums hold at any `approximate_solve_iters ≥ 1`); and
-(4) `constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
-`update_constrain_state_every = "dss"` under condensate warm-starting preserves
-conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
-the stage flux upward). A stage flux is upward (`F > 0`) whenever
-`|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from (a) a negative bottom cell
-with a net implicit sink and `w_jac > 0` (from condensate aloft, the 1M `10⁻⁸`
-rain terminal-velocity floor, or `FixedTerminalVelocity`), or (b) a positive
-bottom cell drained below `(1 - w_base / w_jac) ρq^g` within one stage (e.g.,
-subcloud evaporation at linearized dimensionless rate
-`dtγ λ > w_base / (w_jac - w_base)`) — and (c) negative IMEX `b_imp` stage
-weights (`ARS343` has `b_imp[3] ≈ -0.644`) can make the step sum upward even
-when every stage flux is downward; in all cases the accumulated sum equals the
-discrete column sink (up to explicit-diagonal weight redistribution on `SSP` /
-`IMKG` tableaus). The SGS correction comes from `set_sfc_sgs_precip_energy_flux!`,
-which dispatches on the turbulence-convection model.
-"""
-function record_stage_precipitation_linearization!(Y, p)
-    (
-        eltype(Y) === eltype(p.params) &&
-        has_precip_stage_accumulator(p) &&
-        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_sno))
-    ) || return nothing
-
-    (; params) = p
-    (; ᶜΦ) = p.core
-    (; ᶜT, ᶜu, ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-    (; sfc_precip_lin_state) = p.scratch
-    thp = CAP.thermodynamics_params(params)
-    sfc_space = axes(sfc_precip_lin_state)
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
-
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    int_J = sfc_lev(ᶜJ)
-    sfc_J = Fields.level(ᶠJ, Fields.half)
-    J_ratio = @. lazy(int_J / sfc_J)
-
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_T = sfc_lev(ᶜT)
-    int_Φ = sfc_lev(ᶜΦ)
-    @. p.scratch.c_lev1_uvw = Geometry.UVWVector($(Fields.level(ᶜu, 1)))
-    int_uvw = Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw), sfc_space)
-    sfc_wₗ = sfc_lev(ᶜwₗ)
-    sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_wᵣ = sfc_lev(ᶜwᵣ)
-    sfc_wₛ = sfc_lev(ᶜwₛ)
-
-    # TODO: Replace the three 3D `fill_column_max!` scans with level-1
-    # `Operators.column_reduce!(max, ...)` (skipping explicit-stage and
-    # diagnostic calls), and reuse `sfc_precip_lin_state` in
-    # `surface_precipitation_tendency!` for `SlabOceanTemperature`.
-    fill_column_max!(p.scratch.ᶜtemp_scalar_3, ᶜwᵣ)
-    sfc_wᵣ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_3)
-    fill_column_max!(p.scratch.ᶜtemp_scalar_4, ᶜwₛ)
-    sfc_wₛ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_4)
-    fill_column_max!(p.scratch.ᶜtemp_scalar_5, ᶜwᵢ)
-    sfc_wᵢ_jac = sfc_lev(p.scratch.ᶜtemp_scalar_5)
-
-    # `_precip_lin_nt` computes the linearization fields from the pointwise
-    # inputs so each input `Field` enters the broadcast kernel once (staying
-    # within the 4 KiB CUDA kernel parameter limit).
-    @. sfc_precip_lin_state = _precip_lin_nt(
-        thp,
-        int_J,
-        sfc_J,
-        int_T,
-        int_Φ,
-        int_uvw,
-        int_ρq_lcl,
-        int_ρq_icl,
-        int_ρq_rai,
-        int_ρq_sno,
-        sfc_wₗ,
-        sfc_wᵢ,
-        sfc_wᵣ,
-        sfc_wₛ,
-        sfc_wᵢ_jac,
-        sfc_wᵣ_jac,
-        sfc_wₛ_jac,
-    )
-    gm = (;
-        sfc_lev, J_ratio, int_T, int_uvw,
-        int_ρq_lcl, int_ρq_icl, int_ρq_rai, int_ρq_sno,
-        sfc_wₗ, sfc_wᵢ, sfc_wᵣ, sfc_wₛ,
-    )
-    set_sfc_sgs_precip_energy_flux!(
-        sfc_precip_lin_state.f_e_sgs,
-        Y,
-        p,
-        p.atmos.turbconv_model,
-        gm,
-    )
-    return nothing
 end

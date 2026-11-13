@@ -172,11 +172,9 @@ gravity waves, radiation, tracers).
 # Keyword Arguments
 
   - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
-    explicit), used to extract `dtγ`, `b_imp` stage weights, and the
-    `compensate_explicit_scalar_advection` flag.
+    explicit), used to extract `dtγ` and `b_imp` stage weights.
   - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
-    stage-weighted surface precipitation accumulator and scalar advection
-    dissipation weight.
+    stage-weighted surface precipitation accumulator.
   - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
     or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
 
@@ -293,35 +291,11 @@ function build_cache(
     b_imp_stages, n_imp_stages =
         (jacobian isa ManualSparseJacobian && has_noneq_precip) ?
         imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
-    if atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature &&
-       has_noneq_precip &&
-       !iszero(dtγ) &&
-       n_imp_stages == 0
-        @warn(
-            "Stage-weighted surface precipitation accumulator is disabled for \
-             this solver/Jacobian configuration; `SlabOceanTemperature` \
-             receives only the pointwise stage flux while the atmosphere \
-             applies the post-solve sedimentation increment."
-        )
-    end
-    compensate_explicit_scalar_advection =
-        !iszero(dtγ) &&
-        (
-            jacobian isa ManualSparseJacobian || (
-                jacobian isa AutoSparseJacobian &&
-                atmos.microphysics_model isa DryModel &&
-                atmos.diff_mode != Implicit()
-            )
-        ) &&
-        ode_algo isa CTS.IMEXAlgorithm &&
-        !isnothing(ode_algo.newtons_method) &&
-        isnothing(ode_algo.newtons_method.krylov_method)
     scratch = temporary_quantities(
         Y,
         atmos;
         b_imp_stages,
         n_imp_stages,
-        compensate_explicit_scalar_advection,
     )
 
     precomputed = precomputed_quantities(Y, atmos)

@@ -1798,11 +1798,9 @@ end
 
 Accumulate the stage-weighted bottom-face sedimentation fluxes of rain, snow,
 and precipitation energy for the current IMEX implicit stage at the
-Newton-solved state `Y = U*`. Called from `post_newton_stage_update!` before
-the post-Newton vertical advection increment is added to `U*`. Advances
-`p.scratch.precip_stage_idx[]`. `ClimaTimeSteppers.solve_stage_implicit!`
-invokes `T_post_imp!` once per implicit stage (`a_imp[i, i] ≠ 0`), which the
-stage index depends on.
+Newton-solved state `Y = U*`. Called from `post_newton_stage_update!`. Advances
+`p.scratch.precip_stage_idx[]`. Evaluates `F(U*)` directly from the solved
+state and terminal velocities, without Jacobian linearization.
 
 The accumulator covers the four mass species `ρq_lcl`, `ρq_icl`, `ρq_rai`, and
 `ρq_sno`, which the 1M, 2M, and 2MP3 states all include; a state missing any of
@@ -1833,7 +1831,6 @@ function accumulate_stage_precipitation_surface_fluxes!(
         b_imp_stages,
         n_imp_stages,
         precip_stage_idx,
-        sfc_precip_lin_state,
         surface_rain_flux_accum,
         surface_snow_flux_accum,
         col_integrated_precip_energy_tendency_accum,
@@ -1843,44 +1840,41 @@ function accumulate_stage_precipitation_surface_fluxes!(
     precip_stage_idx[] = k
     b_k = b_imp_stages[k]
 
-    sfc_space = axes(sfc_precip_lin_state)
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    sfc_space = axes(sfc_J)
     sfc_lev(x) =
         Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
 
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    int_J = sfc_lev(ᶜJ)
+    int_ρ = sfc_lev(Y.c.ρ)
+    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
-    f_lcl = @. lazy(
-        sfc_precip_lin_state.f_guess_lcl +
-        sfc_precip_lin_state.w_lcl_jac *
-        (int_ρq_lcl - sfc_precip_lin_state.ρq_lcl_guess),
+    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    int_wᵣ = sfc_lev(ᶜwᵣ)
+    int_wₗ = sfc_lev(ᶜwₗ)
+    int_wₛ = sfc_lev(ᶜwₛ)
+    int_wᵢ = sfc_lev(ᶜwᵢ)
+    int_whht = sfc_lev(ᶜwₕhₜ)
+
+    f_rain = @. lazy(
+        sfc_ρ * (
+            max(specific(int_ρq_rai, int_ρ), zero(int_ρ)) * (-int_wᵣ) +
+            max(specific(int_ρq_lcl, int_ρ), zero(int_ρ)) * (-int_wₗ)
+        ),
     )
-    f_icl = @. lazy(
-        sfc_precip_lin_state.f_guess_icl +
-        sfc_precip_lin_state.w_icl_jac *
-        (int_ρq_icl - sfc_precip_lin_state.ρq_icl_guess),
+    f_snow = @. lazy(
+        sfc_ρ * (
+            max(specific(int_ρq_sno, int_ρ), zero(int_ρ)) * (-int_wₛ) +
+            max(specific(int_ρq_icl, int_ρ), zero(int_ρ)) * (-int_wᵢ)
+        ),
     )
-    f_rai = @. lazy(
-        sfc_precip_lin_state.f_guess_rai +
-        sfc_precip_lin_state.w_rai_jac *
-        (int_ρq_rai - sfc_precip_lin_state.ρq_rai_guess),
-    )
-    f_sno = @. lazy(
-        sfc_precip_lin_state.f_guess_sno +
-        sfc_precip_lin_state.w_sno_jac *
-        (int_ρq_sno - sfc_precip_lin_state.ρq_sno_guess),
-    )
-    f_rain = @. lazy(f_rai + f_lcl)
-    f_snow = @. lazy(f_sno + f_icl)
-    f_energy = @. lazy(
-        sfc_precip_lin_state.f_e_sgs +
-        f_rai * sfc_precip_lin_state.e_rai +
-        f_lcl * sfc_precip_lin_state.e_lcl +
-        f_sno * sfc_precip_lin_state.e_sno +
-        f_icl * sfc_precip_lin_state.e_icl,
-    )
+    f_energy = @. lazy(sfc_ρ * (-int_whht.components.data.:1))
 
     if k == 1
         @. surface_rain_flux_accum = b_k * f_rain

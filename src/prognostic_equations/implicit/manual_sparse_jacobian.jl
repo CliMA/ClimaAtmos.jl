@@ -626,11 +626,9 @@ function jacobian_solver_algorithm(
     else
         # `BlockArrowheadSolve` needs every scalar diagonal block to be `-I` so
         # the Schur complement onto `f.u₃` is exact and tridiagonal. The
-        # central `ρe_tot` residual keeps that block at `-I`; the Newton step
-        # is forward-Euler-central in `e_tot - Φ`, and
-        # `correct_implicit_advection_tendency!` applies the implicit upwind
-        # dissipation and the Courant-limited high-order correction afterwards
-        # at the solved velocity.
+        # central `-I` scalar diagonal is an approximation; Newton iterations
+        # correct the residual mismatch from the `energy_humidity_upwinding`
+        # reconstruction in the implicit residual.
         return MatrixFields.BlockArrowheadSolve(
             available_scalar_names...;
             alg₂ = velocity_alg,
@@ -1032,10 +1030,10 @@ tracers, including the couplings of the sedimenting condensate masses to
 `ρq_tot`, `ρe_tot`, and `ρ`.
 
 Each sedimenting tracer's diagonal is initialized to its downward-biased
-`ᶜprecipdivᵥ` sedimentation operator minus `I`; the central grid-mean advection
-of the tracer is advanced explicitly by the Newton step (its velocity
-derivative lives in `update_advection_jacobian!`), and the implicit upwind
-dissipation is applied post-Newton by `correct_implicit_advection_tendency!`.
+`ᶜprecipdivᵥ` sedimentation operator minus `I`; the grid-mean advection of
+the tracer uses `energy_humidity_upwinding` in the residual (its velocity
+derivative lives in `update_advection_jacobian!`), and the `-I` diagonal is
+an approximation corrected by Newton iterations.
 Each condensate mass additionally contributes the sedimentation operator to the
 `ρq_tot` and `ρ` rows — sedimentation moves moist-air mass — and, weighted by
 the specific energy `e_int + Φ + K`, to the `ρe_tot` row. The EDMFX subdomain

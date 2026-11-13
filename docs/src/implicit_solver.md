@@ -66,17 +66,11 @@ Two stage hooks surround the Newton solve on each implicit stage:
     updraft predictor and warm-starts ``Y[0]``; see
     [PROPHET Discretization and Time Stepping](prophet_numerics.md).
   - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
-    stage-weighted surface precipitation fluxes, applies
-    `correct_implicit_advection_tendency!` — which performs the implicit
-    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
-    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
-    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
-    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
-    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
-    microphysics tracers at the solved velocity — and updates a prognostic
-    slab ocean with the post-Newton precipitation increment when the
-    `ManualSparseJacobian` stage accumulator is active; see
-    [Discretization and Operators](discretization.md).
+    stage-weighted surface precipitation flux ``F(U^*)`` at the converged Newton
+    state, then zeros ``Y_t`` so no additional correction is applied to ``U^*``.
+    Upwinding of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting condensates is
+    handled directly in the Newton residual via `add_energy_transport!` and
+    `add_vertical_transport!`; see [Discretization and Operators](discretization.md).
 
 ## Jacobian algorithms
 
