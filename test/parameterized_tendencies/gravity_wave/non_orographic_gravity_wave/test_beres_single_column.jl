@@ -321,14 +321,19 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             gw_beres_active,
             gw_a_cover,
             gw_flag,
+            gw_ztop,
+            beres_source_ρ_z_u_v_level,
         ) = p.non_orographic_gravity_wave
 
         center_space = axes(Y.c)
         z_max = FT(50000.0)  # matches config
 
         # Compute source_level and damp_level from height (column mode)
-        source_level = argmin(abs.(center_z .- gw_source_height))
-        damp_level = Spaces.nlevels(center_space)
+        # The level closest to the source height, the upper of two equally close levels,
+        # as `non_orographic_gravity_wave_compute_tendency!` picks it.
+        source_distance = abs.(center_z .- gw_source_height)
+        source_level = findlast(==(minimum(source_distance)), source_distance)
+        damp_level = CA.highest_damp_level(Spaces.nlevels(center_space))
 
         # ------------------------------------------------------------------
         # Fill atmospheric state with analytic profiles
@@ -367,6 +372,13 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         # The coverage scaling itself is tested below.
         fill!(gw_a_cover, FT(1.0))
         fill!(gw_flag, FT(0.0))         # tropics flag (AD99 Doppler frame; no effect on Beres)
+        # Heating from the surface to h_heat, so the waves launch at the first level at
+        # or above 5 km. The launch state is set as production sets it, from these
+        # analytic profiles, not left from the startup callback.
+        fill!(gw_ztop, FT(5000.0))      # m — top of the convective envelope
+        CA.set_beres_launch_state!(
+            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+        )
 
         # ------------------------------------------------------------------
         # Call forcing

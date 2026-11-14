@@ -210,6 +210,38 @@ import ClimaCore.Geometry as Geometry
         @test !isempty(inactive_cols)
     end
 
+    # The AD99 launch and damping levels that `compute_tendency!` picked, checked in
+    # every column against the selection rules written out from the column's
+    # pressure profile. The 45 km top lies below `nogw_damp_pressure` (85 Pa, about
+    # 50 km), so the pressure rule alone would leave the top cell as the whole
+    # damping layer; the guard must widen it to `NOGW_MIN_DAMP_CELLS` cells.
+    @testset "Launch and damp levels follow the pressure rules" begin
+        nogw = p.non_orographic_gravity_wave
+        p_arr = Array(Fields.field2array(p.precomputed.ᶜp))     # [nlev, ncol]
+        nlev = size(p_arr, 1)
+        level_values(f) = round.(Int, vec(Array(Fields.field2array(f))))
+        source_level = level_values(nogw.source_p_ρ_z_u_v_level.:6)
+        damp_level = level_values(nogw.damp_level)
+        @test length(source_level) == length(damp_level) == size(p_arr, 2)
+        # Launch: the highest level whose pressure exceeds the source pressure.
+        expected_source = [
+            findlast(>(nogw.gw_source_pressure), p_arr[:, col]) for
+            col in axes(p_arr, 2)
+        ]
+        @test source_level == expected_source
+        # Damping layer: from the lowest level whose pressure is below the damp
+        # pressure, or from the top cell when no level is, and always at least the
+        # top `NOGW_MIN_DAMP_CELLS` cells.
+        expected_damp = map(axes(p_arr, 2)) do col
+            last_above = findlast(>=(nogw.gw_damp_pressure), p_arr[:, col])
+            pressure_rule = min(something(last_above, 0) + 1, nlev)
+            min(pressure_rule, CA.highest_damp_level(nlev))
+        end
+        @test damp_level == expected_damp
+        @test minimum(p_arr[end, :]) > nogw.gw_damp_pressure    # setup guard
+        @test all(==(nlev - CA.NOGW_MIN_DAMP_CELLS + 1), damp_level)
+    end
+
     @testset "Forcing finite and bounded" begin
         @test all(isfinite, uf_beres)
         @test all(isfinite, vf_beres)
