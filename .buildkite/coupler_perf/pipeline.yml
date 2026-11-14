@@ -1,7 +1,7 @@
 # Temporary comparison pipeline (not for merging), on one A100 per job: perf/profile_amip_steps.jl
 # traces 20 coupling steps of the flagship AMIP benchmark, and Nsight Compute counts one coupling
 # step, for one ClimaAtmos tree in environments that differ only in CloudMicrophysics:
-# main (CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609), pr (CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf).
+# main (CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609), pr (CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf), clean (CloudMicrophysics 8b560da11176784a65b71190101b9e4fd6a0dba1), t1 (CloudMicrophysics c83d0b8c124997a01f7af6992d401e790fcb6a78), t1_solve (CloudMicrophysics e47a7cb3b80cc6786f9ccd34655ae6ca4a4db323), t1_clamp (CloudMicrophysics c1c5bf07798dea7cf671cec31e8377fe8f6fbfeb).
 # Every environment has the dy/params_macro branches of ClimaParams, Thermodynamics, and
 # SurfaceFluxes, the ClimaCore that the coupler environment resolves, and the cache, tendency, and
 # Jacobian functions marked with NVTX ranges (perf/annotate_components.py).
@@ -43,12 +43,12 @@ steps:
     agents:
       slurm_cpus_per_task: 1
 
-  - label: "init: flagship AMIP environments main, pr"
+  - label: "init: flagship AMIP base environment"
     key: "init_amip"
     depends_on: "init_trees"
     command:
       # Start from empty environments, so that a retried job can clone the coupler again
-      - rm -rf $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_main $$PROFILE_DIR/coupler_pr
+      - rm -rf $$PROFILE_DIR/coupler_base
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $$PROFILE_DIR/coupler_base
       - bash -c "cd $$PROFILE_DIR/coupler_base && git checkout $$COUPLER_COMMIT"
       # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
@@ -71,11 +71,34 @@ steps:
       # The @params branches of the parameter packages, as the [sources] of ClimaAtmos pin them
       # (which do not apply to direct dependencies of this project)
       - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("ClimaParams", "Thermodynamics", "SurfaceFluxes")])'
-      - echo "--- main (CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609)"
+      - julia --project=$$PROFILE_DIR/coupler_base/experiments/AMIP -e 'using Pkg; Pkg.precompile()'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environment main (CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609)"
+    key: "init_main"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_main
       - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_main
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "02ce32fbda11974f939a9fafcb30cce6a086b609"))'
       - julia --project=$$PROFILE_DIR/coupler_main/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
-      - echo "--- pr (CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf)"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environment pr (CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf)"
+    key: "init_pr"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_pr
       - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_pr
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "2caabd14417e5e4ad0a064aa40d58e36782428bf"))'
       - julia --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
@@ -86,9 +109,69 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
+  - label: "init: flagship AMIP environment clean (CloudMicrophysics 8b560da11176784a65b71190101b9e4fd6a0dba1)"
+    key: "init_clean"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_clean
+      - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_clean
+      - julia --project=$$PROFILE_DIR/coupler_clean/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "8b560da11176784a65b71190101b9e4fd6a0dba1"))'
+      - julia --project=$$PROFILE_DIR/coupler_clean/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environment t1 (CloudMicrophysics c83d0b8c124997a01f7af6992d401e790fcb6a78)"
+    key: "init_t1"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_t1
+      - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_t1
+      - julia --project=$$PROFILE_DIR/coupler_t1/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "c83d0b8c124997a01f7af6992d401e790fcb6a78"))'
+      - julia --project=$$PROFILE_DIR/coupler_t1/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environment t1_solve (CloudMicrophysics e47a7cb3b80cc6786f9ccd34655ae6ca4a4db323)"
+    key: "init_t1_solve"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_t1_solve
+      - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_t1_solve
+      - julia --project=$$PROFILE_DIR/coupler_t1_solve/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "e47a7cb3b80cc6786f9ccd34655ae6ca4a4db323"))'
+      - julia --project=$$PROFILE_DIR/coupler_t1_solve/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - label: "init: flagship AMIP environment t1_clamp (CloudMicrophysics c1c5bf07798dea7cf671cec31e8377fe8f6fbfeb)"
+    key: "init_t1_clamp"
+    depends_on: "init_amip"
+    command:
+      - rm -rf $$PROFILE_DIR/coupler_t1_clamp
+      - cp -r $$PROFILE_DIR/coupler_base $$PROFILE_DIR/coupler_t1_clamp
+      - julia --project=$$PROFILE_DIR/coupler_t1_clamp/experiments/AMIP -e 'using Pkg; Pkg.add(PackageSpec(; url = "https://github.com/CliMA/CloudMicrophysics.jl", rev = "c1c5bf07798dea7cf671cec31e8377fe8f6fbfeb"))'
+      - julia --project=$$PROFILE_DIR/coupler_t1_clamp/experiments/AMIP -e 'using Pkg; Pkg.precompile(); Pkg.status()'
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
   - label: "flagship AMIP (A100), CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609: CUDA trace of 20 coupling steps"
     key: "trace_main"
-    depends_on: "init_amip"
+    depends_on: "init_main"
     command:
       - nvidia-smi -L
       - PROFILE_OUT=$$PROFILE_DIR/trace_main COUPLER_DIR=$$PROFILE_DIR/coupler_main julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_main/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_main/$$AMIP_CONFIG --job_id trace_main
@@ -101,7 +184,7 @@ steps:
 
   - label: "flagship AMIP (A100), CloudMicrophysics 02ce32fbda11974f939a9fafcb30cce6a086b609: Nsight Compute counters of one coupling step"
     key: "ncu_main"
-    depends_on: "init_amip"
+    depends_on: "init_main"
     command:
       - nvidia-smi -L
       - |
@@ -120,7 +203,7 @@ steps:
 
   - label: "flagship AMIP (A100), CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf: CUDA trace of 20 coupling steps"
     key: "trace_pr"
-    depends_on: "init_amip"
+    depends_on: "init_pr"
     command:
       - nvidia-smi -L
       - PROFILE_OUT=$$PROFILE_DIR/trace_pr COUPLER_DIR=$$PROFILE_DIR/coupler_pr julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_pr/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_pr/$$AMIP_CONFIG --job_id trace_pr
@@ -133,7 +216,7 @@ steps:
 
   - label: "flagship AMIP (A100), CloudMicrophysics 2caabd14417e5e4ad0a064aa40d58e36782428bf: Nsight Compute counters of one coupling step"
     key: "ncu_pr"
-    depends_on: "init_amip"
+    depends_on: "init_pr"
     command:
       - nvidia-smi -L
       - |
@@ -150,11 +233,139 @@ steps:
       slurm_cpus_per_task: 8
       slurm_mem: 64GB
 
+  - label: "flagship AMIP (A100), CloudMicrophysics 8b560da11176784a65b71190101b9e4fd6a0dba1: CUDA trace of 20 coupling steps"
+    key: "trace_clean"
+    depends_on: "init_clean"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/trace_clean COUPLER_DIR=$$PROFILE_DIR/coupler_clean julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_clean/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_clean/$$AMIP_CONFIG --job_id trace_clean
+      - tar czf trace_clean.tgz -C $$PROFILE_DIR trace_clean
+    artifact_paths: "trace_clean.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics 8b560da11176784a65b71190101b9e4fd6a0dba1: Nsight Compute counters of one coupling step"
+    key: "ncu_clean"
+    depends_on: "init_clean"
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_clean COUPLER_DIR=$$PROFILE_DIR/coupler_clean ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_clean.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_clean/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_clean/$$AMIP_CONFIG --job_id ncu_clean || exit 1
+        cp ncu_clean.csv $$PROFILE_DIR/
+    artifact_paths: "ncu_clean.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics c83d0b8c124997a01f7af6992d401e790fcb6a78: CUDA trace of 20 coupling steps"
+    key: "trace_t1"
+    depends_on: "init_t1"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/trace_t1 COUPLER_DIR=$$PROFILE_DIR/coupler_t1 julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_t1/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1/$$AMIP_CONFIG --job_id trace_t1
+      - tar czf trace_t1.tgz -C $$PROFILE_DIR trace_t1
+    artifact_paths: "trace_t1.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics c83d0b8c124997a01f7af6992d401e790fcb6a78: Nsight Compute counters of one coupling step"
+    key: "ncu_t1"
+    depends_on: "init_t1"
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_t1 COUPLER_DIR=$$PROFILE_DIR/coupler_t1 ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_t1.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_t1/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1/$$AMIP_CONFIG --job_id ncu_t1 || exit 1
+        cp ncu_t1.csv $$PROFILE_DIR/
+    artifact_paths: "ncu_t1.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics e47a7cb3b80cc6786f9ccd34655ae6ca4a4db323: CUDA trace of 20 coupling steps"
+    key: "trace_t1_solve"
+    depends_on: "init_t1_solve"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/trace_t1_solve COUPLER_DIR=$$PROFILE_DIR/coupler_t1_solve julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_t1_solve/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1_solve/$$AMIP_CONFIG --job_id trace_t1_solve
+      - tar czf trace_t1_solve.tgz -C $$PROFILE_DIR trace_t1_solve
+    artifact_paths: "trace_t1_solve.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics e47a7cb3b80cc6786f9ccd34655ae6ca4a4db323: Nsight Compute counters of one coupling step"
+    key: "ncu_t1_solve"
+    depends_on: "init_t1_solve"
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_t1_solve COUPLER_DIR=$$PROFILE_DIR/coupler_t1_solve ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_t1_solve.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_t1_solve/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1_solve/$$AMIP_CONFIG --job_id ncu_t1_solve || exit 1
+        cp ncu_t1_solve.csv $$PROFILE_DIR/
+    artifact_paths: "ncu_t1_solve.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics c1c5bf07798dea7cf671cec31e8377fe8f6fbfeb: CUDA trace of 20 coupling steps"
+    key: "trace_t1_clamp"
+    depends_on: "init_t1_clamp"
+    command:
+      - nvidia-smi -L
+      - PROFILE_OUT=$$PROFILE_DIR/trace_t1_clamp COUPLER_DIR=$$PROFILE_DIR/coupler_t1_clamp julia --threads=3 --color=yes --project=$$PROFILE_DIR/coupler_t1_clamp/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1_clamp/$$AMIP_CONFIG --job_id trace_t1_clamp
+      - tar czf trace_t1_clamp.tgz -C $$PROFILE_DIR trace_t1_clamp
+    artifact_paths: "trace_t1_clamp.tgz"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
+  - label: "flagship AMIP (A100), CloudMicrophysics c1c5bf07798dea7cf671cec31e8377fe8f6fbfeb: Nsight Compute counters of one coupling step"
+    key: "ncu_t1_clamp"
+    depends_on: "init_t1_clamp"
+    command:
+      - nvidia-smi -L
+      - |
+        available=$$(ncu --query-metrics --chip ga100 | awk '{print $$1}')
+        metrics="gpu__time_duration.sum,launch__grid_size,launch__block_size,dram__bytes_read.sum,dram__bytes_write.sum,smsp__inst_executed_op_global_ld.sum,smsp__inst_executed_op_global_st.sum,smsp__inst_executed.sum,smsp__issue_active.avg,smsp__warps_active.avg,sm__warps_active.avg.pct_of_peak_sustained_active,launch__occupancy_limit_registers,smsp__sass_thread_inst_executed_op_ffma_pred_on.sum,smsp__sass_thread_inst_executed_op_fadd_pred_on.sum,smsp__sass_thread_inst_executed_op_fmul_pred_on.sum,smsp__sass_thread_inst_executed_op_dfma_pred_on.sum,smsp__sass_thread_inst_executed_op_dadd_pred_on.sum,smsp__sass_thread_inst_executed_op_dmul_pred_on.sum"
+        for m in smsp__sass_thread_inst_executed_op_global_ld_pred_on smsp__sass_thread_inst_executed_op_global_st_pred_on; do
+            echo "$$available" | grep -qx $$m && metrics="$$metrics,$$m.sum"
+        done
+        PROFILE_MODE=ncu PROFILE_OUT=$$PROFILE_DIR/ncu_t1_clamp COUPLER_DIR=$$PROFILE_DIR/coupler_t1_clamp ncu --profile-from-start off --print-units base --csv --page raw --metrics $$metrics --log-file ncu_t1_clamp.csv julia --threads=3 --project=$$PROFILE_DIR/coupler_t1_clamp/experiments/AMIP $$PROFILE_DIR/profile_amip_steps.jl --config_file $$PROFILE_DIR/coupler_t1_clamp/$$AMIP_CONFIG --job_id ncu_t1_clamp || exit 1
+        cp ncu_t1_clamp.csv $$PROFILE_DIR/
+    artifact_paths: "ncu_t1_clamp.csv"
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+      slurm_mem: 64GB
+
   - label: "flagship AMIP: device time and counters per component"
     key: "amip_summary"
-    depends_on: ["trace_main", "ncu_main", "trace_pr", "ncu_pr"]
+    depends_on: ["trace_main", "ncu_main", "trace_pr", "ncu_pr", "trace_clean", "ncu_clean", "trace_t1", "ncu_t1", "trace_t1_solve", "ncu_t1_solve", "trace_t1_clamp", "ncu_t1_clamp"]
     allow_dependency_failure: true
     command:
-      - cd $$PROFILE_DIR && python3 attribute_trace.py main=trace_main,ncu_main.csv pr=trace_pr,ncu_pr.csv
+      - cd $$PROFILE_DIR && python3 attribute_trace.py main=trace_main,ncu_main.csv pr=trace_pr,ncu_pr.csv clean=trace_clean,ncu_clean.csv t1=trace_t1,ncu_t1.csv t1_solve=trace_t1_solve,ncu_t1_solve.csv t1_clamp=trace_t1_clamp,ncu_t1_clamp.csv
     agents:
       slurm_cpus_per_task: 1
