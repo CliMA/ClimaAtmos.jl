@@ -66,7 +66,9 @@ Lilly stratification correction from `lilly_stratification_correction`.
 
 Mutates the following fields of `p.precomputed`:
 
-  - `ᶜS`, `ᶠS`: strain rate tensor on centers and faces [1/s].
+  - `ᶜS`, `ᶠS`: strain rate tensor on centers and faces [1/s]; on DG spaces the
+    horizontal gradients are completed by the central lifting of the velocity
+    jumps across element faces (`complete_dg_strain_rate!`).
   - `ᶜS_norm_h`, `ᶜS_norm_v`: horizontal and vertical strain rate norms on centers [1/s].
   - `ᶜνₜ_h`, `ᶜνₜ_v`: horizontal and vertical eddy viscosities on centers [m²/s].
   - `ᶜD_h`, `ᶜD_v`: horizontal and vertical eddy diffusivities on centers [m²/s].
@@ -87,9 +89,12 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
         p.precomputed
     c_smag = CAP.c_smag(p.params)
 
-    # Precompute 3D strain rate tensor
+    # Precompute 3D strain rate tensor; on DG spaces its horizontal gradients
+    # carry the face jumps of the velocity
     compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
     compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
+    complete_dg_strain_rate!(ᶜS, ᶜu)
+    complete_dg_strain_rate!(ᶠS, ᶠu)
 
     # filter scale
     h_space = Spaces.horizontal_space(axes(Y.c))
@@ -144,6 +149,11 @@ tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`. Reads `ᶜS`, `ᶠS`, `ᶜν�
 `ᶜD_h`, and `ᶜT` from `p.precomputed` (set by
 `set_smagorinsky_lilly_precomputed_quantities!`) and writes `p.scratch` scalar fields.
 
+On DG spaces the momentum stress divergence is `dg_horizontal_stress_divergence!`
+(central interface flux, Cartesian momentum) and the scalar fluxes are the SIPG
+Laplacian (`diffusionₕ`), so the elements are coupled without the DSS that
+completes `wdivₕ` on CG spaces.
+
 This tendency is always applied explicitly. It is a no-op unless the model's axes include
 the horizontal directions (`is_smagorinsky_horizontal`); the `::Nothing` method is a
 no-op. See also `vertical_smagorinsky_lilly_tendency!`.
@@ -161,10 +171,14 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     ᶠτ_smag = @. ᶠtemp_UVWxUVW = -2 * ᶠνₜ_h * ᶠS
 
     # Apply to tendencies
-    ## Horizontal momentum tendency
-    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_smag) / ᶜρ)
-    ## Vertical momentum tendency
-    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
+    if is_dg_horizontal(axes(Y.c))
+        dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ_smag, ᶠτ_smag, ᶠρ)
+    else
+        ## Horizontal momentum tendency
+        @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_smag) / ᶜρ)
+        ## Vertical momentum tendency
+        @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
+    end
 
     ## Energy, water (precipitation included), and passive tracers
     ᶜρD_h = @. lazy(ᶜρ * ᶜD_h)

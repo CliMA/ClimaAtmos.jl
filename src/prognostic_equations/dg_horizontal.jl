@@ -610,6 +610,126 @@ function dg_central_weak_divergence(X)
 end
 
 """
+    central_velocity_gradient_lift(normal, (u⁻, lg⁻), (u⁺, lg⁺))
+
+Central lifting that completes the strong-form DG gradient of the velocity `u`
+(any `Geometry` vector, converted to `UVW` with the local geometry `lg` of
+its side), the tensor counterpart of `Operators.central_gradient_lift`:
+`n̂ ⊗ (u⁺ − u⁻)/2` on the minus side, with the derivative direction first, as
+in `gradₕ(UVW(u))`. The `UVW` frame is single-valued at shared nodes, including
+cubed-sphere panel edges, where covariant components are not.
+"""
+function central_velocity_gradient_lift(normal, (u⁻, lg⁻), (u⁺, lg⁺))
+    n₁ = normal.components.data.:1
+    n̂ = Geometry.UVWVector(n₁, normal.components.data.:2, zero(n₁))
+    return Geometry.outer(n̂, (UVW(u⁺, lg⁺) - UVW(u⁻, lg⁻)) / 2)
+end
+
+# The velocity `u` in global Cartesian components, held in a `UVWVector`.
+cartesian_uvw(global_geometry, u, lg) =
+    Geometry.local_to_cartesian(global_geometry, lg.coordinates) * UVW(u, lg)
+
+# The gradient `∇u_c` of the Cartesian components, with its component axis
+# rotated back to the local frame: `∇u = ∇u_c G`, `G` the local-to-Cartesian
+# rotation.
+local_frame_gradient(global_geometry, ∇u_c, lg) =
+    ∇u_c * Geometry.local_to_cartesian(global_geometry, lg.coordinates)
+
+# The horizontal gradient of `u` with the frame held fixed, as in
+# `compute_strain_rate_center_full!`, is exact where the local frame is the
+# global Cartesian one. On the sphere the frame turns with position, and the
+# gradient of the Cartesian components carries that turning (the connection
+# terms of the local frame, O(|u|/R)), so solid-body rotation has no strain
+# and the gradient is the adjoint of `Operators.cartesian_tensor_divergence`.
+add_dg_frame_turning_strain!(S, u, ::Geometry.CartesianGlobalGeometry) = S
+function add_dg_frame_turning_strain!(S, u, global_geometry)
+    lg = Fields.local_geometry_field(axes(S))
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. S += symmetric_part(
+        local_frame_gradient(
+            global_geometry,
+            Geometry.project(
+                axis_uvw,
+                gradₕ(cartesian_uvw(global_geometry, u, lg)),
+            ),
+            lg,
+        ) - Geometry.project(axis_uvw, gradₕ(UVW(u))),
+    )
+    return S
+end
+
+"""
+    complete_dg_strain_rate!(S, u)
+
+Complete on a DG space the strain rate `S` (`UVW × UVW`, from
+`compute_strain_rate_center_full!` or `compute_strain_rate_face_full!` on the
+same space as `u`), and return `S`. The horizontal velocity gradient gets the
+central lifting of the jumps of `u` across element faces
+([`central_velocity_gradient_lift`](@ref)), and on the sphere the turning of
+the local frame (`add_dg_frame_turning_strain!`). The completed horizontal
+gradient is the BR1 gradient, the negative adjoint of the central-flux weak
+divergence of [`dg_horizontal_stress_divergence!`](@ref), so a stress
+`τ = −2ν S` built from it removes resolved kinetic energy at the rate
+`∫ 2ρν ∇u:S` over the horizontal derivatives (Gassner et al. 2018). The
+element-local gradient alone misses the face jumps, which are the
+discontinuities a DG subgrid model has to see. No-op on CG spaces.
+"""
+function complete_dg_strain_rate!(S, u)
+    space = axes(S)
+    is_dg_horizontal(space) || return S
+    lg = Fields.local_geometry_field(space)
+    add_dg_frame_turning_strain!(S, u, Spaces.global_geometry(space))
+    # the face kernels add the lifting to a WJ-weighted residual; the lifting of
+    # the Cartesian jumps, rotated back, is the lifting of the local ones, the
+    # rotation being single-valued at shared nodes
+    @. S *= lg.WJ
+    Operators.add_lifting_flux_interior!(
+        central_velocity_gradient_lift,
+        S,
+        u,
+        lg,
+    )
+    @. S = symmetric_part(S / lg.WJ)
+    return S
+end
+
+"""
+    dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ, ᶠτ, ᶠρ)
+
+Subtract the horizontal divergence of the density-weighted stress, `∇ₕ⋅(ρτ)/ρ`,
+from the momentum tendencies on a DG space: `uₕ` from the center stress `ᶜτ`
+and `u₃` from the face stress `ᶠτ` (`UVW × UVW`, both overwritten with `ρτ`),
+with the face density `ᶠρ`. The divergence is
+`Operators.cartesian_tensor_divergence!` with a central interface flux, the DG
+counterpart of `wdivₕ(ρτ)` on CG spaces: the momentum axis is rotated to global
+Cartesian components, so the face fluxes cancel pairwise and the stress
+conserves Cartesian momentum exactly, as the flux-differencing dynamics do,
+and the connection terms of the sphere are exact.
+"""
+function dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ, ᶠτ, ᶠρ)
+    (; ᶜtemp_strain, ᶠtemp_strain, ᶜtemp_UVW, ᶠtemp_UVW) = p.scratch
+    ᶜρ = Y.c.ρ
+    numflux = Operators.CentralNumericalFlux(identity)
+    @. ᶜτ = ᶜρ * ᶜτ
+    ᶜdivρτ = Operators.cartesian_tensor_divergence!(
+        ᶜtemp_UVW,
+        ᶜtemp_strain,
+        ᶜτ,
+        Operators.tendency_completion(ᶜtemp_UVW; numflux),
+    )
+    @. Yₜ.c.uₕ -= C12(ᶜdivρτ / ᶜρ)
+    @. ᶠτ = ᶠρ * ᶠτ
+    ᶠdivρτ = Operators.cartesian_tensor_divergence!(
+        ᶠtemp_UVW,
+        ᶠtemp_strain,
+        ᶠτ,
+        Operators.tendency_completion(ᶠtemp_UVW; numflux),
+    )
+    @. Yₜ.f.u₃ -= C3(ᶠdivρτ / ᶠρ)
+    return nothing
+end
+
+"""
     set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, ᶜuₕ, ᶜρ)
 
 GCL-consistent (free-stream-preserving) replacement for `compute_ᶠuₕ³` on DG
