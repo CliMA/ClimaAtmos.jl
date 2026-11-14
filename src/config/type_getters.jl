@@ -153,9 +153,9 @@ values map to same-named types in `Setups`:
   - Baroclinic waves: `"DryBaroclinicWave"`, `"MoistBaroclinicWave"`,
     `"MoistBaroclinicWaveWithEDMF"`, which read `perturb_initstate` and `deep_atmosphere`.
   - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
-    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"GABLS"`, `"ISDAC"`, which read `prognostic_tke`
-    (and, for ISDAC, `perturb_initstate`), and `"Larcform1"`, which starts from zero
-    TKE and reads neither.
+    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"GABLS"`, `"ISDAC"`, `"MPACE"`, which read
+    `prognostic_tke` (and, for ISDAC, `perturb_initstate`), and `"Larcform1"`, which
+    starts from zero TKE and reads neither.
   - RCEMIP I: `"RCEMIPIProfile_295"`, `"RCEMIPIProfile_300"`, `"RCEMIPIProfile_305"`.
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
   - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
@@ -270,7 +270,8 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
         )
-    elseif ic_name in ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA")
+    elseif ic_name in
+           ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA", "MPACE")
         return getproperty(Setups, Symbol(ic_name))(;
             prognostic_tke = parsed_args["prognostic_tke"],
             thermo_params,
