@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.19
+-------
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.
