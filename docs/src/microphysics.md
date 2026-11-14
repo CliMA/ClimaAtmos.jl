@@ -90,17 +90,15 @@ therefore `w_base max(0, ρq^g) + w_jac (ρq* - ρq^g)` (nonzero out of a negati
 cell whenever `w_jac > 0` and `ρq* ≠ ρq^g`). Across the implicit stages of each
 step, `surface_rain_flux`, `surface_snow_flux`, and
 `col_integrated_precip_energy_tendency` are accumulated with the IMEX tableau
-`b_imp` weights from those linearized stage bottom-face fluxes (and a
-`SlabOceanTemperature` surface receives the matching post-Newton increment per
-stage when the accumulator is active). Both the accumulated surface diagnostic
-and `SlabOceanTemperature` conservation match the discrete column sedimentation
+`b_imp` weights from those linearized stage bottom-face fluxes at the converged
+Newton state. Both the accumulated surface diagnostic and
+`SlabOceanTemperature` conservation match the discrete column sedimentation
 sink under four conditions: direct Newton solve without Krylov or line search,
 with the Jacobian updated at the final Newton iterate
-(`update_jacobian_every = "solve"`, or `"stage"` when
-`max_newton_iters_ode == 1`); `ManualSparseJacobian` (Krylov, line search,
-`update_jacobian_every = "dt"`, `"stage"` with `max_newton_iters_ode > 1`, and
-autodiff Jacobians disable the `w_jac` accumulator and leave a slab ocean on the
-pointwise stage flux, with a one-time warning in `build_cache`); direct
+(`update_jacobian_every = "solve"`, or `"stage"`); `ManualSparseJacobian`
+(Krylov, line search, `update_jacobian_every = "dt"`, and autodiff Jacobians
+disable the `w_jac` accumulator and leave a slab ocean on the pointwise stage
+flux, with a one-time warning in `build_cache`); direct
 inversion of the block-lower-triangular scalar submatrix
 (`ApproximateBlockArrowheadIterativeSolve` approximates only the velocity Schur
 complement, whose `ᶜadvdivᵥ` columns integrate to zero over each column); and
@@ -202,8 +200,8 @@ fully-coupled implicit microphysics solver.
 `update_implicit_microphysics_jacobian!` builds piecewise analytical Jacobian
 entries for cloud condensation/sublimation, rain evaporation, and snow
 sublimation/deposition, plus their `PrognosticEDMFX` off-diagonal couplings.
-With the default `max_newton_iters_ode = 1`, these entries set the single-step
-Newton increment directly (whereas multi-iteration or Krylov solves converge to
+With the default `max_newton_iters_ode = 3`, these entries serve as the
+preconditioner for each Newton iteration (whereas Krylov solves converge to
 the SGS-integrated residual of `update_implicit_1m_tendency!`):
 
   - **Cell-mean evaluation of `τ`, `C`, and `Γ`.** `τ`, the ventilation

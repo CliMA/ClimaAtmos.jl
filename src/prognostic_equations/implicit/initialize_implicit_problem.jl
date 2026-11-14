@@ -12,7 +12,6 @@ Return `true` when `p.scratch` holds an active stage-weighted surface
 precipitation accumulator (`n_imp_stages > 0`).
 """
 @inline has_precip_stage_accumulator(p) =
-    hasproperty(p.scratch, :sfc_precip_lin_state) &&
     hasproperty(p.scratch, :precip_stage_idx) &&
     hasproperty(p.scratch, :n_imp_stages) &&
     p.scratch.n_imp_stages > 0
@@ -45,9 +44,9 @@ unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
 For `PrognosticEDMFX`:
 
  1. Record `-u₃_old / dtγ` and `-ρa_old / dtγ` from the stage-entering state
-    (so the Newton residual reproduces `u₃_stage` and `ρa_stage`), refresh the
-    implicit precomputed cache (`set_implicit_precomputed_quantities_core!`)
-    when at least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to
+    into `ᶠu₃_tendencyʲs` and `ᶜρa_tendencyʲs`, refresh the implicit
+    precomputed cache (`set_implicit_precomputed_quantities_core!`) when at
+    least one Picard round runs, and clamp `Y.c.sgsʲs.:(j).ρa` to
     `[0, a_max ρʲ]` so the Picard and Newton predictors start from a feasible
     draft area. The grid-mean condensates are left at their stage-entering
     values: the grid-mean, draft, and environment thermodynamics and the 1M
@@ -72,12 +71,13 @@ For `PrognosticEDMFX`:
 
  3. Solve `u₃` and `ρa` (in two passes via `solve_sgs_ρa_two_pass!`)
     analytically with the stage-initial values as `*_old` and the
-    Picard-converged buoyancy, microphysics, and sedimentation inputs, then
-    complete the cached tendencies `(u₃_stage - u₃_old) / dtγ` and
-    `(ρa_stage - ρa_old) / dtγ` in `p.precomputed.ᶠu₃_tendencyʲs` and
-    `p.precomputed.ᶜρa_tendencyʲs`. The matching `sgs_*_implicit_tendency!`
-    routines feed these to the Newton solve so it reproduces the analytic
-    values. `ᶜmp_tendencyʲs` is held fixed through Newton so the Jacobian —
+    Picard-converged buoyancy, microphysics, and sedimentation inputs to
+    provide a high-quality initial guess for the Newton solve. The cached
+    tendencies `p.precomputed.ᶠu₃_tendencyʲs` and
+    `p.precomputed.ᶜρa_tendencyʲs` are updated but are no longer fed to the
+    Newton solve; instead `sgs_u₃_implicit_tendency!` and
+    `sgs_ρa_implicit_tendency!` evaluate the physical ODE RHS at each Newton
+    iterate. `ᶜmp_tendencyʲs` is held fixed through Newton so the Jacobian —
     which does not include its derivatives — stays consistent.
 
  4. With 1M microphysics and at least one Picard round, set the grid-mean
@@ -386,17 +386,16 @@ end
 """
     sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Write the cached SGS/updraft `u₃` tendency into `Yₜ.f.sgsʲs.:(j).u₃`.
+Accumulate the SGS/updraft `u₃` ODE right-hand side into `Yₜ.f.sgsʲs.:(j).u₃`.
 
-For `PrognosticEDMFX`, the implicit-stage value of `u₃` is computed
-analytically in `initialize_implicit_stage_problem!` and written directly
-into `Y`. This routine then supplies the corresponding cached tendency,
+For `PrognosticEDMFX`, evaluates the buoyancy, entrainment damping, pressure
+drag, and Rayleigh sponge terms at the current Newton iterate `Y`. Because
+`implicit_tendency!` zeros `Yₜ` before calling this function, the assignment is
+equivalent to accumulation. The tendency is assigned (not accumulated) so any
+earlier updraft `u₃` contribution is discarded.
 
-    (u₃_stage - u₃_old) / dtγ,
-
-read from `p.precomputed.ᶠu₃_tendencyʲs`, to the implicit ODE solve so that the
-analytically computed `u₃` value is preserved. Note that the tendency is
-assigned, not accumulated, so any earlier updraft `u₃` tendency is discarded.
+The KE advection term `∂(w²/2)/∂z` is currently omitted (deferred to a later
+commit that also adds the matching Jacobian block).
 
 For all other `turbconv_model` subtypes this is a no-op. Mutates `Yₜ` and
 returns `nothing`.
@@ -410,14 +409,104 @@ function sgs_u₃_implicit_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶠu₃_tendencyʲs) = p.precomputed
+    (; params) = p
+    (; rayleigh_sponge) = p.atmos
+    (; ᶜρ_diffʲs, ᶜρʲs, ᶠKᵥʲs) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+    ) = p.precomputed
+    FT = eltype(p.params)
+    (zero_FT, one_FT) = (zero(FT), one(FT))
+
+    turbconv_params = CAP.turbconv_params(params)
+    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    nh_pressure = p.atmos.edmfx_model.nh_pressure
+    # Empty tuple when no sponge so that foreach_column gets a consistent type.
+    (sponge, ᶠz) =
+        isnothing(rayleigh_sponge) ? ((), ()) :
+        (
+            (rayleigh_sponge, Spaces.z_max(axes(Y.f))),
+            Fields.coordinate_field(Y.f).z,
+        )
+    ᶠdz = Fields.Δz_field(axes(Y.f))
     n = n_mass_flux_subdomains(turbconv_model)
 
-    # Use the implied tendency cached during implicit-stage initialization.
-    # This keeps the analytically solved u₃ value fixed during the ODE solve.
     for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ = ᶠu₃_tendencyʲs.:($$j)
+        rates = (
+            ᶜentr_vel_scaleʲs.:($j), ᶜarea_bounding_entr_detrʲs.:($j),
+            ᶜentr_nonvel_rateʲs.:($j), ᶜturb_entrʲs.:($j),
+        )
+        DataLayouts.foreach_column(
+            Yₜ.f.sgsʲs.:($j).u₃, Y.c.sgsʲs.:($j).ρa, Y.c.sgsʲs,
+            Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j), ᶜρʲs, ᶜρ_diffʲs.:($j),
+            ᶠgradᵥ_ᶜΦ, ᶠdz, ᶠz, rates, ᶠKᵥʲs.:($j),
+        ) do ᶠu₃ₜʲ, ᶜρaʲ, ᶜsgsʲs, ᶠu₃ʲ, ᶜρʲ, ᶜρʲs, ᶜρ_diffʲ, ᶠgradᵥ_ᶜΦ,
+        ᶠdz, ᶠz, rates, ᶠKᵥʲ
+            @inline
+            (ᶜentr_vel_scaleʲ, ᶜarea_bounding_entr_detrʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) =
+                rates
+            # Clamp a⁰ ∈ [1−a_max, 1] to guard out-of-range ρa during Newton.
+            ᶜa⁰ = @. clamp(a⁰(ᶜsgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, one_FT)
+            ᶜa⁰_inv = @. one_FT / ᶜa⁰
+            # Velocity-independent linear entrainment sink  E_lin · w / a⁰.
+            ᶜlinear_rate = @. (
+                max(zero_FT, ᶜarea_bounding_entr_detrʲ) + ᶜentr_nonvel_rateʲ +
+                ᶜturb_entrʲ
+            ) * ᶜa⁰_inv
+            # Velocity-proportional + pressure drag quadratic sink (w/a⁰)².
+            ᶜquadratic_rate = @. (
+                ᶜentr_vel_scaleʲ * ᶜa⁰_inv + ifelse(
+                    nh_pressure,
+                    pressure_drag_coefficient(
+                        α_d,
+                        scale_height,
+                        draft_area(ᶜρaʲ, ᶜρʲ),
+                        ᶜa⁰,
+                        a_min,
+                        a_max,
+                    ),
+                    zero_FT,
+                )
+            ) * ᶜa⁰_inv
+            ᶠu₃_data = @. ᶠu₃ʲ.components.data.:1
+            # KE advection ∂(w²/2)/∂z: face KE gradient at centers (F2C),
+            # upwinded from below (bottom_bias C2F), matching the analytic sweep's
+            # (w[i]² − w[i−1]²) / 2Δz stencil.
+            ᶠKE_adv = @. ᶠbottom_bias(ᶜgradᵥ(ᶠKᵥʲ))
+            ᶠKE_adv_data = ᶠKE_adv.components.data.:1
+            # RHS = buoyancy + KE advection + linear + quadratic damping.
+            # Buoyancy: -(1−α_b)·ρ_diff·∇Φ. For a buoyant parcel ρ_diff < 0,
+            # so -(1−α_b)·ρ_diff·∇Φ > 0 (upward acceleration).
+            ᶠtend = @. (
+                -(1 - α_b) * ᶠinterp(ᶜρ_diffʲ) * ᶠgradᵥ_ᶜΦ.components.data.:1 -
+                ᶠKE_adv_data -
+                ᶠinterp(ᶜlinear_rate) * ᶠu₃_data -
+                ᶠinterp(ᶜquadratic_rate) / ᶠdz * ᶠu₃_data * abs(ᶠu₃_data)
+            )
+            if !isempty(sponge)
+                (sponge_model, zmax) = sponge
+                @. ᶠtend -= β_rayleigh_u₃(sponge_model, ᶠz, zmax) * ᶠu₃_data
+            end
+            # cache_imp! resets u₃ = 0 at both boundary faces before every Newton
+            # residual evaluation (set_velocity_at_surface! / set_velocity_at_top!),
+            # and the analytic solve gives 0 at the bottom face via column_accumulate!.
+            # Zero the boundary face tendencies here so the Newton residual is zero there.
+            ᶠset_zero_bc = Operators.SetBoundaryOperator(
+                bottom = Operators.SetValue(zero_FT),
+                top = Operators.SetValue(zero_FT),
+            )
+            @. ᶠu₃ₜʲ = C3(ᶠset_zero_bc(ᶠtend))
+        end
     end
+    return nothing
 end
 
 """
@@ -611,18 +700,14 @@ end
 """
     sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Write the cached updraft area-weighted density tendency into
+Accumulate the updraft area-weighted density `ρa` ODE right-hand side into
 `Yₜ.c.sgsʲs.:(j).ρa`.
 
-For `PrognosticEDMFX`, the implicit-stage value of `ρa` is computed
-analytically in `initialize_implicit_stage_problem!` and written directly
-into `Y`. This routine supplies the corresponding cached tendency,
-
-    (ρa_stage - ρa_old) / dtγ,
-
-read from `p.precomputed.ᶜρa_tendencyʲs`, to the implicit ODE solve so that the
-analytically computed `ρa` value is preserved. The tendency is assigned, not
-accumulated, so any earlier updraft `ρa` tendency is discarded.
+For `PrognosticEDMFX`, evaluates the upwind mass-flux divergence (with the
+mass-flux-divergence detrainment prefactor), the net entrainment minus
+detrainment, the microphysics mass source, and the volumetric surface mass-flux
+source at the current Newton iterate `Y`. Because `implicit_tendency!` zeros
+`Yₜ` before calling this function, the assignment is equivalent to accumulation.
 
 For all other `turbconv_model` subtypes this is a no-op. Mutates `Yₜ` and
 returns `nothing`.
@@ -636,17 +721,115 @@ function sgs_ρa_implicit_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜρa_tendencyʲs) = p.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (;
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+    ) = p.precomputed
+    FT = eltype(p.params)
+    (zero_FT, one_FT) = (zero(FT), one(FT))
+
+    turbconv_params = CAP.turbconv_params(p.params)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    ᶠdz = Fields.Δz_field(axes(Y.f))
+    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    detr_massflux_vertdiv_coeff =
+        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+
+    nonequilibrium_mp =
+        p.atmos.microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    implicit_0m_mp =
+        p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+    dtγ = p.dtγ
+
+    ᶜmass_source_rate = p.scratch.ᶜtemp_scalar_5
     n = n_mass_flux_subdomains(turbconv_model)
-    drafts = unrolled_map(StaticOneTo(n)) do j
-        @inline
-        (Yₜ.c.sgsʲs.:($j).ρa, ᶜρa_tendencyʲs.:($j))
-    end
-    DataLayouts.foreach_point(drafts) do drafts
-        for (ᶜρaₜʲ, ᶜρa_tendencyʲ) in drafts
-            @. ᶜρaₜʲ = ᶜρa_tendencyʲ
+
+    for j in 1:n
+        nonequilibrium_mp &&
+            updraft_sedimentation_rate!(ᶜmass_source_rate, Y, p, j, dtγ)
+        ᶜr_mass =
+            nonequilibrium_mp ? ᶜmass_source_rate :
+            implicit_0m_mp ? p.precomputed.ᶜmp_tendencyʲs.:($j).dq_tot_dt :
+            ()
+        rates = (
+            ᶜarea_bounding_entr_detrʲs.:($j), ᶜentr_vel_scaleʲs.:($j),
+            ᶜentr_nonvel_rateʲs.:($j),
+        )
+        DataLayouts.foreach_column(
+            Yₜ.c.sgsʲs.:($j).ρa, Y.c.sgsʲs.:($j).ρa, Y.f.sgsʲs.:($j).u₃,
+            ᶜρʲs.:($j), ᶜρ_diffʲs.:($j), rates, ᶜr_mass,
+            p.precomputed.sfc_mass_flux_sourceʲs.:($j), ᶠgradᵥ_ᶜΦ, ᶜdz,
+            ᶠdz,
+        ) do ᶜρaₜʲ, ᶜρaʲ, ᶠu₃ʲ, ᶜρʲ, ᶜρ_diffʲ, rates, ᶜr_mass_column,
+        mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
+            @inline
+            (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) =
+                rates
+            ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
+            ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
+            # Clip u₃ to non-negative for mass-flux terms. The prognostic
+            # Y.f.sgsʲs.(j).u₃ can transiently go negative during Newton
+            # iterations; enforce_edmf_updraft_constraints! restores it at
+            # stage boundaries, but all mass-flux-based quantities must use
+            # upward-only velocity here to avoid corrupting ρa.
+            ᶠu₃_pos = @. max(zero_FT, ᶠu₃ʲ.components.data.:1)
+            ᶠw = @. ᶠu₃_pos / ᶠdz
+            # Draft area and area limiters evaluated at the current iterate.
+            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            ᶜlower_limiter_factor =
+                @. lower_area_limiter_factor(ᶜaʲ, turbconv_params)
+            ᶜupper_limiter_factor =
+                @. upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+            # First-order upwinded ρa flux (Covariant3Vector face field).
+            # ᶠbottom_bias gives the upwind (lower-cell) value for upward flow.
+            ᶠρa_flux = @. ᶠbottom_bias(ᶜρaʲ) * C3(ᶠu₃_pos)
+            # Mass-flux-divergence detrainment prefactor: applied when the
+            # flux is convergent (divergence < 0).  At the area limit
+            # (upper_limiter → 0) all converging mass is detrained.
+            ᶜone_minus_prefactor = @. ifelse(
+                ᶜdivᵥ(ᶠρa_flux) < zero_FT,
+                ᶜupper_limiter_factor *
+                (one_FT - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
+                one_FT,
+            )
+            # Buoyancy-driven detrainment rate (negative buoyancy detrain).
+            ᶜbuoy_inv_time_scale = @. ᶜinterp(
+                detr_buoy_inv_time_scale(
+                    ᶠw,
+                    vertical_buoyancy_acceleration(
+                        ᶠinterp(ᶜρ_diffʲ),
+                        ᶠgradᵥ_ᶜΦ,
+                        ᶠlg,
+                    ),
+                    entr_detr_buoy_inv_tau_max,
+                ),
+            )
+            # (ε − δ) without the mass-flux-divergence detrainment piece.
+            ᶜexplicit_entr_minus_detr = @. ᶜarea_bounding_entr_detrʲ +
+               ᶜentr_vel_scaleʲ * ᶜinterp(ᶠw) +
+               ᶜentr_nonvel_rateʲ -
+               ᶜlower_limiter_factor *
+               detr_buoy_coeff *
+               ᶜbuoy_inv_time_scale
+            # Volumetric surface mass-flux source (non-zero at first cell only).
+            ᶜone_first_cell =
+                Operators.SetBoundaryOperator(
+                    bottom = Operators.SetValue(one_FT),
+                )
+            ᶜsource = @. ᶜone_first_cell(zero_FT * ᶜdz) * mass_flux_source
+            # ρa ODE RHS: (ε−δ)·ρa + r_mass·ρa − prefactor·∇·(ρaʲ·u₃) + source.
+            @. ᶜρaₜʲ =
+                (ᶜexplicit_entr_minus_detr + ᶜr_massʲ) * ᶜρaʲ -
+                ᶜone_minus_prefactor * ᶜdivᵥ(ᶠρa_flux) +
+                ᶜsource
         end
     end
+    return nothing
 end
 
 """

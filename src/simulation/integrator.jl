@@ -91,13 +91,7 @@ function imex_b_imp_stages(alg::CTS.IMEXAlgorithm, ::Type{FT}) where {FT}
        !isnothing(nm.krylov_method) ||
        !isnothing(nm.line_search) ||
        isnothing(imex_gamma(alg)) ||
-       !(
-           nm.update_j == CTS.UpdateEvery(CTS.NewNewtonIteration) ||
-           (
-               nm.update_j == CTS.UpdateEvery(CTS.NewNewtonSolve) &&
-               nm.max_iters == 1
-           )
-       )
+       nm.update_j != CTS.UpdateEvery(CTS.NewNewtonIteration)
         return (zero(SVector{8, FT}), 0)
     end
     a = alg.tableau.a_imp.coeffs
@@ -341,33 +335,6 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
              stage-entering state is copied, which can produce an upward \
              surface precipitation flux; use `stage` or `step`."
         )
-    end
-    if isnothing(prescribed_flow) && !iszero(p.dtγ)
-        if atmos.numerics.energy_humidity_upwinding == Val(:none) &&
-           atmos.diff_mode != Implicit()
-            @warn(
-                "`energy_humidity_upwinding = none` skips the post-Newton \
-                 dissipation, leaving vertical advection of `e_tot - Φ`, \
-                 `q_tot`, and any condensates forward-Euler central."
-            )
-        end
-        if atmos.numerics.energy_humidity_upwinding != Val(:none) &&
-           ode_algo isa CTS.IMEXAlgorithm &&
-           !isnothing(ode_algo.newtons_method)
-            nm = ode_algo.newtons_method
-            if (
-                jacobian isa ManualSparseJacobian &&
-                isnothing(nm.krylov_method) &&
-                nm.max_iters > 1
-            )
-                @warn(
-                    "With `ManualSparseJacobian` and `max_newton_iters_ode > 1`, \
-                     additional Newton iterations iterate the explicit central \
-                     scalar step while the `+2 C_γ` dissipation weight is \
-                     disabled (`compensate_explicit_scalar_advection = false`)."
-                )
-            end
-        end
     end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)

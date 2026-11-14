@@ -254,10 +254,9 @@ end
     fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
 Compute the full tendency explicitly, by adding the tendencies of
-`remaining_tendency!` to those of `implicit_tendency!`, together with the
-vertical advection corrections that the implicit path applies after the Newton
-solve (`add_vertical_advection_corrections!` with a unit Courant limiter), so
-that `energy_humidity_upwinding` and `tracer_upwinding` take full effect.
+`remaining_tendency!` to those of `implicit_tendency!`. The upwinding
+reconstruction for `e_tot - Φ`, `q_tot`, and the sedimenting condensates is
+applied directly inside `implicit_tendency!` via `energy_humidity_upwinding`.
 
 Experimental timestepping mode used by `args_integrator` when `prescribed_flow` is
 set, where the flow is imposed and implicit treatment of sound waves is
@@ -266,6 +265,5 @@ unnecessary. Mutates `Yₜ` and `Yₜ_lim`.
 function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     implicit_tendency!(Yₜ, Y, p, t)
     add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    add_vertical_advection_corrections!(Yₜ, Y, p, zero(p.dtγ))
     return nothing
 end

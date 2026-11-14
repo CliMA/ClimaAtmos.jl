@@ -284,10 +284,6 @@ function get_bench_items(
             () -> CA.initialize_implicit_stage_problem!(Y, p, p.dt),
         ),
         (
-            "correct_implicit_advection_tendency!",
-            () -> CA.correct_implicit_advection_tendency!(Yₜ, Y, p, t),
-        ),
-        (
             "update_jacobian! (total)",
             () -> CA.update_jacobian!(jac_alg, jac_cache, Y, p, p.dt, t),
         ),
@@ -390,9 +386,6 @@ function compute_refs(state, jac_alg, jac_cache)
     Yₜ_rem_c = snap(Yₜ_rem.c)
     Yₜ_rem_f = snap(Yₜ_rem.f)
     Yₜ_lim_c = snap(Yₜ_lim.c)
-    Yₜ_corr = similar(Yₜ)
-    CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
-    Yₜ_corr_c = snap(Yₜ_corr.c)
     return (;
         Y_after_init_c,
         Y_after_init_f,
@@ -403,7 +396,6 @@ function compute_refs(state, jac_alg, jac_cache)
         Yₜ_rem_c,
         Yₜ_rem_f,
         Yₜ_lim_c,
-        Yₜ_corr_c,
         ᶠK_h = snap(p.precomputed.ᶠK_h),
         ᶠK_u = snap(p.precomputed.ᶠK_u),
         ᶜgradᵥ_θ = snap(p.precomputed.ᶜgradᵥ_θ_liq_ice),
@@ -433,7 +425,6 @@ function report_equivalence(ref, new)
         ("remaining Yₜ.c", ref.Yₜ_rem_c, new.Yₜ_rem_c),
         ("remaining Yₜ.f", ref.Yₜ_rem_f, new.Yₜ_rem_f),
         ("remaining Yₜ_lim.c", ref.Yₜ_lim_c, new.Yₜ_lim_c),
-        ("correct_implicit Yₜ.c", ref.Yₜ_corr_c, new.Yₜ_corr_c),
         ("ᶠK_h", ref.ᶠK_h, new.ᶠK_h),
         ("ᶠK_u", ref.ᶠK_u, new.ᶠK_u),
         ("ᶜgradᵥ_θ_liq_ice", ref.ᶜgradᵥ_θ, new.ᶜgradᵥ_θ),

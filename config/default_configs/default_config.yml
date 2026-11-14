@@ -76,7 +76,7 @@ use_dynamic_krylov_rtol:
   value: false
 max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
-  value: 1
+  value: 3
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `ARS222`, `SSP333`, `IMKG343a`, etc.]. The explicit tableau of `ARS222` amplifies undamped oscillatory modes (`|R(iy)| > 1`), so it suits 1D column setups (which have no horizontal modes) and 3D configurations whose horizontal damping per step is strong, such as `amip_target.yml` and the aquaplanet setups that select it."
   value: "ARS343"
