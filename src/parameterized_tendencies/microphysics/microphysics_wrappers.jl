@@ -370,16 +370,6 @@ share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction
     return (q_lcl_hat, q_icl_hat)
 end
 
-# `@noinline` here is the SGS node function barrier. The functor body
-# below (the shape-function partition, plus the heavy
-# `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
-# substep loop and 4×4 linearized operator) gets invoked at every node and
-# temperature point of `sum_over_conditional_nodes`. Without the barrier those copies inline
-# into one giant GPU broadcast kernel, pushing register pressure past the
-# 255-reg hard cap and pinning occupancy at 12.5%. Marking the functor
-# itself (vs a trivial forwarding wrapper) is the strongest signal we can
-# give LLVM/NVPTX not to re-inline this — the body is multi-statement and
-# meaningfully sized, so the late inliner won't undo it.
 """
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p, q_sat_hat)
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
@@ -388,9 +378,33 @@ Evaluate the 1-moment tendencies at one node `(T_hat, q_tot_hat)` [K, kg/kg]
 with the node's shaft flag `flag_p` (`1` inside the precipitation shaft, `0`
 outside; the intervals of the conditional-moment rule lie entirely on one
 side of the shaft edge) and the saturation specific humidity `q_sat_hat` at
-`(T_hat, ρ)`, which `_point_value` set the node's total water from and so has
+`(T_hat, ρ)`, which `_point_state` set the node's total water from and so has
 to hand; the three-argument form evaluates it instead, for callers that reach
 the evaluator from outside the node traversal.
+
+The tendencies are those of CloudMicrophysics at the state of the node
+(`sgs_node_state`), or zero where all 1M rates vanish there.
+
+# Returns
+
+NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
+with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
+"""
+@inline (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p) = eval(
+    T_hat, q_tot_hat, flag_p,
+    TD.q_vap_saturation(eval.tps, T_hat, eval.ρ),
+)
+@inline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p, q_sat_hat)
+    (active, state) = sgs_node_state(eval, T_hat, q_tot_hat, flag_p, q_sat_hat)
+    return active ? _node_tendency(eval, state...) : zero_1m_tendency(typeof(eval.ρ))
+end
+
+"""
+    sgs_node_state(eval, T_hat, q_tot_hat, flag_p, q_sat_hat)
+
+State of CloudMicrophysics at one node of the `Microphysics1MEvaluator` `eval`
+(arguments as for the evaluator), as `(active, (T, q_tot, q_lcl, q_icl, q_rai, q_sno))`
+[K, kg/kg]; `active` is `false` where all 1M rates vanish at the node.
 
 The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
@@ -412,18 +426,9 @@ subtracts it from `q_tot` to diagnose the local vapor.
 `q_tot_hat` is clamped non-negative first. Subsaturated nodes contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
 local vapor.
-
-# Returns
-
-NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
-with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@inline (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p) = eval(
-    T_hat, q_tot_hat, flag_p,
-    TD.q_vap_saturation(eval.tps, T_hat, eval.ρ),
-)
-@noinline function (eval::Microphysics1MEvaluator)(
-    T_hat, q_tot_hat, flag_p, q_sat_hat,
+@inline function sgs_node_state(
+    eval::Microphysics1MEvaluator, T_hat, q_tot_hat, flag_p, q_sat_hat,
 )
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
@@ -474,8 +479,9 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
         end
 
     # When a quadrature node has zero condensate and precipitation and lies
-    # below both liquid and ice saturation, all 1M microphysics rates vanish;
-    # return zero directly instead of running the 5-substep 4x4 linear solver.
+    # below both liquid and ice saturation, all 1M microphysics rates vanish,
+    # and the node needs no substepped 4x4 linear solve.
+    active = true
     if isempty(eval.args) &&
        no_1m_condensate(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
         T_freeze = TD.Parameters.T_freeze(eval.tps)
@@ -483,18 +489,70 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
         q_smin =
             (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
             TD.q_vap_saturation(eval.tps, T_hat, eval.ρ, TD.Ice())
-        if q_tot_node <= q_smin
-            return zero_1m_tendency(FT)
+        active = q_tot_node > q_smin
+    end
+    return (active, (T_hat, q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node))
+end
+
+# The tendencies of CloudMicrophysics at the state of a node (`sgs_node_state`).
+@inline _node_tendency(eval, T, q_tot, q_lcl, q_icl, q_rai, q_sno) = _call_bmt_1m(
+    eval.mode, eval.scheme, eval.mp, eval.tps,
+    eval.ρ, T, eval.w,
+    q_tot, q_lcl, q_icl, q_rai, q_sno,
+    eval.dt, eval.nsubs, eval.args,
+)
+
+"""
+    sum_over_conditional_nodes(eval::Microphysics1MEvaluator, rule, spread)
+
+The weighted sum of the 1-moment tendencies over the nodes of `rule` and their
+points in temperature (see the generic method), in two loops: the first stores
+the CloudMicrophysics state (`sgs_node_state`) and the weight of every point
+with a positive weight at which the rates do not all vanish, and the second
+evaluates the tendencies at the stored states. A GPU kernel then holds none of
+the fields that reconstruct a node in registers during an evaluation, and it
+contains the evaluation (the heavy `BMT.bulk_microphysics_tendencies` call
+with its `nsubs` substep loop and 4×4 linearized operator) once, inlined.
+"""
+function sum_over_conditional_nodes(
+    eval::Microphysics1MEvaluator, rule::ConditionalRule{N}, spread::TemperatureSpread,
+) where {N}
+    FT = typeof(eval.ρ)
+    states = SA.MVector{2 * N, NTuple{7, FT}}(undef)
+    n_states = 0
+    @inbounds for k in 1:N
+        nₖ = rule.nodes[k]
+        nₖ.w > zero(FT) || continue
+        pts = _temperature_points(nₖ.T, spread)
+        for j in 1:length(pts)
+            (p, t) = pts[j]
+            weight = nₖ.w * p
+            weight > zero(FT) || continue
+            (T_pt, q_pt, q_sat_pt) = _point_state(nₖ, t, spread)
+            (active, state) = sgs_node_state(eval, T_pt, q_pt, nₖ.shaft, q_sat_pt)
+            active || continue
+            n_states += 1
+            unchecked_setindex!(states, (state..., weight), n_states)
         end
     end
-
-    return _call_bmt_1m(
-        eval.mode, eval.scheme, eval.mp, eval.tps,
-        eval.ρ, T_hat, eval.w,
-        q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
-        eval.dt, eval.nsubs, eval.args,
-    )
+    acc = add_auto_broadcasters(zero_1m_tendency(FT))
+    @inbounds for i in 1:n_states
+        (T, q_tot, q_lcl, q_icl, q_rai, q_sno, weight) = unchecked_getindex(states, i)
+        acc +=
+            add_auto_broadcasters(
+                _node_tendency(eval, T, q_tot, q_lcl, q_icl, q_rai, q_sno),
+            ) * weight
+    end
+    return drop_auto_broadcasters(acc)
 end
+
+# The `getindex` and `setindex!` of an `MVector` of isbits values under `@inbounds`,
+# also with `--check-bounds=yes`, where the `BoundsError` of an index that is not
+# a constant would capture the vector and move it to the heap.
+@inline unchecked_getindex(v::SA.MVector{N, T}, i) where {N, T} =
+    GC.@preserve v unsafe_load(Base.unsafe_convert(Ptr{T}, pointer_from_objref(v)), i)
+@inline unchecked_setindex!(v::SA.MVector{N, T}, x, i) where {N, T} =
+    GC.@preserve v unsafe_store!(Base.unsafe_convert(Ptr{T}, pointer_from_objref(v)), x, i)
 
 # The zero 1M tendency of the early exits for cells and quadrature nodes in which all
 # 1M rates vanish, and their shared test that no condensate or precipitation is present.
@@ -625,11 +683,10 @@ their sum.
     # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
     # return zero without running the substepped 4x4 linear solver.
     if no_1m_condensate(q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos)
-        q_smin = ifelse(
-            T >= TD.Parameters.T_freeze(thp),
-            TD.q_vap_saturation(thp, T, ρ, TD.Liquid()),
-            TD.q_vap_saturation(thp, T, ρ, TD.Ice()),
-        )
+        q_smin =
+            T >= TD.Parameters.T_freeze(thp) ?
+            TD.q_vap_saturation(thp, T, ρ, TD.Liquid()) :
+            TD.q_vap_saturation(thp, T, ρ, TD.Ice())
         if q_tot_safe < q_smin * (one(FT) - 2 * eps(FT))
             return zero_1m_tendency(FT)
         end
@@ -814,13 +871,22 @@ function sgs_microphysics_options(params)
             sgs_precip_incloud_fraction > 0 (got $(floor)): it bounds the \
             concentration of the precipitation on the shaft nodes.",
         )
-    return SGSMicrophysicsOptions(;
-        ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
-        ξ_ice = CAP.sgs_ice_uniform_fraction(params),
-        precip_incloud_fraction = β_p,
-        precip_frac_floor = floor,
-    )
+    return unchecked_sgs_microphysics_options(params)
 end
+
+"""
+    unchecked_sgs_microphysics_options(params)
+
+The `SGSMicrophysicsOptions` of `sgs_microphysics_options` without its check. A
+point loop calls this inside its body, where parameters held in the type of
+`params` are constants of the kernel instead of values it captures.
+"""
+@inline unchecked_sgs_microphysics_options(params) = SGSMicrophysicsOptions(;
+    ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
+    ξ_ice = CAP.sgs_ice_uniform_fraction(params),
+    precip_incloud_fraction = CAP.sgs_precip_incloud_fraction(params),
+    precip_frac_floor = CAP.sgs_precip_fraction_floor(params),
+)
 
 """
     microphysics_tendencies_1m(

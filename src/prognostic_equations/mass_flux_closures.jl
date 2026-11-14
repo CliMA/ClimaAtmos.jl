@@ -293,11 +293,9 @@ No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
 from `enforce_physical_constraints!`.
 """
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
-    FT = eltype(p.params)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
     # The SGS tracers whose grid-mean densities are prognostic
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
@@ -309,6 +307,9 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         (Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j))
     end
     DataLayouts.foreach_column(Y.c, drafts, ᶜh_tot, ᶜK) do Yc, drafts, ᶜh_tot, ᶜK
+        # Constants, evaluated in the loop so that the kernel folds them (a
+        # scalar that the loop captures is a run-time value).
+        (zero_FT, ϵ) = (zero(eltype(ᶜK)), ϵ_numerics(eltype(ᶜK)))
         for (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ) in drafts
             # Clip the area fraction to [0, 1] and the vertical velocity to
             # non-negative values, with zero velocity where the face-averaged

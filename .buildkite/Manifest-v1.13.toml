@@ -536,8 +536,8 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["Adapt", "ClimaParams", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "4a3e15d8ec91c3e965c05319f37109593429ee81"
-repo-rev = "dy/params_macro"
+git-tree-sha1 = "d9dff097ad261340da508ef6c7696d51bdf9de31"
+repo-rev = "dy/microphysics_fusion"
 repo-url = "https://github.com/CliMA/CloudMicrophysics.jl"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.49.1"

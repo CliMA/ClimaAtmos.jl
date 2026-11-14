@@ -346,16 +346,10 @@ function precomputed_quantities(Y, atmos)
             # `set_covariance_cache!`): `T′q′ / √(T′T′ q′q′)` for
             # `tq_correlation_model: diagnosed`, or the prescribed
             # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
-            # The displacement covariance `ᶜT′q′` is only allocated for the
-            # diagnosed model.
             ᶜcorr_Tq = zeros(axes(Y.c)),
             # Local SGS variance fidelity (see `sgs_variance_fidelity`),
             # refreshed inside `set_covariance_cache!`.
             ᶜα = zeros(axes(Y.c)),
-            (
-                atmos.tq_correlation_model isa DiagnosedTqCorrelation ?
-                (; ᶜT′q′ = zeros(axes(Y.c))) : (;)
-            )...,
             # Linear and curvature coefficients `(lin, curv)` of the saturation
             # excess under the vertical displacement, `S = μ_S + lin x +
             # ½ curv (x² − 1) + h` with `x` standard normal
@@ -555,8 +549,7 @@ velocity `ᶜuₕ`, interpolated from centers to faces with the mass-weighted
 interpolation `ᶠwinterp(ρ J, ·)` [1/s].
 
 This component is nonzero wherever the coordinate surfaces are sloped, and so
-enters the impenetrability conditions applied by `set_velocity_at_surface!` and
-`set_velocity_at_top!`.
+enters the impenetrability conditions applied by `set_velocity_at_boundaries!`.
 """
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
@@ -564,78 +557,31 @@ function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
 end
 
 """
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
 
-Modify `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
-`u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
-the `turbconv_model` is `PrognosticEDMFX`, the `Y.f.sgsʲs` are also modified so
-that each `u₃ʲ` is equal to `u₃` at the surface. Returns `nothing`.
+Modify `Y.f.u₃` so that `ᶠu³` is 0 at the surface and at the model top, in one
+point loop over both levels. Since `u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0
+gives `u₃ = -uₕ³ / g³³`. At the model top, this makes the total contravariant
+flux through the boundary vanish even where terrain-following coordinate
+surfaces are still sloped (`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is
+`PrognosticEDMFX`, the `Y.f.sgsʲs` are also modified so that each `u₃ʲ` is
+equal to `u₃` at both levels. Returns `nothing`.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_u₃ .= surface_velocity(Y.f.u₃, ᶠuₕ³)
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
-            @. sfc_u₃ʲ = sfc_u₃
-        end
+function set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
+    function boundary_values(level)
+        Yf = Fields.level(Y.f, level)
+        fields = (Yf, Fields.level(ᶠuₕ³.components.data.:1, level), g³³_field(axes(Yf)))
+        return unrolled_map(Fields.field_values, fields)
     end
-    return nothing
-end
-
-"""
-    surface_velocity(ᶠu₃, ᶠuₕ³)
-
-Return a lazy broadcast of the covariant vertical velocity component at the
-surface that makes the contravariant vertical velocity vanish there,
-`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_surface!`.
-"""
-function surface_velocity(ᶠu₃, ᶠuₕ³)
-    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(axes(sfc_u₃))
-    return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-end
-
-"""
-    top_velocity(ᶠu₃, ᶠuₕ³)
-
-Return a lazy broadcast of the covariant vertical velocity component at the model
-top that makes the contravariant vertical velocity vanish there,
-`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_top!`.
-"""
-function top_velocity(ᶠu₃, ᶠuₕ³)
-    top_level = Spaces.nlevels(axes(ᶠu₃)) - half
-    top_u₃ = Fields.level(ᶠu₃.components.data.:1, top_level)
-    top_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, top_level)
-    top_g³³ = g³³_field(axes(top_u₃))
-    return @. lazy(-top_uₕ³ / top_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-end
-
-"""
-    set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
-
-Modify `Y.f.u₃` so that `ᶠu³` is 0 at the model top. As at the surface,
-since `u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. This
-makes the total contravariant flux through the top boundary vanish even where
-terrain-following coordinate surfaces are still sloped at the model top
-(`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is `PrognosticEDMFX`, the
-`Y.f.sgsʲs` are also modified so that each `u₃ʲ` is equal to `u₃` at the model
-top. Returns `nothing`.
-"""
-function set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
-    top_u₃ = Fields.level(
-        Y.f.u₃.components.data.:1,
-        Spaces.nlevels(axes(Y.c)) + half,
-    )
-    top_u₃ .= top_velocity(Y.f.u₃, ᶠuₕ³)
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            top_u₃ʲ = Fields.level(
-                Y.f.sgsʲs.:($j).u₃.components.data.:1,
-                Spaces.nlevels(axes(Y.c)) + half,
-            )
-            @. top_u₃ʲ = top_u₃
+    boundaries = (boundary_values(half), boundary_values(Spaces.nlevels(axes(Y.c)) + half))
+    DataLayouts.foreach_point(boundaries) do boundaries
+        MatrixFields.unrolled_foreach(boundaries) do (Yf, uₕ³, g³³)
+            @inline
+            u₃ = @. -uₕ³ / g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+            @. Yf.u₃.components.data.:1 = u₃
+            for j in 1:n_prognostic_mass_flux_subdomains(turbconv_model)
+                @. Yf.sgsʲs.:($$j).u₃.components.data.:1 = u₃
+            end
         end
     end
     return nothing
@@ -845,17 +791,48 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
 
     # TODO: We might want to move this to constrain_state!
     if !(p.atmos.prescribed_flow isa PrescribedFlow)
-        set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-        set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
+        set_velocity_at_boundaries!(Y, ᶠuₕ³, turbconv_model)
     end
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    # Grid-mean velocities and kinetic energy in one fused column loop.
+    T_min_sgs = CAP.T_min_sgs(p.params)
+    # Grid-mean velocities and kinetic energy in one fused column loop. With
+    # nonequilibrium microphysics, the same loop then sets the thermodynamic
+    # state from the prognostic water species, the total specific enthalpy, and
+    # the pressure.
     DataLayouts.foreach_column(
-        ᶜu, ᶠu³, ᶜK, ᶠu, Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ,
-    ) do ᶜu, ᶠu³, ᶜK, ᶠu, Yc, ᶠu₃, ᶠuₕ³, ᶜJ
+        ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+        Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ, ᶜΦ,
+    ) do ᶜu, ᶠu³, ᶜK, ᶠu, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp,
+    Yc, ᶠu₃, ᶠuₕ³, ᶜJ, ᶜΦ
+        (ᶠu₃, ᶠuₕ³, ᶜJ) = register_copy((ᶠu₃, ᶠuₕ³, ᶜJ))
         set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
         @. ᶠu = CT123(ᶠwinterp(Yc.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+        microphysics_model isa NonEquilibriumMicrophysics || return nothing
+        ᶜρ = register_copy(Yc.ρ)
+        ᶜq_liq_reg =
+            @. max(0, specific(Yc.ρq_lcl, ᶜρ)) + max(0, specific(Yc.ρq_rai, ᶜρ))
+        ᶜq_ice_reg =
+            @. max(0, specific(Yc.ρq_icl, ᶜρ)) + max(0, specific(Yc.ρq_sno, ᶜρ))
+        ᶜq_tot_reg = @. max(ᶜq_liq_reg + ᶜq_ice_reg, specific(Yc.ρq_tot, ᶜρ))
+        ᶜT_reg = @. max(
+            T_min_sgs,
+            TD.air_temperature(
+                thermo_params,
+                specific(Yc.ρe_tot, ᶜρ) - ᶜK - ᶜΦ,
+                ᶜq_tot_reg,
+                ᶜq_liq_reg,
+                ᶜq_ice_reg,
+            ),
+        )
+        @. ᶜq_liq = ᶜq_liq_reg
+        @. ᶜq_ice = ᶜq_ice_reg
+        @. ᶜq_tot_nonneg = ᶜq_tot_reg
+        @. ᶜT = ᶜT_reg
+        set_enthalpy_and_pressure!(
+            ᶜh_tot, ᶜp, (; ρ = ᶜρ, Yc.ρe_tot), ᶜT_reg, ᶜq_tot_reg, ᶜq_liq_reg,
+            ᶜq_ice_reg, thermo_params,
+        )
     end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
@@ -872,39 +849,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
         # @. ᶜK += Y.c.ρtke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    T_min_sgs = CAP.T_min_sgs(p.params)
-    if microphysics_model isa NonEquilibriumMicrophysics
-        # Thermodynamic state from the prognostic water species, total specific
-        # enthalpy, and pressure in one fused column loop.
-        DataLayouts.foreach_column(
-            ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Y.c, ᶜK, ᶜΦ,
-        ) do ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Yc, ᶜK, ᶜΦ
-            # (Named differently from the enclosing function's ᶜe_int: assigning
-            # a captured name inside the loop body would box it.)
-            ᶜe_int_col = @. lazy(specific(Yc.ρe_tot, Yc.ρ) - ᶜK - ᶜΦ)
-            @. ᶜq_liq =
-                max(0, specific(Yc.ρq_lcl, Yc.ρ)) +
-                max(0, specific(Yc.ρq_rai, Yc.ρ))
-            @. ᶜq_ice =
-                max(0, specific(Yc.ρq_icl, Yc.ρ)) +
-                max(0, specific(Yc.ρq_sno, Yc.ρ))
-            @. ᶜq_tot_nonneg =
-                max(ᶜq_liq + ᶜq_ice, specific(Yc.ρq_tot, Yc.ρ))
-            @. ᶜT = max(
-                T_min_sgs,
-                TD.air_temperature(
-                    thermo_params,
-                    ᶜe_int_col,
-                    ᶜq_tot_nonneg,
-                    ᶜq_liq,
-                    ᶜq_ice,
-                ),
-            )
-            set_enthalpy_and_pressure!(
-                ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params,
-            )
-        end
-    else
+    if !(microphysics_model isa NonEquilibriumMicrophysics)
         ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
         if microphysics_model isa EquilibriumMicrophysics0M
             # Compute thermodynamic state variables using combined getter function.

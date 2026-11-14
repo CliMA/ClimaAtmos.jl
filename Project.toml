@@ -43,7 +43,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 
 [sources]
-CloudMicrophysics = {rev = "dy/params_macro", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
+CloudMicrophysics = {rev = "dy/microphysics_fusion", url = "https://github.com/CliMA/CloudMicrophysics.jl"}
 SurfaceFluxes = {rev = "dy/params_macro", url = "https://github.com/CliMA/SurfaceFluxes.jl"}
 Thermodynamics = {rev = "dy/params_macro", url = "https://github.com/CliMA/Thermodynamics.jl"}
 

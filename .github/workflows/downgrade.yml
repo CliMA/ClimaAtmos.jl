@@ -38,7 +38,7 @@ jobs:
       # Temporary: remove when the parameter packages with `@params` are released.
       # julia-downgrade-compat cannot write a manifest for a project with url [sources],
       # so it resolves the registered versions, which the next step replaces.
-      - run: sed -i '/rev = "dy\/params_macro"/d' Project.toml
+      - run: sed -i '/rev = "dy\//d' Project.toml
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           # Temporary: Thermodynamics, SurfaceFluxes, and CloudMicrophysics are skipped until
@@ -47,7 +47,7 @@ jobs:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica, Thermodynamics, SurfaceFluxes, CloudMicrophysics, Aqua
           mode: 'forcedeps'
       # Temporary: remove when the parameter packages with `@params` are released.
-      - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
+      - run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev) for (name, rev) in (("Thermodynamics", "dy/params_macro"), ("SurfaceFluxes", "dy/params_macro"), ("CloudMicrophysics", "dy/microphysics_fusion"))])
         shell: julia --color=yes --project=. {0}
 
       - uses: julia-actions/julia-buildpkg@latest

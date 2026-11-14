@@ -1336,13 +1336,13 @@ end
 # the process; pick whichever 1M mp carries the active formation. With
 # `sgs_cloud_species_constant_timescales > 0`, the constant timescales of the
 # phases replace the relaxation times of the processes.
-cloud_species_blend_params(p) = (;
-    thermo_params = CAP.thermodynamics_params(p.params),
-    cmp = CAP.cloud_formation_1m_params(p.params),
-    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params)),
-    constant_timescales = CAP.sgs_cloud_species_constant_timescales(p.params) > 0,
-    τ_liquid = CAP.condensation_evaporation_timescale(p.params),
-    τ_ice = CAP.sublimation_deposition_timescale(p.params),
+@inline cloud_species_blend_params(params) = (;
+    thermo_params = CAP.thermodynamics_params(params),
+    cmp = CAP.cloud_formation_1m_params(params),
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(params)),
+    constant_timescales = CAP.sgs_cloud_species_constant_timescales(params) > 0,
+    τ_liquid = CAP.condensation_evaporation_timescale(params),
+    τ_ice = CAP.sublimation_deposition_timescale(params),
 )
 
 """
@@ -1458,10 +1458,15 @@ twice.
         fused ? Base.materialize(ᶜsensitivities_lazy) : ᶜsensitivities_lazy
     ᶜc_qt = materialize_into!(ᶜc_qt_out, (@inline @. lazy(first(ᶜsensitivities))))
     ᶜc_sl = materialize_into!(ᶜc_sl_out, (@inline @. lazy(last(ᶜsensitivities))))
-    @. ᶜρχₜ -= ᶜdiffdivᵥ(
-        -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
-        ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),
-    )
+    # In a fused loop, the face blend and the equilibrium flux are evaluated in
+    # statements of their own, so that each statement reads at most two center
+    # values at neighboring levels.
+    ᶠλ_lazy = @inline @. lazy(ᶠinterp(ᶜλ))
+    ᶠλ = fused ? Base.materialize(ᶠλ_lazy) : ᶠλ_lazy
+    ᶠF_eq_lazy =
+        @inline @. lazy(ᶠλ * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl))
+    ᶠF_eq = fused ? Base.materialize(ᶠF_eq_lazy) : ᶠF_eq_lazy
+    @. ᶜρχₜ -= ᶜdiffdivᵥ(-((1 - ᶠλ) * ᶠw * ᶠgradᵥ(ᶜq_μ)) + ᶠF_eq)
     return nothing
 end
 
@@ -1653,7 +1658,7 @@ function add_blended_cloud_species_diffusionᵥ!(
     (; microphysics_model) = p.atmos
     (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜl_mix, ᶜp, ᶜsgs_moments) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    blend_params = cloud_species_blend_params(p)
+    blend_params = cloud_species_blend_params(p.params)
     cloud_names = unrolled_filter(
         ((χ_name, ρχ_name),) ->
             !isnothing(cloud_species_phase(χ_name)) &&
