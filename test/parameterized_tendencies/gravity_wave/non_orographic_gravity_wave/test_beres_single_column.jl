@@ -324,14 +324,18 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             gw_zbot,
             gw_ztop,
             gw_w_obstacle,
+            beres_source_ρ_z_u_v_level,
         ) = p.non_orographic_gravity_wave
 
         center_space = axes(Y.c)
         z_max = FT(50000.0)  # matches config
 
         # Compute source_level and damp_level from height (column mode)
-        source_level = argmin(abs.(center_z .- gw_source_height))
-        damp_level = Spaces.nlevels(center_space)
+        # The level closest to the source height, the upper of two equally close levels,
+        # as `non_orographic_gravity_wave_compute_tendency!` picks it.
+        source_distance = abs.(center_z .- gw_source_height)
+        source_level = findlast(==(minimum(source_distance)), source_distance)
+        damp_level = CA.highest_damp_level(Spaces.nlevels(center_space))
 
         # ------------------------------------------------------------------
         # Fill atmospheric state with analytic profiles
@@ -380,6 +384,12 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         # gw_beres_B0_u/v, not the scalar source fields above, so rebuild them
         # from the values just set.
         CA._beres_precompute_launch_spectra!(p.non_orographic_gravity_wave)
+        # The waves launch at the first level at or above gw_ztop. The launch
+        # state is set as production sets it, from these analytic profiles, not
+        # left from the startup callback.
+        CA.set_beres_launch_state!(
+            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+        )
 
         # ------------------------------------------------------------------
         # Call forcing

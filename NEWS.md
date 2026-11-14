@@ -12,6 +12,11 @@ main
   `non_orographic_gravity_wave` enabled.
 - ![][badge-✨feature/enhancement] A warning is logged when `dt_nogw` or `dt_ogw` is not a
   whole number of model steps, giving the actual times between drag updates.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave damping layer, which receives
+  the momentum flux escaping the model top, now always spans at least the top three cells.
+  With a model top below `nogw_damp_pressure` (e.g. the default 30 km top and 85 Pa), it was
+  the top cell alone; a warning is now logged in that case. Single columns use the top three
+  cells instead of the top cell.
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.

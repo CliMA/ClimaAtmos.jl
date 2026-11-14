@@ -341,7 +341,8 @@ Steps, in order:
  2. Locate the AD99 launch level per column and record `(ρ, u, v)` there: on a column, the
     level closest to `source_height`; on a sphere, the highest level with
     `p > source_pressure`. On a sphere the damp level is the lowest level with
-    `p < damp_pressure`; on a column it is the model top.
+    `p < damp_pressure`, lowered if needed so the damping layer spans at least
+    `NOGW_MIN_DAMP_CELLS` top cells; on a column it is the top `NOGW_MIN_DAMP_CELLS` cells.
  3. When a Beres source is configured, call `compute_beres_convective_heating!` and
     then locate the Beres launch level, the first level (going up) with `z ≥ gw_ztop`.
  4. Loop over the `gw_nk` horizontal wavenumber bands and, for each, run the shared
@@ -398,7 +399,8 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜv = ᶜuv_temp.components.data.:2
 
     if iscolumn(axes(Y.c))
-        # source level: the index of the level that is closest to the source height
+        # source level: the index of the level that is closest to the source height,
+        # the upper of the two when two levels are equally close
         (; gw_source_height, source_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
 
@@ -420,7 +422,8 @@ function non_orographic_gravity_wave_compute_tendency!(
         source_level = source_ρ_z_u_v_level.:5
         # get the ρ,u,v value on the source level
 
-        fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
+        # A column has no damp pressure; the damping layer is the top cells.
+        fill!(damp_level, highest_damp_level(Spaces.nlevels(axes(ᶜz))))
 
     elseif issphere(axes(Y.c))
         (; ᶜp) = p.precomputed
@@ -460,6 +463,14 @@ function non_orographic_gravity_wave_compute_tendency!(
                 return (level_prev, p_prev)
             end
         end
+        # When the model top lies below the damp pressure, the search above stops at
+        # the top cell, which would receive all the escaped flux on its own. The
+        # damping layer always spans at least `NOGW_MIN_DAMP_CELLS` top cells.
+        damp_level_max = highest_damp_level(Spaces.nlevels(axes(ᶜz)))
+        maximum(damp_level) > damp_level_max &&
+            @warn "The model top lies below nogw_damp_pressure ($gw_damp_pressure Pa) in some columns; the non-orographic gravity-wave momentum that escapes the model top is spread over the top $NOGW_MIN_DAMP_CELLS cells there instead." maxlog =
+                1
+        @. damp_level = min(damp_level, damp_level_max)
     else
         error("Only sphere and columns are supported")
     end
@@ -469,22 +480,9 @@ function non_orographic_gravity_wave_compute_tendency!(
         compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
 
         (; gw_ztop, beres_source_ρ_z_u_v_level) = p.non_orographic_gravity_wave
-        beres_input = Base.Broadcast.broadcasted(
-            tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+        set_beres_launch_state!(
+            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
         )
-        Operators.column_reduce!(
-            beres_source_ρ_z_u_v_level,
-            beres_input;
-            init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
-        ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
-        (ρ, z, u, v, level, ztop)
-            # Take the first level (going up) whose z meets/exceeds ztop.
-            if (z_prev < ztop) && (z >= ztop)
-                return (ρ, z, u, v, level)
-            else
-                return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
-            end
-        end
     end
 
     uforcing .= 0
@@ -530,6 +528,39 @@ limited_gravity_wave_forcing(forcing) = ifelse(
     zero(forcing),
     max(-oftype(forcing, 3e-3), min(oftype(forcing, 3e-3), forcing)),
 )
+
+"""
+    set_beres_launch_state!(beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop)
+
+Set the per-column Beres launch state: the density, height, winds, and level index of the
+first level (going up) whose height meets or exceeds the convective envelope top `gw_ztop`.
+
+Mutates `beres_source_ρ_z_u_v_level`, a level field of `(ρ, z, u, v, level)` tuples that
+`non_orographic_gravity_wave_forcing` reads as the Beres launch level. Called from
+`non_orographic_gravity_wave_compute_tendency!` after `compute_beres_convective_heating!`
+has set `gw_ztop`.
+"""
+function set_beres_launch_state!(
+    beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+)
+    FT = eltype(ᶜρ)
+    beres_input = Base.Broadcast.broadcasted(
+        tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+    )
+    Operators.column_reduce!(
+        beres_source_ρ_z_u_v_level,
+        beres_input;
+        init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
+    ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
+    (ρ, z, u, v, level, ztop)
+        # Take the first level (going up) whose z meets/exceeds ztop.
+        if (z_prev < ztop) && (z >= ztop)
+            return (ρ, z, u, v, level)
+        else
+            return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
+        end
+    end
+end
 
 """
     compute_beres_convective_heating!(Y, p, ᶜN)
@@ -1537,7 +1568,7 @@ end
 """
     compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
-Return the AD99 launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m³/s³].
+Return the AD99 launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m²/s²].
 
 A thin named wrapper around the AD99 method of `wave_source`, so that
 `waveforcing_column_accumulate!` selects between the two source spectra by name rather than
@@ -1889,6 +1920,26 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
 end
 
 """
+    NOGW_MIN_DAMP_CELLS
+
+Number of top cells the non-orographic gravity-wave damping layer always spans [-].
+
+The damping layer receives the momentum flux that escapes through the model top. On a
+sphere it starts at the lowest level above `nogw_damp_pressure`; when the model top lies
+below that pressure, it would otherwise shrink to the top cell alone, which then takes all
+the escaped flux.
+"""
+const NOGW_MIN_DAMP_CELLS = 3
+
+"""
+    highest_damp_level(nlevels)
+
+Return the highest level index at which the damping layer may start, so that it spans at
+least `NOGW_MIN_DAMP_CELLS` top cells of a column with `nlevels` levels.
+"""
+highest_damp_level(nlevels) = nlevels - NOGW_MIN_DAMP_CELLS + 1
+
+"""
     gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, deposit_scale)
 
 Add the momentum flux that escaped through the model top back into the sponge layer.
@@ -1943,7 +1994,7 @@ end
 """
     wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
-Return the AD99 launch spectrum `B₀(c)` as an `NTuple{nc}` [m³/s³].
+Return the AD99 launch spectrum `B₀(c)` as an `NTuple{nc}` [m²/s²].
 
 The spectrum is the sum of a wide and a narrow Gaussian in phase speed, each of half-width
 at half-maximum `cw` and `cn` and peak amplitude `Bw` and `Bn` at `c0`, multiplied by
