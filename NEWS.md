@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Set `Setups.ISDAC` surface sensible and latent heat
+  fluxes to zero (`shf = 0`, `lhf = 0`) per Ovchinnikov et al. (2014), Appendix
+  A2 (previously `MoninObukhov(; z0 = 4e-4)` computed interactive surface heat
+  and moisture fluxes from `T_sfc = 267 K`, altering existing ISDAC runs such as
+  `les_isdac_box.yml`), apply `RadiationISDAC` longwave heating consistently to
+  `PrognosticEDMFX` updraft MSE, and add the `Setups.MPACE` single-layer Arctic
+  mixed-phase cloud setup (`MPACEForcing`, `prognostic_edmfx_isdac_column.yml`,
+  and `prognostic_edmfx_mpace_column.yml`).
 - ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
   In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
   temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice
