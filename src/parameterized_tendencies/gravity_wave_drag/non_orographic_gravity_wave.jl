@@ -432,13 +432,14 @@ function non_orographic_gravity_wave_compute_tendency!(
                 return (level_prev, p_prev)
             end
         end
-        # When the model top lies below the damp pressure, the search above stops at
-        # the top cell, which would receive all the escaped flux on its own. The
-        # damping layer always spans at least `NOGW_MIN_DAMP_CELLS` top cells.
+        # The damping layer spans at least `NOGW_MIN_DAMP_CELLS` top cells. The warning
+        # check reduces over all columns and MPI ranks, so it runs at the first call only.
         damp_level_max = highest_damp_level(Spaces.nlevels(axes(ᶜz)))
-        maximum(damp_level) > damp_level_max &&
-            @warn "The model top lies below nogw_damp_pressure ($gw_damp_pressure Pa) in some columns; the non-orographic gravity-wave momentum that escapes the model top is spread over the top $NOGW_MIN_DAMP_CELLS cells there instead." maxlog =
-                1
+        if !NOGW_DAMP_LAYER_CHECKED[]
+            NOGW_DAMP_LAYER_CHECKED[] = true
+            maximum(damp_level) > damp_level_max &&
+                @warn "Fewer than $NOGW_MIN_DAMP_CELLS levels lie above nogw_damp_pressure ($gw_damp_pressure Pa) in some columns; the non-orographic gravity-wave momentum that escapes the model top is spread over the top $NOGW_MIN_DAMP_CELLS cells there instead."
+        end
         @. damp_level = min(damp_level, damp_level_max)
     else
         error("Only sphere and columns are supported")
@@ -1086,17 +1087,12 @@ function non_orographic_gravity_wave_forcing(
         Fields.field_values(z_endlevel_m1)
     field_shiftlevel_up!(ᶜz, ᶜz_p1, gw_temp_surface)
 
-    # Per-layer rescaling that makes the interior deposit conserve momentum on any grid.
-    # The kernel turns the flux a layer gives up into a drag by dividing by
-    # `√(ρ_k·ρ_{k+1})·(z_{k+1} - z_k)`, and `postprocess_and_accumulate!` gives half of
-    # that drag to each of the two cells the layer spans. Dividing by the mean of the two
-    # cells' masses instead makes the two halves carry exactly the layer's flux: cell
-    # centers sit midway between faces, so half of each cell's mass is the part of that
-    # cell inside the layer. The mass is the one `column_integral_definite!` measures,
-    # `ρ·J/ΔA` with `ΔA` the area element of the bottom face, which on a deep-atmosphere
-    # grid grows with height. `ᶜlayer_ratio` holds the 3D part of the factor and
-    # `gw_temp_surface` the per-column `ΔA`; `u_waveforcing` is free until the kernel
-    # first writes it.
+    # The kernel turns the flux each layer loses into a drag by dividing by an estimate of
+    # the layer's mass, `√(ρ_k·ρ_{k+1})·Δz`. Here that estimate is replaced by the mean mass
+    # of the two cells on either side of the layer, `m = ρ·J/ΔA` (`ΔA`: the area at the
+    # bottom of the column). Half of each cell lies inside the layer, so the drag given to
+    # the two cells then adds up exactly to the flux the layer lost, on any grid.
+    # `u_waveforcing` is not written until the kernel runs, so it serves as scratch here.
     ᶜlayer_ratio = p.scratch.ᶜtemp_scalar_6
     ᶜρJ_p1 = u_waveforcing
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
@@ -1109,6 +1105,10 @@ function non_orographic_gravity_wave_forcing(
         Fields.field_values(
             Fields.level(Fields.local_geometry_field(ᶠspace).J, half),
         ) ./ Fields.field_values(Fields.level(Fields.Δz_field(ᶠspace), half))
+    DataLayouts.foreach_column(ᶜlayer_ratio, gw_temp_surface) do ᶜratio, ΔA_bottom
+        @inline
+        @. ᶜratio *= ΔA_bottom
+    end
 
     mask_u = StaticBitVector{nc}(_ -> true)
     mask_v = StaticBitVector{nc}(_ -> true)
@@ -1260,7 +1260,7 @@ function non_orographic_gravity_wave_forcing(
         postprocess_and_accumulate!(
             uforcing, vforcing, u_waveforcing, v_waveforcing,
             damp_level, ᶜlevel, level_end, gw_deposit_scale,
-            ᶜlayer_ratio, gw_temp_surface,
+            ᶜlayer_ratio,
         )
 
         # --- Beres convective source (when configured) ---
@@ -1278,7 +1278,7 @@ function non_orographic_gravity_wave_forcing(
             postprocess_and_accumulate!(
                 uforcing, vforcing, u_waveforcing, v_waveforcing,
                 damp_level, ᶜlevel, level_end, gw_deposit_scale,
-                ᶜlayer_ratio, gw_temp_surface,
+                ᶜlayer_ratio,
             )
         end
     end
@@ -1288,7 +1288,7 @@ end
 """
     postprocess_and_accumulate!(uforcing, vforcing, u_waveforcing, v_waveforcing,
                                 damp_level, ᶜlevel, level_end, deposit_scale,
-                                ᶜlayer_ratio, ΔA_bottom)
+                                ᶜlayer_ratio)
 
 Redistribute the escaped flux of one source and add its drag to the forcing fields.
 
@@ -1297,21 +1297,18 @@ wavenumber band and source from `non_orographic_gravity_wave_forcing`, after the
 `waveforcing_column_accumulate!` calls that set `u_waveforcing`/`v_waveforcing`.
 
 The top level of the half-level drag left by the upward march holds the momentum flux that
-escaped through the model top. The rest of the drag `X` is first rescaled by
-`ᶜlayer_ratio · ΔA_bottom`, which turns the kernel's division by
-`√(ρ_k·ρ_{k+1})·(z_{k+1} - z_k)` into a division by the mean mass of the two cells the
-layer spans, and is then moved to full levels by averaging adjacent half-levels,
-`½(X[k-1/2] + X[k+1/2])` with zero below the bottom level and at the top level. Each layer
-therefore hands each of its two cells the share of its flux that matches the mass of the
-part of that cell inside the layer, so the column momentum `Σ ρ·J/ΔA·drag` equals the
-deposited flux exactly, on stretched and deep-atmosphere grids alike. The escaped flux is
-spread over the levels at and above `damp_level` by `gw_deposit`, scaled by the per-column
-`deposit_scale`, which divides by the same mass, so it is conserved too. On a sphere
+escaped through the model top. The rest of the drag `X` is multiplied by `ᶜlayer_ratio`
+(set in `non_orographic_gravity_wave_forcing`) and moved to full levels by averaging
+adjacent half-levels, `½(X[k-1/2] + X[k+1/2])`, with zero below the bottom level and at
+the top level. The escaped flux is spread over the levels at and above `damp_level` by
+`gw_deposit`, scaled by the per-column `deposit_scale`. The drag from waves breaking
+inside the column and the redistributed escaped flux each conserve momentum exactly; the
+*Non-orographic Gravity Waves* docs page explains why. On a sphere
 `damp_level` is a field of level indices; single-column tests pass one level index.
 """
 function postprocess_and_accumulate!(
     uforcing, vforcing, u_waveforcing, v_waveforcing,
-    damp_level, ᶜlevel, level_end, deposit_scale, ᶜlayer_ratio, ΔA_bottom,
+    damp_level, ᶜlevel, level_end, deposit_scale, ᶜlayer_ratio,
 )
     FT = eltype(uforcing)
     # The drag at the half level below each full level, zero below the bottom level
@@ -1323,9 +1320,9 @@ function postprocess_and_accumulate!(
         damp_level isa Fields.Field ? ((damp_level,), nothing) : ((), damp_level)
     DataLayouts.foreach_column(
         uforcing, vforcing, u_waveforcing, v_waveforcing, ᶜlevel, deposit_scale,
-        ᶜlayer_ratio, ΔA_bottom, damp_level_fields,
+        ᶜlayer_ratio, damp_level_fields,
     ) do ᶜuforcing, ᶜvforcing, ᶜu_waveforcing, ᶜv_waveforcing, ᶜlevel,
-    ᶜdeposit_scale, ᶜlayer_ratio, ᶜΔA_bottom, damp_level_fields
+    ᶜdeposit_scale, ᶜlayer_ratio, damp_level_fields
         @inline
         ᶜdamp_level =
             isnothing(damp_level_index) ? damp_level_fields[1] : damp_level_index
@@ -1337,7 +1334,7 @@ function postprocess_and_accumulate!(
             # The momentum flux that escaped through the model top
             ᶜescaped_flux = Fields.level(ᶜwaveforcing, level_end)
             # The half-level drag, divided by the mean mass of the two cells it spans
-            ᶜlayer_drag = @. lazy(ᶜwaveforcing * ᶜlayer_ratio * ᶜΔA_bottom)
+            ᶜlayer_drag = @. lazy(ᶜwaveforcing * ᶜlayer_ratio)
             @. ᶜforcing += gw_deposit(
                 ᶜescaped_flux,
                 _half * (
@@ -1675,11 +1672,15 @@ end
 Number of top cells the non-orographic gravity-wave damping layer always spans [-].
 
 The damping layer receives the momentum flux that escapes through the model top. On a
-sphere it starts at the lowest level above `nogw_damp_pressure`; when the model top lies
-below that pressure, it would otherwise shrink to the top cell alone, which then takes all
-the escaped flux.
+sphere it starts at the lowest level above `nogw_damp_pressure`; when fewer than
+`NOGW_MIN_DAMP_CELLS` levels lie above that pressure (a model top near or below it), it
+would otherwise shrink to one or two top cells, which then take all the escaped flux.
 """
 const NOGW_MIN_DAMP_CELLS = 3
+
+# Whether the damping layer has been checked for fewer than `NOGW_MIN_DAMP_CELLS` levels
+# above `nogw_damp_pressure`, which happens once per session.
+const NOGW_DAMP_LAYER_CHECKED = Ref(false)
 
 """
     highest_damp_level(nlevels)

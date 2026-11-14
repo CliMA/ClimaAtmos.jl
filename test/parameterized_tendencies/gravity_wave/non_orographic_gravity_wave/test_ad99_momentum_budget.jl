@@ -28,8 +28,9 @@
 #    divides it by the mean mass of the two cells and gives half to each, so
 #    the two cells together receive exactly the layer's flux. Dividing by any
 #    other mass (the kernel's own `√(ρ_k ρ_{k+1})·Δz`, say) leaves a residual
-#    of second order on a uniform grid and of first order on a stretched or
-#    deep grid, which the round-off tolerance catches.
+#    of second order on uniform and stretched grids and, on a deep-atmosphere
+#    grid, equal to the area growth from the surface (about 1.6% at 50 km),
+#    which the round-off tolerance catches.
 #
 # 2. Escaped flux. The wind and stability are set so that no wave breaks on
 #    the way up: everything reaches the top and goes through the forced-break
@@ -520,8 +521,8 @@ const MAX_ESCAPED_FRAC = 1e-3
 
 # The grids tests 1-3 run on. The stretched grid has uneven cell masses even
 # where the density changes slowly, and the deep sphere has cell areas that grow
-# with height; the old half-and-half split of the kernel's drag got both wrong at
-# first order.
+# with height. Dividing by any mass other than the mean of the two cells' masses
+# misses the budget on both.
 const INTERIOR_CASES = (
     ("column", COLUMN_STATE, NLEV),
     ("stretched column", STRETCHED_COLUMN_STATE, NLEV),

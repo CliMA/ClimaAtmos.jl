@@ -535,7 +535,7 @@ function warn_if_not_whole_steps(name, dt_str, dt)
     interval = time_to_seconds(dt_str)
     step = Float64(dt)
     n_steps = interval / step
-    isinteger(n_steps) && return nothing
+    (isinteger(n_steps) || !isfinite(n_steps)) && return nothing
     if n_steps < 1
         @warn "$name ($interval s) is shorter than the model step ($step s), so the drag is recomputed every step."
     else
