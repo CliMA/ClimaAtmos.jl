@@ -46,7 +46,7 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..ISDACForcing
+import ..ISDACForcing, ..MPACEForcing
 import ..ExternalDrivenTVForcing, ..default_forcing_terms
 import ..ColumnDatasets
 import ..ExternalTVInsolation, ..TimeVaryingInsolation
@@ -385,6 +385,7 @@ include("GATE_III.jl")
 include("DYCOMS.jl")
 include("TRMM_LBA.jl")
 include("ISDAC.jl")
+include("MPACE.jl")
 include("Larcform1.jl")
 include("IsothermalProfile.jl")
 include("ConstantBuoyancyFrequencyProfile.jl")

@@ -1289,6 +1289,22 @@ case. Supplied by `Setups.ISDAC`, which `initial_condition: "ISDAC"` selects; th
 struct ISDACForcing end
 
 """
+    MPACEForcing{FT}(; u_nudge = -13, v_nudge = -3, τ_wind = 3600)
+
+Analytic horizontal-wind nudging for the M-PACE mixed-phase Arctic cloud case
+[Klein2009](@cite), relaxing `(u, v)` toward `(u_nudge, v_nudge)` [m/s] (default
+`(-13, -3)` m/s) with timescale `τ_wind` [s] (default `3600` s). Supplied by
+`Setups.MPACE`, which `initial_condition: "MPACE"` selects; the
+`external_forcing` key does not accept it.
+"""
+Base.@kwdef struct MPACEForcing{FT}
+    u_nudge::FT = FT(-13)
+    v_nudge::FT = FT(-3)
+    τ_wind::FT = FT(3600)
+end
+MPACEForcing(::Type{FT}) where {FT} = MPACEForcing{FT}()
+
+"""
     AbstractEnvBuoyGradClosure
 
 Closure used to convert environmental thermodynamic gradients into a buoyancy
@@ -2139,7 +2155,7 @@ usually supplied by a `Setups` case rather than set by hand.
 
   - `subsidence`: `nothing`, or a `LargeScaleSubsidence`.
   - `external_forcing`: `nothing`, or a forcing object
-    (`ExternalDrivenTVForcing`, `ISDACForcing`).
+    (`ExternalDrivenTVForcing`, `ISDACForcing`, `MPACEForcing`).
   - `ls_adv`: `nothing`, or a `LargeScaleAdvection`.
   - `advection_test`: Whether to run in pure tracer-advection test mode, in which
     the dynamics are frozen.

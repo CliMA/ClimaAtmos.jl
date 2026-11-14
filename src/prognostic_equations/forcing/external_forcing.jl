@@ -644,3 +644,32 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
     apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt_nudging, ᶜdqtdt_nudging)
 end
+
+"""
+    external_forcing_cache(Y, external_forcing::MPACEForcing, params, _)
+
+Return an empty cache for M-PACE (Mixed-Phase Arctic Cloud Experiment) wind
+nudging.
+"""
+external_forcing_cache(Y, external_forcing::MPACEForcing, params, _) = (;)
+
+"""
+    external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+
+Apply the M-PACE horizontal-wind forcing [Klein2009](@cite): Newtonian
+relaxation of `(u, v)` toward `(forcing.u_nudge, forcing.v_nudge)` (default
+`(-13, -3)` m/s) with timescale `forcing.τ_wind` (default `3600` s), via
+`nudge_uv!`. `t` is unused.
+"""
+function external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+    FT = Spaces.undertype(axes(Y.c))
+    nudge_uv!(
+        Yₜ,
+        Y,
+        p,
+        FT(forcing.u_nudge),
+        FT(forcing.v_nudge),
+        1 / FT(forcing.τ_wind),
+    )
+    return nothing
+end

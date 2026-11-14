@@ -82,6 +82,111 @@ end
     @test atmos.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
     @test atmos.surface.temperature isa
           CA.SurfaceConditions.AnalyticTemperature
+
+    config_mpace = CA.AtmosConfig(
+        Dict(
+            "config" => "column",
+            "z_stretch" => false,
+            "initial_condition" => "MPACE",
+        ),
+        job_id = "test_setup_components_mpace",
+    )
+    params_mpace = CA.ClimaAtmosParameters(config_mpace)
+    thermo_params_mpace = CA.Parameters.thermodynamics_params(params_mpace)
+    FT_mpace = eltype(thermo_params_mpace)
+    setup_mpace =
+        CA.get_setup_type(config_mpace.parsed_args, thermo_params_mpace)
+    grid_mpace =
+        CA.get_grid(config_mpace.parsed_args, params_mpace, config_mpace.comms_ctx)
+    atmos_mpace =
+        CA.get_atmos(config_mpace, params_mpace, grid_mpace; setup_type = setup_mpace)
+
+    @test setup_mpace isa CA.Setups.MPACE
+    @test atmos_mpace.subsidence isa CA.LargeScaleSubsidence
+    @test atmos_mpace.ls_adv isa CA.LargeScaleAdvection
+    @test isnothing(atmos_mpace.scm_coriolis)
+    @test atmos_mpace.external_forcing isa CA.MPACEForcing
+    @test atmos_mpace.external_forcing.u_nudge == FT_mpace(-13)
+    @test atmos_mpace.external_forcing.v_nudge == FT_mpace(-3)
+    @test atmos_mpace.external_forcing.τ_wind == FT_mpace(3600)
+    @test atmos_mpace.insolation isa CA.TimeVaryingInsolation
+    @test atmos_mpace.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
+    @test atmos_mpace.surface.temperature isa
+          CA.SurfaceConditions.AnalyticTemperature
+    @test setup_mpace.profiles.p(FT_mpace(0)) ≈ FT_mpace(101000) rtol = 1e-5
+    @test setup_mpace.profiles.θ(FT_mpace(0)) ≈ FT_mpace(269.2) rtol = 1e-5
+    @test setup_mpace.profiles.q_tot(FT_mpace(0)) ≈
+          FT_mpace(1.95e-3 / (1 + 1.95e-3)) rtol = 1e-5
+
+    # Verify M-PACE subsidence, large-scale advection, and stratospheric extension
+    grav_mpace = CA.Parameters.grav(params_mpace)
+    @test setup_mpace.profiles.w_sub(FT_mpace(0)) ≈ FT_mpace(0) atol = 1e-10
+    @test setup_mpace.profiles.w_sub(FT_mpace(500)) < FT_mpace(0)
+    # Above 850 hPa (z ≈ 1.4 km) and below the upper-tropospheric taper (p ≥ 550 hPa),
+    # ω = -ρ g w_sub = D (p_s - p_inv) = 5.8e-6 * (101000 - 85000) Pa/s is constant.
+    ω_cap = FT_mpace(5.8e-6 * (101000 - 85000))
+    for z_ft in (FT_mpace(2000), FT_mpace(3500))
+        p_ft = setup_mpace.profiles.p(z_ft)
+        θ_ft = setup_mpace.profiles.θ(z_ft)
+        q_ft = setup_mpace.profiles.q_tot(z_ft)
+        T_ft = CA.TD.air_temperature(
+            thermo_params_mpace,
+            CA.TD.pθ_li(),
+            p_ft,
+            θ_ft,
+            q_ft,
+        )
+        ρ_ft = CA.TD.air_density(
+            thermo_params_mpace,
+            T_ft,
+            p_ft,
+            q_ft,
+            FT_mpace(0),
+            FT_mpace(0),
+        )
+        @test -ρ_ft * grav_mpace * setup_mpace.profiles.w_sub(z_ft) ≈ ω_cap rtol =
+            5e-3
+    end
+    @test setup_mpace.profiles.w_sub(FT_mpace(10000)) == FT_mpace(0)
+
+    # Large-scale temperature and moisture tendencies (Eqs. 4 & 5)
+    @test setup_mpace.profiles.prof_dTdt(FT_mpace(0), FT_mpace(0)) ≈
+          FT_mpace(-15 / 86400) rtol = 1e-4
+    @test FT_mpace(-15 / 86400) <
+          setup_mpace.profiles.prof_dTdt(FT_mpace(0), FT_mpace(1000)) <
+          FT_mpace(-4 / 86400)
+    @test setup_mpace.profiles.prof_dTdt(FT_mpace(0), FT_mpace(3500)) ≈
+          FT_mpace(-4 / 86400) rtol = 1e-4
+    @test setup_mpace.profiles.prof_dTdt(FT_mpace(0), FT_mpace(10000)) ==
+          FT_mpace(0)
+
+    @test setup_mpace.profiles.prof_dqtdt(FT_mpace(0)) ≈
+          FT_mpace(-3e-3 / 86400) rtol = 1e-4
+    @test FT_mpace(-3e-3 / 86400) <
+          setup_mpace.profiles.prof_dqtdt(FT_mpace(1000)) <
+          FT_mpace(-0.164e-3 / 86400)
+    @test setup_mpace.profiles.prof_dqtdt(FT_mpace(3500)) ≈
+          FT_mpace(-0.164e-3 / 86400) rtol = 1e-4
+    @test setup_mpace.profiles.prof_dqtdt(FT_mpace(10000)) == FT_mpace(0)
+
+    # Stratospheric humidity floor (3 ppmw) and isothermal temperature above 300 hPa
+    @test setup_mpace.profiles.q_tot(FT_mpace(10000)) ≈
+          FT_mpace(3e-6 / (1 + 3e-6)) rtol = 1e-5
+    T_strat_12km = CA.TD.air_temperature(
+        thermo_params_mpace,
+        CA.TD.pθ_li(),
+        setup_mpace.profiles.p(FT_mpace(12000)),
+        setup_mpace.profiles.θ(FT_mpace(12000)),
+        setup_mpace.profiles.q_tot(FT_mpace(12000)),
+    )
+    T_strat_20km = CA.TD.air_temperature(
+        thermo_params_mpace,
+        CA.TD.pθ_li(),
+        setup_mpace.profiles.p(FT_mpace(20000)),
+        setup_mpace.profiles.θ(FT_mpace(20000)),
+        setup_mpace.profiles.q_tot(FT_mpace(20000)),
+    )
+    @test T_strat_12km ≈ T_strat_20km rtol = 1e-5
 end
 
 @testset "Smagorinsky-Lilly axes options" begin
