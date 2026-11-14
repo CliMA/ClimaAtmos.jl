@@ -14,6 +14,20 @@ import ClimaAtmos as CA
     end
 end
 
+@testset "Command-line config determines implicit job_id" begin
+    selected_config_file =
+        joinpath(CA.config_path, "model_configs", "baroclinic_wave.yml")
+    parsed_args = CA.parse_commandline(
+        ["--config_file", selected_config_file],
+        CA.argparse_settings(),
+    )
+    (; config_file, job_id) = CA.to_named_tuple(parsed_args)
+
+    config = CA.AtmosConfig(config_file; job_id)
+
+    @test config.job_id == CA.job_id_from_config_files(config_file)
+end
+
 @testset "Base-name uniqueness of configuration files" begin
     configs = String[]
     for (root, _, files) in walkdir(CA.config_path), f in files

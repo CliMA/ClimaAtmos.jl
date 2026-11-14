@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4798](https://github.com/CliMA/ClimaAtmos.jl/pull/4798) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Made command-line runs without `--job_id` use the `job_id` from the selected configuration, or derive it from the selected config file names, instead of always using `default_config`.
 
 0.42.19
 -------
