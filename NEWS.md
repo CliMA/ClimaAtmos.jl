@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 ----
 - [#4798](https://github.com/CliMA/ClimaAtmos.jl/pull/4798) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Made command-line runs without `--job_id` use the `job_id` from the selected configuration, or derive it from the selected config file names, instead of always using `default_config`.
+
+0.42.19
+-------
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.
