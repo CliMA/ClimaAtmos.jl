@@ -94,6 +94,11 @@ jobs:
         with:
           prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
           hash: ${{ hashFiles('Project.toml') }}
+      # Temporary: remove when the parameter packages with `@params` are released.
+      # Julia 1.10 ignores the [sources] of Project.toml.
+      - if: matrix.version == '1.10'
+        run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev = "dy/params_macro") for name in ("Thermodynamics", "SurfaceFluxes", "CloudMicrophysics")])
+        shell: julia --color=yes --project=. {0}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
