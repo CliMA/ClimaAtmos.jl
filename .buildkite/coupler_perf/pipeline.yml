@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "dd16e96767033b231e917e1ccdaaada54dfbf534"
+  COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
   # Packages whose [compat] bounds are dropped from the coupler projects at
@@ -70,7 +70,7 @@ steps:
     env:
       CLIMACOMMS_DEVICE: "CUDA"
       # Fallback used when no passing main build metadata is available yet.
-      BASELINE_SYPD: "0.279"
+      BASELINE_SYPD: "0.252"
       MIN_PERCENT_CHANGE: "-1"
     agents:
       slurm_gpus_per_task: 1
