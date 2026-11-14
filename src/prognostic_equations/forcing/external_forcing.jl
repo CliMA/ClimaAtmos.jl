@@ -307,14 +307,19 @@ function _set_inv_τ_rate!(ᶜinv_τ, ::DefaultTimescale, variables, ᶜz, param
     return nothing
 end
 _set_inv_τ_rate!(ᶜinv_τ, τ::Number, variables, ᶜz, params) =
-    (ᶜinv_τ .= 1 / τ; nothing)
+    (ᶜinv_τ .= 1 / τ;
+        nothing)
 _set_inv_τ_rate!(ᶜinv_τ, f, variables, ᶜz, params) =
-    (@. ᶜinv_τ = 1 / f(ᶜz); nothing)
+    (@. ᶜinv_τ = 1 / f(ᶜz);
+        nothing)
 
 _apply_inv_τ_mask!(ᶜinv_τ, ::Nothing, ᶜz) = nothing
-_apply_inv_τ_mask!(ᶜinv_τ, w::Number, ᶜz) = (ᶜinv_τ .*= w; nothing)
-_apply_inv_τ_mask!(ᶜinv_τ, m::Fields.Field, ᶜz) = (ᶜinv_τ .*= m; nothing)
-_apply_inv_τ_mask!(ᶜinv_τ, f, ᶜz) = (@. ᶜinv_τ *= f(ᶜz); nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, w::Number, ᶜz) = (ᶜinv_τ .*= w;
+    nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, m::Fields.Field, ᶜz) = (ᶜinv_τ .*= m;
+    nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, f, ᶜz) = (@. ᶜinv_τ *= f(ᶜz);
+    nothing)
 
 # --- HorizontalAdvection / VerticalFluctuation: a (dT, dq) tendency pair ---
 function _tendency_pair_cache(Y, cd, start_date, method, dT_var, dq_var)
@@ -643,4 +648,33 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
         -(specific(Y.c.ρq_tot, Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
     apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt_nudging, ᶜdqtdt_nudging)
+end
+
+"""
+    external_forcing_cache(Y, external_forcing::MPACEForcing, params, _)
+
+Return an empty cache for M-PACE (Mixed-Phase Arctic Cloud Experiment) wind
+nudging.
+"""
+external_forcing_cache(Y, external_forcing::MPACEForcing, params, _) = (;)
+
+"""
+    external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+
+Apply the M-PACE horizontal-wind forcing [Klein2009](@cite): Newtonian
+relaxation of `(u, v)` toward `(forcing.u_nudge, forcing.v_nudge)` (default
+`(-13, -3)` m/s) with timescale `forcing.τ_wind` (default `3600` s), via
+`nudge_uv!`. `t` is unused.
+"""
+function external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+    FT = Spaces.undertype(axes(Y.c))
+    nudge_uv!(
+        Yₜ,
+        Y,
+        p,
+        FT(forcing.u_nudge),
+        FT(forcing.v_nudge),
+        1 / FT(forcing.τ_wind),
+    )
+    return nothing
 end
