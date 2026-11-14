@@ -58,8 +58,11 @@ center_space = axes(Y.c)
 
 # Compute source_level and damp_level based on height
 center_z = Array(Fields.field2array(ᶜz))[:, 1]
-source_level = argmin(abs.(center_z .- gw_source_height))
-damp_level = Spaces.nlevels(center_space)
+# The level closest to the source height, the upper of two equally close levels,
+# as `non_orographic_gravity_wave_compute_tendency!` picks it.
+source_distance = abs.(center_z .- gw_source_height)
+source_level = findlast(==(minimum(source_distance)), source_distance)
+damp_level = CA.highest_damp_level(Spaces.nlevels(center_space))
 
 # Load ERA5 data from artifacts
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
