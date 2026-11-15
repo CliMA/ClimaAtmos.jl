@@ -751,6 +751,163 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             @test call_forcing!()[1] == uf_data   # the launch spectra are restored
         end
     end
+
+    # ============================================================================
+    # Phase C — Beres-G (sine_transform) end to end
+    #
+    # The same column with the shape mode switched to the sine transform of the
+    # gathered in-cloud heating, run through the production entry point
+    # `non_orographic_gravity_wave_compute_tendency!` (buoyancy frequency, heating
+    # extraction, gather, launch state, propagation, clean-up). The synthetic
+    # draft heats from 2 to 14 km and cools from 1 to 2 km, so its envelope
+    # reaches below the 2 km floor. Checks: the gathered profile is the
+    # floor-started, linearly interpolated, peak-normalized and edge-tapered
+    # heating; the launch spectra are the ones built from it with the window and
+    # level spacing; the slow bins next to u_heat carry almost nothing; and the
+    # drag is finite.
+    # ============================================================================
+    @testset "Beres-G (sine_transform) single column, end to end" begin
+        nogw = p.non_orographic_gravity_wave
+        bs_c = nogw.gw_beres_source
+        bs_g = CA.BeresSourceParams{FT}(;
+            (n => getfield(bs_c, n) for n in fieldnames(typeof(bs_c)))...,
+            beres_shape_general = true,
+        )
+        p_g = (;
+            p.precomputed,
+            p.params,
+            p.atmos,
+            p.scratch,
+            non_orographic_gravity_wave = merge(nogw, (; gw_beres_source = bs_g)),
+        )
+        (; ᶜρʲs, ᶜTʲs, ᶜT) = p.precomputed
+        parent(ᶜρʲs.:(1)) .= parent(Y.c.ρ)
+        ΔT(z) =
+            z < 1000 || z > 14000 ? 0.0 :
+            z < 2000 ? 2 * (z - 1000) / 1000 : 2 * (14000 - z) / 12000
+        @. ᶜTʲs.:(1) = ᶜT + ΔT(ᶜz)
+        @. Y.c.sgsʲs.:(1).ρa =
+            ifelse((ᶜz >= 500) & (ᶜz <= 15000), FT(1) * Y.c.ρ, FT(0))
+
+        CA.non_orographic_gravity_wave_compute_tendency!(
+            Y,
+            p_g,
+            p.atmos.non_orographic_gravity_wave,
+        )
+
+        (;
+            gw_zbot,
+            gw_ztop,
+            gw_Q0,
+            gw_h_heat,
+            gw_u_heat,
+            gw_v_heat,
+            gw_N_source,
+            gw_beres_active,
+            gw_Q_conv_ic,
+            gw_beres_gprofile,
+            gw_beres_dz_level,
+            gw_w_obstacle,
+            gw_beres_B0_u,
+            gw_beres_B0_v,
+            gw_c,
+            gw_ncval,
+            uforcing,
+            vforcing,
+        ) = nogw
+        value(f) = parent(f)[1]
+        # The value of a level field of tuples, read component by component.
+        tuple_value(f, n) = ntuple(i -> parent(getproperty(f, i))[1], n)
+        z_floor = bs_g.z_bot_floor
+        @test value(gw_beres_active) == 1
+        @test value(gw_zbot) < z_floor            # the envelope reaches below the floor
+        z_start = CA._beres_gather_bottom(value(gw_zbot), value(gw_ztop), z_floor)
+        @test z_start == z_floor
+        span = value(gw_ztop) - z_start
+
+        # The level spacing is the largest thickness of the cells in the window.
+        dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+        overlap =
+            (center_z .+ dz_col ./ 2 .> z_start) .&
+            (center_z .- dz_col ./ 2 .< value(gw_ztop))
+        dz_level = maximum(dz_col[overlap])
+        @test value(gw_beres_dz_level) == dz_level
+
+        # The gathered profile, rebuilt from the model's in-cloud heating.
+        Q_ic = Array(Fields.field2array(gw_Q_conv_ic))[:, 1]
+        ng_val = Val(CA.N_BERES_PROFILE)
+        state = CA._beres_gather_init(FT, ng_val)
+        for k in eachindex(center_z)
+            state = CA._beres_gather_step(
+                state,
+                (center_z[k], Q_ic[k], z_start, value(gw_ztop)),
+                z_floor,
+                ng_val,
+            )
+        end
+        expected_profile =
+            CA._beres_taper_edges(CA._beres_peaknorm(first(state)), span, dz_level)
+        profile = tuple_value(gw_beres_gprofile, CA.N_BERES_PROFILE)
+        @test all(isapprox.(profile, expected_profile; rtol = 1e-12, atol = 1e-14))
+        @test profile[1] == 0
+        @test profile[end] == 0
+        @test maximum(profile) <= 1
+        # No gaps between heated samples. The first and last samples can be zero
+        # besides the tapered end points: on this 1 km grid the level just above
+        # the floor cools (masked to zero), and the window top may lie above the
+        # highest heated level.
+        i_first = findfirst(>(0), profile)
+        i_last = findlast(>(0), profile)
+        @test i_last - i_first > CA.N_BERES_PROFILE ÷ 2
+        @test all(>(0), profile[i_first:i_last])
+
+        # The launch spectra are the ones built from that profile, on that window,
+        # with that level spacing.
+        for (B0, wind) in ((gw_beres_B0_u, gw_u_heat), (gw_beres_B0_v, gw_v_heat))
+            expected_B0 = CA._beres_launch_spectrum(
+                gw_c, value(wind), value(gw_Q0), value(gw_h_heat),
+                value(gw_N_source), z_start, span, profile, value(gw_w_obstacle),
+                bs_g, gw_ncval, Val(true); dz_level,
+            )
+            @test all(
+                isapprox.(
+                    tuple_value(B0.B0, length(gw_c)),
+                    expected_B0;
+                    rtol = 1e-12,
+                    atol = 0,
+                ),
+            )
+        end
+
+        # The slow bins next to u_heat carry almost nothing of the launched flux.
+        B0_u = tuple_value(gw_beres_B0_u.B0, length(gw_c))
+        u_heat = value(gw_u_heat)
+        near = sum(
+            abs(B0_u[n]) for n in eachindex(gw_c) if abs(gw_c[n] - u_heat) < 2;
+            init = zero(FT),
+        )
+        @test sum(abs, B0_u) > 0
+        @test near < 0.01 * sum(abs, B0_u)
+
+        # The drag (after the clean-up) is finite and not zero.
+        uf = Array(Fields.field2array(uforcing))[:, 1]
+        vf = Array(Fields.field2array(vforcing))[:, 1]
+        @test all(isfinite, uf)
+        @test all(isfinite, vf)
+        @test maximum(abs, uf) > 0
+
+        # Beres-G transforms the peak-normalized shape times the half-sine
+        # amplitude Q0, so the heating the spectrum uses does not integrate to the
+        # in-cloud heating it was gathered from. Whether it should (F03, the
+        # Beres-G amplitude) awaits a decision; until then this is broken. The
+        # edge taper alone removes about 5-8% of the integral, so this may stay
+        # broken after F03 unless the amplitude definition accounts for the taper.
+        dz_g = span / (CA.N_BERES_PROFILE - 1)
+        used = value(gw_Q0) * dz_g * (sum(profile) - (profile[1] + profile[end]) / 2)
+        window = (center_z .>= z_start) .& (center_z .<= value(gw_ztop))
+        gathered = sum(max.(Q_ic[window], 0) .* dz_col[window])
+        @test_broken used ≈ gathered rtol = 0.05
+    end
 end
 
 # ---------------------------------------------------------------------------
