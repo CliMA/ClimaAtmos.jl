@@ -49,7 +49,7 @@ The reflection frequency is defined as
 \omega_r(z) = \left(\frac{N(z)^2 k^2}{k^2+\alpha^2}\right)^{1/2}
 ```
 
-where $N(z)$ is the buoyancy frequency, $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
+where $N(z)$ is the buoyancy frequency (from $dT/dz$ at cell centres, with a one-sided difference in the bottom and top cells, where interpolating to the boundary face would give only about half the gradient), $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
 
 The instability condition is defined as
 
