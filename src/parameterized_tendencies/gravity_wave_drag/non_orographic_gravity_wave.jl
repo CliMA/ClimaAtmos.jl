@@ -1941,13 +1941,19 @@ Return the AD99 wave intermittency factor `ε = F_S0/(ρ₀·nk·Σ|B₀|)` [-].
 The launched spectrum is the flux of a wave train that is present only a fraction of the
 time; `ε` rescales it so the long-term mean flux matches the prescribed, latitude-dependent
 source amplitude `source_ampl` [kg/m/s²]. Assumes a constant phase-speed spacing `Δc`, so
-the spacing cancels between `source_ampl` and `Bsum` and does not appear here.
+the spacing cancels between `source_ampl` and `Bsum` and does not appear here. Returns
+zero when the spectrum is empty (`Bsum = 0`, e.g. with `nogw_Bw = nogw_Bn = 0`): no flux
+is launched then, and the division would give an infinite `ε` and a `NaN` drag.
 
 Called from `waveforcing_column_accumulate!` in `:ad99` mode; the Beres mode uses the
 convective coverage instead.
 """
 function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
-    return (source_ampl / ρ_source_level / nk) / Bsum
+    return ifelse(
+        Bsum > zero(Bsum),
+        (source_ampl / ρ_source_level / nk) / Bsum,
+        zero(Bsum),
+    )
 end
 
 """

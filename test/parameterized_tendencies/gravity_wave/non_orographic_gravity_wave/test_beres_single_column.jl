@@ -395,7 +395,9 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         # ------------------------------------------------------------------
         # Call forcing
         # ------------------------------------------------------------------
-        function call_forcing!()
+        # `pp` is the cache the forcing reads; a NamedTuple with swapped NOGW fields
+        # runs the same column with other source settings.
+        function call_forcing!(pp = p)
             uforcing .= 0
             vforcing .= 0
             CA.non_orographic_gravity_wave_forcing(
@@ -415,7 +417,7 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
                 gw_ncval,
                 u_waveforcing,
                 v_waveforcing,
-                p,
+                pp,
             )
             return (
                 Array(Fields.field2array(uforcing))[:, 1],
@@ -615,6 +617,43 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             @test uf_zero_ρ == uf_ad99
             parent(beres_source_ρ_z_u_v_level.:1) .= ρ_launch
             @test call_forcing!()[1] == uf_data   # the launch state is restored
+        end
+
+        @testset "An empty AD99 spectrum adds no drag and keeps the Beres drag" begin
+            # With nogw_Bw = nogw_Bn = 0 every AD99 bin is zero, so Σ|B0| = 0. The
+            # AD99 intermittency must then be zero, not infinite: an infinite one
+            # gives NaN above the AD99 launch level, which the clean-up turns into
+            # zero drag for both sources. Zeroing the source amplitude instead
+            # (Bt_0 = Bt_eq = 0) is the other way to switch the AD99 drag off and
+            # must give the same drag. Read before the clean-up, so a NaN shows.
+            nogw = p.non_orographic_gravity_wave
+            zero_level = zero(nogw.gw_Bw)
+            cache_with(nt) = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(nogw, nt),
+            )
+            uf_bw0, vf_bw0 =
+                call_forcing!(cache_with((; gw_Bw = zero_level, gw_Bn = zero_level)))
+            uf_amp0, vf_amp0 = call_forcing!(cache_with((; gw_source_ampl = zero_level)))
+            @test all(isfinite, uf_bw0)
+            @test all(isfinite, vf_bw0)
+            @test maximum(abs, uf_bw0) > 0
+            @test uf_bw0 == uf_amp0
+            @test vf_bw0 == vf_amp0
+            # Both equal the Beres drag of the full run, the full drag minus the
+            # AD99 drag (a_cover = 0 switches the Beres deposit off).
+            fill!(gw_a_cover, FT(0))
+            uf_ad99, _ = call_forcing!()
+            fill!(gw_a_cover, FT(1))
+            @test isapprox(
+                uf_bw0,
+                uf_data .- uf_ad99;
+                rtol = sqrt(eps(FT)),
+                atol = 100 * eps(FT) * maximum(abs, uf_bw0),
+            )
         end
     end
 end
