@@ -555,7 +555,8 @@ limited_gravity_wave_forcing(forcing) = ifelse(
     set_beres_launch_state!(beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop)
 
 Set the per-column Beres launch state: the density, height, winds, and level index of the
-first level (going up) whose height meets or exceeds the convective envelope top `gw_ztop`.
+first level (going up) whose height meets or exceeds the convective envelope top `gw_ztop`,
+or of the top level when no level reaches `gw_ztop`.
 
 Mutates `beres_source_ρ_z_u_v_level`, a level field of `(ρ, z, u, v, level)` tuples that
 `non_orographic_gravity_wave_forcing` reads as the Beres launch level. Called from
@@ -566,6 +567,7 @@ function set_beres_launch_state!(
     beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
 )
     FT = eltype(ᶜρ)
+    top_level = FT(Spaces.nlevels(axes(ᶜρ)))
     beres_input = Base.Broadcast.broadcasted(
         tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
     )
@@ -575,8 +577,11 @@ function set_beres_launch_state!(
         init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
     ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
     (ρ, z, u, v, level, ztop)
-        # Take the first level (going up) whose z meets/exceeds ztop.
-        if (z_prev < ztop) && (z >= ztop)
+        # Take the first level (going up) whose z meets/exceeds ztop. When no level
+        # does (a ztop above the top cell centre, or a NaN ztop, for which every
+        # comparison is false), take the top level, so that the launch density is
+        # never the zero of `init`.
+        if !(z_prev >= ztop) && ((z >= ztop) || (level == top_level))
             return (ρ, z, u, v, level)
         else
             return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
@@ -618,7 +623,7 @@ The envelope `[z_bot, z_top]` is obtained by moment matching over `z ≥ z_bot_f
 by default, which excludes the EDMF boundary-layer and dry-thermal signal): a half-sine of
 depth `h` has variance `h²(π²−8)/(4π²)`, so `h = σ/√((π²−8)/(4π²))` with `σ` the spread of
 `max(gw_Q_conv_ic, 0)` about its centroid `z_c`, and `z_bot, z_top = z_c ∓ h/2` (`z_top`
-clamped to the domain top, `z_bot` to `[0, z_top]`). The amplitude follows from inverting
+clamped to the column's top cell centre, `z_bot` to `[0, z_top]`). The amplitude follows from inverting
 the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same integral. Activation
 requires the grid-mean counterpart of that amplitude to exceed `Q0_threshold` and
 `h > h_heat_min`.
@@ -820,25 +825,27 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜΔz_m = Fields.Δz_field(axes(Y.c))
     input1 = Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, ᶜΔz_m)
     # `result_field` (gw_reduce_result) is a single 7-slot tuple field reused for
-    # both passes. Pass 1 fills only slots 1-3 with the heating moments
-    # (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) and carries slots 4-7 through untouched, i.e., the
-    # `_4..._7` placeholders in the reducer below. Pass 2 then reuses all 7 slots as
+    # both passes. Pass 1 fills slots 1-3 with the heating moments
+    # (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) and slot 4 with the height of the column's top cell
+    # centre, and carries slots 5-7 through untouched, i.e., the `_5..._7`
+    # placeholders in the reducer below. Pass 2 then reuses all 7 slots as
     # (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum); see the
     # `reduce_init2` accumulator there.
     reduce_init = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
     let _z_floor = gw_beres_source.z_bot_floor, _zero = FT(0)
-        # Accumulate (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) over z ≥ z_bot_floor into slots 1-3.
+        # Accumulate (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) over z ≥ z_bot_floor into slots 1-3,
+        # and the highest cell-centre height into slot 4.
         Operators.column_reduce!(
             result_field,
             input1;
             init = reduce_init,
-        ) do (I0p, I1p, I2p, _4, _5, _6, _7), (z, Q_ic, dz)
+        ) do (I0p, I1p, I2p, z_top_prev, _5, _6, _7), (z, Q_ic, dz)
             qpdz = ifelse(z >= _z_floor, max(Q_ic, _zero) * dz, _zero)
             return (
                 I0p + qpdz,
                 I1p + z * qpdz,
                 I2p + z * z * qpdz,
-                _4,
+                max(z_top_prev, z),
                 _5,
                 _6,
                 _7,
@@ -847,14 +854,13 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     end
     h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
     half_π = FT(π) / FT(2)
-    z_dom_top = maximum(ᶜz)
     # The envelope and amplitude of every column in one loop.
     DataLayouts.foreach_column(
         gw_zbot, gw_ztop, gw_h_heat, gw_Q0, result_field,
     ) do gw_zbot, gw_ztop, gw_h_heat, gw_Q0, moments
         @inline
-        (Q⁺_integral, zQ⁺_integral, z²Q⁺_integral) =
-            (moments.:1, moments.:2, moments.:3)
+        (Q⁺_integral, zQ⁺_integral, z²Q⁺_integral, z_column_top) =
+            (moments.:1, moments.:2, moments.:3, moments.:4)
         # z_c
         ᶜz_c = @. ifelse(Q⁺_integral > ϵ, zQ⁺_integral / Q⁺_integral, _zero)
         # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
@@ -863,9 +869,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             h_coef * sqrt(max(z²Q⁺_integral / Q⁺_integral - ᶜz_c^2, _zero)),
             _zero,
         )
-        # z_top = z_c + h/2 and z_bot = z_c − h/2, with z_top clamped to the domain top
-        # and z_bot to [0, z_top].
-        @. gw_ztop = min(ᶜz_c + ᶜh / 2, z_dom_top)
+        # z_top = z_c + h/2 and z_bot = z_c − h/2, with z_top clamped to the column's
+        # own top cell centre (which differs between columns on a terrain-following
+        # grid), so the launch level search finds a level, and z_bot to [0, z_top].
+        @. gw_ztop = min(ᶜz_c + ᶜh / 2, z_column_top)
         @. gw_zbot = min(max(ᶜz_c - ᶜh / 2, _zero), gw_ztop)
         # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
         ᶜQ0 = @. ifelse(
@@ -1909,7 +1916,13 @@ end
         eps = if MODE == :ad99
             calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
         else # MODE == :beres
-            beres_a_cover / (ρ_source_eff * FT1(nk))
+            # A zero launch density (no launch level found) gives no deposit rather
+            # than an infinite one.
+            ifelse(
+                ρ_source_eff > zero(FT1),
+                beres_a_cover / (ρ_source_eff * FT1(nk)),
+                zero(FT1),
+            )
         end
         rbh = sqrt(ρ_k * ρ_kp1)
         wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)

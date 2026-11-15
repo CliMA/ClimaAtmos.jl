@@ -278,6 +278,7 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             # reference values (which no longer match the implementation).
             @test beres.z_bot_floor <= zbot       # respects the PBL altitude floor
             @test zbot < ztop                     # ordered envelope
+            @test ztop <= center_z[end]           # at or below the top cell centre
             @test h_heat ≈ ztop - zbot            # depth = envelope span
             @test h_heat > beres.h_heat_min       # deep enough to activate Beres
             # The envelope intersects the injected heating band [z_lo, z_hi]
@@ -571,6 +572,49 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             net_steady = sum(ρ_col .* steady_contrib)
             println("  steady: Σρ·Δuforcing = $net_steady (U_heat = -5 ⇒ expect > 0)")
             @test net_steady > 0
+        end
+
+        @testset "Launch level falls back to the top level when gw_ztop is above it" begin
+            # On a terrain-following grid the top cell centre differs between
+            # columns, so a heating top can lie above every level of its own
+            # column. The launch state must then be the top level, never the
+            # zero density of the search's starting value, and the Beres waves
+            # launched there all go to the damping layer, so below it the drag is
+            # the AD99 drag alone, bit for bit.
+            nlev = Spaces.nlevels(axes(ᶜρ))
+            damp_first = CA.highest_damp_level(nlev)
+            fill!(gw_a_cover, FT(0))
+            uf_ad99, _ = call_forcing!()
+            fill!(gw_a_cover, FT(1))
+            launch_value(i) = parent(getproperty(beres_source_ρ_z_u_v_level, i))[1]
+            for ztop_beyond in (FT(1e6), FT(NaN))
+                fill!(gw_ztop, ztop_beyond)
+                CA.set_beres_launch_state!(
+                    beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+                )
+                @test launch_value(1) > 0                 # launch density
+                @test launch_value(2) == center_z[end]    # launch height
+                @test launch_value(5) == nlev             # launch level
+                uf_top, vf_top = call_forcing!()
+                @test all(isfinite, uf_top)
+                @test all(isfinite, vf_top)
+                @test uf_top[1:(damp_first - 1)] == uf_ad99[1:(damp_first - 1)]
+            end
+
+            # A zero launch density (no level found, as the search's starting value
+            # leaves it) gives no Beres deposit rather than an infinite one.
+            fill!(gw_ztop, FT(7000.0))
+            CA.set_beres_launch_state!(
+                beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+            )
+            ρ_launch = launch_value(1)
+            parent(beres_source_ρ_z_u_v_level.:1) .= FT(0)
+            uf_zero_ρ, vf_zero_ρ = call_forcing!()
+            @test all(isfinite, uf_zero_ρ)
+            @test all(isfinite, vf_zero_ρ)
+            @test uf_zero_ρ == uf_ad99
+            parent(beres_source_ρ_z_u_v_level.:1) .= ρ_launch
+            @test call_forcing!()[1] == uf_data   # the launch state is restored
         end
     end
 end

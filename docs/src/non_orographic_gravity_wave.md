@@ -145,7 +145,7 @@ From the column profiles, we extract:
 Q_0 = \frac{\pi}{2} \, \frac{1}{h} \int_{z \geq z_{\text{bot,floor}}} \max\left(Q_{\text{ic}}(z), 0\right) \, dz.
 ```
 
-  - **Heating depth** $h = z_{\text{top}} - z_{\text{bot}}$ is the vertical extent of the convective envelope. It is set by moment-matching a half-sine to the in-cloud heating $Q_{\text{ic}}$ through its first two vertical moments, namely the heating centroid $z_c$ and spread $\sigma$ (both taken over $z \geq z_{\text{bot,floor}}$, i.e., `nogw_beres_z_bot_floor`, to eliminate the boundary-layer / dry-thermal signal). A half-sine of depth $h$ has variance $h^2(\pi^2-8)/(4\pi^2)$, so $h = \sigma / \sqrt{(\pi^2-8)/(4\pi^2)}$, and $z_{\text{bot}}, z_{\text{top}} = z_c \mp h/2$ (with $z_{\text{top}}$ clamped to the domain top and $z_{\text{bot}} \geq 0$). This seats the envelope on the heating peak.
+  - **Heating depth** $h = z_{\text{top}} - z_{\text{bot}}$ is the vertical extent of the convective envelope. It is set by moment-matching a half-sine to the in-cloud heating $Q_{\text{ic}}$ through its first two vertical moments, namely the heating centroid $z_c$ and spread $\sigma$ (both taken over $z \geq z_{\text{bot,floor}}$, i.e., `nogw_beres_z_bot_floor`, to eliminate the boundary-layer / dry-thermal signal). A half-sine of depth $h$ has variance $h^2(\pi^2-8)/(4\pi^2)$, so $h = \sigma / \sqrt{(\pi^2-8)/(4\pi^2)}$, and $z_{\text{bot}}, z_{\text{top}} = z_c \mp h/2$ (with $z_{\text{top}}$ clamped to the column's top cell centre and $z_{\text{bot}} \geq 0$). This seats the envelope on the heating peak.
   - **Mean wind and stability in heating layer**: mass-weighted averages over the levels within the envelope $[z_{\text{bot}}, z_{\text{top}}]$,
 
 ```math
