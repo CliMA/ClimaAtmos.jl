@@ -286,6 +286,50 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             @test zbot < z_hi
             @test ztop > z_lo
         end
+
+        @testset "Activation counts only the heating above the floor" begin
+            # The draft is warmest at 2 km and its anomaly falls linearly to zero
+            # at 14 km, so it heats from 2 to 14 km and cools from 1 to 2 km. The
+            # fitted envelope reaches below 1 km, so it includes the cooling, which
+            # the moment fit and the gather leave out (it is below the floor). The
+            # activation amplitude must leave it out too and divide by the width of
+            # the envelope above the floor. The area fraction is set so that this
+            # amplitude is just above the threshold, while the amplitude over the
+            # whole envelope divided by h, which includes the cooling, is below it.
+            z_floor = beres.z_bot_floor
+            ΔT(z) =
+                z < 1000 || z > 14000 ? 0.0 :
+                z < 2000 ? 2 * (z - 1000) / 1000 : 2 * (14000 - z) / 12000
+            @. ᶜTʲs.:(1) = ᶜT + ΔT(ᶜz)
+            dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+            function run_with_area(a)
+                @. Y.c.sgsʲs.:(1).ρa =
+                    ifelse((ᶜz >= 500) & (ᶜz <= 15000), FT(a) * ᶜρ, FT(0))
+                CA.compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
+                Q = Array(Fields.field2array(gw_Q_conv))[:, 1]
+                z_b, z_t, h = parent(gw_zbot)[1], parent(gw_ztop)[1], parent(gw_h_heat)[1]
+                z_start = max(z_b, z_floor)
+                in_env = (center_z .>= z_b) .& (center_z .<= z_t)
+                above = in_env .& (center_z .>= z_floor)
+                return (;
+                    floor_amplitude = (π / 2) * sum(Q[above] .* dz_col[above]) /
+                                      (z_t - z_start),
+                    whole_amplitude = (π / 2) * sum(Q[in_env] .* dz_col[in_env]) / h,
+                    z_b,
+                    cooling = minimum(Q[in_env .& (center_z .< z_floor)]; init = 0.0),
+                    active = parent(gw_beres_active)[1],
+                )
+            end
+            unit = run_with_area(1)
+            a_test = 1.05 * beres.Q0_threshold / unit.floor_amplitude
+            @test 0 < a_test < 1
+            res = run_with_area(a_test)
+            @test res.z_b < 1000                  # the envelope includes the cooling
+            @test res.cooling < 0
+            @test res.floor_amplitude ≈ 1.05 * beres.Q0_threshold rtol = 1e-6
+            @test res.whole_amplitude < beres.Q0_threshold
+            @test res.active == 1
+        end
     end
 
     # ============================================================================

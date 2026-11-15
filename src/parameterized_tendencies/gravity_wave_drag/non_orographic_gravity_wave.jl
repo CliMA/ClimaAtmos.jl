@@ -685,10 +685,11 @@ The envelope `[z_bot, z_top]` is obtained by moment matching over `z ≥ z_bot_f
 by default, which excludes the EDMF boundary-layer and dry-thermal signal): a half-sine of
 depth `h` has variance `h²(π²−8)/(4π²)`, so `h = σ/√((π²−8)/(4π²))` with `σ` the spread of
 `max(gw_Q_conv_ic, 0)` about its centroid `z_c`, and `z_bot, z_top = z_c ∓ h/2` (`z_top`
-clamped to the column's top cell centre, `z_bot` to `[0, z_top]`). The amplitude follows from inverting
-the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same integral. Activation
-requires the grid-mean counterpart of that amplitude to exceed `Q0_threshold` and
-`h > h_heat_min`.
+clamped to the column's top cell centre, `z_bot` to `[0, z_top]`). The amplitude follows
+from inverting the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same
+integral. Activation requires the grid-mean amplitude over the part of the envelope above
+the floor, `(π/2)·∫ gw_Q_conv dz / (z_top − max(z_bot, z_bot_floor))`, to exceed
+`Q0_threshold`, and `h > h_heat_min`.
 
 The launch spectrum is built here once per column, not inside the propagation kernel,
 because it does not depend on the AD99 horizontal wavenumber. With
@@ -954,6 +955,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # (Σⱼ ρaʲ/ρʲ without the drafts whose density is at most ϵ)
     draft_area = (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, sgsʲ.ρa / ρʲ, zero(ρʲ))
     ᶜa_up = @. lazy(mapreduce_with_init(draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    # The activation integral counts only the heating at or above the floor, as the
+    # moment fit and the gather do.
+    z_floor = FT(gw_beres_source.z_bot_floor)
+    ᶜabove_floor = @. lazy(ifelse(ᶜz >= z_floor, FT(1), FT(0)))
     input2 = Base.Broadcast.broadcasted(
         tuple,
         gw_Q_conv,
@@ -965,6 +970,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜin_env,
         gw_Q_conv_ic,
         ᶜa_up,
+        ᶜabove_floor,
     )
     # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum).
     # Same 7-slot `result_field` as Pass 1, which used only slots 1-3 for the
@@ -985,10 +991,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         Qic_int_prev,
         a_sum_prev,
     ),
-    (Q, u, v, N, ρ, dz, env, Q_ic, a_up)
+    (Q, u, v, N, ρ, dz, env, Q_ic, a_up, above_floor)
         active = env > _half
         ρdz = ρ * dz
-        Q_int = ifelse(active, Q_int_prev + Q * dz, Q_int_prev)
+        Q_int = ifelse(
+            active & (above_floor > _half),
+            Q_int_prev + Q * dz,
+            Q_int_prev,
+        )
         u_sum = ifelse(active, u_sum_prev + u * ρdz, u_sum_prev)
         v_sum = ifelse(active, v_sum_prev + v * ρdz, v_sum_prev)
         N_sum = ifelse(active, N_sum_prev + N * ρdz, N_sum_prev)
@@ -1001,16 +1011,17 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Unpack Pass 2 results, and set the beres_active flag: GRID-MEAN amplitude above
     # threshold AND heating depth above minimum. The activation trigger always uses
     # grid-mean Q₁ (slot 1) to ensure the same activation criteria between 0M and 1M
-    # microphysics.
+    # microphysics. The grid-mean amplitude is the half-sine peak of the heating over the
+    # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
     _one = FT(1)
     N_source_default = FT(0.01)
     DataLayouts.foreach_column(
         gw_u_heat, gw_v_heat, gw_N_source, gw_a_cover, gw_beres_active, gw_h_heat,
-        result_field,
+        gw_zbot, gw_ztop, result_field,
     ) do gw_u_heat, gw_v_heat, gw_N_source, gw_a_cover, gw_beres_active, gw_h_heat,
-    sums
+    gw_zbot, gw_ztop, sums
         @inline
         (Q_integral, u_sum, v_sum, N_sum, mass_sum, a_sum) =
             (sums.:1, sums.:2, sums.:3, sums.:4, sums.:5, sums.:7)
@@ -1025,8 +1036,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             min(max(a_sum / mass_sum, _zero), _one),
             _zero,
         )
+        ᶜfloor_width =
+            @. gw_ztop - _beres_gather_bottom(gw_zbot, gw_ztop, z_floor)
         @. gw_beres_active = ifelse(
-            (max(half_π * Q_integral / max(gw_h_heat, ϵ), _zero) > Q0_threshold) &
+            (max(half_π * Q_integral / max(ᶜfloor_width, ϵ), _zero) > Q0_threshold) &
             (gw_h_heat > h_heat_min),
             _one,
             _zero,
@@ -1052,7 +1065,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # it, a step whose transform falls off only like 1/m. Baseline (half_sine) is
     # unaffected — only the V_G path reads the gathered profile.
     ng_val = Val(N_BERES_PROFILE)
-    z_floor = FT(gw_beres_source.z_bot_floor)
     ᶜgather_bottom =
         @. lazy(_beres_gather_bottom(gw_zbot, gw_ztop, z_floor))
     gather_input = Base.Broadcast.broadcasted(

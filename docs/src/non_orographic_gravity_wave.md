@@ -165,7 +165,7 @@ The envelope detection makes several deliberate simplifications:
 
 The Beres source activates in a column only when both conditions are met:
 
-  - the grid-mean heating amplitude exceeds a threshold, $(\pi/2)\,h^{-1}\!\int_{z_{\text{bot}}}^{z_{\text{top}}} Q_1\,dz > Q_{0,\text{threshold}}$, of order $1\;\text{K/day}$ (`nogw_beres_Q0_threshold`). This gate deliberately uses the grid-mean $Q_1$ (not the in-cloud $Q_0$ that sets the launched amplitude) because its threshold is calibrated to grid-mean magnitudes.
+  - the grid-mean heating amplitude exceeds a threshold, $(\pi/2)\,(z_{\text{top}} - z_b)^{-1}\!\int_{z_b}^{z_{\text{top}}} Q_1\,dz > Q_{0,\text{threshold}}$ with $z_b = \max(z_{\text{bot}}, z_{\text{bot,floor}})$, i.e. over the part of the envelope above the floor, as for the moments that set $h$ and $Q_0$, of order $1\;\text{K/day}$ (`nogw_beres_Q0_threshold`). This gate deliberately uses the grid-mean $Q_1$ (not the in-cloud $Q_0$ that sets the launched amplitude) because its threshold is calibrated to grid-mean magnitudes.
   - the heating depth exceeds a threshold, $h > h_{\min}$, of order $1\;\text{km}$ (`nogw_beres_h_heat_min`).
 
 This filters out shallow or weak convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts. Where they are met, the Beres flux is added on top of the AD99 background.
