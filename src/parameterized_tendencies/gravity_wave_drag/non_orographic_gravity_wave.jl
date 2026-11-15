@@ -1756,8 +1756,10 @@ order and removed from the mask when it fails:
  1. Critical level, `ĉ = c[n] - u = 0`.
  2. Total internal reflection, `|ĉ|·k ≥ ω_r` with `ω_r² = N²k²/(k² + 1/(4Hb²))` and `Hb`
     the local density scale height.
- 3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N`, or a sign change of `ĉ` relative to its
-    launch-level value (critical-level absorption).
+ 3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N` for AD99, whose `B₀` is a flux per
+    unit mass [m²/s²], and `B₀[n]/ĉ³ ≥ ½ρ_{k+1}·k/N` for Beres, whose `B₀` is a stress
+    [Pa]; or a sign change of `ĉ` relative to its launch-level value (critical-level
+    absorption).
 
 A bin removed by test 1 or 3 adds its `B₀[n]` to the layer's flux sum `fm`; a reflected
 bin (test 2) is removed without depositing anything, which is the only way the kernel
@@ -1890,7 +1892,11 @@ end
 
     k2 = kwv * kwv
 
-    fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1
+    # Breaking threshold on B0/ĉ³. The AD99 B0 is a flux per unit mass at the launch
+    # level [m²/s²], so the stress-based limit ½ρ_{k+1}·k/N is divided by ρ_source; the
+    # Beres B0 is already a stress [Pa] and takes the limit as it is.
+    fac =
+        FT1(0.5) * (MODE == :ad99 ? ρ_kp1 / ρ_source_eff : ρ_kp1) * kwv / bf_kp1
     Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
     alp2 = FT1(0.25) / (Hb * Hb)
     ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)

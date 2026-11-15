@@ -655,6 +655,57 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
                 atol = 100 * eps(FT) * maximum(abs, uf_bw0),
             )
         end
+
+        @testset "Beres breaking test treats B0 as a stress" begin
+            # The Beres B0 is a stress [Pa], so a wave breaks where
+            # B0/ĉ³ ≥ ½·ρ·k/N, with no division by the launch density (that
+            # division turns the AD99 flux per unit mass into a stress). One bin
+            # at c = 20 m/s with 1.5 times that limit at the first level above
+            # launch must break in the first layer, for a launch density of 0.2
+            # and of 1 (for 1 the two forms agree); with 0.5 times the limit it
+            # must not. The AD99 drag is switched off by its source amplitude.
+            nogw = p.non_orographic_gravity_wave
+            (; gw_c, gw_beres_B0_u, gw_beres_B0_v) = nogw
+            p_beres_only = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (; gw_source_ampl = zero(nogw.gw_source_ampl)),
+                ),
+            )
+            launch_level = Int(parent(beres_source_ρ_z_u_v_level.:5)[1])
+            ρ_launch = parent(beres_source_ρ_z_u_v_level.:1)[1]
+            ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
+            u_col = Array(Fields.field2array(ᶜu))[:, 1]
+            N = FT(0.012)                      # uniform buoyancy frequency above
+            k_band1 = 2 * FT(π) / (30 * FT(10) * 1000)   # largest k of the bands
+            n_bin = findfirst(==(FT(20)), gw_c)
+            c_hat = gw_c[n_bin] - u_col[launch_level + 1]
+            B0_limit = ρ_col[launch_level + 1] * k_band1 * c_hat^3 / (2 * N)
+            @test c_hat > 0                    # setup: no sign change in the first layer
+            fill!(gw_beres_B0_v, CA.BeresB0(ntuple(_ -> FT(0), length(gw_c))))
+            # Drag outside the two cells the first layer spans (it puts half its
+            # flux in the launch cell and half in the cell above).
+            function drag_beyond_first_layer(B0_factor, ρ_source)
+                B0 = ntuple(n -> n == n_bin ? B0_factor * B0_limit : FT(0), length(gw_c))
+                fill!(gw_beres_B0_u, CA.BeresB0(B0))
+                parent(beres_source_ρ_z_u_v_level.:1) .= ρ_source
+                uf, _ = call_forcing!(p_beres_only)
+                @test maximum(abs, uf) > 0
+                beyond = vcat(uf[1:(launch_level - 1)], uf[(launch_level + 2):end])
+                return maximum(abs, beyond)
+            end
+            for ρ_source in (FT(0.2), FT(1))
+                @test drag_beyond_first_layer(FT(1.5), ρ_source) == 0
+                @test drag_beyond_first_layer(FT(0.5), ρ_source) > 0
+            end
+            parent(beres_source_ρ_z_u_v_level.:1) .= ρ_launch
+            CA._beres_precompute_launch_spectra!(nogw)
+            @test call_forcing!()[1] == uf_data   # the launch spectra are restored
+        end
     end
 end
 
