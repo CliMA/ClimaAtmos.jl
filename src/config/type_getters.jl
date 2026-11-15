@@ -259,9 +259,31 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"];
             use_full_pressure = parsed_args["era5_ic_full_pressure"],
+            initial_temperature_perturbation = get(
+                parsed_args,
+                "initial_temperature_perturbation",
+                0.0,
+            ),
+            initial_perturbation_seed = get(
+                parsed_args,
+                "initial_perturbation_seed",
+                0,
+            ),
         )
     elseif ic_name == "AMIPFromERA5"
-        return Setups.AMIPFromERA5(parsed_args["start_date"])
+        return Setups.AMIPFromERA5(
+            parsed_args["start_date"];
+            initial_temperature_perturbation = get(
+                parsed_args,
+                "initial_temperature_perturbation",
+                0.0,
+            ),
+            initial_perturbation_seed = get(
+                parsed_args,
+                "initial_perturbation_seed",
+                0,
+            ),
+        )
     elseif ic_name == "DecayingProfile"
         return Setups.DecayingProfile(;
             perturb = parsed_args["perturb_initstate"],
@@ -311,7 +333,19 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "ShipwayHill2012"
         return Setups.ShipwayHill2012(; thermo_params)
     elseif isfile(ic_name)
-        return Setups.MoistFromFile(ic_name)
+        return Setups.MoistFromFile(
+            ic_name;
+            initial_temperature_perturbation = get(
+                parsed_args,
+                "initial_temperature_perturbation",
+                0.0,
+            ),
+            initial_perturbation_seed = get(
+                parsed_args,
+                "initial_perturbation_seed",
+                0,
+            ),
+        )
     end
     error("Unknown initial_condition: $ic_name")
 end

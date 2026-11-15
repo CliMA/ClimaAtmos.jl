@@ -343,12 +343,161 @@ function assign_moisture_edmf!(
 end
 
 # ============================================================================
+# Initial temperature perturbation (noise floor)
+# ============================================================================
+
+@inline function _splitmix64(x::UInt64)
+    z = x + 0x9e3779b97f4a7c15
+    z = (z ⊻ (z >> 30)) * 0xbf58476d1ce4e5b9
+    z = (z ⊻ (z >> 27)) * 0x94d049bb133111eb
+    return z ⊻ (z >> 31)
+end
+
+@inline function _rademacher_δT(coord, level_idx::Int, seed::Int, A::FT) where {FT}
+    lat_i =
+        hasproperty(coord, :lat) ? round(Int64, Float64(coord.lat) * 1e4) :
+        Int64(0)
+    lon_i = if hasproperty(coord, :long)
+        round(Int64, Float64(coord.long) * 1e4)
+    elseif hasproperty(coord, :lon)
+        round(Int64, Float64(coord.lon) * 1e4)
+    elseif hasproperty(coord, :x)
+        round(Int64, Float64(coord.x))
+    else
+        Int64(0)
+    end
+    h = _splitmix64(reinterpret(UInt64, Int64(seed)))
+    h = _splitmix64(h ⊻ reinterpret(UInt64, lat_i))
+    h = _splitmix64(h ⊻ reinterpret(UInt64, lon_i))
+    h = _splitmix64(h ⊻ reinterpret(UInt64, Int64(level_idx)))
+    return isodd(h) ? A : -A
+end
+
+"""
+    apply_initial_temperature_perturbation!(
+        ᶜT, initial_temperature_perturbation, initial_perturbation_seed;
+        apply_dss = true,
+    )
+
+Apply a layout-invariant Rademacher perturbation `δT = ±A` to the center
+temperature field `ᶜT` in place, followed by direct stiffness summation
+(`Spaces.weighted_dss!`) when `apply_dss = true`, and return the unperturbed
+copy `ᶜT_unpert` (or `nothing` when `initial_temperature_perturbation == 0`,
+which is a bit-identical no-op).
+
+The sign at each point comes from a portable 64-bit SplitMix64 mixer over
+`(seed, round(Int64, lat*1e4), round(Int64, lon*1e4), level_idx)`, so the
+perturbation is identical across Julia versions, MPI domain decompositions, and
+shared spectral-element nodes before DSS. Called right after `ᶜT` is read from
+file and before surface-pressure topographic correction, hydrostatic pressure
+integration, density, total energy, and EDMF initialization, keeping the
+initial state thermodynamically consistent.
+"""
+function apply_initial_temperature_perturbation!(
+    ᶜT,
+    initial_temperature_perturbation::Real,
+    initial_perturbation_seed::Integer;
+    apply_dss::Bool = true,
+)
+    iszero(initial_temperature_perturbation) && return nothing
+    center_space = Fields.axes(ᶜT)
+    FT = Spaces.undertype(center_space)
+    A = FT(initial_temperature_perturbation)
+    seed = Int(initial_perturbation_seed)
+    ᶜT_unpert = copy(ᶜT)
+
+    coords_cpu = Adapt.adapt(Array, Fields.coordinate_field(center_space))
+    ᶜδT_cpu = similar(coords_cpu, FT)
+    n_levels = Spaces.nlevels(center_space)
+    for level_idx in 1:n_levels
+        Fields.level(ᶜδT_cpu, level_idx) .= _rademacher_δT.(
+            Fields.level(coords_cpu, level_idx),
+            level_idx,
+            seed,
+            A,
+        )
+    end
+    ᶜδT = Fields.Field(FT, center_space)
+    copyto!(parent(ᶜδT), parent(ᶜδT_cpu))
+    ᶜT .+= ᶜδT
+    apply_dss && Spaces.weighted_dss!(ᶜT)
+    return ᶜT_unpert
+end
+
+"""
+    log_initial_temperature_perturbation(
+        Y, ᶜT, ᶜT_unpert, ᶠp_unpert, ᶜq_tot, ᶜq_liq, ᶜq_ice,
+        e_pot, thermo_params, initial_temperature_perturbation,
+        initial_perturbation_seed,
+    )
+
+Compute and log the `t = 0` temperature and total-energy differences relative to
+the unperturbed state on every MPI rank, asserting `max|Δρe_tot| > 0`.
+"""
+function log_initial_temperature_perturbation(
+    Y,
+    ᶜT,
+    ᶜT_unpert,
+    ᶠp_unpert,
+    ᶜq_tot,
+    ᶜq_liq,
+    ᶜq_ice,
+    e_pot,
+    thermo_params,
+    initial_temperature_perturbation::Real,
+    initial_perturbation_seed::Integer,
+)
+    isnothing(ᶜT_unpert) && return nothing
+    e_kin = compute_kinetic(Y.c.uₕ, Y.f.u₃)
+    ᶜρ_unpert = TD.air_density.(
+        thermo_params,
+        ᶜT_unpert,
+        exp.(ᶜinterp.(log.(ᶠp_unpert))),
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+    )
+    ᶜρe_tot_unpert =
+        TD.total_energy.(
+            thermo_params,
+            e_kin,
+            e_pot,
+            ᶜT_unpert,
+            ᶜq_tot,
+            ᶜq_liq,
+            ᶜq_ice,
+        ) .* ᶜρ_unpert
+
+    dT_arr = Array(parent(ᶜT) .- parent(ᶜT_unpert))
+    dρe_arr = Array(parent(Y.c.ρe_tot) .- parent(ᶜρe_tot_unpert))
+    max_abs_dT = maximum(abs, dT_arr)
+    rms_dT = sqrt(mean(dT_arr .^ 2))
+    max_abs_dρe_tot = maximum(abs, dρe_arr)
+    @assert max_abs_dρe_tot > 0 "Initial temperature perturbation produced zero Δρe_tot at t=0"
+
+    comms_ctx = ClimaComms.context(Fields.axes(Y.c))
+    rank = ClimaComms.mypid(comms_ctx)
+    msg =
+        "IC temperature perturbation at t=0: rank=$(rank) " *
+        "seed=$(Int(initial_perturbation_seed)) " *
+        "A=$(Float64(initial_temperature_perturbation)) " *
+        "max_abs_dT=$(max_abs_dT) rms_dT=$(rms_dT) " *
+        "max_abs_drhoe_tot=$(max_abs_dρe_tot)"
+    println(msg)
+    flush(stdout)
+    @info msg
+    return nothing
+end
+
+# ============================================================================
 # Main shared overwrite function
 # ============================================================================
 
 """
     overwrite_from_file!(file_path, extrapolation_bc, Y, thermo_params;
-                         regridder_type=nothing, interpolation_method=nothing)
+                         regridder_type=nothing, interpolation_method=nothing,
+                         initial_temperature_perturbation=0.0,
+                         initial_perturbation_seed=0)
 
 Overwrite the prognostic state `Y` with data regridded from a NetCDF file.
 Recomputes vertical pressure levels assuming hydrostatic balance from
@@ -372,6 +521,8 @@ function overwrite_from_file!(
     thermo_params;
     regridder_type = nothing,
     interpolation_method = nothing,
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
 )
     regridder_kwargs = filter(!isnothing, (; extrapolation_bc, interpolation_method))
     svi_kwargs =
@@ -387,6 +538,11 @@ function overwrite_from_file!(
     # Regrid temperature and vapor specific humidity from file
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "t", center_space; svi_kwargs...,
+    )
+    ᶜT_unpert = apply_initial_temperature_perturbation!(
+        ᶜT,
+        initial_temperature_perturbation,
+        initial_perturbation_seed,
     )
     ᶜq_vap = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "q", center_space; svi_kwargs...,
@@ -407,6 +563,7 @@ function overwrite_from_file!(
         ),
         Fields.half,
     )
+    p_sfc_unpert = isnothing(ᶜT_unpert) ? nothing : copy(p_sfc)
 
     surface_altitude_var = "z_sfc"
     has_surface_altitude = NC.NCDataset(file_path) do ds
@@ -419,6 +576,14 @@ function overwrite_from_file!(
             thermo_params, regridder_kwargs;
             surface_altitude_var,
         )
+        if !isnothing(p_sfc_unpert)
+            correct_surface_pressure_for_topography!(
+                p_sfc_unpert, file_path, face_space, Y, ᶜT_unpert,
+                ᶜq_tot, ᶜq_liq, ᶜq_ice,
+                thermo_params, regridder_kwargs;
+                surface_altitude_var,
+            )
+        end
     end
 
     # Hydrostatic pressure integration
@@ -444,6 +609,18 @@ function overwrite_from_file!(
         Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, e_pot, thermo_params,
         ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
     )
+
+    if !isnothing(ᶜT_unpert)
+        ᶠp_unpert = hydrostatic_pressure(
+            p_sfc_unpert, ᶜT_unpert, ᶜq_tot, ᶜq_liq, ᶜq_ice, face_space,
+            thermo_params,
+        )
+        log_initial_temperature_perturbation(
+            Y, ᶜT, ᶜT_unpert, ᶠp_unpert, ᶜq_tot, ᶜq_liq, ᶜq_ice,
+            e_pot, thermo_params, initial_temperature_perturbation,
+            initial_perturbation_seed,
+        )
+    end
 
     return nothing
 end
