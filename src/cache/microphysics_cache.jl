@@ -1058,16 +1058,22 @@ saturation-excess mean `mu_S` are first materialized in scratch fields by one
 column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
 arguments of `microphysics_tendencies_1m`.
 
-`order` is the thread order of the quadrature kernel. It defaults to
-`DataLayouts.LevelAlignedOrder()`, which gives a warp the cells of one level, so
-that the clear-air early-out in `_sum_1m_over_sgs` is collected by whole warps:
-the cells it fires at are a quarter of the field but share a vertical warp three
-times in a thousand. `DataLayouts.NoMask()` is the vertical order, and the two
-write the same values.
+`order` is the thread order of the quadrature kernel, and the two orders write
+the same values to the bit. `DataLayouts.LevelAlignedOrder()` gives a warp the
+cells of one level, which is what lets the clear-air early-out in
+`_sum_1m_over_sgs` be collected by whole warps: the cells it fires at are a
+quarter of the field and share a vertical warp three times in a thousand.
+`DataLayouts.NoMask()`, the default, is the layout's own vertical order.
+
+The explicit call site asks for the level-aligned order. The implicit path keeps
+the vertical one: its `Instantaneous` kernel costs a fifth of the explicit
+kernel per call, so it is nearer its memory roofline and pays more for the
+strided reads than it recovers in skipped warps. See
+`docs/experiments/sgs-thread-order.md`.
 """
 function set_environment_1m_tendency!(
     ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
-    order = DataLayouts.LevelAlignedOrder(),
+    order = DataLayouts.NoMask(),
 )
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     # The column loop calls Thermodynamics with `thp`; the microphysics
@@ -1522,6 +1528,7 @@ function set_microphysics_tendency_cache!(
     ### Environment contribution
     set_environment_1m_tendency!(
         ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, (),
+        DataLayouts.LevelAlignedOrder(),
     )
     return nothing
 end
