@@ -392,7 +392,7 @@ compute_detr(state, cache, time) =
     compute_detr(state, cache, time, cache.atmos.turbconv_model)
 compute_detr(_, _, _, turbconv_model) = error_diagnostic_variable("detr", turbconv_model)
 
-function compute_detr(state, cache, _, ::PrognosticEDMFX)
+function compute_detr(state, cache, _, ::PrognosticEDMFX, ::Val{j} = Val(1)) where {j}
     (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
     (; ᶠgradᵥ_ᶜΦ) = cache.core
     turbconv_params = CAP.turbconv_params(cache.params)
@@ -400,8 +400,11 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     detr_model = cache.atmos.edmfx_model.detr_model
     ᶠlg = Fields.local_geometry_field(state.f)
     ᶠdz = Fields.Δz_field(axes(state.f))
-    ρaʲ = state.c.sgsʲs.:(1).ρa
-    u₃ʲ = state.f.sgsʲs.:(1).u₃
+    ρaʲ = getproperty(state.c.sgsʲs, j).ρa
+    u₃ʲ = getproperty(state.f.sgsʲs, j).u₃
+    ᶜρ_diffʲ = getproperty(ᶜρ_diffʲs, j)
+    ᶜρʲ = getproperty(ᶜρʲs, j)
+    ᶜarea_bounding_entr_detrʲ = getproperty(ᶜarea_bounding_entr_detrʲs, j)
     # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
     ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
@@ -411,7 +414,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             detr_buoy_inv_time_scale(
                 u₃ʲ.components.data.:1 / ᶠdz,
                 vertical_buoyancy_acceleration(
-                    ᶠinterp(ᶜρ_diffʲs.:1),
+                    ᶠinterp(ᶜρ_diffʲ),
                     ᶠgradᵥ_ᶜΦ,
                     ᶠlg,
                 ),
@@ -422,11 +425,11 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     return @. lazy(
         compute_detrainment(
             turbconv_params,
-            draft_area(ρaʲ, ᶜρʲs.:1),
+            draft_area(ρaʲ, ᶜρʲ),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
             ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
-            ᶜarea_bounding_entr_detrʲs.:1,
+            ᶜarea_bounding_entr_detrʲ,
             detr_model,
         ),
     )
@@ -436,6 +439,127 @@ add_diagnostic_variable!(short_name = "detr", units = "s^-1",
     long_name = "Detrainment rate",
     comments = "Detrainment rate of the first updraft",
     compute = compute_detr,
+)
+
+###
+# Updraft detrainment of moisture and condensate (3d)
+###
+@inline _sum_lazy_tuple(t::Tuple{Any}) = t[1]
+@inline _sum_lazy_tuple(t::Tuple) =
+    @. lazy(t[1] + _sum_lazy_tuple(Base.tail(t)))
+
+@inline _updraft_q_tot(_, cache, ::MoistMicrophysics, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_tot_nonnegʲs, j)
+@inline _updraft_q_lcl(_, cache, ::EquilibriumMicrophysics0M, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_liqʲs, j)
+@inline _updraft_q_lcl(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_lcl
+@inline _updraft_q_icl(_, cache, ::EquilibriumMicrophysics0M, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_iceʲs, j)
+@inline _updraft_q_icl(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_icl
+
+function _compute_detr_q(
+    q_getter::F,
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) where {F}
+    ᶜρ = state.c.ρ
+    terms = ntuple(Val(n_mass_flux_subdomains(tc_model))) do j
+        @inline
+        ᶜρaʲ = getproperty(state.c.sgsʲs, j).ρa
+        ᶜdetrʲ = compute_detr(state, cache, time, tc_model, Val(j))
+        ᶜqʲ = q_getter(state, cache, mp_model, Val(j))
+        @. lazy(ᶜρaʲ * ᶜdetrʲ * ᶜqʲ / ᶜρ)
+    end
+    return _sum_lazy_tuple(terms)
+end
+
+compute_detr_q_tot(state, cache, time) = compute_detr_q_tot(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_tot(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft total-water detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_tot(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(_updraft_q_tot, state, cache, time, mp_model, tc_model)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_tot",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Total Water",
+    comments = "Grid-mean mass-weighted updraft detrainment source of total \
+                specific humidity, sum_j (ρa^j * detr^j * q_tot^j) / ρ",
+    compute = compute_detr_q_tot,
+)
+
+compute_detr_q_lcl(state, cache, time) = compute_detr_q_lcl(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_lcl(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft cloud-liquid detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_lcl(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(_updraft_q_lcl, state, cache, time, mp_model, tc_model)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_lcl",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Cloud Liquid Water",
+    comments = "Grid-mean mass-weighted updraft detrainment source of cloud \
+                liquid specific humidity, sum_j (ρa^j * detr^j * q_lcl^j) / ρ",
+    compute = compute_detr_q_lcl,
+)
+
+compute_detr_q_icl(state, cache, time) = compute_detr_q_icl(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_icl(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft cloud-ice detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_icl(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(_updraft_q_icl, state, cache, time, mp_model, tc_model)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_icl",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Cloud Ice",
+    comments = "Grid-mean mass-weighted updraft detrainment source of cloud \
+                ice specific humidity, sum_j (ρa^j * detr^j * q_icl^j) / ρ",
+    compute = compute_detr_q_icl,
 )
 
 ###
