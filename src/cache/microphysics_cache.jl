@@ -1047,6 +1047,7 @@ end
 """
     set_environment_1m_tendency!(
         ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+        [order],
     )
 
 Write the 1M microphysics tendency of the `PrognosticEDMFX` environment, with the
@@ -1056,9 +1057,17 @@ density and specific humidities, the liquid fraction `λ`, and the linearized SG
 saturation-excess mean `mu_S` are first materialized in scratch fields by one
 column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
 arguments of `microphysics_tendencies_1m`.
+
+`order` is the thread order of the quadrature kernel. It defaults to
+`DataLayouts.LevelAlignedOrder()`, which gives a warp the cells of one level, so
+that the clear-air early-out in `_sum_1m_over_sgs` is collected by whole warps:
+the cells it fires at are a quarter of the field but share a vertical warp three
+times in a thousand. `DataLayouts.NoMask()` is the vertical order, and the two
+write the same values.
 """
 function set_environment_1m_tendency!(
     ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
+    order = DataLayouts.LevelAlignedOrder(),
 )
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     # The column loop calls Thermodynamics with `thp`; the microphysics
@@ -1110,6 +1119,12 @@ function set_environment_1m_tendency!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         opts = sgs_microphysics_options(p.params)
+        # `order` takes the place of the destination space's own mask, and the
+        # atmosphere's spaces carry none; a masked space would need the two
+        # composed rather than one chosen.
+        order isa DataLayouts.NoMask ||
+            Spaces.get_mask(axes(ᶜmp_tendency⁰)) isa DataLayouts.NoMask ||
+            error("the SGS quadrature's thread order cannot be set on a masked space")
         # Ask `ptxas` for at most 128 registers, the top of this kernel's A100
         # occupancy band. ClimaCore sizes the launch from the register count, so
         # the cap is what decides which band the launch lands in.
@@ -1125,6 +1140,7 @@ function set_environment_1m_tendency!(
                 ),
             ),
             Val(128),
+            order,
         )
     end
     return nothing
