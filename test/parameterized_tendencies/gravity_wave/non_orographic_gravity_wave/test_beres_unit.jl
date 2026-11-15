@@ -1213,3 +1213,69 @@ end
             1e-12
     end
 end
+
+# ============================================================================
+# Non-finite values: the forcing clean-up, its report, and the heating envelope
+#
+# The forcing is clamped and NaN/Inf replaced by zero once per callback; the
+# replaced values are counted and reported once. The envelope moments must not
+# turn an infinite in-cloud heating into a NaN height: Inf/Inf = NaN, and a NaN
+# z_top would leave the Beres launch level search without a level.
+# ============================================================================
+@testset "NOGW non-finite values: clean-up, report, envelope" begin
+    @testset "limited_gravity_wave_forcing (FT = $FT)" for FT in (Float32, Float64)
+        lim = CA.limited_gravity_wave_forcing
+        @test lim(FT(NaN)) == FT(0)
+        @test lim(FT(Inf)) == FT(0)
+        @test lim(-FT(Inf)) == FT(0)
+        @test lim(FT(1)) == FT(3e-3)
+        @test lim(-FT(1)) == -FT(3e-3)
+        @test lim(FT(1e-4)) == FT(1e-4)
+        @test lim(-FT(1e-4)) == -FT(1e-4)
+    end
+
+    @testset "Non-finite forcing is counted and reported once" begin
+        report = CA.warn_nonfinite_gravity_wave_forcing
+        uf = [0.0, NaN, 1e-4, Inf]
+        vf = [-Inf, 0.0, 0.0, 0.0]
+        CA.NOGW_NONFINITE_WARNED[] = false
+        n_first = @test_logs (:warn, r"3 NaN or infinite") report(uf, vf)
+        @test n_first == 3
+        # Counted again, not reported again.
+        n_second = @test_logs report(uf, vf)
+        @test n_second == 3
+        n_finite = @test_logs report([0.0, 1.0], [2.0, 3.0])
+        @test n_finite == 0
+        CA.NOGW_NONFINITE_WARNED[] = false
+    end
+
+    for FT in (Float32, Float64)
+        @testset "Heating centroid and depth are finite (FT = $FT)" begin
+            centroid = CA._beres_heating_centroid
+            depth = CA._beres_heating_depth
+            # A half-sine on [2, 12] km: centroid 7 km and depth 10 km from its
+            # moments (looser for Float32, where σ² = ∫z²Q/∫Q − z_c² cancels).
+            rtol = FT == Float32 ? 1e-2 : 1e-4
+            z = collect(range(FT(2000), FT(12000); length = 2001))
+            dz = z[2] - z[1]
+            Q = sin.(FT(π) .* (z .- z[1]) ./ (z[end] - z[1]))
+            I0 = sum(Q) * dz
+            I1 = sum(z .* Q) * dz
+            I2 = sum(z .^ 2 .* Q) * dz
+            z_c = centroid(I0, I1)
+            @test z_c ≈ FT(7000) rtol = rtol
+            @test depth(I0, I2, z_c) ≈ FT(10000) rtol = rtol
+            # An infinite heating gives infinite moments: zero, not NaN.
+            inf_c = centroid(FT(Inf), FT(Inf))
+            @test inf_c == FT(0)
+            @test depth(FT(Inf), FT(Inf), inf_c) == FT(0)
+            @test centroid(FT(1), FT(Inf)) == FT(0)
+            @test depth(FT(1), FT(Inf), FT(0)) == FT(0)
+            # No positive heating, or a NaN moment: zero.
+            @test centroid(FT(0), FT(0)) == FT(0)
+            @test depth(FT(0), FT(0), FT(0)) == FT(0)
+            @test centroid(FT(NaN), FT(NaN)) == FT(0)
+            @test depth(FT(NaN), FT(NaN), FT(0)) == FT(0)
+        end
+    end
+end

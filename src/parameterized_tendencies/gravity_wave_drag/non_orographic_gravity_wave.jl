@@ -352,7 +352,8 @@ Steps, in order:
     (when configured) again for the Beres source, accumulating both into `uforcing` and
     `vforcing` via `postprocess_and_accumulate!`.
  5. Sanitize the forcing: any `NaN`/`Inf` is replaced by zero and the rest is clamped to
-    ±3e-3 m/s², the same limit the orographic scheme uses.
+    ±3e-3 m/s², the same limit the orographic scheme uses. The replaced values are counted
+    by `warn_nonfinite_gravity_wave_forcing`, which warns the first time there are any.
 
 Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
 clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level`.
@@ -531,7 +532,9 @@ function non_orographic_gravity_wave_compute_tendency!(
     )
 
     # Sanitize the forcing here, once per callback, rather than at every stage that applies
-    # it (same limit as OGW: 3e-3 m/s²).
+    # it (same limit as OGW: 3e-3 m/s²). The cells it zeroes are counted first, so that a
+    # NaN or Inf is reported instead of silently removed.
+    warn_nonfinite_gravity_wave_forcing(uforcing, vforcing)
     DataLayouts.foreach_point(uforcing, vforcing) do ᶜuforcing, ᶜvforcing
         @inline
         @. ᶜuforcing = limited_gravity_wave_forcing(ᶜuforcing)
@@ -550,6 +553,30 @@ limited_gravity_wave_forcing(forcing) = ifelse(
     zero(forcing),
     max(-oftype(forcing, 3e-3), min(oftype(forcing, 3e-3), forcing)),
 )
+
+# Whether a non-finite non-orographic gravity-wave forcing has been reported, which
+# happens once per session.
+const NOGW_NONFINITE_WARNED = Ref(false)
+
+"""
+    warn_nonfinite_gravity_wave_forcing(uforcing, vforcing)
+
+Return the number of `NaN` or infinite values in the drag fields `uforcing` and
+`vforcing`, and log a warning the first time in a session that it is not zero.
+
+Called once per callback by `non_orographic_gravity_wave_compute_tendency!` just before
+`limited_gravity_wave_forcing` replaces those values by zero, which would otherwise hide
+them.
+"""
+function warn_nonfinite_gravity_wave_forcing(uforcing, vforcing)
+    n_nonfinite =
+        count(!isfinite, parent(uforcing)) + count(!isfinite, parent(vforcing))
+    if n_nonfinite > 0 && !NOGW_NONFINITE_WARNED[]
+        NOGW_NONFINITE_WARNED[] = true
+        @warn "The non-orographic gravity-wave drag has $n_nonfinite NaN or infinite values in this callback; they are set to zero. Later occurrences are not reported."
+    end
+    return n_nonfinite
+end
 
 """
     set_beres_launch_state!(beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop)
@@ -587,6 +614,41 @@ function set_beres_launch_state!(
             return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
         end
     end
+end
+
+"""
+    _beres_heating_centroid(Q⁺_integral, zQ⁺_integral)
+
+Return the centroid `z_c = ∫z·Q⁺dz / ∫Q⁺dz` [m] of the positive in-cloud heating `Q⁺`
+from its first two moments, or zero when `∫Q⁺dz` is not positive or the quotient is not
+finite (an infinite heating gives `Inf/Inf = NaN`).
+"""
+@inline function _beres_heating_centroid(Q⁺_integral, zQ⁺_integral)
+    z_c = ifelse(
+        Q⁺_integral > eps(typeof(Q⁺_integral)),
+        zQ⁺_integral / Q⁺_integral,
+        zero(Q⁺_integral),
+    )
+    return ifelse(isfinite(z_c), z_c, zero(z_c))
+end
+
+"""
+    _beres_heating_depth(Q⁺_integral, z²Q⁺_integral, z_c)
+
+Return the depth `h = σ/√((π²−8)/(4π²))` [m] of the half-sine with the same spread `σ` as
+the positive in-cloud heating `Q⁺`, with `σ² = ∫z²Q⁺dz/∫Q⁺dz − z_c²` and `z_c` from
+`_beres_heating_centroid`. Returns zero when `∫Q⁺dz` is not positive or the result is not
+finite.
+"""
+@inline function _beres_heating_depth(Q⁺_integral, z²Q⁺_integral, z_c)
+    FT = typeof(Q⁺_integral)
+    h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
+    h = ifelse(
+        Q⁺_integral > eps(FT),
+        h_coef * sqrt(max(z²Q⁺_integral / Q⁺_integral - z_c^2, zero(FT))),
+        zero(FT),
+    )
+    return ifelse(isfinite(h), h, zero(h))
 end
 
 """
@@ -852,7 +914,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             )
         end
     end
-    h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
     half_π = FT(π) / FT(2)
     # The envelope and amplitude of every column in one loop.
     DataLayouts.foreach_column(
@@ -861,14 +922,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         @inline
         (Q⁺_integral, zQ⁺_integral, z²Q⁺_integral, z_column_top) =
             (moments.:1, moments.:2, moments.:3, moments.:4)
-        # z_c
-        ᶜz_c = @. ifelse(Q⁺_integral > ϵ, zQ⁺_integral / Q⁺_integral, _zero)
-        # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
-        ᶜh = @. ifelse(
-            Q⁺_integral > ϵ,
-            h_coef * sqrt(max(z²Q⁺_integral / Q⁺_integral - ᶜz_c^2, _zero)),
-            _zero,
-        )
+        ᶜz_c = @. _beres_heating_centroid(Q⁺_integral, zQ⁺_integral)
+        ᶜh = @. _beres_heating_depth(Q⁺_integral, z²Q⁺_integral, ᶜz_c)
         # z_top = z_c + h/2 and z_bot = z_c − h/2, with z_top clamped to the column's
         # own top cell centre (which differs between columns on a terrain-following
         # grid), so the launch level search finds a level, and z_bot to [0, z_top].
