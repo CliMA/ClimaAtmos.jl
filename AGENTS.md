@@ -18,6 +18,8 @@ Always read the ClimaAtmos-specific guide before working in this repository:
 ## Local norms
 
 - Prefer Julia 1.13.x for local work. GitHub CI runs every test group on 1.13 and only `infrastructure` on 1.10.
+- Always pair Julia 1.13 with `CUDA` v6 (`CUDA = "5, 6"` resolving to v6.x, e.g., `6.4.1` in `.buildkite/Manifest-v1.13.toml`). Running Julia 1.13 against `CUDA` v5 (for example, via a legacy `CUDA = "5"` compat cap in downstream `ClimaCoupler.jl/experiments/AMIP/Project.toml`) causes a severe (`>30×`) GPU runtime regression.
+- Multi-GPU runs on `CUDA` v6 are non-deterministic due to McICA RNG behavior in RRTMGP across ranks; single-GPU (`SingletonCommsContext`) runs are bitwise deterministic.
 - For runtime validation, prefer `julia +1.13 --project=.buildkite .buildkite/ci_driver.jl ...`.
 - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 - Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
