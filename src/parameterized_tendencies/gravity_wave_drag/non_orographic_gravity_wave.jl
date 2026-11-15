@@ -1040,8 +1040,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # half-sine + no-mechanical reproduces the classical kernel spectrum exactly.
 
     # (1) Gather the in-cloud heating shape onto a fixed uniform grid spanning the
-    # convective envelope [z_bot, z_top], nearest-model-level resampled within each
-    # bracketing segment and positive-part masked, then peak-normalized (amplitude
+    # convective envelope [z_bot, z_top], linearly interpolated between the two model
+    # levels that bracket each point and positive-part masked, then peak-normalized (amplitude
     # stays in Q0; mode (ii)). z is absolute (rigid-ground origin for sin(m z)).
     # Heating below z_bot_floor is excluded, mirroring the moment-fit mask in
     # Pass 1: z_bot = z_c − h/2 may legally dip below the floor, and without the
@@ -1054,25 +1054,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # The do-closure is a GPU kernel argument, so it may capture only isbits
     # values — never the type FT itself (same rule the Pass-1 moment reduce
     # follows). All FT-derived constants are let-bound as plain numbers.
-    let _z_floor = FT(gw_beres_source.z_bot_floor), _zero = FT(0), _eps = eps(FT),
-        _ng_m1 = FT(N_BERES_PROFILE - 1), _ng_val = ng_val
-
+    let _z_floor = FT(gw_beres_source.z_bot_floor), _ng_val = ng_val
         Operators.column_reduce!(
             gw_beres_gprofile,
             gather_input;
-            init = (ntuple(_ -> FT(0), ng_val), FT(0), FT(0)),
+            init = _beres_gather_init(FT, ng_val),
             transform = first,
-        ) do (vals, z_prev, Q_prev), (z, Q_ic, z_bot, z_top)
-            h_env = max(z_top - z_bot, _eps)
-            dz_g = h_env / _ng_m1
-            Q_pos = ifelse(z >= _z_floor, max(Q_ic, _zero), _zero)
-            newvals = ntuple(_ng_val) do i
-                z_i = z_bot + (i - 1) * dz_g
-                in_seg = (z_prev < z_i) & (z_i <= z)
-                nearer = abs(z_i - z_prev) <= abs(z_i - z) ? Q_prev : Q_pos
-                ifelse(in_seg, nearer, vals[i])
-            end
-            return (newvals, z, Q_pos)
+        ) do state, level_input
+            _beres_gather_step(state, level_input, _z_floor, _ng_val)
         end
     end
     @. gw_beres_gprofile = _beres_peaknorm(gw_beres_gprofile)
@@ -1145,6 +1134,48 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         @. gw_beres_mech_flux =
             mech(gw_beres_active, gw_u_heat, gw_N_source, gw_w_obstacle)
     end
+end
+
+"""
+    _beres_gather_init(FT, Val(ng))
+
+Return the starting state of the Beres-G gather, `(values, z_prev, Q_prev)`: `ng` zero
+samples and a zero heating at `z = 0`, so the segment below the lowest level runs from the
+ground with zero heating.
+"""
+_beres_gather_init(::Type{FT}, ng_val::Val) where {FT} =
+    (ntuple(_ -> FT(0), ng_val), FT(0), FT(0))
+
+"""
+    _beres_gather_step(state, (z, Q_ic, z_bot, z_top), z_floor, Val(ng))
+
+One level of the Beres-G gather, run upward through a column by `column_reduce!`.
+
+`state = (values, z_prev, Q_prev)` holds the `ng` samples gathered so far and the height
+[m] and masked heating [K/s] of the level below. The heating at this level is masked to its
+positive part `max(Q_ic, 0)`, and to zero below `z_floor` (the `z_bot_floor` the moment fit
+also uses). Each sample point `z_i = z_bot + (i-1)·(z_top - z_bot)/(ng-1)` in the segment
+`z_prev < z_i ≤ z` takes the linear interpolation of the masked heating between the two
+levels, so the gathered profile is the piecewise-linear interpolant of the masked heating
+on the model levels. Returns the updated state; `first` of the final state is the profile.
+"""
+@inline function _beres_gather_step(
+    (values, z_prev, Q_prev),
+    (z, Q_ic, z_bot, z_top),
+    z_floor,
+    ng_val::Val{ng},
+) where {ng}
+    FT = typeof(z)
+    dz_g = max(z_top - z_bot, eps(FT)) / FT(ng - 1)
+    Q_pos = ifelse(z >= z_floor, max(Q_ic, zero(FT)), zero(FT))
+    new_values = ntuple(ng_val) do i
+        z_i = z_bot + (i - 1) * dz_g
+        in_segment = (z_prev < z_i) & (z_i <= z)
+        # Successive levels are strictly increasing, so z > z_prev.
+        weight = (z_i - z_prev) / (z - z_prev)
+        ifelse(in_segment, Q_prev + weight * (Q_pos - Q_prev), values[i])
+    end
+    return (new_values, z, Q_pos)
 end
 
 """
@@ -2149,9 +2180,11 @@ end
 
 # Number of uniform samples in the gathered in-cloud heating profile used by the
 # Beres-G (sine_transform) shape factor. Compile-time constant for GPU type
-# stability; the offline O(dz²) convergence study (gate 2) shows ~4e-4 relative
-# error at 64 points for a 10-km heating layer. Bump (and re-alloc-check) if
-# finer profiles are needed.
+# stability. The gather interpolates the heating linearly between model levels, so
+# it carries no detail finer than the model levels; 64 samples resolve that
+# interpolant for a heating layer up to about 64 model levels deep. For a smooth
+# shape known everywhere (gate 2), 64 samples give ~4e-4 relative error over a
+# 10-km layer. Bump (and re-alloc-check) if finer profiles are needed.
 const N_BERES_PROFILE = 64
 
 """
@@ -2173,9 +2206,11 @@ The squared transform `gs(m)²` is the Beres-G shape factor `V_G_sq`, used at th
 `V_hs_sq`, by the algebraic parity `V_hs_sq(m,h) = |gs_halfsine(m)|²` (gate 1).
 
 The quadrature is the Filon-type exact per-segment rule for the piecewise-linear
-interpolant of `g` (no oscillatory-quadrature error at any `m`; the only error vs
-a smooth shape is the `O(dz²)` interpolation error, asserted by the convergence
-gate in `test_beres_unit.jl`). The evaluation uses a rotation recurrence: `z_a`
+interpolant of `g` (no oscillatory-quadrature error at any `m`). For a smooth shape
+sampled exactly at the `ng` points, the only error is the `O(dz²)` interpolation error,
+asserted by the convergence gate in `test_beres_unit.jl`. The gathered model profile is
+itself a linear interpolant of the heating on the model levels, so its transform also
+carries the interpolation error at the model level spacing, which is coarser. The evaluation uses a rotation recurrence: `z_a`
 advances by the constant `dz`, so `(sin(m z_a), cos(m z_a))` advances by a fixed
 rotation by `x = m·dz` — 2 `sincos` calls TOTAL instead of 4 transcendentals per
 segment, which removed a 19x GPU cost on the B0-build broadcast (95% of the

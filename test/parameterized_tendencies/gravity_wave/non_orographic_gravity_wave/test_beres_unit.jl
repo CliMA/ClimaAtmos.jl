@@ -1279,3 +1279,95 @@ end
         end
     end
 end
+
+# ============================================================================
+# Beres-G gather: sampling the in-cloud heating on the model levels onto the
+# 64-point profile the sine transform reads.
+#
+# The tests run the gather (`_beres_gather_step`, upward through the levels as
+# `column_reduce!` runs it) on the production vertical grid of the Beres runs
+# (63 stretched levels to 60 km, 30 m at the bottom), whose spacing grows from
+# about 200 m at 2 km to 1.3 km at 15 km.
+# ============================================================================
+import ClimaCore.Fields as Fields
+
+# Cell-centre heights and thicknesses of the production Beres grid.
+const BERES_GRID = let
+    grid = CA.ColumnGrid(
+        Float64;
+        z_elem = 63,
+        z_max = 60000.0,
+        z_stretch = true,
+        dz_bottom = 30.0,
+    )
+    (; center_space, face_space) = CA.get_spaces(grid)
+    z_centre = vec(Array(parent(Fields.coordinate_field(center_space).z)))
+    z_face = vec(Array(parent(Fields.coordinate_field(face_space).z)))
+    (; z = z_centre, dz = diff(z_face))
+end
+
+# The gathered 64-point profile of the heating `Q(z)` on [z_bot, z_top], run
+# level by level as the model runs it.
+function gather_profile(Q, z_bot, z_top; z_floor = 0.0)
+    state = CA._beres_gather_init(Float64, Val(CA.N_BERES_PROFILE))
+    for z in BERES_GRID.z
+        state = CA._beres_gather_step(
+            state,
+            (z, Q(z), z_bot, z_top),
+            z_floor,
+            Val(CA.N_BERES_PROFILE),
+        )
+    end
+    return first(state)
+end
+
+# Largest level thickness over the cells that overlap [z_bot, z_top].
+function coarsest_spacing(z_bot, z_top)
+    (; z, dz) = BERES_GRID
+    return maximum(dz[(z .+ dz ./ 2 .> z_bot) .& (z .- dz ./ 2 .< z_top)])
+end
+
+# ∫ f(z) sin(m z) dz over [a, b] by the composite Simpson rule.
+function sine_transform_quadrature(f, a, b, m; n = 20000)
+    zz = range(a, b; length = n + 1)
+    w = [i == 0 || i == n ? 1 : (isodd(i) ? 4 : 2) for i in 0:n]
+    return sum(w .* f.(zz) .* sin.(m .* zz)) * step(zz) / 3
+end
+
+@testset "Beres-G gather" begin
+    @testset "Linear interpolation between levels, not the nearest level" begin
+        # A smooth Gaussian heating lobe. The spectrum weighs the transform as
+        # m²·|gs(m)|². The linear interpolant of the heating on the levels has
+        # kinks at the levels, so that weight falls off beyond the level
+        # resolution, m > π/dz_level; a nearest-level copy has steps, and the
+        # weight stays near its peak there, which puts false flux into the slow
+        # bins. The resolved part, m ≤ π/(2 dz_level), must match the exact
+        # transform. The nearest-level copy, computed here only for contrast,
+        # shows the tail check has the power to catch it.
+        for (z_0, σ, z_bot, z_top) in (
+            (9000.0, 2000.0, 3000.0, 15000.0),
+            (8000.0, 1500.0, 3000.0, 14000.0),
+        )
+            Q(z) = exp(-((z - z_0) / σ)^2 / 2)
+            span = z_top - z_bot
+            ng = CA.N_BERES_PROFILE
+            dz_level = coarsest_spacing(z_bot, z_top)
+            profile = gather_profile(Q, z_bot, z_top)
+            z_samples = z_bot .+ (0:(ng - 1)) .* (span / (ng - 1))
+            nearest = ntuple(ng) do i
+                BERES_GRID.z[argmin(abs.(BERES_GRID.z .- z_samples[i]))] |> Q
+            end
+            weight(g, m) = (m * CA._beres_gs(g, z_bot, span, m))^2
+            m_resolved = range(1e-5, π / (2 * dz_level); length = 100)
+            m_tail = range(π / dz_level, π * (ng - 1) / span; length = 200)
+            exact = [sine_transform_quadrature(Q, z_bot, z_top, m)^2 for m in m_resolved]
+            gathered = [CA._beres_gs(profile, z_bot, span, m)^2 for m in m_resolved]
+            @test maximum(abs.(gathered .- exact)) < 0.05 * maximum(exact)
+            tail_share(g) =
+                maximum(m -> weight(g, m), m_tail) /
+                maximum(m -> weight(g, m), m_resolved)
+            @test tail_share(profile) < 0.02
+            @test tail_share(nearest) > 0.1      # the check has power
+        end
+    end
+end
