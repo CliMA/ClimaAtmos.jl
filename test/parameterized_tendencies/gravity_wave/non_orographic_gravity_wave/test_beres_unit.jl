@@ -1370,4 +1370,26 @@ end
             @test tail_share(nearest) > 0.1      # the check has power
         end
     end
+
+    @testset "The window starts at the floor, so the profile has no step inside it" begin
+        # A half-sine heating on [1, 9] km whose envelope starts at 1 km, below the
+        # 2 km floor under which the gather masks the heating. A window from z_bot
+        # holds zeros up to 2 km and then jumps to the heating there; the window
+        # from the floor holds the heating from its first point on.
+        z_floor = 2000.0
+        z_bot, z_top = 1000.0, 9000.0
+        Q(z) = z_bot <= z <= z_top ? sin(π * (z - z_bot) / (z_top - z_bot)) : 0.0
+        z_start = CA._beres_gather_bottom(z_bot, z_top, z_floor)
+        @test z_start == z_floor
+        profile = gather_profile(Q, z_start, z_top; z_floor)
+        @test all(>(0), profile[2:(end - 1)])
+        from_z_bot = gather_profile(Q, z_bot, z_top; z_floor)
+        i_step = findlast(iszero, from_z_bot[1:(end ÷ 2)])
+        # The step it avoids: from zero to over a third of the peak within two
+        # gather points (one model level at 2 km).
+        @test !isnothing(i_step) && from_z_bot[i_step + 2] > 0.3
+        # The bottom stays inside the envelope.
+        @test CA._beres_gather_bottom(3000.0, 9000.0, z_floor) == 3000.0
+        @test CA._beres_gather_bottom(500.0, 1500.0, z_floor) == 1500.0
+    end
 end

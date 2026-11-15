@@ -151,8 +151,8 @@ seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level st
 `gw_c_centroid`, `gw_beres_mech_flux`, and the Beres-G / mechanical-source launch state:
 the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the peak-normalized in-cloud heating shape `gw_beres_gprofile`
-(`NTuple{N_BERES_PROFILE, FT}` on `[z_bot, z_top]`), and the obstacle-level updraft
-velocity `gw_w_obstacle` [m/s].
+(`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), and the
+obstacle-level updraft velocity `gw_w_obstacle` [m/s].
 
 Called from `non_orographic_gravity_wave_cache`.
 """
@@ -693,8 +693,9 @@ requires the grid-mean counterpart of that amplitude to exceed `Q0_threshold` an
 The launch spectrum is built here once per column, not inside the propagation kernel,
 because it does not depend on the AD99 horizontal wavenumber. With
 `shape_mode = half_sine` it uses the classical half-sine shape factor; with
-`sine_transform` it uses the sine transform of `gw_beres_gprofile` sampled on the clamped
-envelope `[z_bot, z_top]` (heating below `z_bot_floor` is masked out, as in the moment fit).
+`sine_transform` it uses the sine transform of `gw_beres_gprofile` sampled on the part of the
+clamped envelope above the floor, `[max(z_bot, z_bot_floor), z_top]` (heating below
+`z_bot_floor` is left out, as in the moment fit).
 The steady c≈0 bin adds the thermal and, if enabled, the mechanical (obstacle) source,
 the latter driven by `gw_w_obstacle` sampled at `z_bot + beres_obstacle_frac·h`.
 
@@ -1039,22 +1040,28 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # propagation kernel reads it rather than rebuilding it inside the `ink` loop.
     # half-sine + no-mechanical reproduces the classical kernel spectrum exactly.
 
-    # (1) Gather the in-cloud heating shape onto a fixed uniform grid spanning the
-    # convective envelope [z_bot, z_top], linearly interpolated between the two model
-    # levels that bracket each point and positive-part masked, then peak-normalized (amplitude
-    # stays in Q0; mode (ii)). z is absolute (rigid-ground origin for sin(m z)).
-    # Heating below z_bot_floor is excluded, mirroring the moment-fit mask in
-    # Pass 1: z_bot = z_c − h/2 may legally dip below the floor, and without the
-    # mask the sine transform would ingest the PBL/surface-flux heating the fit
-    # deliberately excluded. Baseline (half_sine) is unaffected — only the V_G
-    # path reads the gathered profile.
+    # (1) Gather the in-cloud heating shape onto a fixed uniform grid spanning the part
+    # of the convective envelope above the floor, [max(z_bot, z_bot_floor), z_top],
+    # linearly interpolated between the two model levels that bracket each point and
+    # positive-part masked, then peak-normalized (amplitude stays in Q0; mode (ii)). z is
+    # absolute (rigid-ground origin for sin(m z)). Heating below z_bot_floor is
+    # excluded, mirroring the moment-fit mask in Pass 1: z_bot = z_c − h/2 may legally
+    # dip below the floor, and without the mask the sine transform would ingest the
+    # PBL/surface-flux heating the fit deliberately excluded. The window starts at the
+    # floor rather than at z_bot, so the masked heating does not drop to zero inside
+    # it, a step whose transform falls off only like 1/m. Baseline (half_sine) is
+    # unaffected — only the V_G path reads the gathered profile.
     ng_val = Val(N_BERES_PROFILE)
-    gather_input =
-        Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, gw_zbot, gw_ztop)
+    z_floor = FT(gw_beres_source.z_bot_floor)
+    ᶜgather_bottom =
+        @. lazy(_beres_gather_bottom(gw_zbot, gw_ztop, z_floor))
+    gather_input = Base.Broadcast.broadcasted(
+        tuple, ᶜz, gw_Q_conv_ic, ᶜgather_bottom, gw_ztop,
+    )
     # The do-closure is a GPU kernel argument, so it may capture only isbits
     # values — never the type FT itself (same rule the Pass-1 moment reduce
     # follows). All FT-derived constants are let-bound as plain numbers.
-    let _z_floor = FT(gw_beres_source.z_bot_floor), _ng_val = ng_val
+    let _z_floor = z_floor, _ng_val = ng_val
         Operators.column_reduce!(
             gw_beres_gprofile,
             gather_input;
@@ -1137,6 +1144,19 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 end
 
 """
+    _beres_gather_bottom(z_bot, z_top, z_floor)
+
+Return the bottom of the Beres-G gather window [m], `max(z_bot, z_floor)` capped at `z_top`.
+
+The gather masks the heating below `z_floor` (`z_bot_floor`), as the moment fit does, so a
+window starting at a `z_bot` below the floor would hold a step from zero to the heating
+at the floor. The window, and the sine transform of the gathered profile, start at the
+floor instead.
+"""
+@inline _beres_gather_bottom(z_bot, z_top, z_floor) =
+    min(max(z_bot, z_floor), z_top)
+
+"""
     _beres_gather_init(FT, Val(ng))
 
 Return the starting state of the Beres-G gather, `(values, z_prev, Q_prev)`: `ng` zero
@@ -1154,7 +1174,8 @@ One level of the Beres-G gather, run upward through a column by `column_reduce!`
 `state = (values, z_prev, Q_prev)` holds the `ng` samples gathered so far and the height
 [m] and masked heating [K/s] of the level below. The heating at this level is masked to its
 positive part `max(Q_ic, 0)`, and to zero below `z_floor` (the `z_bot_floor` the moment fit
-also uses). Each sample point `z_i = z_bot + (i-1)·(z_top - z_bot)/(ng-1)` in the segment
+also uses). `z_bot` here is the window bottom from `_beres_gather_bottom`. Each sample point
+`z_i = z_bot + (i-1)·(z_top - z_bot)/(ng-1)` in the segment
 `z_prev < z_i ≤ z` takes the linear interpolation of the masked heating between the two
 levels, so the gathered profile is the piecewise-linear interpolant of the masked heating
 on the model levels. Returns the updated state; `first` of the final state is the profile.
@@ -1212,10 +1233,11 @@ function _beres_precompute_launch_spectra!(nogw)
     # mode, plus the steady c≈0 bin (β_therm + β_mech). The phase-speed grid
     # `cgrid`, `ncv`, and `beres` are CAPTURED in the closure (plain tuples/Val
     # would be iterated if passed as broadcast args); only fields are broadcast.
-    # `span = z_top - z_bot` is the CLAMPED envelope width the gather sampled on;
-    # it is passed to the sine transform (NOT gw_h_heat, the unclamped moment
-    # depth, which differs from the gather grid when the envelope is floored at 0
-    # or capped at the domain top — that mismatch would evaluate V_G at the wrong
+    # The Beres-G transform runs over the window the gather sampled,
+    # [_beres_gather_bottom(z_bot, z_top, z_bot_floor), z_top], with
+    # `span = z_top - bottom` (NOT gw_h_heat, the unclamped moment depth, which
+    # differs from the gather grid when the envelope reaches below the floor or is
+    # capped at the column top — that mismatch would evaluate V_G at the wrong
     # altitudes). gw_h_heat stays the half-sine depth (V_hs / Q0 / activation).
     # GPU note: the shape mode is decided HERE, on the CPU, not inside the
     # kernel, and is threaded into the launch-spectrum builder as a COMPILE-TIME
@@ -1228,14 +1250,19 @@ function _beres_precompute_launch_spectra!(nogw)
     # runtime-Bool switch instead forces BOTH branches into the kernel and widens
     # the profile to `Union{Nothing,NTuple}` -> dynamic dispatch / GC allocation
     # (the InvalidIRError the transform path used to fail with).
-    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval
+    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval,
+        z_floor = gw_beres_source.z_bot_floor
+
         if beres.beres_shape_general
-            b0g(active, u, Q0, h, N, zbot, ztop, gprof, w) = BeresB0(
-                _beres_launch_spectrum_or_zero(
-                    active, cgrid, u, Q0, h, N, zbot, ztop - zbot, gprof, w,
-                    beres, ncv, Val(true),
-                ),
-            )
+            function b0g(active, u, Q0, h, N, zbot, ztop, gprof, w)
+                z_gather = _beres_gather_bottom(zbot, ztop, z_floor)
+                return BeresB0(
+                    _beres_launch_spectrum_or_zero(
+                        active, cgrid, u, Q0, h, N, z_gather, ztop - z_gather,
+                        gprof, w, beres, ncv, Val(true),
+                    ),
+                )
+            end
             @. gw_beres_B0_u = b0g(
                 gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
                 gw_zbot, gw_ztop, gw_beres_gprofile, gw_w_obstacle,
@@ -3249,6 +3276,8 @@ function _compute_beres_fiveway!(p, time)
         active[I] > FT(0.5) || continue
         z_bot = zba[I]
         z_top = zta[I]
+        # The gathered profile lies on the window above the floor, as in the model.
+        z_gather = _beres_gather_bottom(z_bot, z_top, beres.z_bot_floor)
         gprof = ntuple(
             k -> gpa[CartesianIndex(ntuple(
                 d -> d == fdim ? k : I[d],
@@ -3258,8 +3287,9 @@ function _compute_beres_fiveway!(p, time)
         )
         gprof_hs = _beres_hs_gprofile(z_bot, z_top, ha[I])
         for (vname, vparams, use_hs) in variants
+            z_window = use_hs ? z_bot : z_gather
             sums = _beres_banded_spectrum(
-                gw_c, ua[I], Q0a[I], ha[I], Na[I], z_bot, z_top - z_bot,
+                gw_c, ua[I], Q0a[I], ha[I], Na[I], z_window, z_top - z_window,
                 use_hs ? gprof_hs : gprof, wa[I], vparams, nc, c_band,
             )
             for (kb, bname) in enumerate(bands)
