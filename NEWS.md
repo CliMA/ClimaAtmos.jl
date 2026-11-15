@@ -3,6 +3,43 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Beres convective gravity waves break by the stress limit: a Beres
+  bin breaks where `B0/ĉ³ ≥ ½ρk/N`, since its `B0` is a stress. The AD99 form, divided by
+  the launch density, let Beres waves carry about `1/ρ_source` (4-7 times) more amplitude
+  before breaking, so Beres waves now break lower. This changes every run with
+  `nogw_beres_source: true`.
+- ![][badge-🐛bugfix] Each transient bin of the Beres launch spectrum carries the spectral
+  density times the bin width `nogw_dc`, so the launched flux no longer depends on the
+  bin width; the steady (`c = 0`) term is a total flux, as before. With the default
+  `nogw_dc = 0.8` the transient Beres flux is 0.8 times what it was and the steady share
+  is 1.25 times larger; the scale factor absorbs the total on recalibration.
+- ![][badge-🐛bugfix] The Beres activation amplitude counts only the grid-mean heating at
+  or above `nogw_beres_z_bot_floor` and divides by the width of the envelope above the
+  floor, as the moment fit does. Cooling below the floor no longer keeps weak columns
+  inactive.
+- ![][badge-🔥behavioralΔ] A column activates the Beres source only when its convective
+  coverage (the mass-weighted mean updraft area fraction over the heating layer) is at
+  least `a_min = 1e-4` (a `BeresSourceParams` field), so near-empty updrafts launch no
+  Beres waves.
+- ![][badge-🐛bugfix] Beres-G (`nogw_beres_shape_mode: sine_transform`): the gathered
+  heating profile interpolates linearly between model levels instead of copying the
+  nearest level, starts at `max(z_bot, nogw_beres_z_bot_floor)` instead of at a `z_bot`
+  below the floor, and is tapered to zero at both window edges over the largest level
+  thickness in the window; vertical wavenumbers above `π` over that thickness are dropped
+  from the spectrum, and the steady flux is zero beyond the wavenumber the profile
+  resolves. The profile uses only the positive part of the in-cloud heating, as before.
+  These remove spurious flux in the slow bins next to the heating-layer wind and in the
+  `c = 0` bin.
+- ![][badge-🐛bugfix] Beres launch level: the heating top is clamped to the column's own
+  top cell, the launch level falls back to the top level when no level reaches it, and a
+  zero launch density gives no deposit. An empty AD99 spectrum (`nogw_Bw = nogw_Bn = 0`)
+  gives zero AD99 drag instead of NaN, which the clean-up turned into zero drag for both
+  sources. NaN or infinite drag is reported (once) before the clean-up zeroes it.
+- ![][badge-💥breaking] `nogw_beres_source: true` requires `turbconv: prognostic_edmfx` with
+  `updraft_number ≥ 1`; other `turbconv` values (`edmfx`, `diagnostic_edmfx`) now error at
+  construction, as does a Julia-built model without `PrognosticEDMFX`. A warning is
+  logged when the Beres source runs over topography, since it measures heights from sea
+  level.
 - ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
   exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
   layer's flux is divided by the mean mass of the two cells it spans (the model's own
