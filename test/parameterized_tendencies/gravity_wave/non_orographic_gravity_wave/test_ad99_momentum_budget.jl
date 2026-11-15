@@ -54,7 +54,12 @@
 #    wave without depositing it; it now deposits the flux like any other
 #    critical level.
 #
-# Each test runs twice: on a single column, and on a cubed sphere where
+# 5. The Beres convective source. It launches a per-column spectrum from a
+#    per-column level and deposits it with its coverage instead of the AD99
+#    intermittency; its budget is a_cover times its launched flux, and the
+#    full drag with both sources must be the sum of the two alone.
+#
+# Each of tests 1-4 runs twice: on a single column, and on a cubed sphere where
 # `damp_level` differs from column to column. Only test 2 sends momentum through
 # `damp_level` and `M_R`, so only there does the sphere check the per-column
 # hand-back, the production setup; in tests 1, 3 and 4 every column is the same
@@ -154,7 +159,12 @@ per_column(level_field) = copy(vec(Array(parent(level_field))))
 # deliberately tiny (2 elements per panel edge). `z_stretch` selects the stretched
 # vertical grid and `deep_atmosphere` the deep-atmosphere sphere, whose cell areas
 # grow with height.
-function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
+function build_state(
+    kind::Symbol;
+    z_stretch = false,
+    deep_atmosphere = false,
+    gw = build_gw(),
+)
     grid = if kind == :column
         CA.ColumnGrid(
             FT;
@@ -190,7 +200,7 @@ function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
     @assert (kind == :column) == CA.iscolumn(center_space)
     kind == :sphere && @assert CA.issphere(center_space)
 
-    gwc = CA.non_orographic_gravity_wave_cache(Y, build_gw())
+    gwc = CA.non_orographic_gravity_wave_cache(Y, gw)
 
     ᶜρ_t = Fields.Field(FT, center_space)
 
@@ -717,5 +727,214 @@ end
         @test maximum(abs, res.escaped ./ lf.F_launch) < MAX_ESCAPED_FRAC
         @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
+    end
+end
+
+# ============================================================================
+# Test 5 — the Beres convective source, alone and on top of AD99
+#
+# The Beres path differs from AD99 in what it launches and from where: a
+# precomputed per-column spectrum B0 (a stress, Pa), launched from the first
+# level at or above the top of the convective heating, which differs between
+# columns, and deposited with the coverage a_cover instead of the AD99
+# intermittency, a_cover/(ρ_source·nk) per wavenumber band. Its budget is
+#
+#     Σ_k ρ_k·Δz_k·a_k  =  a_cover · Σ_n B0[n]
+#
+# summed over the nk bands (a_cover·ΣB0/nk each). The two sources accumulate
+# into the same forcing, so the full drag must be the AD99-only drag plus the
+# Beres-only drag. This would catch an `=` in place of a `+=` in the
+# accumulation, which the coverage-linearity test of the single-column file
+# differences away. Here nk = 2, a_cover = 0.3, and the launch height varies by
+# column on the sphere; B0 is set by hand, asymmetric in c so its net flux is
+# not zero, with a meridional spectrum that rides to the model top (v = 0, so
+# no critical level), which sends it through the escaped-flux route.
+# ============================================================================
+const A_COVER = FT(0.3)
+
+function build_gw_beres()
+    gw_params = CA.NonOrographicGravityWaveParameters(
+        FT,
+        (; dc = FT(4), cmax = FT(40), nk = FT(2)),
+    )
+    P = typeof(gw_params)
+    kwargs = NamedTuple{fieldnames(P)}(
+        ntuple(i -> getfield(gw_params, i), fieldcount(P)),
+    )
+    beres_source = CA.BeresSourceParams{FT}(;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(1),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+    )
+    return CA.NonOrographicGravityWave{FT, typeof(beres_source)}(;
+        kwargs...,
+        beres_source,
+    )
+end
+
+# Hand-set launch spectra, each signed like the intrinsic phase speed with a larger
+# eastward lobe so the net flux is not zero: zonal, a Gaussian in c - U_SOURCE;
+# meridional, a Gaussian in c.
+const BERES_B0_U = ntuple(
+    n ->
+        GW_C[n] == U_SOURCE ? FT(0) :
+        sign(GW_C[n] - U_SOURCE) * FT(1e-3) *
+        (GW_C[n] > U_SOURCE ? FT(1) : FT(0.4)) *
+        exp(-((GW_C[n] - U_SOURCE) / 15)^2),
+    length(GW_C),
+)
+const BERES_B0_V = ntuple(
+    n ->
+        sign(GW_C[n]) * FT(5e-4) * (GW_C[n] > 0 ? FT(1) : FT(0.5)) *
+        exp(-(GW_C[n] / 15)^2),
+    length(GW_C),
+)
+
+# Heating top per column: 8 km on a column; on the sphere 6-11 km by latitude,
+# so the Beres launch level differs from column to column.
+function set_beres_ztop!(st)
+    (; gw_ztop) = st.gwc
+    if st.kind == :column
+        fill!(gw_ztop, FT(8000))
+    else
+        lat = Fields.local_geometry_field(gw_ztop).coordinates.lat
+        @. gw_ztop = FT(6000) + FT(5000) * abs(sind(lat))
+    end
+    return nothing
+end
+
+# Run AD99 and Beres together with the given AD99 source amplitude and Beres
+# coverage, and return the column-integrated drag and the drag profiles.
+function run_beres_case!(st; source_ampl, a_cover, damp_spec)
+    (; gwc, p, ᶜz, ᶜρ_t, ᶜu_t, ᶜv_t, ᶜbf_t, ᶜmom, deposited_field) = st
+    @assert gwc.gw_nk == 2
+
+    fill!(gwc.gw_Bw, GW.Bw)
+    fill!(gwc.gw_Bn, FT(0))
+    fill!(gwc.gw_cw, GW.cw)
+    fill!(gwc.gw_cn, GW.cn)
+    fill!(gwc.gw_flag, FT(1))
+    fill!(gwc.gw_source_ampl, source_ampl)
+
+    z_src = st.center_z[SOURCE_LEVEL]
+    z_top = st.center_z[end]
+    @. ᶜρ_t = ρ0 * exp(-(ᶜz / H_ρ))
+    @. ᶜu_t = reversing_wind(ᶜz, z_src, z_top)
+    fill!(ᶜv_t, FT(0))
+    fill!(ᶜbf_t, N_const)
+
+    fill!(st.source_level, FT(SOURCE_LEVEL))
+    for (dst, src) in
+        ((st.ρ_source, ᶜρ_t), (st.u_source, ᶜu_t), (st.v_source, ᶜv_t))
+        Fields.field_values(dst) .=
+            Fields.field_values(Fields.level(src, SOURCE_LEVEL))
+    end
+    set_damp_level!(st, damp_spec)
+
+    # The Beres source: hand-set spectra and coverage, the launch state as
+    # production sets it. The scalar source fields are carried by the kernel's
+    # input tuple but not read; they are set so they hold finite values.
+    fill!(gwc.gw_beres_B0_u, CA.BeresB0(BERES_B0_U))
+    fill!(gwc.gw_beres_B0_v, CA.BeresB0(BERES_B0_V))
+    fill!(gwc.gw_a_cover, a_cover)
+    for f in (gwc.gw_Q0, gwc.gw_h_heat, gwc.gw_u_heat, gwc.gw_v_heat)
+        fill!(f, FT(0))
+    end
+    fill!(gwc.gw_N_source, N_const)
+    set_beres_ztop!(st)
+    CA.set_beres_launch_state!(
+        gwc.beres_source_ρ_z_u_v_level, ᶜρ_t, ᶜz, ᶜu_t, ᶜv_t, gwc.ᶜlevel,
+        gwc.gw_ztop,
+    )
+
+    fill!(gwc.uforcing, FT(0))
+    fill!(gwc.vforcing, FT(0))
+    CA.non_orographic_gravity_wave_forcing(
+        ᶜu_t, ᶜv_t, ᶜbf_t, ᶜρ_t, ᶜz, gwc.ᶜlevel, st.source_level,
+        gwc.damp_level, st.ρ_source, st.u_source, st.v_source, gwc.uforcing,
+        gwc.vforcing, gwc.gw_ncval, gwc.u_waveforcing, gwc.v_waveforcing, p,
+    )
+
+    @. ᶜmom = ᶜρ_t * gwc.uforcing
+    Operators.column_integral_definite!(deposited_field, ᶜmom)
+    deposited_u = per_column(deposited_field)
+    @. ᶜmom = ᶜρ_t * gwc.vforcing
+    Operators.column_integral_definite!(deposited_field, ᶜmom)
+    deposited_v = per_column(deposited_field)
+    nlev = Spaces.nlevels(axes(gwc.uforcing))
+    profile(f) = permutedims(reduce(hcat, (per_column(Fields.level(f, k)) for k in 1:nlev)))
+    return (;
+        deposited_u,
+        deposited_v,
+        forcing_u = profile(gwc.uforcing),
+        forcing_v = profile(gwc.vforcing),
+        launch_level = per_column(gwc.beres_source_ρ_z_u_v_level.:5),
+    )
+end
+
+const BERES_CASES = (
+    ("column", build_state(:column; gw = build_gw_beres()), NLEV),
+    (
+        "stretched column",
+        build_state(:column; z_stretch = true, gw = build_gw_beres()),
+        NLEV,
+    ),
+    (
+        "deep sphere, per-column damp_level",
+        build_state(:sphere; deep_atmosphere = true, gw = build_gw_beres()),
+        Val(:varying),
+    ),
+)
+
+@testset "Beres column momentum budget, alone and on top of AD99" begin
+    lf = launched_flux(U_SOURCE, GW.Bw)
+    F_beres_u = A_COVER * sum(BERES_B0_U)
+    F_beres_v = A_COVER * sum(BERES_B0_V)
+    @test abs(F_beres_u) > 0.1 * A_COVER * sum(abs, BERES_B0_U)  # not degenerate
+    @test abs(F_beres_v) > 0.1 * A_COVER * sum(abs, BERES_B0_V)
+
+    for (name, st, damp_spec) in BERES_CASES
+        beres_only =
+            run_beres_case!(st; source_ampl = FT(0), a_cover = A_COVER, damp_spec)
+        ad99_only =
+            run_beres_case!(st; source_ampl = GW.Bt_0, a_cover = FT(0), damp_spec)
+        both = run_beres_case!(st; source_ampl = GW.Bt_0, a_cover = A_COVER, damp_spec)
+
+        @info "Test 5 ($name): Beres deposited / launched = $(round(beres_only.deposited_u[1] / F_beres_u; digits = 12)) (u), $(round(beres_only.deposited_v[1] / F_beres_v; digits = 12)) (v); launch levels $(sort(unique(round.(Int, beres_only.launch_level))))"
+
+        # Setup: the Beres launch level lies above the ground and below the
+        # damping layer and, on the sphere, differs between columns.
+        @test all(>(1), beres_only.launch_level)
+        @test all(<(NLEV - 3), beres_only.launch_level)
+        st.kind == :sphere && @test length(unique(beres_only.launch_level)) > 1
+
+        @test all(isapprox.(beres_only.deposited_u ./ F_beres_u, 1; rtol = RTOL_CLOSURE))
+        @test all(isapprox.(beres_only.deposited_v ./ F_beres_v, 1; rtol = RTOL_CLOSURE))
+        @test all(isapprox.(ad99_only.deposited_u ./ lf.F_launch, 1; rtol = RTOL_CLOSURE))
+        @test all(
+            isapprox.(
+                both.deposited_u ./ (lf.F_launch + F_beres_u),
+                1;
+                rtol = RTOL_CLOSURE,
+            ),
+        )
+        # Nothing lands below the Beres launch level.
+        for (col, level) in enumerate(round.(Int, beres_only.launch_level))
+            @test all(iszero, beres_only.forcing_u[1:(level - 1), col])
+        end
+        # The two sources add.
+        scale = maximum(abs, both.forcing_u)
+        @test maximum(
+            abs,
+            both.forcing_u .- (ad99_only.forcing_u .+ beres_only.forcing_u),
+        ) <
+              1e-12 * scale
+        @test maximum(
+            abs,
+            both.forcing_v .- (ad99_only.forcing_v .+ beres_only.forcing_v),
+        ) < 1e-12 * maximum(abs, both.forcing_v)
     end
 end
