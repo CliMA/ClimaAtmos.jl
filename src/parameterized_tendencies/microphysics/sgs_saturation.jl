@@ -127,9 +127,11 @@ inconsistent with saturation equilibrium and degrade the Jacobian approximations
   - `lin`, `curv`: Linear and curvature coefficients of the saturation excess
     under the vertical displacement [kg/kg]; zero for the truncated
     displacement.
-  - `c`: Truncation of the displacement in standard deviations
-    (`sgs_displacement_truncation`) [-]; `Inf` (the default, as `Inf32`, which
-    promotes to the state's float type) for the untruncated Gaussian.
+  - `c`: Truncation of the displacement in standard deviations [-]; `Inf` for
+    the untruncated Gaussian, which is this keyword's default (as `Inf32`,
+    which promotes to the state's float type). The model supplies it from
+    `sgs_displacement_truncation`, whose own default is 3, so a run truncates
+    unless that parameter says otherwise.
 
 # Returns
 
