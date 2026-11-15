@@ -306,4 +306,41 @@ import ClimaCore.Geometry as Geometry
         @test all(isfinite, du_arr)
         @test maximum(abs, du_arr) > 0
     end
+
+    # N in the bottom and top cells uses the one-sided dT/dz across the face between
+    # each end cell and its only neighbour, recomputed here from the column's T, z and
+    # moist heat capacity. The initial state is isothermal near the top, where half of a
+    # zero gradient equals the full one, so T gets an added 2 K/km first. Runs last
+    # because it changes ᶜT and the NOGW cache.
+    @testset "Buoyancy frequency in the end cells uses a one-sided dT/dz" begin
+        ᶜz = Fields.coordinate_field(Y.c).z
+        @. ᶜT += FT(2e-3) * ᶜz
+        CA.non_orographic_gravity_wave_compute_tendency!(
+            Y,
+            p,
+            p.atmos.non_orographic_gravity_wave,
+        )
+        (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        thermo_params = CA.Parameters.thermodynamics_params(p.params)
+        grav = CA.Parameters.grav(p.params)
+        ᶜcp_m = @. CA.TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+        T_arr = Array(Fields.field2array(ᶜT))
+        z_arr = Array(Fields.field2array(ᶜz))
+        cp_arr = Array(Fields.field2array(ᶜcp_m))
+        N_arr = Array(
+            Fields.field2array(p.non_orographic_gravity_wave.ᶜbuoyancy_frequency),
+        )
+        n = size(T_arr, 1)
+        N_from(dTdz, k) = map(axes(T_arr, 2)) do col
+            N² = grav / T_arr[k, col] * (dTdz[col] + grav / cp_arr[k, col])
+            N² < 2.5e-5 ? sqrt(2.5e-5) : sqrt(abs(N²))
+        end
+        dTdz_bottom = (T_arr[2, :] .- T_arr[1, :]) ./ (z_arr[2, :] .- z_arr[1, :])
+        dTdz_top = (T_arr[n, :] .- T_arr[n - 1, :]) ./ (z_arr[n, :] .- z_arr[n - 1, :])
+        @test N_arr[1, :] ≈ N_from(dTdz_bottom, 1) rtol = 1e-5
+        @test N_arr[n, :] ≈ N_from(dTdz_top, n) rtol = 1e-5
+        # setup guard: half the gradient would give a different N in these cells
+        @test !isapprox(N_from(dTdz_top ./ 2, n), N_from(dTdz_top, n); rtol = 1e-3)
+        @test !isapprox(N_from(dTdz_bottom ./ 2, 1), N_from(dTdz_bottom, 1); rtol = 1e-3)
+    end
 end

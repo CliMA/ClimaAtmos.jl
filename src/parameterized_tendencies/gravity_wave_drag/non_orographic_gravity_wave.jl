@@ -336,7 +336,9 @@ integrator step. The `::Nothing` method is a no-op.
 Steps, in order:
 
  1. Compute the buoyancy frequency `N = sqrt(g/T · (dT/dz + g/c_pm))` at cell centers from
-    `p.precomputed.ᶜT` and the moist heat capacity, floored at `sqrt(2.5e-5)` s⁻¹. The
+    `p.precomputed.ᶜT` and the moist heat capacity, floored at `sqrt(2.5e-5)` s⁻¹. `dT/dz`
+    is the difference of the interpolated face temperatures across each cell, one-sided
+    in the bottom and top cells. The
     cache field `ᶜbuoyancy_frequency` holds `N`, not `N²`, once this step completes.
  2. Locate the AD99 launch level per column and record `(ρ, u, v)` there: on a column, the
     level closest to `source_height`; on a sphere, the highest level with
@@ -388,7 +390,26 @@ function non_orographic_gravity_wave_compute_tendency!(
 
     # compute the buoyancy frequency N = sqrt(|N²|) [1/s], or sqrt(2.5e-5) s⁻¹ where
     # N² < 2.5e-5 s⁻², to avoid small numbers
-    ᶜdTdz = @. lazy(w_component(Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))))
+    # Inside the column, dT/dz is computed as the difference of the interpolated face
+    # temperatures across each cell. However, because ᶠinterp copies the end-cell value
+    # to the boundary face, the bottom and top cells would get only about half the
+    # gradient there. Therefore, a one-sided difference is taken across the face to
+    # their only neighbouring cell instead.
+    n_levels = Spaces.nlevels(axes(Y.c))
+    ᶜface_above = Operators.TopBiasedF2C()
+    ᶜface_below = Operators.BottomBiasedF2C()
+    ᶠdTdz = @. lazy(w_component(Geometry.WVector(ᶠgradᵥ(ᶜT))))
+    ᶜdTdz = @. lazy(
+        ifelse(
+            ᶜlevel == 1,
+            ᶜface_above(ᶠdTdz),
+            ifelse(
+                ᶜlevel == n_levels,
+                ᶜface_below(ᶠdTdz),
+                w_component(Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))),
+            ),
+        ),
+    )
     ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     ᶜN² = @. lazy((grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m))
     @. ᶜbuoyancy_frequency = ifelse(ᶜN² < FT(2.5e-5), FT(sqrt(2.5e-5)), sqrt(abs(ᶜN²)))
