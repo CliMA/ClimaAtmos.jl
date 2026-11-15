@@ -701,3 +701,44 @@ end
         @test parent(out_c) ≈ parent(expected)
     end
 end
+
+@testset "Initial temperature perturbation (SplitMix64 Rademacher)" begin
+    ᶜT_base = copy(p_sphere.precomputed.ᶜT)
+    ᶜT_work = copy(ᶜT_base)
+
+    # 1. A = 0 leaves T bitwise unchanged and returns nothing
+    res_zero = CA.Setups.apply_initial_temperature_perturbation!(ᶜT_work, FT(0), 1)
+    @test isnothing(res_zero)
+    @test parent(ᶜT_work) == parent(ᶜT_base)
+
+    # 2. A > 0 gives |δT| == A at every node before DSS
+    A = FT(1e-4)
+    ᶜT_work .= ᶜT_base
+    ᶜT_unpert = CA.Setups.apply_initial_temperature_perturbation!(
+        ᶜT_work,
+        A,
+        1;
+        apply_dss = false,
+    )
+    @test parent(ᶜT_unpert) == parent(ᶜT_base)
+    δT_nodss = Array(parent(ᶜT_work) .- parent(ᶜT_unpert))
+    ulp_T = eps(maximum(abs, parent(ᶜT_unpert)))
+    @test all(x -> isapprox(abs(x), A; atol = ulp_T), δT_nodss)
+    @test any(>(0), δT_nodss) && any(<(0), δT_nodss)
+
+    # 3. Sign field matches for identical coordinates and differs across seeds
+    coord_a = (; lat = FT(23.4567), long = FT(-145.6789))
+    coord_b = (; lat = FT(23.4567), long = FT(-145.6789))
+    for lvl in 1:5, seed in 1:3
+        @test CA.Setups._rademacher_δT(coord_a, lvl, seed, A) ==
+              CA.Setups._rademacher_δT(coord_b, lvl, seed, A)
+    end
+    ᶜT_m1 = copy(ᶜT_base)
+    ᶜT_m2 = copy(ᶜT_base)
+    ᶜT_m1_dup = copy(ᶜT_base)
+    CA.Setups.apply_initial_temperature_perturbation!(ᶜT_m1, A, 1)
+    CA.Setups.apply_initial_temperature_perturbation!(ᶜT_m2, A, 2)
+    CA.Setups.apply_initial_temperature_perturbation!(ᶜT_m1_dup, A, 1)
+    @test parent(ᶜT_m1) == parent(ᶜT_m1_dup)
+    @test parent(ᶜT_m1) != parent(ᶜT_m2)
+end

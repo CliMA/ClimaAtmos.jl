@@ -261,6 +261,12 @@ initial_condition:
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
   value: true
+initial_temperature_perturbation:
+  help: "Amplitude A [K] of the layout-invariant Rademacher (±A) perturbation applied to the initial temperature field in file-based initial conditions (`WeatherModel`, `AMIPFromERA5`, `MoistFromFile`) before hydrostatic pressure, density, energy, and EDMF initialization [`0.0` (default, bit-identical off)]"
+  value: 0.0
+initial_perturbation_seed:
+  help: "Integer seed for the layout-invariant Rademacher initial temperature perturbation [`0` (default)]"
+  value: 0
 apply_sem_quasimonotone_limiter:
   help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false

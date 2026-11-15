@@ -29,19 +29,39 @@ then overwrites the whole prognostic state with ERA5 data located by
 struct WeatherModel
     start_date::Dates.DateTime
     use_full_pressure::Bool
+    initial_temperature_perturbation::Float64
+    initial_perturbation_seed::Int
 end
 
 const _ERA5_IC_DIR = Ref{Any}(nothing)
 
 function WeatherModel(
+    start_date::Dates.DateTime,
+    use_full_pressure::Bool;
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
+)
+    return WeatherModel(
+        start_date,
+        use_full_pressure,
+        Float64(initial_temperature_perturbation),
+        Int(initial_perturbation_seed),
+    )
+end
+
+function WeatherModel(
     start_date::String,
     era5_initial_condition_dir = nothing;
     use_full_pressure::Bool = false,
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
 )
     _ERA5_IC_DIR[] = era5_initial_condition_dir
     return WeatherModel(
         parse_date(start_date),
         use_full_pressure,
+        Float64(initial_temperature_perturbation),
+        Int(initial_perturbation_seed),
     )
 end
 
@@ -77,7 +97,10 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         # Standard path: delegate to shared overwrite infrastructure
         return overwrite_from_file!(
             file_path, extrapolation_bc, Y, thermo_params;
-            regridder_type, interpolation_method,
+            regridder_type,
+            interpolation_method,
+            initial_temperature_perturbation = setup.initial_temperature_perturbation,
+            initial_perturbation_seed = setup.initial_perturbation_seed,
         )
     end
 
@@ -94,6 +117,11 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
 
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "t", center_space; svi_kwargs...,
+    )
+    ᶜT_unpert = apply_initial_temperature_perturbation!(
+        ᶜT,
+        setup.initial_temperature_perturbation,
+        setup.initial_perturbation_seed,
     )
     ᶜq_vap = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "q", center_space; svi_kwargs...,
@@ -162,6 +190,14 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, e_pot, thermo_params,
         ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
     )
+
+    if !isnothing(ᶜT_unpert)
+        log_initial_temperature_perturbation(
+            Y, ᶜT, ᶜT_unpert, ᶠp, ᶜq_tot, ᶜq_liq, ᶜq_ice,
+            e_pot, thermo_params, setup.initial_temperature_perturbation,
+            setup.initial_perturbation_seed,
+        )
+    end
 
     return nothing
 end

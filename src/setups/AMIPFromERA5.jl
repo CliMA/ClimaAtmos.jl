@@ -17,9 +17,29 @@ reading the 00:00 UTC snapshot of `start_date` from the
 """
 struct AMIPFromERA5
     start_date::Dates.DateTime
+    initial_temperature_perturbation::Float64
+    initial_perturbation_seed::Int
 end
 
-AMIPFromERA5(start_date::String) = AMIPFromERA5(parse_date(start_date))
+AMIPFromERA5(
+    start_date::Dates.DateTime;
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
+) = AMIPFromERA5(
+    start_date,
+    Float64(initial_temperature_perturbation),
+    Int(initial_perturbation_seed),
+)
+
+AMIPFromERA5(
+    start_date::String;
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
+) = AMIPFromERA5(
+    parse_date(start_date);
+    initial_temperature_perturbation,
+    initial_perturbation_seed,
+)
 
 function center_initial_condition(::AMIPFromERA5, local_geometry, params)
     FT = eltype(params)
@@ -40,5 +60,7 @@ function overwrite_initial_state!(setup::AMIPFromERA5, Y, thermo_params)
         file_path, extrapolation_bc, Y, thermo_params;
         regridder_type = :InterpolationsRegridder,
         interpolation_method = Intp.Linear(),
+        initial_temperature_perturbation = setup.initial_temperature_perturbation,
+        initial_perturbation_seed = setup.initial_perturbation_seed,
     )
 end

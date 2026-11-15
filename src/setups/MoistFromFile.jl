@@ -26,7 +26,19 @@ The file is expected to carry:
 """
 struct MoistFromFile
     file_path::String
+    initial_temperature_perturbation::Float64
+    initial_perturbation_seed::Int
 end
+
+MoistFromFile(
+    file_path::String;
+    initial_temperature_perturbation::Real = 0.0,
+    initial_perturbation_seed::Integer = 0,
+) = MoistFromFile(
+    file_path,
+    Float64(initial_temperature_perturbation),
+    Int(initial_perturbation_seed),
+)
 
 function center_initial_condition(setup::MoistFromFile, local_geometry, params)
     FT = eltype(params)
@@ -34,5 +46,12 @@ function center_initial_condition(setup::MoistFromFile, local_geometry, params)
 end
 
 function overwrite_initial_state!(setup::MoistFromFile, Y, thermo_params)
-    return overwrite_from_file!(setup.file_path, nothing, Y, thermo_params)
+    return overwrite_from_file!(
+        setup.file_path,
+        nothing,
+        Y,
+        thermo_params;
+        initial_temperature_perturbation = setup.initial_temperature_perturbation,
+        initial_perturbation_seed = setup.initial_perturbation_seed,
+    )
 end
