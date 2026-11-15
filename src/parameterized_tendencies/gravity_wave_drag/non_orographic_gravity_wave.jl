@@ -2589,7 +2589,8 @@ zero-frequency temporal weight, with `dc_frac` a tuning knob (default 1). When
 `h ± Δh_frac·h`, the same resonance smoothing the transient path applies.
 
 Returns exactly zero for `|U| < 1e-6` m/s, where `m₀ → ∞`, the stationary wave vanishes,
-and the `1/|U|³` factor would otherwise blow up.
+and the `1/|U|³` factor would otherwise blow up. With the gathered profile (Beres-G), it also
+returns zero when `m₀` exceeds what the profile resolves, `m₀·span/(ng-1) > π`.
 
 Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Waves* page.
 """
@@ -2625,7 +2626,12 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
     # real profile self-smooths; Ext 1 applies to the thermal-steady term too).
     # `span = z_top - z_bot` (clamped envelope width) must match the gather grid.
     Vbar = if shape_general && gprofile !== nothing
-        _beres_gs(gprofile, z_bot, span, m0)^2
+        # The gathered profile resolves vertical wavelengths down to two gather
+        # spacings. Beyond that, i.e. as U → 0, its transform is set by the profile's
+        # edges and kinks rather than by the heating, falls off only like 1/m₀, and
+        # Vbar/|U|³ grows like 1/|U|, so the steady flux is zero there.
+        dz_gather = span / FT(length(gprofile) - 1)
+        m0 * dz_gather > FT(π) ? FT(0) : _beres_gs(gprofile, z_bot, span, m0)^2
     elseif n_h_avg <= 1
         V_hs_sq(m0, h)
     else

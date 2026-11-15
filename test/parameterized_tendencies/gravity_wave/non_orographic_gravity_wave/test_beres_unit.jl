@@ -1066,6 +1066,34 @@ end
         end
     end
 
+    @testset "Steady flux with a gathered profile vanishes as U → 0" begin
+        # A profile that ends at 0.3 at the window top, a jump the transform sees
+        # as 1/m₀, would give a steady flux growing like 1/|U| as U → 0. Beyond
+        # the wavenumber the profile resolves, m₀·span/(ng−1) > π, the flux is
+        # zero, so it decreases toward zero.
+        ng = CA.N_BERES_PROFILE
+        g = ntuple(
+            i -> FT(0.7 * sin(π * (i - 1) / (ng - 1)) + 0.3 * (i - 1) / (ng - 1)),
+            Val(ng),
+        )
+        z_bot = FT(2000)
+        span = FT(10000)
+        N = FT(0.012)
+        steady(U) = _beres_steady_flux(
+            U, N, span, FT(5e-5), FT(2e-6), 1, FT(0.1), FT(4000), FT(1e6),
+            FT(1), FT(8.727e-4), true, g, z_bot, span,
+        )
+        mags = [abs(steady(U)) for U in (FT(1), FT(0.1), FT(0.01))]
+        @test all(isfinite, mags)
+        @test mags[1] > 0                    # m₀·dz_gather ≈ 1.9: resolved
+        @test issorted(mags; rev = true)
+        @test mags[3] == 0
+        # Beyond the resolved wavenumber, exactly zero; the transform there is not.
+        U_unresolved = N * (span / (ng - 1)) / FT(3.5)
+        @test steady(U_unresolved) == 0
+        @test CA._beres_gs(g, z_bot, span, N / U_unresolved) != 0
+    end
+
     @testset "Peak-normalization to unit maximum" begin
         t = (FT(0), FT(0.5), FT(2.0), FT(1.0), FT(0))
         tn = _beres_peaknorm(t)
