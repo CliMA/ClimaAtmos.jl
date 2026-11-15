@@ -202,6 +202,15 @@ model_1m_cosp = (;
 p_1m_cosp.precomputed.cloudsat_tcc .= FT(25)
 p_1m_cosp.precomputed.cloudsat_tcc2 .= FT(12.5)
 
+# Shared EDMF configuration — minimal (no SGS fluxes)
+tcp = CAP.turbconv_params(params)
+edmfx_model = CA.EDMFXModel(;
+    entr_model = CA.InvZEntrainment(),
+    detr_model = CA.BuoyancyVelocityDetrainment(),
+    scale_blending_method = CA.SmoothMinimumBlending(),
+)
+pedmfx = CA.PrognosticEDMFX(; area_fraction = tcp.min_area)
+
 ## Non-orographic gravity wave
 nogw_params = CA.NonOrographicGravityWaveParameters(FT)
 non_orographic_gravity_wave = CA.NonOrographicGravityWave(;
@@ -221,11 +230,25 @@ nogw_beres = CA.NonOrographicGravityWave(;
     (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
     beres_source,
 )
+# The Beres source reads the prognostic EDMF drafts, so the model needs them.
 model_nogw_beres = (;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     non_orographic_gravity_wave = nogw_beres,
+    turbconv_model = pedmfx,
+    edmfx_model,
 )
 (Y_nogw_beres, p_nogw_beres) = build_state_cache(FT, model_nogw_beres; grid = column);
+# Without the prognostic EDMF drafts the cache constructor rejects the Beres source.
+@testset "Beres source requires PrognosticEDMFX" begin
+    @test_throws "PrognosticEDMFX" build_state_cache(
+        FT,
+        (;
+            microphysics_model = CA.EquilibriumMicrophysics0M(),
+            non_orographic_gravity_wave = nogw_beres,
+        );
+        grid = column,
+    )
+end
 # Zero-initialize uninitialized Beres cache fields so diagnostics return finite values
 let c = p_nogw_beres.non_orographic_gravity_wave
     c.gw_beres_active .= 0
@@ -295,16 +318,8 @@ let rrtm = p_allsky.radiation.rrtmgp_solver
     end
 end
 
-## EDMFX models
-# Shared EDMF configuration — minimal (no SGS fluxes)
-tcp = CAP.turbconv_params(params)
-edmfx_model = CA.EDMFXModel(;
-    entr_model = CA.InvZEntrainment(),
-    detr_model = CA.BuoyancyVelocityDetrainment(),
-    scale_blending_method = CA.SmoothMinimumBlending(),
-)
-pedmfx = CA.PrognosticEDMFX(; area_fraction = tcp.min_area)
-
+## EDMFX models (fixtures below; the shared EDMF configuration is defined before
+## the Beres fixture, which needs it)
 model_0m_pedmfx = (; microphysics_model = CA.EquilibriumMicrophysics0M(),
     turbconv_model = pedmfx, edmfx_model)
 model_1m_pedmfx = (; microphysics_model = CA.NonEquilibriumMicrophysics1M(),

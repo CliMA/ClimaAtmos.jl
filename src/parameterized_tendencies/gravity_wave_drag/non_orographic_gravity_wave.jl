@@ -123,6 +123,10 @@ buffers, the working fields for the upward-marching kernel, and the accumulated 
 `uforcing`/`vforcing` [m/s²]. Beres source-property fields are appended only when
 `gw.beres_source` is a `BeresSourceParams` (see `_beres_cache_fields`).
 
+The `AtmosModel` method errors when a Beres source is configured without a
+`PrognosticEDMFX` turbulence-convection model with at least one updraft, whose draft state
+the source reads.
+
 The column and sphere branches differ in how the AD99 launch level is set: a column uses
 the height `source_height` and damps from the model top down, a sphere uses
 `source_pressure` and `damp_pressure`. Any other horizontal space is an error.
@@ -130,8 +134,22 @@ the height `source_height` and damps from the model top down, a sphere uses
 See also `non_orographic_gravity_wave_compute_tendency!`. The scheme is documented
 on the *Non-orographic Gravity Waves* page.
 """
-non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
-    non_orographic_gravity_wave_cache(Y, atmos.non_orographic_gravity_wave)
+function non_orographic_gravity_wave_cache(Y, atmos::AtmosModel)
+    nogw = atmos.non_orographic_gravity_wave
+    # The Beres source reads the per-draft state of the prognostic EDMF scheme. The
+    # config getter checks this for YAML runs; this check covers models built in Julia.
+    if !isnothing(nogw) && !isnothing(nogw.beres_source)
+        (; turbconv_model) = atmos
+        turbconv_model isa PrognosticEDMFX &&
+        n_mass_flux_subdomains(turbconv_model) >= 1 ||
+            error(
+                "The Beres convective gravity-wave source requires a PrognosticEDMFX " *
+                "turbulence-convection model with at least one updraft; got " *
+                "$(typeof(turbconv_model)).",
+            )
+    end
+    return non_orographic_gravity_wave_cache(Y, nogw)
+end
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 

@@ -948,6 +948,28 @@ end
         Float64,
     )
 
+    # The Beres source itself needs the prognostic EDMF drafts: any other
+    # turbconv value, or no updraft, is rejected with a clear error.
+    beres_base = Dict{String, Any}(
+        "non_orographic_gravity_wave" => true,
+        "nogw_beres_source" => true,
+        "turbconv" => "prognostic_edmfx",
+        "updraft_number" => 1,
+    )
+    for bad in (
+        Dict("turbconv" => "edmfx"),
+        Dict("turbconv" => "diagnostic_edmfx"),
+        Dict("turbconv" => "edonly_edmfx"),
+        Dict("turbconv" => nothing),
+        Dict("updraft_number" => 0),
+    )
+        @test_throws ErrorException CA.get_non_orographic_gravity_wave_model(
+            merge(beres_base, bad),
+            nothing,
+            Float64,
+        )
+    end
+
     # The struct itself defaults heating_latent to false (inert path).
     bsp = CA.BeresSourceParams{Float64}(;
         Q0_threshold = 1.0e-5,

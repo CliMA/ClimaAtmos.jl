@@ -405,9 +405,9 @@ and return `nothing` when it is `false` (no other value is allowed).
 
 Spectrum and source parameters are taken from `params.non_orographic_gravity_wave_params`.
 When `nogw_beres_source` is `true`, a `BeresSourceParams` convective source built from
-`params.beres_source_params` is attached; this requires `turbconv = "prognostic_edmfx"`,
-and, if `nogw_beres_heating_latent` is also `true`, `microphysics_model = "1M"`. A
-warning is emitted when the phase-speed grid has no exact `c = 0` bin (`cmax / dc` not an
+`params.beres_source_params` is attached; this requires `turbconv = "prognostic_edmfx"`
+with `updraft_number ≥ 1`, and, if `nogw_beres_heating_latent` is also `true`,
+`microphysics_model = "1M"`. A warning is emitted when the phase-speed grid has no exact `c = 0` bin (`cmax / dc` not an
 integer), because the steady Beres component is then skipped.
 """
 function get_non_orographic_gravity_wave_model(
@@ -421,12 +421,21 @@ function get_non_orographic_gravity_wave_model(
         @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
     end
     if get(parsed_args, "nogw_beres_source", false) && nogw_name == true
+        # The Beres source reads the per-draft state of the prognostic EDMF scheme
+        # (`Y.c.sgsʲs` and draft 1), which every other `turbconv` value lacks.
         turbconv = get(parsed_args, "turbconv", nothing)
-        if turbconv === nothing || turbconv == "edonly_edmfx"
+        if turbconv != "prognostic_edmfx"
             error(
                 "nogw_beres_source requires turbconv to be " *
                 "'prognostic_edmfx' " *
                 "(got: $turbconv)",
+            )
+        end
+        updraft_number = get(parsed_args, "updraft_number", 1)
+        if updraft_number < 1
+            error(
+                "nogw_beres_source requires updraft_number >= 1 " *
+                "(got: $updraft_number)",
             )
         end
         # Canonical latent heating (Q_lat = Σ_p L_p R_p) needs explicit per-phase

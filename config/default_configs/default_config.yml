@@ -371,7 +371,7 @@ non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
 nogw_beres_source:
-  help: "Use Beres (2004) convective source spectrum for tropical non-orographic gravity waves (requires the eddy-diffusivity mass-flux scheme) [`false` (default), `true`]"
+  help: "Use Beres (2004) convective source spectrum for non-orographic gravity waves, launched wherever the prognostic EDMF scheme convects (requires `turbconv: prognostic_edmfx` with `updraft_number` >= 1) [`false` (default), `true`]"
   value: false
 nogw_beres_heating_latent:
   help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
