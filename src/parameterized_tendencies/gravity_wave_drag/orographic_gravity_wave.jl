@@ -649,8 +649,8 @@ in the bottom and top cells (see the *Orographic Gravity Waves* docs page). `ᶠ
 scratch. Called from `orographic_gravity_wave_compute_tendency!`.
 """
 function ogw_temperature_gradient!(ᶜdTdz, ᶠdTdz, ᶜT)
-    ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
-    ᶠdTdz .= Geometry.WVector.(ᶠgradᵥ.(ᶜT)).components.data.:1
+    @. ᶜdTdz = w_component(Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT))))
+    @. ᶠdTdz = w_component(Geometry.WVector(ᶠgradᵥ(ᶜT)))
     # The face levels and the end-cell levels are different spaces with the same layout,
     # so copy their raw data (views into the fields).
     n = Spaces.nlevels(axes(ᶜT))
