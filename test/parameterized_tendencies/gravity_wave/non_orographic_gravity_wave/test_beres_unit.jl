@@ -1421,3 +1421,41 @@ end
         @test CA._beres_gather_bottom(500.0, 1500.0, z_floor) == 1500.0
     end
 end
+
+# ============================================================================
+# Bin width: each transient bin carries the spectral density times the bin
+# width dc, and the steady c = 0 bin carries the steady flux, a total. Halving
+# dc (same cmax) must then leave the total launched flux and the steady share
+# unchanged.
+# ============================================================================
+@testset "Beres launch flux does not depend on the bin width" begin
+    FT = Float64
+    beres = BeresSourceParams{FT}(;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(2e-6),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+        beres_steady_source = true,
+    )
+    cmax = FT(40)
+    Q0, h, N = FT(5e-5), FT(8000), FT(0.012)
+    function totals(dc, u_heat)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+        B = wave_source(c, u_heat, Q0, h, N, beres, Val(nc))
+        n_zero = findfirst(iszero, c)
+        moving = sum(abs, B) - abs(B[n_zero])
+        return (; moving, steady = abs(B[n_zero]))
+    end
+    for u_heat in (FT(7.3), FT(-11.1))
+        coarse = totals(FT(0.8), u_heat)
+        fine = totals(FT(0.4), u_heat)
+        @test coarse.moving > 0
+        @test coarse.steady > 0
+        @test fine.moving ≈ coarse.moving rtol = 0.02
+        @test fine.steady == coarse.steady
+        @test fine.steady / fine.moving ≈ coarse.steady / coarse.moving rtol = 0.02
+    end
+end

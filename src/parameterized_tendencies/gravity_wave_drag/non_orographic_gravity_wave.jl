@@ -1721,7 +1721,8 @@ compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
     compute_beres_spectrum(::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val,
                            N_val, gw_ncval)
 
-Return the Beres launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m³/s³].
+Return the Beres launch spectrum for one column, as an `NTuple{nc}` of the momentum flux
+`B₀(c)` carried by each phase-speed bin [Pa].
 
 Delegates to the `BeresSourceParams` method of `wave_source` when the column is convecting
 (`beres_active_val > 0.5`), and returns all zeros otherwise.
@@ -2711,10 +2712,12 @@ end
 """
     wave_source(c, u_heat, Q0, h, N_source, beres::BeresSourceParams, gw_ncval)
 
-Return the Beres convective launch spectrum `B₀(c)` as an `NTuple{nc}` [m³/s³].
+Return the Beres convective launch spectrum `B₀(c)` as an `NTuple{nc}` of the momentum flux
+carried by each phase-speed bin [Pa], with the dimensional prefactor absorbed into
+`beres_scale_factor`.
 
-Dispatch on `BeresSourceParams` distinguishes this from the AD99 Gaussian method above;
-both return a spectrum in the same units.
+Dispatch on `BeresSourceParams` distinguishes this from the AD99 Gaussian method above,
+whose `B₀` is a flux per unit mass [m²/s²] that the AD99 intermittency rescales.
 
 This is the classical half-sine spectrum only: it calls `_beres_launch_spectrum` with no
 gathered heating profile and zero obstacle velocity, so `beres_shape_general` and
@@ -2723,8 +2726,9 @@ precomputes the full spectrum (including the Beres-G shape and the mechanical so
 `compute_beres_convective_heating!`. It is kept for tests and diagnostics.
 
 For each phase-speed bin, `_beres_spectrum_single_h` integrates the spectral density over
-frequency, and the result is signed by `sgn(ĉ)` with `ĉ = c - u_heat` the intrinsic phase
-speed, then multiplied by `beres_scale_factor`. Bins with `|ĉ| < 1e-6` or `|c| < 1e-6` m/s
+frequency, a flux per unit phase speed, and the result is signed by `sgn(ĉ)` with
+`ĉ = c - u_heat` the intrinsic phase speed, then multiplied by `beres_scale_factor` and by
+the bin width `dc` to give the flux in the bin. Bins with `|ĉ| < 1e-6` or `|c| < 1e-6` m/s
 are set to zero, the latter because the `ν → c` change of variables is singular there.
 When `n_h_avg > 1`, the integral is averaged over `n_h_avg` heating depths spanning
 `h ± Δh_frac·h`, which smooths the `mh = π` resonance.
@@ -2775,10 +2779,12 @@ end
 The full per-column Beres launch momentum-flux spectrum `B0` (NTuple over phase
 speed), assembled once per column (it is independent of the AD99 horizontal
 wavenumber, so the propagation kernel reads it precomputed rather than rebuilding
-it inside the `ink` loop). Transient bins integrate the Beres (2004) spectral
-density over intrinsic frequency; the `c≈0` bin carries the steady (`ν=0`) terms.
-`h` is the half-sine depth (V_hs/Q0); `span = z_top - z_bot` is the clamped
-envelope width the gather sampled on, used by the Beres-G sine transform.
+it inside the `ink` loop). Each bin holds the momentum flux it carries [Pa]: a
+transient bin is the Beres (2004) spectral density, integrated over intrinsic
+frequency, times the bin width `dc`; the `c≈0` bin carries the steady (`ν=0`)
+terms, which are a total flux already. `h` is the half-sine depth (V_hs/Q0);
+`z_bot` and `span` are the bottom and width of the window the gather sampled on,
+used by the Beres-G sine transform.
 
 `gprofile` (peak-normalised `NTuple{ng}` on `[z_bot, z_top]`) and the flag
 `beres.beres_shape_general` select the vertical shape factor:
@@ -2916,7 +2922,9 @@ function _beres_launch_spectrum(
                     acc / FT(n_h_avg)
                 end
 
-                sign(c_hat) * scale_factor * result
+                # The integral is a flux per unit phase speed; times the bin
+                # width it is the flux the bin carries.
+                sign(c_hat) * scale_factor * result * dc
             end
 
             # Deposit the steady (ν=0) flux into the c≈0 bin only.
@@ -3207,7 +3215,7 @@ function _beres_banded_spectrum(
                 end
                 acc / FT(n_h_avg)
             end
-            sign(c_hat) * scale_factor * result
+            sign(c_hat) * scale_factor * result * dc
         end
         v = Float64(val + steady_flux * FT(n == n_zero))
         band = (abs(c_n) <= c_band) ? (c_n > 0 ? 1 : 2) : (c_n > 0 ? 3 : 4)
