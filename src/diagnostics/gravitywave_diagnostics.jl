@@ -572,7 +572,9 @@ struct _B5DiagCompute <: Function
     sname::String
 end
 function (f::_B5DiagCompute)(out, state, cache, time)
-    hasproperty(cache.non_orographic_gravity_wave, :gw_beres_source) ||
+    # An AD99-only cache holds the key `gw_beres_source` with the value `nothing`.
+    nogw = cache.non_orographic_gravity_wave
+    (hasproperty(nogw, :gw_beres_source) && !isnothing(nogw.gw_beres_source)) ||
         error_diagnostic_variable(
             "$(f.sname) requires the Beres NOGW source to be enabled",
         )

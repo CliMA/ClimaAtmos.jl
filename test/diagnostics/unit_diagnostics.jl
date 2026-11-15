@@ -614,12 +614,24 @@ end
 
     # Beres diagnostics error on dry model (no NOGW) and on NOGW without Beres source
     for name in ("nogw_beres_active", "nogw_Q0", "nogw_h_heat",
-        "nogw_zbot", "nogw_ztop", "nogw_Q_conv")
+        "nogw_zbot", "nogw_ztop", "nogw_Q_conv",
+        "nogw_b5_base_lowE", "nogw_b5_ext1_highW_abs", "nogw_b5_hs0_c0")
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
         end
         @testset "$name errors on NOGW without Beres" begin
             @test_throws Exception compute_diag(getdiag(name), Y_nogw, p_nogw)
+        end
+    end
+
+    # The five-way nogw_b5_* diagnostics name the missing Beres source, rather than
+    # failing on a field of `nothing` (an AD99-only cache holds gw_beres_source =
+    # nothing).
+    for name in ("nogw_b5_base_lowE", "nogw_b5_ext13_lowW_abs", "nogw_b5_hs0_c0")
+        @testset "$name names the missing Beres source" begin
+            @test_throws "requires the Beres NOGW source" compute_diag(
+                getdiag(name), Y_nogw, p_nogw,
+            )
         end
     end
 
