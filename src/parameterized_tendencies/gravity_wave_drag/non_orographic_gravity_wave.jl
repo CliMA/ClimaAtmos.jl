@@ -169,8 +169,9 @@ seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level st
 `gw_c_centroid`, `gw_beres_mech_flux`, and the Beres-G / mechanical-source launch state:
 the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the peak-normalized in-cloud heating shape `gw_beres_gprofile`
-(`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), and the
-obstacle-level updraft velocity `gw_w_obstacle` [m/s].
+(`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), the largest model
+level thickness over that window `gw_beres_dz_level` [m], and the obstacle-level updraft
+velocity `gw_w_obstacle` [m/s].
 
 Called from `non_orographic_gravity_wave_cache`.
 """
@@ -211,6 +212,7 @@ function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
         gw_beres_B0_v = similar(Fields.level(Y.c.ρ, 1), BeresB0{nc, FT}),
         gw_beres_gprofile =
         similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+        gw_beres_dz_level = similar(Fields.level(Y.c.ρ, 1)),
         gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
     )
 end
@@ -714,7 +716,12 @@ because it does not depend on the AD99 horizontal wavenumber. With
 `shape_mode = half_sine` it uses the classical half-sine shape factor; with
 `sine_transform` it uses the sine transform of `gw_beres_gprofile` sampled on the part of the
 clamped envelope above the floor, `[max(z_bot, z_bot_floor), z_top]` (heating below
-`z_bot_floor` is left out, as in the moment fit).
+`z_bot_floor` is left out, as in the moment fit). That profile is the positive part
+`max(Q_ic, 0)` of the in-cloud heating (cooling is left out, as in the moment fit and `Q0`),
+interpolated linearly between model levels, peak-normalized, and tapered to zero at both
+window edges over `gw_beres_dz_level`, the largest level thickness in the window; the
+spectrum drops vertical wavenumbers `m > π/gw_beres_dz_level`, which the profile does not
+resolve.
 The steady c≈0 bin adds the thermal and, if enabled, the mechanical (obstacle) source,
 the latter driven by `gw_w_obstacle` sampled at `z_bot + beres_obstacle_frac·h`.
 
@@ -763,6 +770,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_launch_flux,
         gw_c_centroid,
         gw_beres_gprofile,
+        gw_beres_dz_level,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -1101,7 +1109,25 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             _beres_gather_step(state, level_input, _z_floor, _ng_val)
         end
     end
-    @. gw_beres_gprofile = _beres_peaknorm(gw_beres_gprofile)
+    # The largest model level thickness over the window, from the cells that overlap it.
+    # The gathered profile interpolates the heating between levels, so it holds no
+    # detail finer than this spacing; it sets the edge taper below and the shortest
+    # vertical wavelength the Beres-G spectrum uses.
+    window_input =
+        Base.Broadcast.broadcasted(tuple, ᶜz, ᶜΔz, ᶜgather_bottom, gw_ztop)
+    Operators.column_reduce!(
+        gw_beres_dz_level,
+        window_input;
+        init = FT(0),
+    ) do dz_max, (z, dz, z_start, z_top)
+        overlaps = (z + dz / 2 > z_start) & (z - dz / 2 < z_top)
+        return ifelse(overlaps, max(dz_max, dz), dz_max)
+    end
+    @. gw_beres_gprofile = _beres_taper_edges(
+        _beres_peaknorm(gw_beres_gprofile),
+        gw_ztop - ᶜgather_bottom,
+        gw_beres_dz_level,
+    )
 
     # (2) Obstacle-level updraft velocity w_b for the mechanical source (Ext 3):
     # the per-draft physical vertical velocity where the draft penetrates the
@@ -1187,6 +1213,34 @@ floor instead.
     min(max(z_bot, z_floor), z_top)
 
 """
+    _beres_taper_edges(profile, span, width)
+
+Return the gathered heating `profile` (an `NTuple{ng}` on a window of width `span` [m])
+multiplied by a raised-cosine taper that falls from 1 to 0 over the distance `width` [m],
+at most half the window, from each window edge, so the profile is zero at both edges.
+
+The window edges cut the heating where the moment fit puts them, generally where it is
+not zero. A jump at an edge makes the sine transform fall off only like `1/m`, which puts
+flux into the slow bins next to `u_heat` that grows like `1/|ĉ|`. The taper removes the
+jump. `width` is the largest model level thickness over the window, `gw_beres_dz_level`,
+the same scale below which the Beres-G spectrum drops vertical wavenumbers, so the taper
+smooths the edges at the shortest wavelength the spectrum keeps. The amplitude `Q0` is
+not changed.
+"""
+@inline function _beres_taper_edges(profile, span, width)
+    t = _beres_unwrap_gprofile(profile)
+    FT = typeof(span)
+    ng = length(t)
+    dz_g = span / FT(ng - 1)
+    w = max(min(width, span / 2), eps(FT))
+    return ntuple(Val(ng)) do i
+        d = FT(min(i - 1, ng - i)) * dz_g   # distance to the nearer window edge
+        factor = ifelse(d < w, (1 - cos(FT(π) * d / w)) / 2, FT(1))
+        t[i] * factor
+    end
+end
+
+"""
     _beres_gather_init(FT, Val(ng))
 
 Return the starting state of the Beres-G gather, `(values, z_prev, Q_prev)`: `ng` zero
@@ -1235,7 +1289,8 @@ end
 Fill the per-column Beres launch spectra `gw_beres_B0_u` and `gw_beres_B0_v` of the NOGW
 cache `nogw` from the source fields already in it (`gw_beres_active`, `gw_u_heat`,
 `gw_v_heat`, `gw_Q0`, `gw_h_heat`, `gw_N_source`, `gw_zbot`, `gw_ztop`,
-`gw_beres_gprofile`, `gw_w_obstacle`) and the source parameters `gw_beres_source`.
+`gw_beres_gprofile`, `gw_beres_dz_level`, `gw_w_obstacle`) and the source parameters
+`gw_beres_source`.
 
 Called at the end of `compute_beres_convective_heating!`. It is a separate function so that
 tests and offline drivers that set the source fields by hand, or swap `gw_beres_source`,
@@ -1255,6 +1310,7 @@ function _beres_precompute_launch_spectra!(nogw)
         gw_zbot,
         gw_ztop,
         gw_beres_gprofile,
+        gw_beres_dz_level,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -1284,22 +1340,24 @@ function _beres_precompute_launch_spectra!(nogw)
         z_floor = gw_beres_source.z_bot_floor
 
         if beres.beres_shape_general
-            function b0g(active, u, Q0, h, N, zbot, ztop, gprof, w)
+            function b0g(active, u, Q0, h, N, zbot, ztop, gprof, dz_level, w)
                 z_gather = _beres_gather_bottom(zbot, ztop, z_floor)
                 return BeresB0(
                     _beres_launch_spectrum_or_zero(
                         active, cgrid, u, Q0, h, N, z_gather, ztop - z_gather,
-                        gprof, w, beres, ncv, Val(true),
+                        gprof, w, beres, ncv, Val(true); dz_level,
                     ),
                 )
             end
             @. gw_beres_B0_u = b0g(
                 gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_beres_gprofile, gw_w_obstacle,
+                gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
+                gw_w_obstacle,
             )
             @. gw_beres_B0_v = b0g(
                 gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_beres_gprofile, gw_w_obstacle,
+                gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
+                gw_w_obstacle,
             )
         else
             b0hs(active, u, Q0, h, N, zbot, ztop, w) = BeresB0(
@@ -2396,7 +2454,7 @@ left-to-right, matching the accumulation order of the rule it replaced.
 end
 
 """
-    _beres_shape_factor_sq(shape_general, gprofile, z_bot, h, span, m)
+    _beres_shape_factor_sq(shape_general, gprofile, z_bot, h, span, m, m_max)
 
 The squared vertical shape factor entering `R² = (·)·m²/(N²−ν̂²)²`, dispatching
 between the classical half-sine `V_hs_sq(m,h)` (`shape_general=false`, or
@@ -2404,9 +2462,10 @@ between the classical half-sine `V_hs_sq(m,h)` (`shape_general=false`, or
 (`shape_general=true`). `h` is the (unclamped) half-sine depth used by `V_hs_sq`;
 `span = z_top - z_bot` is the gather/transform grid width used by `_beres_gs` —
 they differ only for a clamped envelope. Holding the `·m²/(N²−ν̂²)²` downstream
-factor fixed is the `1/m²`-parity pinned by gate 1.
+factor fixed is the `1/m²`-parity pinned by gate 1. The Beres-G factor is zero for
+`m > m_max`, the shortest vertical wavelength the gathered profile resolves (`m_max = π/dz_level`, or `Inf` for no cut); the half-sine factor ignores `m_max`.
 """
-@inline _beres_shape_factor_sq(::Bool, ::Nothing, z_bot, h, span, m) =
+@inline _beres_shape_factor_sq(::Bool, ::Nothing, z_bot, h, span, m, m_max) =
     V_hs_sq(m, h)
 @inline function _beres_shape_factor_sq(
     shape_general::Bool,
@@ -2415,8 +2474,10 @@ factor fixed is the `1/m²`-parity pinned by gate 1.
     h,
     span,
     m,
+    m_max,
 )
-    return shape_general ? _beres_gs(gprofile, z_bot, span, m)^2 : V_hs_sq(m, h)
+    shape_general || return V_hs_sq(m, h)
+    return m > m_max ? zero(m) : _beres_gs(gprofile, z_bot, span, m)^2
 end
 
 """
@@ -2450,7 +2511,7 @@ end
 """
     _beres_spectrum_single_h(c_n, c_hat, h, u_heat, N2, N_source, Q0_sq, σ_x_sq,
                              ν_min, dν, n_groups, boole_w, shape_general = false,
-                             gprofile = nothing, z_bot = 0, span = 0)
+                             gprofile = nothing, z_bot = 0, span = 0, m_max = Inf)
 
 Return the unsigned launched momentum flux of one phase-speed bin and one heating depth.
 
@@ -2467,7 +2528,7 @@ Each node contributes the product of
     `m² = k²(N²/ν̂² − 1)` and the squared shape factor `S²(m)` from
     `_beres_shape_factor_sq`: the half-sine `V_hs_sq(m, h)` by default, or, when
     `shape_general` is true and `gprofile` is given, the squared sine transform of the
-    gathered heating profile on `[z_bot, z_bot + span]`;
+    gathered heating profile on `[z_bot, z_bot + span]`, zero for `m > m_max`;
   - the propagation factor `√(N² − ν̂²)/|ν̂|` and the normalization `1/√(2π)`; and
   - the `ν → c` Jacobian `ν/c_n²`,
 
@@ -2506,6 +2567,7 @@ page.
     gprofile = nothing,
     z_bot = zero(c_n),
     span = zero(c_n),
+    m_max = oftype(c_n, Inf),
 )
     FT = typeof(c_n)
     π_val = FT(π)
@@ -2548,6 +2610,7 @@ page.
                 h,
                 span,
                 m,
+                m_max,
             )
             R_sq = shape_sq * m^2 / N2_minus_νhat2^2
 
@@ -2599,7 +2662,8 @@ end
 
 """
     _beres_steady_flux(U, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x,
-                       L_system, dc_frac, ν_min)
+                       L_system, dc_frac, ν_min, shape_general = false,
+                       gprofile = nothing, z_bot = 0, span = 0, m_max = Inf)
 
 Return the launch flux of the steady (ν = 0) convective wave for one azimuth.
 
@@ -2621,7 +2685,8 @@ zero-frequency temporal weight, with `dc_frac` a tuning knob (default 1). When
 
 Returns exactly zero for `|U| < 1e-6` m/s, where `m₀ → ∞`, the stationary wave vanishes,
 and the `1/|U|³` factor would otherwise blow up. With the gathered profile (Beres-G), it also
-returns zero when `m₀` exceeds what the profile resolves, `m₀·span/(ng-1) > π`.
+returns zero when `m₀` exceeds what the profile resolves, `m₀·span/(ng-1) > π`, or the
+wavenumber `m_max = π/dz_level` of the model levels it was gathered from.
 
 Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Waves* page.
 """
@@ -2641,6 +2706,7 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
     gprofile = nothing,
     z_bot = zero(U),
     span = zero(U),
+    m_max = oftype(U, Inf),
 )
     FT = typeof(U)
     # U → 0 guard: m₀ = N/|U| → ∞, the stationary wave vanishes; also protects
@@ -2661,8 +2727,10 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
         # spacings. Beyond that, i.e. as U → 0, its transform is set by the profile's
         # edges and kinks rather than by the heating, falls off only like 1/m₀, and
         # Vbar/|U|³ grows like 1/|U|, so the steady flux is zero there.
+        # It is also zero beyond the wavenumber `m_max` of the model levels.
         dz_gather = span / FT(length(gprofile) - 1)
-        m0 * dz_gather > FT(π) ? FT(0) : _beres_gs(gprofile, z_bot, span, m0)^2
+        (m0 * dz_gather > FT(π)) | (m0 > m_max) ? FT(0) :
+        _beres_gs(gprofile, z_bot, span, m0)^2
     elseif n_h_avg <= 1
         V_hs_sq(m0, h)
     else
@@ -2814,7 +2882,9 @@ transient bin is the Beres (2004) spectral density, integrated over intrinsic
 frequency, times the bin width `dc`; the `c≈0` bin carries the steady (`ν=0`)
 terms, which are a total flux already. `h` is the half-sine depth (V_hs/Q0);
 `z_bot` and `span` are the bottom and width of the window the gather sampled on,
-used by the Beres-G sine transform.
+used by the Beres-G sine transform, and the keyword `dz_level` is the largest model level
+thickness over that window: Beres-G drops vertical wavenumbers `m > π/dz_level` (no cut
+for the default `0`).
 
 `gprofile` (peak-normalised `NTuple{ng}` on `[z_bot, z_top]`) and the flag
 `beres.beres_shape_general` select the vertical shape factor:
@@ -2839,7 +2909,8 @@ function _beres_launch_spectrum(
     w_obstacle,
     beres::BeresSourceParams,
     gw_ncval::Val{nc},
-    shape_mode::Val{SG} = Val(beres.beres_shape_general),
+    shape_mode::Val{SG} = Val(beres.beres_shape_general);
+    dz_level = zero(u_heat),
 ) where {nc, SG}
     (;
         σ_x,
@@ -2868,6 +2939,10 @@ function _beres_launch_spectrum(
     # dispatch / GC allocation). Behaviour is unchanged: the flag still selects
     # the shape, so a profile present with the flag off stays exact half-sine.
     use_VG = SG && (gprofile !== nothing)
+    # Beres-G drops vertical wavenumbers above π/dz_level: the gathered profile
+    # interpolates the heating between model levels, so it holds no information at
+    # shorter vertical wavelengths, only its kinks and edges. No cut without a spacing.
+    m_max = dz_level > zero(dz_level) ? FT(π) / dz_level : FT(Inf)
 
     boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
     dν = (ν_max - ν_min) / FT(n_ν - 1)
@@ -2903,6 +2978,7 @@ function _beres_launch_spectrum(
             gprofile,
             z_bot,
             span,
+            m_max,
         ) : FT(0)
     steady_mech =
         (beres_mechanical_source && has_c0_bin) ?
@@ -2931,7 +3007,7 @@ function _beres_launch_spectrum(
                     _beres_spectrum_single_h(
                         c_n, c_hat, h, u_heat, N2, N_source,
                         Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                        use_VG, gprofile, z_bot, span,
+                        use_VG, gprofile, z_bot, span, m_max,
                     )
                 else
                     # Half-sine averaged over n_h_avg values of h in [h-Δh, h+Δh]
@@ -2995,7 +3071,8 @@ end
     w_obstacle,
     beres::BeresSourceParams,
     gw_ncval::Val{nc},
-    shape_mode::Val = Val(beres.beres_shape_general),
+    shape_mode::Val = Val(beres.beres_shape_general);
+    dz_level = zero(u_heat),
 ) where {nc}
     FT = typeof(u_heat)
     # Unwrap ClimaCore's AutoBroadcaster (if present) to the concrete NTuple.
@@ -3003,7 +3080,7 @@ end
     if active > FT(0.5)
         return _beres_launch_spectrum(
             c, u_heat, Q0, h, N_source, z_bot, span, gprofile, w_obstacle,
-            beres, gw_ncval, shape_mode,
+            beres, gw_ncval, shape_mode; dz_level,
         )
     else
         return ntuple(_ -> FT(0), gw_ncval)
@@ -3018,6 +3095,8 @@ shape carries no amplitude, which stays in `Q0`, so the half-sine reduction hold
 and `Q0`/`h`/`E` are identical between shape modes). Returns zeros if the peak is
 nonpositive (inactive / cooling-only column).
 """
+@inline _beres_peaknorm(t::ClimaCore.Utilities.AutoBroadcaster) =
+    _beres_peaknorm(_beres_unwrap_gprofile(t))
 @inline function _beres_peaknorm(t::NTuple{ng, FT}) where {ng, FT}
     mx = FT(0)
     for i in 1:ng
@@ -3180,6 +3259,7 @@ function _beres_banded_spectrum(
     beres::BeresSourceParams{FT},
     nc::Int,
     c_band::FT,
+    dz_level::FT = zero(FT),
 ) where {FT}
     (;
         σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac,
@@ -3189,6 +3269,7 @@ function _beres_banded_spectrum(
     scale_factor = FT(beres_scale_factor)
     L_system = FT(beres_L_system)
     use_VG = beres_shape_general && (gprofile !== nothing)
+    m_max = dz_level > zero(dz_level) ? FT(π) / dz_level : FT(Inf)
 
     boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
     dν = (ν_max - ν_min) / FT(n_ν - 1)
@@ -3206,7 +3287,7 @@ function _beres_banded_spectrum(
         _beres_steady_flux(
             u_heat, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x,
             L_system, FT(beres_steady_dc_frac), ν_min, use_VG, gprofile,
-            z_bot, span,
+            z_bot, span, m_max,
         ) : FT(0)
     steady_mech =
         (beres_mechanical_source && has_c0_bin) ?
@@ -3227,7 +3308,7 @@ function _beres_banded_spectrum(
                 _beres_spectrum_single_h(
                     c_n, c_hat, h, u_heat, N2, N_source,
                     Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                    use_VG, gprofile, z_bot, span,
+                    use_VG, gprofile, z_bot, span, m_max,
                 )
             else
                 Δh = Δh_frac * h
@@ -3289,6 +3370,7 @@ function _compute_beres_fiveway!(p, time)
     ua = Array(parent(nogw.gw_u_heat))   # envelope-mean zonal wind (Pass 2)
     wa = Array(parent(nogw.gw_w_obstacle))
     gpa = Array(parent(nogw.gw_beres_gprofile))  # (..., N_BERES_PROFILE, ...)
+    dza = Array(parent(nogw.gw_beres_dz_level))
 
     variants = (
         ("base", _beres_with_flags(beres, false, false), false),
@@ -3334,7 +3416,7 @@ function _compute_beres_fiveway!(p, time)
             z_window = use_hs ? z_bot : z_gather
             sums = _beres_banded_spectrum(
                 gw_c, ua[I], Q0a[I], ha[I], Na[I], z_window, z_top - z_window,
-                use_hs ? gprof_hs : gprof, wa[I], vparams, nc, c_band,
+                use_hs ? gprof_hs : gprof, wa[I], vparams, nc, c_band, dza[I],
             )
             for (kb, bname) in enumerate(bands)
                 maps["nogw_b5_$(vname)_$(bname)"][I] = FT(sums[kb])

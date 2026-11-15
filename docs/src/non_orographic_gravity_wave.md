@@ -225,6 +225,15 @@ The factor $\alpha$ (`nogw_beres_scale_factor`) bundles the dimensional prefacto
 
 **Sign convention.** The code applies $\text{sgn}(\hat{c})$ outside the integral, whereas Beres Eq. (30) places $\text{sgn}(\hat{\nu})$ inside the integrand. Since $k = \nu/c$ with $\nu > 0$, the two are related by $\text{sgn}(\hat{\nu}) = \text{sgn}(c) \cdot \text{sgn}(\hat{c})$, so the forms differ by a factor of $\text{sgn}(c)$ for negative phase speeds. The $\text{sgn}(\hat{c})$ convention is correct for the AD99 propagator, which interprets $B_0(c) < 0$ as westward momentum flux for westward-propagating waves ($c < 0$).
 
+### General heating shape (Beres-G)
+
+With `nogw_beres_shape_mode: sine_transform`, the half-sine response factor $V_{hs}(m, h)$ above is replaced by $|g_s(m)|^2$, the square of the sine transform $g_s(m) = \int g(z) \sin(m z)\,dz$ of the in-cloud heating shape $g(z)$, with $z$ measured from the ground. The amplitude is still $Q_0$. The shape is built per column in these steps:
+
+ 1. Only the positive part $\max(Q_{\text{ic}}, 0)$ of the in-cloud heating is used, and only at and above $z_{\text{bot,floor}}$, as for the moments that set $h$ and $Q_0$. Cooling (for example below cloud base or above cloud top) is left out.
+ 2. It is sampled at 64 equally spaced points on the window $[\max(z_{\text{bot}}, z_{\text{bot,floor}}), z_{\text{top}}]$, by linear interpolation between the model levels, and divided by its maximum.
+ 3. It is tapered to zero at both window edges by a raised cosine over $\Delta z_{\text{level}}$, the largest model level thickness in the window. The window edges generally cut the heating where it is not zero, and a jump there makes $g_s$ fall off only like $1/m$, which puts spurious flux into the slow phase speeds next to $\bar{u}_{\text{heat}}$.
+ 4. Vertical wavenumbers $m > \pi/\Delta z_{\text{level}}$ are dropped from the transient and the steady spectrum: the profile is an interpolation between model levels, so it carries no information at shorter vertical wavelengths.
+
 ### Heating depth averaging
 
 Optionally, the spectrum may be computed and averaged at $n_{h,\text{avg}}$ values of $h$ uniformly spaced in $[h - \Delta h, h + \Delta h]$, with $\Delta h = \Delta h_{\text{frac}} \cdot h$. This averaging smooths the resonance at $mh = \pi$ (vertical wavelength $\lambda_z = 2h$) in the response function $R$, which is sharp for any single $h$ but unphysical, as real columns contain cells of varying depth. [beres2004](@cite) introduced this $h$-averaging for the steady (stationary) component, where the factor $\beta$ of their §2.b, Fig. 4, averaged over $n_{h,\text{avg}} = 20$ depths with $\Delta h_{\text{frac}} \approx 0.17$. Here, the averaging can also be applied to the transient (nonstationary) spectrum described above, whose response function $R$ carries a resonance of the same origin (the half-sine vertical projection), so the same averaging is warranted. The default is `nogw_beres_n_h_avg = 1`, so heating depth averaging is off.

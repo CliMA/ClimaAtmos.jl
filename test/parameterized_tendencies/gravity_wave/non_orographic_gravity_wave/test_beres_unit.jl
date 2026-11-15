@@ -1442,6 +1442,87 @@ end
         @test CA._beres_gather_bottom(3000.0, 9000.0, z_floor) == 3000.0
         @test CA._beres_gather_bottom(500.0, 1500.0, z_floor) == 1500.0
     end
+
+    @testset "Edge taper and wavenumber cut keep the slow bins smooth" begin
+        # Two heatings with jumps the gather keeps: a half-sine on [2, 14] km
+        # whose window starts at a quarter of its depth (5 km), where it is 0.71
+        # of its peak; and a coarse staircase, a half-sine held constant over
+        # blocks of 8 model levels. A jump makes the sine transform fall off like
+        # 1/m, which puts flux next to u_heat, growing like 1/|c − u_heat| and
+        # jumping about as u_heat moves across the 0.8 m/s bins. With the edges
+        # tapered over the coarsest level thickness and m > π/dz_level dropped,
+        # the flux within 2 m/s of u_heat is under 1% of the total, and moving
+        # u_heat by 0.4 m/s changes the total by under 10% for the cut half-sine.
+        # The cut itself is what empties the bins within 4 m/s of u_heat: a
+        # wave there has a vertical wavelength 2π|c − u_heat|/N under about two
+        # level thicknesses, which the gathered profile does not resolve. The
+        # taper alone leaves 3-4% of the flux there, the cut under 0.5%.
+        # For the staircase the total still changes by about 18%. With the
+        # steady term off it changes by about 4%, so nearly all of it is the
+        # Beres-G steady c = 0 bin, |gs(N/|u_heat|)|² of the gathered profile
+        # (F04, awaiting a decision), which the taper makes larger. That check
+        # is broken until F04 is decided. The untapered, uncut profile, for
+        # contrast, puts more than 1% within 2 m/s of u_heat.
+        FT = Float64
+        z_floor = 2000.0
+        half_sine(z) = 2000 <= z <= 14000 ? sin(π * (z - 2000) / 12000) : 0.0
+        # The staircase is defined on the model levels, which is all the gather
+        # reads: level k takes the half-sine at the mean height of its block.
+        z_levels = BERES_GRID.z
+        block_value = map(eachindex(z_levels)) do k
+            block = (8 * ((k - 1) ÷ 8) + 1):min(8 * ((k - 1) ÷ 8) + 8, length(z_levels))
+            half_sine(sum(z_levels[block]) / length(block))
+        end
+        staircase(zz) = block_value[findfirst(==(zz), z_levels)]
+        beres_g = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0),
+            beres_scale_factor = FT(2e-6),
+            σ_x = FT(4000),
+            ν_min = FT(8.727e-4),
+            ν_max = FT(1.047e-2),
+            n_ν = 9,
+            beres_shape_general = true,
+        )
+        dc, cmax = FT(0.8), FT(40)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+        Q0, h, N = FT(5e-5), FT(12000), FT(0.012)
+        spectrum(profile, z_lo, span, u_heat, dz_level) = CA._beres_launch_spectrum(
+            c, u_heat, Q0, h, N, z_lo, span, profile, FT(0), beres_g, Val(nc);
+            dz_level,
+        )
+        near_share(B, u_heat; within = 2) =
+            sum(abs(B[n]) for n in 1:nc if abs(c[n] - u_heat) < within; init = 0.0) /
+            sum(abs, B)
+        for (Q, z_lo, z_top, total_steady) in
+            ((half_sine, 5000.0, 14000.0, true), (staircase, 2000.0, 14000.0, false))
+            span = z_top - z_lo
+            dz_level = coarsest_spacing(z_lo, z_top)
+            raw = CA._beres_peaknorm(gather_profile(Q, z_lo, z_top; z_floor))
+            tapered = CA._beres_taper_edges(raw, span, dz_level)
+            @test tapered[1] == 0
+            @test tapered[end] == 0
+            @test maximum(tapered) <= 1
+            totals = map((FT(5.3), FT(5.7))) do u_heat
+                B = spectrum(tapered, z_lo, span, u_heat, dz_level)
+                @test all(isfinite, B)
+                @test near_share(B, u_heat) < 0.01
+                @test near_share(B, u_heat; within = 4) < 0.005   # the cut
+                sum(abs, B)
+            end
+            if total_steady
+                @test abs(totals[2] / totals[1] - 1) < 0.1
+            else
+                @test_broken abs(totals[2] / totals[1] - 1) < 0.1   # F04
+            end
+            B_raw = spectrum(raw, z_lo, span, FT(5.3), FT(0))
+            @info "Beres-G taper and cut (window $(z_lo)-$(z_top) m, dz_level = $(round(dz_level)) m): near-u_heat share $(near_share(B_raw, FT(5.3))) untreated, total flux treated/untreated = $(totals[1] / sum(abs, B_raw)), change for +0.4 m/s = $(totals[2] / totals[1] - 1)"
+            @test near_share(B_raw, FT(5.3)) > 0.01   # the check has power
+            # Taper without the cut: the bins within 4 m/s of u_heat keep flux.
+            B_taper_only = spectrum(tapered, z_lo, span, FT(5.3), FT(0))
+            @test near_share(B_taper_only, FT(5.3); within = 4) > 0.01
+        end
+    end
 end
 
 # ============================================================================
