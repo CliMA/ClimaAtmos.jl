@@ -251,6 +251,11 @@ model_nogw_beres = (;
 end
 # Zero-initialize uninitialized Beres cache fields so diagnostics return finite values
 let c = p_nogw_beres.non_orographic_gravity_wave
+    for f in (c.gw_N_source, c.gw_u_heat, c.gw_v_heat, c.gw_a_cover,
+        c.gw_w_obstacle, c.gw_beres_mech_flux, c.gw_beres_dz_level)
+        fill!(f, 0)
+    end
+    fill!(c.gw_beres_gprofile, ntuple(_ -> FT(0), CA.N_BERES_PROFILE))
     c.gw_beres_active .= 0
     c.gw_Q0 .= 0
     c.gw_h_heat .= 0
@@ -468,7 +473,17 @@ VALID_CASES = [
     # Beres source diagnostics (require NonOrographicGravityWave with BeresSourceParams)
     cases(("nogw_beres_active", "nogw_Q0", "nogw_h_heat", "nogw_zbot",
            "nogw_ztop", "nogw_Q_conv", "nogw_Q_conv_ic", "nogw_c_centroid",
-           "nogw_halfsine", "nogw_launch_flux", "nogw_a_cover"), :nogw_beres)...,
+           "nogw_halfsine", "nogw_launch_flux", "nogw_a_cover", "nogw_N_source",
+           "nogw_beres_mech_flux"), :nogw_beres)...,
+    # Five-way band fluxes: 5 variants × (4 bands and the c = 0 bin) × (signed, |B0|)
+    cases(
+        Tuple(
+            "nogw_b5_$(v)_$(b)" * (a ? "_abs" : "") for
+            v in ("base", "ext1", "ext3", "ext13", "hs0"),
+            b in ("lowE", "lowW", "highE", "highW", "c0"), a in (false, true)
+        ),
+        :nogw_beres,
+    )...,
 
     # ---------------------------------------------------------------------------
     # radiation_diagnostics.jl
