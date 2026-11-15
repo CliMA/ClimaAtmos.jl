@@ -709,7 +709,8 @@ clamped to the column's top cell centre, `z_bot` to `[0, z_top]`). The amplitude
 from inverting the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same
 integral. Activation requires the grid-mean amplitude over the part of the envelope above
 the floor, `(π/2)·∫ gw_Q_conv dz / (z_top − max(z_bot, z_bot_floor))`, to exceed
-`Q0_threshold`, and `h > h_heat_min`.
+`Q0_threshold`, `h > h_heat_min`, and the coverage `gw_a_cover ≥ a_min`, which keeps a
+column with near-empty updrafts inactive.
 
 The launch spectrum is built here once per column, not inside the propagation kernel,
 because it does not depend on the AD99 horizontal wavenumber. With
@@ -1041,6 +1042,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
+    a_min = gw_beres_source.a_min
     _one = FT(1)
     N_source_default = FT(0.01)
     DataLayouts.foreach_column(
@@ -1066,7 +1068,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             @. gw_ztop - _beres_gather_bottom(gw_zbot, gw_ztop, z_floor)
         @. gw_beres_active = ifelse(
             (max(half_π * Q_integral / max(ᶜfloor_width, ϵ), _zero) > Q0_threshold) &
-            (gw_h_heat > h_heat_min),
+            (gw_h_heat > h_heat_min) &
+            (gw_a_cover >= a_min),
             _one,
             _zero,
         )
@@ -3211,6 +3214,7 @@ function _beres_with_flags(
         n_ν = b.n_ν,
         h_heat_min = b.h_heat_min,
         z_bot_floor = b.z_bot_floor,
+        a_min = b.a_min,
         beres_steady_source = b.beres_steady_source,
         beres_steady_dc_frac = b.beres_steady_dc_frac,
         beres_L_system = b.beres_L_system,

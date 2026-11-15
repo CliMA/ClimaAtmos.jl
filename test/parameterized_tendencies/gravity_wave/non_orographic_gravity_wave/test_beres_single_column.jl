@@ -330,6 +330,59 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             @test res.whole_amplitude < beres.Q0_threshold
             @test res.active == 1
         end
+
+        @testset "Columns with near-empty updrafts stay inactive (a_min)" begin
+            # A column is active only when its coverage a_cover (the mass-weighted
+            # mean updraft area over the envelope) is at least a_min = 1e-4. With
+            # the area fraction uniform in the whole column, a_cover equals it.
+            # The heating threshold is set to zero so that only the coverage gate
+            # decides; the in-cloud heating, and so the envelope, does not depend
+            # on a uniform area fraction.
+            @test beres.a_min == FT(1e-4)
+            @. ᶜTʲs.:(1) =
+                ᶜT + ifelse(
+                    (ᶜz >= z_lo) & (ᶜz <= z_hi),
+                    FT(2) * sin(FT(π) * (ᶜz - z_lo) / (z_hi - z_lo)),
+                    FT(0),
+                )
+            nogw = p.non_orographic_gravity_wave
+            with_source(bs) = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(nogw, (; gw_beres_source = bs)),
+            )
+            source_with(; kw...) = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                kw...,
+            )
+            p_no_threshold = with_source(source_with(; Q0_threshold = FT(0)))
+            for (a, expected_active) in ((0.99 * beres.a_min, 0), (1.01 * beres.a_min, 1))
+                @. Y.c.sgsʲs.:(1).ρa = FT(a) * ᶜρ
+                CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
+                @test parent(gw_a_cover)[1] ≈ a rtol = 1e-10
+                @test parent(gw_h_heat)[1] > beres.h_heat_min
+                @test parent(gw_beres_active)[1] == expected_active
+            end
+
+            # A regular deep column (area fraction a0 in the band) is active, and
+            # its launch spectra are the same as without the coverage gate.
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+            (; gw_beres_B0_u) = nogw
+            CA.compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
+            @test parent(gw_beres_active)[1] == 1
+            @test parent(gw_a_cover)[1] > beres.a_min
+            B0_with_gate = copy(Array(parent(gw_beres_B0_u)))
+            CA.compute_beres_convective_heating!(
+                Y,
+                with_source(source_with(; a_min = FT(0))),
+                ᶜbuoyancy_frequency,
+            )
+            @test parent(gw_beres_active)[1] == 1
+            @test Array(parent(gw_beres_B0_u)) == B0_with_gate
+        end
     end
 
     # ============================================================================

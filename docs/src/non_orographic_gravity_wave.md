@@ -163,12 +163,13 @@ The envelope detection makes several deliberate simplifications:
 
 ### Activation criteria
 
-The Beres source activates in a column only when both conditions are met:
+The Beres source activates in a column only when all three conditions are met:
 
   - the grid-mean heating amplitude exceeds a threshold, $(\pi/2)\,(z_{\text{top}} - z_b)^{-1}\!\int_{z_b}^{z_{\text{top}}} Q_1\,dz > Q_{0,\text{threshold}}$ with $z_b = \max(z_{\text{bot}}, z_{\text{bot,floor}})$, i.e. over the part of the envelope above the floor, as for the moments that set $h$ and $Q_0$, of order $1\;\text{K/day}$ (`nogw_beres_Q0_threshold`). This gate deliberately uses the grid-mean $Q_1$ (not the in-cloud $Q_0$ that sets the launched amplitude) because its threshold is calibrated to grid-mean magnitudes.
   - the heating depth exceeds a threshold, $h > h_{\min}$, of order $1\;\text{km}$ (`nogw_beres_h_heat_min`).
+  - the convective coverage $\bar{a}$ (the mass-weighted mean updraft area fraction over the envelope, see "Intermittency" below) is at least $a_{\min} = 10^{-4}$ (the `BeresSourceParams` field `a_min`, not a ClimaParams parameter). This keeps columns whose updrafts are nearly empty inactive.
 
-This filters out shallow or weak convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts. Where they are met, the Beres flux is added on top of the AD99 background.
+This filters out shallow, weak, or near-empty convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts. Where they are met, the Beres flux is added on top of the AD99 background.
 
 **Note:** The Beres physical parameters `nogw_beres_Q0_threshold`, `nogw_beres_h_heat_min`, and the spectrum and steady-component parameters used below are ClimaParams parameters. Their defaults are in the ClimaParams `[nogw_beres_*]` / `[nogw_*]` entries. Only the toggle switches are in [`default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml).
 

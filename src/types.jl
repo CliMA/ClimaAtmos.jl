@@ -969,6 +969,10 @@ convective heating.
     out shallow convection [m].
   - `z_bot_floor`: Lowest allowed heating-layer base, which excludes the
     boundary-layer signal from `Q_conv` [m].
+  - `a_min`: Minimum convective coverage `a_cover` (the mass-weighted mean updraft area
+    fraction over the heating layer) that activates the source in a column [-]. A guard
+    against near-empty updrafts; default `1e-4`. It is a struct field rather than a
+    ClimaParams parameter, because ClimaParams has no such key.
   - `beres_steady_source`: Whether to include the steady (`ν = 0`) stationary
     component, which deposits momentum only if a `c ≈ 0` phase-speed bin exists.
   - `beres_steady_dc_frac`: Weight of the artificial steady component,
@@ -994,6 +998,7 @@ Base.@kwdef struct BeresSourceParams{FT}
     n_ν::Int                     # frequency quadrature points (must be 4k+1: 5, 9, 13...)
     h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
     z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
+    a_min::FT = FT(1e-4)         # -, min coverage a_cover to activate (guards against near-empty updrafts)
     beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
     beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
     beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
