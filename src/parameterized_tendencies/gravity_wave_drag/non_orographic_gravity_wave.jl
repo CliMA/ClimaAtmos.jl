@@ -125,7 +125,7 @@ buffers, the working fields for the upward-marching kernel, and the accumulated 
 
 The `AtmosModel` method errors when a Beres source is configured without a
 `PrognosticEDMFX` turbulence-convection model with at least one updraft, whose draft state
-the source reads.
+the source reads, and warns once (`warn_beres_topography`) when the grid has topography.
 
 The column and sphere branches differ in how the AD99 launch level is set: a column uses
 the height `source_height` and damps from the model top down, a sphere uses
@@ -147,8 +147,33 @@ function non_orographic_gravity_wave_cache(Y, atmos::AtmosModel)
                 "turbulence-convection model with at least one updraft; got " *
                 "$(typeof(turbconv_model)).",
             )
+        warn_beres_topography(axes(Y.c))
     end
     return non_orographic_gravity_wave_cache(Y, nogw)
+end
+
+# Whether the Beres source has been reported to run with topography, which happens once
+# per session.
+const BERES_TOPOGRAPHY_WARNED = Ref(false)
+
+"""
+    warn_beres_topography(space)
+
+Return whether `space` has topography, and log a warning the first time in a session
+that it does.
+
+The Beres source measures heights from sea level, not from the surface: the 2 km floor
+`z_bot_floor`, the clamp `z_bot ≥ 0`, and the origin `z = 0` of the Beres-G sine
+transform. Over topography these are then wrong by the surface height. Called when the
+NOGW cache is built with a Beres source.
+"""
+function warn_beres_topography(space)
+    topography = has_topography(space)
+    if topography && !BERES_TOPOGRAPHY_WARNED[]
+        BERES_TOPOGRAPHY_WARNED[] = true
+        @warn "The Beres convective gravity-wave source runs on a grid with topography, but it measures heights from sea level, not from the surface: the 2 km floor (nogw_beres_z_bot_floor), the clamp z_bot >= 0, and the origin of the Beres-G sine transform are offset by the surface height over land."
+    end
+    return topography
 end
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
