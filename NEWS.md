@@ -124,6 +124,12 @@ main
   With fewer levels above `nogw_damp_pressure` (e.g. the default 30 km top and 85 Pa), it was
   one or two top cells; a warning is now logged in that case. Single columns use the top three
   cells instead of the top cell.
+- ![][badge-🐛bugfix] The non-orographic and orographic gravity-wave buoyancy frequency in
+  the bottom and top cells now uses the one-sided `dT/dz` across the face to the neighbouring
+  cell. Previously it was about half of that, as the boundary face took the end-cell
+  temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
+  too high in the bottom cell (where temperature falls with height). This changes the
+  results of every run with either scheme enabled.
 
 0.42.19
 -------

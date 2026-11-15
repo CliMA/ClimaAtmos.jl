@@ -98,7 +98,7 @@ Let the subscript $(\cdot)_{\text{pbl}}$ denote a property of the low-level flow
 N^2 = \frac{g}{T} \left( \frac{dT}{dz} + \frac{g}{c_{pm}} \right),
 ```
 
-where $c_{pm}$ is the moist isobaric specific heat. $N_{\text{pbl}}$ is then $N$ evaluated at the source level.
+where $c_{pm}$ is the moist isobaric specific heat. $dT/dz$ is the difference of the interpolated face temperatures across each cell, except in the bottom and top cells, which take the one-sided difference to their only neighbouring cell. $N_{\text{pbl}}$ is then $N$ evaluated at the source level.
 
 The base flux is computed as the linear drag following
 
