@@ -997,12 +997,15 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             )
         end
         expected_profile =
-            CA._beres_taper_edges(CA._beres_peaknorm(first(state)), span, dz_level)
+            CA._beres_scale_profile(
+                CA._beres_taper_edges(first(state), span, dz_level),
+                span,
+                2 / FT(π) * value(gw_Q0) * value(gw_h_heat),
+            )
         profile = tuple_value(gw_beres_gprofile, CA.N_BERES_PROFILE)
         @test all(isapprox.(profile, expected_profile; rtol = 1e-12, atol = 1e-14))
         @test profile[1] == 0
         @test profile[end] == 0
-        @test maximum(profile) <= 1
         # No gaps between heated samples. The first and last samples can be zero
         # besides the tapered end points: on this 1 km grid the level just above
         # the floor cools (masked to zero), and the window top may lie above the
@@ -1066,17 +1069,58 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
         @test all(isfinite, vf)
         @test maximum(abs, uf) > 0
 
-        # Beres-G transforms the peak-normalized shape times the half-sine
-        # amplitude Q0, so the heating the spectrum uses does not integrate to the
-        # in-cloud heating it was gathered from. Whether it should (F03, the
-        # Beres-G amplitude) awaits a decision; until then this is broken. The
-        # edge taper alone removes about 5-8% of the integral, so this may stay
-        # broken after F03 unless the amplitude definition accounts for the taper.
-        dz_g = span / (CA.N_BERES_PROFILE - 1)
-        used = value(gw_Q0) * dz_g * (sum(profile) - (profile[1] + profile[end]) / 2)
-        window = (center_z .>= z_start) .& (center_z .<= value(gw_ztop))
-        gathered = sum(max.(Q_ic[window], 0) .* dz_col[window])
-        @test_broken used ≈ gathered rtol = 0.05
+        # Beres-G transforms the in-cloud heating itself: the profile it uses
+        # integrates to the column heating ∫Q⁺dz above the floor, the integral
+        # behind Q0, whatever the window, smoothing and taper (F03, option ii).
+        column_heating(prof) =
+            span / (CA.N_BERES_PROFILE - 1) *
+            (sum(prof) - (prof[1] + prof[end]) / 2)
+        above_floor = center_z .>= z_floor
+        gathered = sum(max.(Q_ic[above_floor], 0) .* dz_col[above_floor])
+        @test column_heating(profile) ≈ gathered rtol = 1e-10
+        @test 2 / FT(π) * value(gw_Q0) * value(gw_h_heat) ≈ gathered rtol = 1e-10
+
+        @testset "The same column heating with smoothing" begin
+            # A sharper heating than the half-sine (a tanh step in the draft
+            # temperature gives a sech² heating, about 1 km wide, at 8 km), with
+            # and without a 500 m smoothing: the profile integrates to ∫Q⁺dz.
+            @. ᶜTʲs.:(1) =
+                ᶜT + ifelse(
+                    (ᶜz >= 1000) & (ᶜz <= 15000),
+                    1 - tanh((ᶜz - FT(8000)) / FT(1000)),
+                    FT(0),
+                )
+            for width in (FT(0), FT(500))
+                bs_w = CA.BeresSourceParams{FT}(;
+                    (n => getfield(bs_g, n) for n in fieldnames(typeof(bs_g)))...,
+                    beres_smoothing_width = width,
+                )
+                p_w = (;
+                    p.precomputed,
+                    p.params,
+                    p.atmos,
+                    p.scratch,
+                    non_orographic_gravity_wave = merge(
+                        nogw,
+                        (; gw_beres_source = bs_w),
+                    ),
+                )
+                CA.compute_beres_convective_heating!(Y, p_w, nogw.ᶜbuoyancy_frequency)
+                Q_w = Array(Fields.field2array(gw_Q_conv_ic))[:, 1]
+                z_lo_w = CA._beres_gather_bottom(
+                    value(gw_zbot),
+                    value(gw_ztop),
+                    z_floor,
+                )
+                span_w = value(gw_ztop) - z_lo_w
+                prof_w = tuple_value(gw_beres_gprofile, CA.N_BERES_PROFILE)
+                heating_w = sum(max.(Q_w[above_floor], 0) .* dz_col[above_floor])
+                @test value(gw_beres_active) == 1
+                @test span_w / (CA.N_BERES_PROFILE - 1) *
+                      (sum(prof_w) - (prof_w[1] + prof_w[end]) / 2) ≈ heating_w rtol =
+                    1e-10
+            end
+        end
     end
 end
 

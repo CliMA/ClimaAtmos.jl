@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Beres-G (`nogw_beres_shape_mode: sine_transform`) transforms
+  the gathered in-cloud heating itself instead of its peak-normalized shape times the
+  half-sine amplitude `Q0`. After the gather, an optional Gaussian smoothing
+  (`nogw_beres_smoothing_width`, default 0) and the edge taper, the profile is rescaled to
+  the column heating `∫Q⁺dz` above the floor, the integral that sets `Q0`, so Beres-C and
+  Beres-G carry the same column heating. Beres-G fluxes rise by about the square of
+  (peak heating / `Q0`).
 - ![][badge-🔥behavioralΔ] New config key `nogw_beres_launch_filter`: Beres waves whose
   phase speed equals the wind between the heating and the launch level are removed at
   launch. `beres2004` (default) removes every phase speed between the minimum and

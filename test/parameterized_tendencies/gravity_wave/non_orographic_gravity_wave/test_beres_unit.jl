@@ -32,7 +32,8 @@ const _beres_gs = CA._beres_gs
 const _beres_launch_spectrum = CA._beres_launch_spectrum
 const _beres_mech_flux = CA._beres_mech_flux
 const _beres_b0_band = CA._beres_b0_band
-const _beres_peaknorm = CA._beres_peaknorm
+# A profile scaled to unit peak, for the spectrum tests below that compare shapes.
+unit_peak(t) = t ./ maximum(t)
 
 # Unit half-sine sin(π·(i−1)/(ng−1)) sampled at `ng` points, as a CONCRETE
 # NTuple{ng,FT}. `Val{ng}` keeps the length in the type so `_beres_gs` /
@@ -1069,7 +1070,8 @@ end
         Q0 = FT(10.0 / 86400.0)
         u_heat = FT(0.0)
 
-        g = _halfsine_profile(Val(CA.N_BERES_PROFILE), FT)   # = 64 (production)
+        # Beres-G transforms the heating itself, Q0 times the unit half-sine.
+        g = Q0 .* _halfsine_profile(Val(CA.N_BERES_PROFILE), FT)   # 64 points (production)
 
         beres_hs = BeresSourceParams{FT}(;
             Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
@@ -1156,16 +1158,6 @@ end
         U_unresolved = N * (span / (ng - 1)) / FT(3.5)
         @test steady(U_unresolved) == 0
         @test CA._beres_gs(g, z_bot, span, N / U_unresolved) != 0
-    end
-
-    @testset "Peak-normalization to unit maximum" begin
-        t = (FT(0), FT(0.5), FT(2.0), FT(1.0), FT(0))
-        tn = _beres_peaknorm(t)
-        @test maximum(tn) ≈ FT(1.0)
-        @test tn[3] ≈ FT(1.0)               # the peak maps to 1
-        @test tn[2] ≈ FT(0.25)
-        # All-zero / nonpositive ⇒ zeros (no division blow-up).
-        @test all(==(FT(0)), _beres_peaknorm((FT(0), FT(0), FT(0))))
     end
 end
 
@@ -1546,7 +1538,7 @@ end
             span = z_top - z_lo
             dz_level = mean_spacing(z_lo, z_top)
             c_cut = N * dz_level / π
-            raw = CA._beres_peaknorm(gather_profile(Q, z_lo, z_top; z_floor))
+            raw = unit_peak(gather_profile(Q, z_lo, z_top; z_floor))
             tapered = CA._beres_taper_edges(raw, span, dz_level)
             @test tapered[1] == 0
             @test tapered[end] == 0
@@ -1611,7 +1603,7 @@ end
         span = z_top - z_lo
         dz_level = mean_spacing(z_lo, z_top)
         profile = CA._beres_taper_edges(
-            CA._beres_peaknorm(gather_profile(Q, z_lo, z_top; z_floor = 2000.0)),
+            unit_peak(gather_profile(Q, z_lo, z_top; z_floor = 2000.0)),
             span,
             dz_level,
         )
@@ -1633,7 +1625,8 @@ end
         fine_total = sum((-cmax - dc / 2 + dc / 128):(dc / 64):(cmax + dc / 2)) do c_f
             abs(
                 CA._beres_transient_bin(
-                    c_f, dc / 64, FT(5.3), h, N^2, N, Q0^2, beres_g.σ_x^2,
+                    # Beres-G takes no Q0 factor (it transforms the profile).
+                    c_f, dc / 64, FT(5.3), h, N^2, N, FT(1), beres_g.σ_x^2,
                     beres_g.ν_min, dν, (beres_g.n_ν - 1) ÷ 4, boole_w, true,
                     profile, z_lo, span, FT(π) / dz_level, 1, FT(0.1),
                     beres_g.beres_scale_factor, nothing, Val(1),
@@ -1654,7 +1647,7 @@ end
         z_lo, z_top = 2000.0, 14000.0
         dz_level = mean_spacing(z_lo, z_top)
         profile = CA._beres_taper_edges(
-            CA._beres_peaknorm(gather_profile(half_sine, z_lo, z_top; z_floor = 2000.0)),
+            unit_peak(gather_profile(half_sine, z_lo, z_top; z_floor = 2000.0)),
             z_top - z_lo,
             dz_level,
         )
@@ -1870,5 +1863,109 @@ end
         @test_throws ErrorException CA.beres_launch_filter_mode("cam")
         @test BeresSourceParams{FT}(; kw...).launch_filter ==
               CA.BERES_LAUNCH_FILTER_BERES2004
+    end
+end
+
+# ============================================================================
+# Beres-G transforms the heating itself (F03, option ii): the gathered profile,
+# after the optional smoothing and the edge taper, is rescaled to the column
+# heating ∫Q⁺dz above the floor, and the spectrum takes no Q0 factor.
+# ============================================================================
+@testset "Beres-G transforms the gathered heating itself" begin
+    # An exact half-sine of peak Q0 from the floor (2 km) to 12 km on the
+    # production grid, gathered and processed as the model does.
+    function processed(FT; taper = true, smoothing = 0)
+        Q0, z_lo, h = FT(5e-5), FT(2000), FT(10000)
+        z_top = z_lo + h
+        Q(z) = z_lo <= z <= z_top ? Q0 * sin(FT(π) * (z - z_lo) / h) : FT(0)
+        state = CA._beres_gather_init(FT, Val(CA.N_BERES_PROFILE))
+        for z in FT.(BERES_GRID.z)
+            state = CA._beres_gather_step(
+                state, (z, Q(z), z_lo, z_top), FT(2000), Val(CA.N_BERES_PROFILE),
+            )
+        end
+        dz_level = FT(mean_spacing(z_lo, z_top))
+        g = CA._beres_smooth_profile(first(state), h, FT(smoothing))
+        g = taper ? CA._beres_taper_edges(g, h, dz_level) : g
+        column_heating = 2 / FT(π) * Q0 * h   # ∫Q⁺dz of the half-sine
+        return (; g = CA._beres_scale_profile(g, h, column_heating), Q0, z_lo, h, dz_level)
+    end
+    window_integral(g, h) = h / (length(g) - 1) * (sum(g) - (g[1] + g[end]) / 2)
+    # Transient spectrum only: the steady c = 0 term of Beres-G uses the transform
+    # of the gathered profile at m₀ = N/|u_heat| (F04, awaiting a decision), where the
+    # half-sine's response is tiny and the profile's interpolation kinks are not.
+    beres_kw(FT, general) = BeresSourceParams{FT}(;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(2e-6),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+        beres_shape_general = general,
+        beres_steady_source = false,
+    )
+
+    @testset "The rescaled profile carries the column heating" begin
+        for taper in (true, false), smoothing in (0, 800)
+            (; g, Q0, h) = processed(Float64; taper, smoothing)
+            @test window_integral(g, h) ≈ 2 / π * Q0 * h rtol = 1e-12
+        end
+        # A degenerate window gives no profile, not NaN.
+        @test all(iszero, CA._beres_scale_profile(ntuple(_ -> 0.0, 64), 1000.0, 1.0))
+        @test all(iszero, CA._beres_scale_profile(ntuple(_ -> 1.0, 64), 0.0, 1.0))
+    end
+
+    @testset "A half-sine from the floor: Beres-G and Beres-C agree" begin
+        FT = Float64
+        (; g, Q0, z_lo, h) = processed(FT; taper = false)
+        dc, cmax = FT(0.8), FT(40)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+        N, u_heat = FT(0.012), FT(-3.3)
+        B_C = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, z_lo, h, nothing, FT(0), beres_kw(FT, false), Val(nc),
+        )
+        # Untapered, sampled at the bin centres, with the transform origin at the
+        # bottom of the heating: the Beres-C spectrum, up to the interpolation of
+        # the half-sine on the model levels. Its kinks add flux at vertical
+        # wavelengths shorter than two levels, i.e. in the bins closer to u_heat
+        # than c_cut = N·dz_level/π, which the model's wavenumber cut removes; the
+        # comparison is on the bins outside that.
+        dz_level = FT(mean_spacing(z_lo, z_lo + h))
+        B_G_ground = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, FT(0), h, g, FT(0), beres_kw(FT, true), Val(nc);
+            n_bin_samples = Val(1), dz_level,
+        )
+        c_cut = N * dz_level / π
+        resolved = filter(n -> abs(c[n] - u_heat) > c_cut, 1:nc)
+        @test maximum(n -> abs(B_G_ground[n] - B_C[n]), resolved) <
+              0.02 * maximum(abs, B_C)
+        # As the model runs it (taper, cut, bin average, origin at the ground
+        # 2 km below the heating), the total differs by the elevation phase and
+        # those choices only.
+        (; g, dz_level) = processed(FT; taper = true)
+        B_G = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, z_lo, h, g, FT(0), beres_kw(FT, true), Val(nc);
+            dz_level,
+        )
+        ratio = sum(abs, B_G) / sum(abs, B_C)
+        @info "Half-sine from the floor: total |B0| Beres-G / Beres-C = $ratio (model settings), max bin difference at the ground origin outside c_cut = $(maximum(n -> abs(B_G_ground[n] - B_C[n]), resolved) / maximum(abs, B_C)) of the peak"
+        @test 0.5 < ratio < 2
+    end
+
+    @testset "Float32 and Float64 agree" begin
+        totals = map((Float32, Float64)) do FT
+            (; g, Q0, z_lo, h, dz_level) = processed(FT; taper = true)
+            dc, cmax = FT(0.8), FT(40)
+            nc = Int(2 * cmax / dc + 1)
+            c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+            B = _beres_launch_spectrum(
+                c, FT(-3.3), Q0, h, FT(0.012), z_lo, h, g, FT(0),
+                beres_kw(FT, true), Val(nc); dz_level,
+            )
+            (Float64(window_integral(g, h)), Float64(sum(abs, B)))
+        end
+        @test totals[1][1] ≈ totals[2][1] rtol = 1e-5
+        @test totals[1][2] ≈ totals[2][2] rtol = 1e-3
     end
 end

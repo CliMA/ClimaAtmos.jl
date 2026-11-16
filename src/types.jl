@@ -1007,6 +1007,8 @@ convective heating.
     `PrognosticEDMFX`) instead of the dry-static-energy budget `Q₁`.
   - `detailed_diagnostics`: Whether to expose the `nogw_*` source-internal
     extended diagnostics.
+  - `beres_smoothing_width`: Standard deviation of an optional Gaussian smoothing of the
+    gathered Beres-G heating profile in the vertical [m]; 0 (default) for none.
   - `launch_filter`: Which launched waves are removed because they meet a critical
     level inside the heating layer, between their source and the launch level [-]:
       + `BERES_LAUNCH_FILTER_BERES2004` (default): every phase speed between the
@@ -1051,6 +1053,8 @@ Base.@kwdef struct BeresSourceParams{FT}
     beres_mech_weight::FT = FT(1.0)       # mechanical ν=0 weight (analogue of thermal Q_t²(0)); sets β_mech relative to β_therm
     heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
     detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
+
+    beres_smoothing_width::FT = FT(0) # m, Gaussian smoothing of the Beres-G profile (0: none)
 
     # --- launch filter of waves that meet a critical level inside the heating layer ---
     launch_filter::Int = BERES_LAUNCH_FILTER_BERES2004 # see the docstring
