@@ -24,7 +24,7 @@ main
 - ![][badge-🐛bugfix] Beres-G (`nogw_beres_shape_mode: sine_transform`): the gathered
   heating profile interpolates linearly between model levels instead of copying the
   nearest level, starts at `max(z_bot, nogw_beres_z_bot_floor)` instead of at a `z_bot`
-  below the floor, and is tapered to zero at both window edges over the largest level
+  below the floor, and is tapered to zero at both window edges over the mean level
   thickness in the window; vertical wavenumbers above `π` over that thickness are dropped
   from the spectrum, and the steady flux is zero beyond the wavenumber the profile
   resolves. The profile uses only the positive part of the in-cloud heating, as before.

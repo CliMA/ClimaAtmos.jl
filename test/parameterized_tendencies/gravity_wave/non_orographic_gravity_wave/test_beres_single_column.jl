@@ -878,13 +878,13 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         @test z_start == z_floor
         span = value(gw_ztop) - z_start
 
-        # The level spacing is the largest thickness of the cells in the window.
+        # The level spacing is the mean thickness of the cells in the window.
         dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
         overlap =
             (center_z .+ dz_col ./ 2 .> z_start) .&
             (center_z .- dz_col ./ 2 .< value(gw_ztop))
-        dz_level = maximum(dz_col[overlap])
-        @test value(gw_beres_dz_level) == dz_level
+        dz_level = sum(dz_col[overlap]) / count(overlap)
+        @test value(gw_beres_dz_level) ≈ dz_level rtol = 1e-12
 
         # The gathered profile, rebuilt from the model's in-cloud heating.
         Q_ic = Array(Fields.field2array(gw_Q_conv_ic))[:, 1]

@@ -233,8 +233,8 @@ With `nogw_beres_shape_mode: sine_transform`, the half-sine response factor $V_{
 
  1. Only the positive part $\max(Q_{\text{ic}}, 0)$ of the in-cloud heating is used, and only at and above $z_{\text{bot,floor}}$, as for the moments that set $h$ and $Q_0$. Cooling (for example below cloud base or above cloud top) is left out.
  2. It is sampled at 64 equally spaced points on the window $[\max(z_{\text{bot}}, z_{\text{bot,floor}}), z_{\text{top}}]$, by linear interpolation between the model levels, and divided by its maximum.
- 3. It is tapered to zero at both window edges by a raised cosine over $\Delta z_{\text{level}}$, the largest model level thickness in the window. The window edges generally cut the heating where it is not zero, and a jump there makes $g_s$ fall off only like $1/m$, which puts spurious flux into the slow phase speeds next to $\bar{u}_{\text{heat}}$.
- 4. Vertical wavenumbers $m > \pi/\Delta z_{\text{level}}$ are dropped from the transient and the steady spectrum: the profile is an interpolation between model levels, so it carries no information at shorter vertical wavelengths.
+ 3. It is tapered to zero at both window edges by a raised cosine over $\Delta z_{\text{level}}$, the mean model level thickness in the window. The window edges generally cut the heating where it is not zero, and a jump there makes $g_s$ fall off only like $1/m$, which puts spurious flux into the slow phase speeds next to $\bar{u}_{\text{heat}}$.
+ 4. Vertical wavenumbers $m > \pi/\Delta z_{\text{level}}$ are dropped from the transient and the steady spectrum: the profile is an interpolation between model levels, so it carries no information at shorter vertical wavelengths. In the hydrostatic limit $m \approx N/|c - \bar{u}_{\text{heat}}|$, so this removes the waves with $|c - \bar{u}_{\text{heat}}| < N\Delta z_{\text{level}}/\pi$, about 2.3 m/s for a 2-14 km window on a 63-level, 60 km grid.
 
 ### Heating depth averaging
 

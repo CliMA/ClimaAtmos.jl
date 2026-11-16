@@ -170,7 +170,7 @@ seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level st
 the surface height under each column `gw_z_surface` [m], from which every Beres height is
 measured, the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the peak-normalized in-cloud heating shape `gw_beres_gprofile`
-(`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), the largest model
+(`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), the mean model
 level thickness over that window `gw_beres_dz_level` [m], and the obstacle-level updraft
 velocity `gw_w_obstacle` [m/s].
 
@@ -737,7 +737,7 @@ clamped envelope above the floor, `[max(z_bot, z_bot_floor), z_top]` (heating be
 `z_bot_floor` is left out, as in the moment fit). That profile is the positive part
 `max(Q_ic, 0)` of the in-cloud heating (cooling is left out, as in the moment fit and `Q0`),
 interpolated linearly between model levels, peak-normalized, and tapered to zero at both
-window edges over `gw_beres_dz_level`, the largest level thickness in the window; the
+window edges over `gw_beres_dz_level`, the mean level thickness in the window; the
 spectrum drops vertical wavenumbers `m > π/gw_beres_dz_level`, which the profile does not
 resolve.
 The steady c≈0 bin adds the thermal and, if enabled, the mechanical (obstacle) source,
@@ -1140,10 +1140,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             _beres_gather_step(state, level_input, _z_floor, _ng_val)
         end
     end
-    # The largest model level thickness over the window, from the cells that overlap it.
+    # The mean model level thickness over the window, from the cells that overlap it.
     # The gathered profile interpolates the heating between levels, so it holds no
-    # detail finer than this spacing; it sets the edge taper below and the shortest
-    # vertical wavelength the Beres-G spectrum uses.
+    # detail finer than the level spacing; this mean sets the edge taper below and the
+    # shortest vertical wavelength the Beres-G spectrum uses.
     window_input =
         Base.Broadcast.broadcasted(
             tuple, ᶜz_above_surface, ᶜΔz, ᶜgather_bottom, gw_ztop,
@@ -1151,10 +1151,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     Operators.column_reduce!(
         gw_beres_dz_level,
         window_input;
-        init = FT(0),
-    ) do dz_max, (z, dz, z_start, z_top)
+        init = (FT(0), FT(0)),
+        transform = sum_count -> sum_count[1] / max(sum_count[2], one(sum_count[2])),
+    ) do (dz_sum, n_cells), (z, dz, z_start, z_top)
         overlaps = (z + dz / 2 > z_start) & (z - dz / 2 < z_top)
-        return ifelse(overlaps, max(dz_max, dz), dz_max)
+        return (
+            ifelse(overlaps, dz_sum + dz, dz_sum),
+            ifelse(overlaps, n_cells + one(n_cells), n_cells),
+        )
     end
     @. gw_beres_gprofile = _beres_taper_edges(
         _beres_peaknorm(gw_beres_gprofile),
@@ -1257,7 +1261,7 @@ at most half the window, from each window edge, so the profile is zero at both e
 The window edges cut the heating where the moment fit puts them, generally where it is
 not zero. A jump at an edge makes the sine transform fall off only like `1/m`, which puts
 flux into the slow bins next to `u_heat` that grows like `1/|ĉ|`. The taper removes the
-jump. `width` is the largest model level thickness over the window, `gw_beres_dz_level`,
+jump. `width` is the mean model level thickness over the window, `gw_beres_dz_level`,
 the same scale below which the Beres-G spectrum drops vertical wavenumbers, so the taper
 smooths the edges at the shortest wavelength the spectrum keeps. The amplitude `Q0` is
 not changed.
@@ -2918,7 +2922,7 @@ transient bin is the Beres (2004) spectral density, integrated over intrinsic
 frequency, times the bin width `dc`; the `c≈0` bin carries the steady (`ν=0`)
 terms, which are a total flux already. `h` is the half-sine depth (V_hs/Q0);
 `z_bot` and `span` are the bottom and width of the window the gather sampled on,
-used by the Beres-G sine transform, and the keyword `dz_level` is the largest model level
+used by the Beres-G sine transform, and the keyword `dz_level` is the mean model level
 thickness over that window: Beres-G drops vertical wavenumbers `m > π/dz_level` (no cut
 for the default `0`).
 
