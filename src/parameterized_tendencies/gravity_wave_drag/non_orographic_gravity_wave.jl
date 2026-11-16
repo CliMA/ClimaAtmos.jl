@@ -2678,9 +2678,16 @@ end
 Return the horizontal-scale factor `H` of the steady source amplitude [m²].
 
 `H` measures how strongly a convective cell of half-width `σ_x` [m] projects onto gravity
-waves, summed over all horizontal scales down to the largest system size `L_system` [m]:
+waves, summed over all horizontal scales down to the largest system size `L_system` [m]
+and over both signs of the horizontal wavenumber `k`:
 
-    H = (σ_x²/4) · E₁(x),   x = k_min²·σ_x²/2,   k_min = 2π/L_system
+    H = ∫_{|k| > k_min} G_k²/|k| dk = (σ_x²/2) · E₁(x),   x = k_min²·σ_x²/2,   k_min = 2π/L_system
+
+[beres2004](@cite) Eq. 34 prints `H_k = G_k²/k`, which is odd in `k` and would integrate
+to zero over both signs; with the flux signed by `sgn(ĉ) = sgn(ν̂/k)`, both signs of `k`
+give steady flux of the same sign, so the integrand is `G_k²/|k|`. Both halves are
+counted here, which equals the `ν → 0` limit of the transient integrand summed over both
+signs of `k` (up to the hydrostatic `m₀ = N/|U|`).
 
 The exponential integral is evaluated from its small-argument series
 `E₁(x) ≈ −γ_E − ln(x) + x`, which is accurate for the intended `x ≪ 1` and needs only a
@@ -2697,7 +2704,7 @@ Called from `_beres_steady_flux`; this is the only place `L_system` enters. Desc
     k_min = FT(2) * FT(π) / L_system
     x = a * k_min^2
     E1 = x < FT(1) ? (-γ - log(x) + x) : FT(0)
-    return a / FT(2) * E1
+    return a * E1
 end
 
 """
@@ -2719,7 +2726,11 @@ so nothing is double-counted; the two components carry orthogonal frequencies.
 
 Everything except two pieces is shared with the transient path: `H` is the horizontal
 constant from `_beres_steady_horizontal_const`, and `Q_t(0)² = dc_frac·ν_min` is the
-zero-frequency temporal weight, with `dc_frac` a tuning knob (default 1). When
+zero-frequency temporal weight. Neither [beres2004](@cite) nor its WACCM use
+(Beres et al. 2005, which has no steady term) fixes these two: `dc_frac` is the fraction
+of the white transient spectrum carried down to `ν = 0` over the width `ν_min` (default 1),
+and `L_system` sets the smallest wavenumber in `H`, on which `H` depends logarithmically.
+Both are free knobs. When
 `n_h_avg > 1` the half-sine factor is averaged over `n_h_avg` depths in
 `h ± Δh_frac·h`, the same resonance smoothing the transient path applies.
 

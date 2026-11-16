@@ -975,10 +975,12 @@ convective heating.
     ClimaParams parameter, because ClimaParams has no such key.
   - `beres_steady_source`: Whether to include the steady (`ν = 0`) stationary
     component, which deposits momentum only if a `c ≈ 0` phase-speed bin exists.
-  - `beres_steady_dc_frac`: Weight of the artificial steady component,
-    `Q_t(0)² = dc_frac · ν_min` [-].
+  - `beres_steady_dc_frac`: Weight of the steady component, `Q_t(0)² = dc_frac · ν_min`:
+    the fraction of the white transient spectrum carried down to `ν = 0` [-]. A free
+    knob; [beres2004](@cite) does not fix it.
   - `beres_L_system`: Largest system scale, which sets `k_min = 2π/L` in the
-    even-folded heating profile used by the steady source [m].
+    horizontal constant `H` of the steady source (both signs of `k`) [m]. A free knob;
+    `H` depends on it logarithmically.
   - `heating_latent`: Whether to source the in-cloud heating from the latent
     heating `Q_lat = Σ_p L_p R_p` (requires 1-moment microphysics with
     `PrognosticEDMFX`) instead of the dry-static-energy budget `Q₁`.
@@ -1001,7 +1003,7 @@ Base.@kwdef struct BeresSourceParams{FT}
     a_min::FT = FT(1e-4)         # -, min coverage a_cover to activate (guards against near-empty updrafts)
     beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
     beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
-    beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
+    beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in the two-sided H of the steady source
 
     # --- Extension 1: generalized vertical shape (Beres-G) ---
     beres_shape_general::Bool = false  # false → half-sine V_hs (Beres 2004); true → V_G = sine transform of the EDMF heating profile (Ext 1)

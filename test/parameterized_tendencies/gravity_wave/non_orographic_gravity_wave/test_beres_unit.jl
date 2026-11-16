@@ -482,10 +482,11 @@ end
 # ============================================================================
 # Steady (ν=0) stationary-mechanical component of the Beres source
 # (Beres 2004 Eqs. 31–34), normalization per the (30)→(32) rederivation. The
-# reference grid and H value hard-coded below (V_hs_sq, β, even-folded H, F_T
+# reference grid and H value hard-coded below (V_hs_sq, β, one-sided H, F_T
 # continuous/discrete, R table, L-invariance) were computed offline from the
 # closed-form expressions in the docstrings of `_beres_steady_flux` and
-# `_beres_steady_horizontal_const`.
+# `_beres_steady_horizontal_const` with H counting k > 0 only; H now counts
+# both signs of k, so they are multiplied by 2 here.
 # ============================================================================
 @testset "Beres steady (ν=0) source" begin
     FT = Float64
@@ -549,11 +550,12 @@ end
         end
     end
 
-    @testset "Even-folded horizontal constant H" begin
-        # Closed-form H matches the offline-computed quadrature reference value.
+    @testset "Two-sided horizontal constant H" begin
+        # Closed-form H matches the offline-computed quadrature reference value
+        # (one-sided, times 2).
         H = _beres_steady_horizontal_const(σx, Lsys)
         @test H > 0
-        @test H ≈ 2.993366e7 rtol = 1e-5
+        @test H ≈ 2 * 2.993366e7 rtol = 1e-5
         # L-invariance bug-detector: H grows only logarithmically with L (×~2.23
         # over ×100 in L), and the steady flux's ENTIRE L-dependence is via H.
         H100 = _beres_steady_horizontal_const(σx, FT(100) * Lsys)
@@ -610,7 +612,7 @@ end
         end
     end
 
-    @testset "Reference grid match (Eqs 31–34, even-folded H + DC weight)" begin
+    @testset "Reference grid match (Eqs 31–34, two-sided H + DC weight)" begin
         # N=0.012, Q0=5e-5, σ_x=4000, sf=2e-6, L=1e6, dc_frac=1, ν_min=8.727e-4, n_h_avg=1.
         Q0 = FT(5e-5)
         ref = [          # (U, h, F_steady_bin) computed offline from Eqs 31–34
@@ -623,7 +625,44 @@ end
             (FT(15.0), FT(5000.0), -4.838131967350e-06),
         ]
         for (U, h, fref) in ref
-            @test sflux(U, h, Q0) ≈ FT(fref) rtol = 1e-10
+            @test sflux(U, h, Q0) ≈ 2 * FT(fref) rtol = 1e-10
+        end
+    end
+
+    @testset "Steady flux = ν → 0 limit of the transient integrand, both signs of k" begin
+        # The steady term carries the code's own transient spectral density down to
+        # ν = 0 over the width dc_frac·ν_min. At ν → 0 the intrinsic frequency is
+        # ν̂ = −k·U, and the density (as in `_beres_spectrum_single_h`, before the
+        # change of variables to c), integrated over |k| > k_min = 2π/L on both
+        # sides of k = 0, must equal the steady flux. With the hydrostatic
+        # m₀ = N/|U| (and ν̂ ≪ N) that the steady term takes, they agree to the
+        # quadrature error; with the exact m² = N²/U² − k², to within a few per cent.
+        for (U, h) in ((FT(3.0), FT(8000.0)), (FT(-3.0), FT(6000.0)))
+            Q0 = FT(5e-5)
+            N = N_source
+            k_min = 2 * FT(π) / Lsys
+            function density(k)
+                ν̂ = -k * U
+                abs(ν̂) >= N && return FT(0)
+                m² = k^2 * (N^2 / ν̂^2 - 1)
+                m = sqrt(m²)
+                Gk² = σx^2 / 2 * exp(-k^2 * σx^2 / 2)
+                R² = V_hs_sq(m, h) * m² / (N^2 - ν̂^2)^2
+                return 1 / sqrt(2 * FT(π)) * sqrt(N^2 - ν̂^2) / abs(ν̂) * Q0^2 * Gk² * R²
+            end
+            density_hydrostatic(k) =
+                1 / sqrt(2 * FT(π)) * Q0^2 * σx^2 / 2 * exp(-k^2 * σx^2 / 2) *
+                V_hs_sq(N / abs(U), h) / (N * abs(k) * abs(U)^3)
+            # Integrate in log k over k_min < |k| < 20/σx, on both sides of k = 0.
+            lk = range(log(k_min), log(20 / σx); length = 40001)
+            integral(f) =
+                sum(exp(l) * (f(exp(l)) + f(-exp(l))) for l in lk) * step(lk)
+            one_side = sum(exp(l) * density(exp(l)) for l in lk) * step(lk)
+            other_side = sum(exp(l) * density(-exp(l)) for l in lk) * step(lk)
+            @test other_side ≈ one_side rtol = 1e-10       # both signs carry the same
+            weight = sf * dcf * νmin
+            @test abs(sflux(U, h, Q0)) ≈ weight * integral(density_hydrostatic) rtol = 1e-3
+            @test abs(sflux(U, h, Q0)) ≈ weight * integral(density) rtol = 0.06
         end
     end
 

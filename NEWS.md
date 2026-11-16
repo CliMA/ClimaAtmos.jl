@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The steady (`c = 0`) Beres source counts the horizontal
+  wavenumbers of both signs: its horizontal constant is `H = (σx²/2)·E1(k_min²σx²/2)`,
+  twice what it was, so the steady flux is twice as large at the same
+  `nogw_beres_steady_dc_frac`. Beres et al. (2004) Eq. 34 prints an odd integrand that
+  would vanish over both signs; with the flux signed by the intrinsic phase speed both
+  signs give flux of the same sign. `nogw_beres_steady_dc_frac` and
+  `nogw_beres_L_system` are documented as free knobs.
 - ![][badge-🐛bugfix] Beres convective gravity waves break by the stress limit: a Beres
   bin breaks where `B0/ĉ³ ≥ ½ρk/N`, since its `B0` is a stress. The AD99 form, divided by
   the launch density, let Beres waves carry about `1/ρ_source` (4-7 times) more amplitude
