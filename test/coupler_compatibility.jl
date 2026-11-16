@@ -72,7 +72,6 @@ const T2 = 290
     p_overwritten = CA.AtmosCache(
         p.dt,
         p.dtγ,
-        p.mp_averaging,
         new_atmos,
         p.numerics,
         p.params,

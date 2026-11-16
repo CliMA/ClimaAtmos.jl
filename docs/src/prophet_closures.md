@@ -329,7 +329,7 @@ column rather than only in the surface layer.
 
 !!! note "TODO: not yet implemented"
 
-    Two terms of the budget above are absent from `edmfx_tke.jl`: the dilatation
+    Two terms of the budget above are absent from `step_prognostic_tke!`: the dilatation
     term and the ``\tfrac{2}{3} \kappa_{\mathrm{iso}} \boldsymbol{I}`` trace of
     the diffusive momentum flux. Together with the terms that are present, these
     are what would close the resolved-kinetic-energy ↔
@@ -345,14 +345,14 @@ column rather than only in the surface layer.
     `edmfx_sgs_horizontal_diffusive_flux`; see
     [Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
-    What *is* implemented, in `edmfx_tke_sources!`, is shear and buoyancy
+    What *is* implemented, in `step_prognostic_tke!`, is shear and buoyancy
     production evaluated at the faces from the same face diffusivities, face
     strain rate, and face buoyancy gradient as the fluxes they parameterize,
     and then interpolated to the centers, so the discrete conversions mirror
     the discrete fluxes: summed over a column, the shear production equals the
     kinetic energy the momentum flux removes from the horizontal wind, up to
     the interpolation of ``\rho``. Transport and dissipation are applied in
-    `edmfx_sgs_diffusive_flux_tendency!`.
+    `step_prognostic_tke!` (`column_physics_step.jl`).
 
 ### Mixing-length scales
 
@@ -919,7 +919,7 @@ these to change first.
 | Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                                 |
 | Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)                       |
 | Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                                       |
-| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                                   |
+| TKE production, dissipation                          | [column_physics_step.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/column_physics_step.jl) (`step_prognostic_tke!`)      |
 | Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl)           |
 | In-cloud condensate inhomogeneity for SW radiation   | [microphysics/cloud_inhomogeneity.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_inhomogeneity.jl) |
 | SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl)           |

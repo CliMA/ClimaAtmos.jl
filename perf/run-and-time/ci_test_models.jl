@@ -8,7 +8,7 @@ case_files = Set([
     "models/hyperdiff_tendency.jl",
     "models/implicit_tendency.jl",
     "models/set_cloud_frac.jl",
-    "models/set_CM_cache.jl",
+    "models/coupled_microphysics.jl",
     "models/sgs.jl",
 ])
 

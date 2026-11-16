@@ -81,7 +81,7 @@ model = CA.AtmosModel(
     microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     terminal_velocity_snow = CA.FixedTerminalVelocity(),
     cloud_model = CA.GridScaleCloud(),
-    microphysics_tendency_timestepping = CA.Explicit(),
+    microphysics_tendency_timestepping = CA.Implicit(),
     tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
 
     # AtmosRadiation
@@ -141,7 +141,7 @@ simulation = CA.AtmosSimulation(model;
     # Diagnostics
     diagnostics = CA.DiagnosticsConfig(; default = false, additional = diagnostics),
     # Numerics
-    jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2),  # TODO: Fix implicit diffusion for LES
+    jacobian = CA.ManualSparseJacobian(),
     # Misc
     checkpoint_frequency = "1days",
     log_to_file = true,

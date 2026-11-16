@@ -1,7 +1,6 @@
 initial_condition: "DryDensityCurrentProfile"
 config: "box"
 smagorinsky_lilly: "UVW"
-implicit_diffusion: true
 hyperdiff: ~
 x_max: 51200.0
 y_max: 51200.0

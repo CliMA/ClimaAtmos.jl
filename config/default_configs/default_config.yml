@@ -105,7 +105,7 @@ update_cache_every:
   help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
   value: "stage"
 update_constrain_state_every:
-  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]. With `PrognosticEDMFX`, 1M microphysics, and `updraft_picard_rounds > 0`, `dss` re-clamps the warm-started grid-mean condensates of the Newton initial guess after the stage-entering state is copied, which can produce an upward surface precipitation flux."
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]."
   value: "stage"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
@@ -207,7 +207,7 @@ smagorinsky_lilly:
     - `W`: vertical axis only.
     - `UV_W`: horizontal and vertical axes, treated separately (distinct horizontal and vertical mixing lengths).
     - `~` (default): closure off.
-    The `W`, `UV_W`, and `UVW` options act on the vertical and can be paired with `implicit_diffusion: true`.
+    The `W`, `UV_W`, and `UVW` options act on the vertical, where the post-ARK column physics step integrates the closure implicitly.
   value: ~
 tracer_nonnegativity_method:
   help: |
@@ -238,7 +238,7 @@ dt_save_state_to_disk:
   help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
 microphysics_model:
-  help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
+  help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`]. `2MP3` (P3 ice) raises an `ArgumentError`: the coupled microphysics sweep does not support it."
   value: "dry"
 precipitation_evaporation_0m:
   help: "Below-cloud evaporation of the precipitation flux for 0M microphysics [`Kessler`, ~ (default)]. Reads the `precipitation_evaporation_*` parameters (ClimaParams defaults unless set in the parameter TOML); `precipitation_evaporation_coefficient` must be positive."
@@ -274,7 +274,7 @@ cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
   value: "arch_2layers_8nodes.jld2"
 implicit_microphysics:
-  help: "Controls how 1M cloud condensation and sublimation are coupled to the implicit solve. When `true`, both processes are refreshed each Newton iterate and contribute `-dtγ/τ` diagonals to the Jacobian; when `false`, they are part of the stage-fixed CM BMT bulk tendency with no Jacobian contribution. All 1M microphysics tendencies are applied in the implicit stage either way. [`true` (default), `false`]"
+  help: "Only `true` (default) is accepted: 1M cloud formation, rain evaporation, and snow sublimation are integrated with the other microphysics processes in the post-ARK coupled microphysics sweep. Other values raise an `ArgumentError`."
   value: true
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
@@ -295,10 +295,10 @@ sgs_variance_curvature:
   help: "Evaluate the equilibrium SGS condensate E[max(0, S)] under the vertical displacement acting on the curved profile of the saturation excess, S = μ_S + lin x + ½ curv (x² − 1) + h with x standard normal, so that the moist tail is bounded by the largest excess the displaced (quadratic) profile reaches, μ_S + (lin² + curv²)/(2|curv|) for curv < 0. `false` keeps the truncated-Gaussian expectation. [`false` (default), `true`]"
   value: false
 microphysics_n_substeps:
-  help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
+  help: "Only `3` (default) is accepted: the coupled microphysics sweep chooses its own substeps. Other values raise an `ArgumentError`."
   value: 3
 microphysics_n_substeps_quadrature:
-  help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
+  help: "Only `2` (default) is accepted: the coupled microphysics sweep chooses its own substeps. Other values raise an `ArgumentError`."
   value: 2
 cloud_liquid_terminal_velocity:
   help: "Cloud liquid sedimentation velocity for 1M microphysics [`Fixed` (default), `Stokes`]"
@@ -313,10 +313,10 @@ snow_terminal_velocity:
   help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
   value: "Chen2022"
 cloud_liquid_formation:
-  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation; `~` disables it. The `implicit_microphysics` toggle routes the process between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`CloudLiquidFormation` (default), `~`]"
+  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation; `~` disables it. [`CloudLiquidFormation` (default), `~`]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics. The `implicit_microphysics` toggle routes the chosen variant between the explicit CM BMT bulk tendency and the isolated implicit CM BMT call. [`TemperatureDependentIceNumber` (default), `PrescribedIceNumber`, `ConstantTimescale`, `TemperatureDependent`, `~`]"
+  help: "Cloud ice formation option for 1M microphysics. [`TemperatureDependentIceNumber` (default), `PrescribedIceNumber`, `ConstantTimescale`, `TemperatureDependent`, `~`]"
   value: "TemperatureDependentIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
@@ -362,10 +362,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Upwinding mode for passive tracers; prognostic `ρtke` uses implicit `first_order` upwind, and the sedimenting microphysics species follow `energy_humidity_upwinding` [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]"
+  help: "Upwinding mode for passive tracers in the post-ARK vertical transport; `none` is explicit central transport, which is unstable for any time step. Prognostic `ρtke` and the sedimenting microphysics species follow `energy_humidity_upwinding` [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 energy_humidity_upwinding:
-  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]. `first_order` gives positive first-order transport of `e_tot - Φ`, `q_tot`, and the sedimenting species with the leading diffusivity of backward-Euler upwind; `third_order` is linear and unlimited (not positive or monotone on sharp fronts); `none` skips their post-Newton dissipation and antidiffusion, leaving their vertical advection forward-Euler central under one Newton iteration with `ManualSparseJacobian` (amplifying oscillatory modes without vertical diffusion)."
+  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species in post-ARK vertical scalar transport [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]. `first_order` gives positive backward-Euler upwind transport of `e_tot - Φ`, `q_tot`, and the sedimenting species; `third_order` is unlimited 3rd-order finite-volume transport (not positive or monotone on sharp fronts); `vanleer_limiter` applies the shared Zalesak FCT limiter; `none` uses central vertical transport."
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization)]"
@@ -438,16 +438,16 @@ albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"
 implicit_diffusion:
-  help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
-  value: false
+  help: "Only `true` (default) is accepted: vertical diffusion, surface fluxes, and EDMF transport are integrated implicitly in the post-ARK column physics step. Other values raise an `ArgumentError`."
+  value: true
 approximate_linear_solve_iters:
-  help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true, the configuration is moist, or prognostic `ρtke` is active)"
+  help: "Only `2` (default) is accepted: the wave-core Newton solve uses the selected Jacobian algorithm directly. Other values raise an `ArgumentError`."
   value: 2
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
 debug_tendency_diagnostics:
-  help: "Include ~96 per-process tendency-field diagnostics for debugging (3D center-space fields; short names of the form `tn_<field>_<process>`, plus the aggregate updraft ρa tendency `tn_sgsrhoa_aggregate`). Each sample runs one extra tendency evaluation into a persistent scratch FieldVector; enable only for debugging and use a coarse output cadence."
+  help: "Include per-process tendency-field diagnostics for debugging (3D center-space fields; short names of the form `tn_<field>_<process>`): instantaneous ARK tendencies, each sample of which runs one extra tendency evaluation, and realized per-operator tendencies of the split step, recorded every step into state-sized buffers. Enable only for debugging and use a coarse output cadence."
   value: false
 enable_diagnostics:
   help: "Set to false to fully disable the diagnostics"
@@ -536,7 +536,7 @@ edmfx_sgs_horizontal_diffusive_flux:
   help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 edmfx_updraft_picard_rounds:
-  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `initialize_implicit_stage_problem!` before the final u₃/ρa analytic solves. `0` reproduces the single-pass behavior.  [non-negative integer; default `2`]"
+  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `step_edmf_and_env_turbulence!` before the final u₃/ρa solves. `0` runs a single pass.  [non-negative integer; default `2`]"
   value: 2
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"

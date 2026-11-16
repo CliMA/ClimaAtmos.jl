@@ -52,6 +52,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
+    @safetestset "Realized tendency diagnostics" begin @time include("diagnostics/realized_tendency_tests.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
     @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
     @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
@@ -66,12 +67,15 @@ end
 if TEST_GROUP in ("dynamics", "all")
     @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
+    @safetestset "Moist wave-core Jacobian" begin @time include("prognostic_equations/moist_jacobian_tests.jl") end
+    @safetestset "Pure wave-core implicit solver" begin @time include("prognostic_equations/pure_wave_core_tests.jl") end
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
-    @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
-    @safetestset "Consistent energy and water transport" begin @time include("prognostic_equations/consistent_transport_tests.jl") end
-    @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
+    @safetestset "Post-step physics callback plumbing" begin @time include("prognostic_equations/post_step_hook_tests.jl") end
+    @safetestset "Post-ARK vertical scalar transport" begin @time include("prognostic_equations/vertical_transport_step_tests.jl") end
+    @safetestset "Column physics step" begin @time include("prognostic_equations/column_physics_step_tests.jl") end
+    @safetestset "Split simulation end-to-end" begin @time include("prognostic_equations/split_simulation_e2e_tests.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
@@ -82,8 +86,6 @@ end
 # Dynamics (EDMFX): SGS diffusion, limiters, and closures (split out for CI time)
 # ============================================================================
 if TEST_GROUP in ("dynamics_edmfx", "all")
-    @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
-    @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
@@ -99,9 +101,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "LES energy flux split" begin @time include("parameterized_tendencies/les_energy_split_tests.jl") end
 
     # Microphysics tests
-    @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
-    @safetestset "Implicit microphysics split tests" begin @time include("parameterized_tendencies/microphysics/implicit_microphysics_split.jl") end
     @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
     @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
@@ -118,6 +118,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Conditional node rule tests" begin @time include("parameterized_tendencies/microphysics/conditional_nodes.jl") end
     @safetestset "Truncated displacement tests" begin @time include("parameterized_tendencies/microphysics/truncated_displacement.jl") end
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
+    @safetestset "Coupled microphysics sweep tests" begin @time include("parameterized_tendencies/microphysics/coupled_microphysics_sweep_tests.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
     # Chemistry tests

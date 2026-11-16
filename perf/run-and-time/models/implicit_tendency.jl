@@ -15,22 +15,17 @@ Random.seed!(1234)
 # src/simulation/AtmosSimulations.jl). Restart handling is skipped (this
 # config starts from an initial condition, not a restart file).
 #
-# Beyond that, `implicit_tendency!` exercises only the vertical-advection,
-# EDMFX, microphysics, implicit-diffusion, and Rayleigh-sponge code paths. A
-# call-tree trace confirms it never reads the radiation, aerosol, trace-gas,
-# gravity-wave, tracer, external-forcing, or hyperdiffusion parts of `p`.
-# Those are also the *expensive* part of model setup (RRTMGP compilation +
-# lookup tables, ETOPO topography load + spectral smoothing, aerosol/trace-gas
-# data ingestion, Beres gravity-wave tables), so we strip them from the config
-# below *before* building anything. `ClimaAtmosParameters`/`get_atmos` then
-# never load their parameter sets, `build_cache` constructs trivial stubs in
-# their place, and `set_precomputed_quantities!` skips their precomputed
-# quantities.
+# `implicit_tendency!` evaluates the acoustic/gravity wave-core vertical
+# dynamics (vertical mass flux, pressure-gradient/buoyancy forcing, vertical
+# energy advection, and Rayleigh sponge). It does not read the radiation,
+# aerosol, trace-gas, gravity-wave, tracer, external-forcing, or hyperdiffusion
+# parts of `p`, so we strip those components from the config below before
+# building anything. `ClimaAtmosParameters`/`get_atmos` then omit their
+# parameter sets, `build_cache` constructs stubs in their place, and
+# `set_precomputed_quantities!` skips their precomputed quantities.
 #
-# What is KEPT (because `implicit_tendency!` dispatches on / reads it):
-#   turbconv = prognostic_edmfx, microphysics_model = 1M, implicit_diffusion,
-#   rayleigh_sponge, and DefaultMoninObukhov surface fluxes (needed for the
-#   implicit-diffusion path's diffusivities).
+# What is KEPT:
+#   turbconv = prognostic_edmfx, microphysics_model = 1M, and rayleigh_sponge.
 # ---------------------------------------------------------------------------
 
 # Defines: get_base_atmos_config
