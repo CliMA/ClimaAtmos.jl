@@ -26,8 +26,10 @@ include("conditional_nodes.jl")
 
 # Microphysics processes
 include("microphysics_wrappers.jl")
-include("tendency.jl")
 include("moisture_fixers.jl")
 
 # Terminal velocity computations
 include("terminal_velocity_utils.jl")
+
+# Coupled microphysics and sedimentation top-down column sweep
+include("coupled_microphysics_sweep.jl")

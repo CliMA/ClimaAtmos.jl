@@ -61,14 +61,45 @@ below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
 differences of such probabilities, which the absolute accuracy of `normal_cdf`
 alone does not resolve beyond `z ≈ 2`.
 """
+@inline function _normal_abs_tail_and_pdf(z)
+    FT = typeof(z)
+    if !isfinite(z)
+        return (zero(FT), zero(FT))
+    end
+    z_abs = abs(z)
+    z_max = FT === Float32 ? FT(15) : FT(40)
+    if !(z_abs < z_max)
+        return (zero(FT), zero(FT))
+    end
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    φ = exp(-FT(0.5) * z_abs * z_abs) * inv_sqrt2π
+    if z_abs >= FT(2)
+        d, _ = _mills_continued_fraction(z_abs)
+        t = z_abs + inv(z_abs + d)
+        return (φ / t, φ)
+    end
+    t_as = one(FT) / (one(FT) + FT(0.2316419) * z_abs)
+    poly =
+        t_as * (
+            FT(0.319381530) +
+            t_as * (
+                FT(-0.356563782) +
+                t_as * (
+                    FT(1.781477937) +
+                    t_as * (FT(-1.821255978) + t_as * FT(1.330274429))
+                )
+            )
+        )
+    return (φ * poly, φ)
+end
+
 @inline function normal_tail_prob(z)
     FT = typeof(z)
-    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    z_cf = max(z, FT(2))
-    d, _ = _mills_continued_fraction(z_cf)
-    t = z_cf + inv(z_cf + d)
-    q_cf = exp(-FT(0.5) * z_cf * z_cf) * inv_sqrt2π / t
-    return ifelse(z >= FT(2), q_cf, normal_cdf(-z))
+    if z >= zero(FT)
+        Q, _ = _normal_abs_tail_and_pdf(z)
+        return Q
+    end
+    return normal_cdf(-z)
 end
 
 """
@@ -186,6 +217,7 @@ regressed temperature spread `|β_T| σ_S` never exceeds `σ_T`.
 """
 @inline function sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     FT = typeof(σ_S)
+    T′T′ <= zero(FT) && return zero(FT)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
     return (corr * σ_T * σ_q - γ * σ_T^2) / max(FT(σ_S), ϵ_numerics(FT))^2
@@ -303,6 +335,218 @@ weights sum to one; an interval of zero width contributes zero weight.
     )
 end
 
+# Register-compact 8-node rule storing only `(S′, w)` and a 1-byte shaft
+# bitmask. Temperature is reconstructed on demand from `T + β_T * S′`, and
+# saturation specific humidity is deferred to positive-weight wet points.
+struct _CompactConditionalRule{FT}
+    S′::NTuple{8, FT}
+    w::NTuple{8, FT}
+    shaft_mask::UInt8
+end
+
+@inline function _compact_conditional_interval_nodes(
+    σ_S::FT,
+    a::FT,
+    b::FT,
+    Qa::FT,
+    φa::FT,
+    Qb::FT,
+    φb::FT,
+    cloudy::Bool,
+) where {FT}
+    z = zero(FT)
+    if !(a < b)
+        return (z, z, z, z)
+    end
+    I₀ = max(
+        z,
+        ifelse(a >= z, Qa - Qb, ifelse(b <= z, Qb - Qa, one(FT) - Qb - Qa)),
+    )
+    if I₀ <= z
+        return (z, z, z, z)
+    end
+    inv_I₀ = one(FT) / max(I₀, floatmin(FT))
+    I₁ = φa - φb
+    m = I₁ * inv_I₀
+    if !cloudy
+        S′_m = σ_S * m
+        return (S′_m, I₀, S′_m, z)
+    end
+    aφa = ifelse(isfinite(a), a * φa, z)
+    bφb = ifelse(isfinite(b), b * φb, z)
+    a²φa = ifelse(isfinite(a), a * aφa, z)
+    b²φb = ifelse(isfinite(b), b * bφb, z)
+    I₂ = I₀ + aφa - bφb
+    I₃ = FT(2) * I₁ + a²φa - b²φb
+    m2 = I₂ * inv_I₀
+    m3 = I₃ * inv_I₀
+    v = m2 - m^2
+    c₃ = m3 - FT(3) * m * m2 + FT(2) * m^3
+    degenerate = v <= 64 * eps(FT) * max(m^2, one(FT))
+    v_safe = ifelse(degenerate, one(FT), v)
+    s = ifelse(degenerate, z, c₃ / v_safe)
+    r = sqrt(s^2 + FT(4) * v_safe)
+    d₁ = (s - r) * FT(0.5)
+    d₂ = (s + r) * FT(0.5)
+    p₂ = ifelse(degenerate, FT(0.5), -d₁ / r)
+    p₁ = one(FT) - p₂
+    x₁ = ifelse(degenerate, m, max(m + d₁, a))
+    x₂ = ifelse(degenerate, m, min(m + d₂, b))
+    return (σ_S * x₁, I₀ * p₁, σ_S * x₂, I₀ * p₂)
+end
+
+@inline function _compact_conditional_rule(
+    σ_S::FT,
+    t_a::FT,
+    t_e::FT,
+    t_p::FT,
+) where {FT}
+    t_e_guarded = ifelse(
+        isfinite(t_e) & isfinite(t_a) & (abs(t_e - t_a) < FT(1e-3) * σ_S),
+        t_a,
+        t_e,
+    )
+    (b₁, b₂, b₃) = _sort3(t_a, t_e_guarded, t_p)
+    z = zero(FT)
+    inv_σ = one(FT) / σ_S
+    z₁ = b₁ * inv_σ
+    z₂ = b₂ * inv_σ
+    z₃ = b₃ * inv_σ
+    (Q₁, φ₁) = _normal_abs_tail_and_pdf(z₁)
+    (Q₂, φ₂) = if !isfinite(b₂)
+        (z, z)
+    elseif b₂ == b₁
+        (Q₁, φ₁)
+    else
+        _normal_abs_tail_and_pdf(z₂)
+    end
+    (Q₃, φ₃) = if !isfinite(b₃)
+        (z, z)
+    elseif b₃ == b₂
+        (Q₂, φ₂)
+    else
+        _normal_abs_tail_and_pdf(z₃)
+    end
+    (S1, w1, S2, w2) = _compact_conditional_interval_nodes(
+        σ_S,
+        FT(-Inf),
+        z₁,
+        z,
+        z,
+        Q₁,
+        φ₁,
+        FT(-Inf) >= t_a,
+    )
+    (S3, w3, S4, w4) = _compact_conditional_interval_nodes(
+        σ_S,
+        z₁,
+        z₂,
+        Q₁,
+        φ₁,
+        Q₂,
+        φ₂,
+        b₁ >= t_a,
+    )
+    (S5, w5, S6, w6) = _compact_conditional_interval_nodes(
+        σ_S,
+        z₂,
+        z₃,
+        Q₂,
+        φ₂,
+        Q₃,
+        φ₃,
+        b₂ >= t_a,
+    )
+    (S7, w7, S8, w8) = _compact_conditional_interval_nodes(
+        σ_S,
+        z₃,
+        FT(Inf),
+        Q₃,
+        φ₃,
+        z,
+        z,
+        b₃ >= t_a,
+    )
+    sh1 = ifelse(FT(-Inf) >= t_p, UInt8(0x03), UInt8(0x00))
+    sh2 = ifelse(b₁ >= t_p, UInt8(0x0c), UInt8(0x00))
+    sh3 = ifelse(b₂ >= t_p, UInt8(0x30), UInt8(0x00))
+    sh4 = ifelse(b₃ >= t_p, UInt8(0xc0), UInt8(0x00))
+    return _CompactConditionalRule{FT}(
+        (S1, S2, S3, S4, S5, S6, S7, S8),
+        (w1, w2, w3, w4, w5, w6, w7, w8),
+        sh1 | sh2 | sh3 | sh4,
+    )
+end
+
+@inline function _compact_single_node_rule(::Type{FT}) where {FT}
+    z = zero(FT)
+    return _CompactConditionalRule{FT}(
+        (z, z, z, z, z, z, z, z),
+        (one(FT), z, z, z, z, z, z, z),
+        UInt8(0x01),
+    )
+end
+
+# Register-only binary selection over an 8-tuple avoids NVPTX `.local` spills.
+@inline function _select_tuple8(k::Int32, t::NTuple{8, FT}) where {FT}
+    v12 = ifelse(k == Int32(1), t[1], t[2])
+    v34 = ifelse(k == Int32(3), t[3], t[4])
+    v56 = ifelse(k == Int32(5), t[5], t[6])
+    v78 = ifelse(k == Int32(7), t[7], t[8])
+    v14 = ifelse(k <= Int32(2), v12, v34)
+    v58 = ifelse(k <= Int32(6), v56, v78)
+    return ifelse(k <= Int32(4), v14, v58)
+end
+
+@inline function _compact_rule_mean(
+    g,
+    rule::_CompactConditionalRule{FT},
+) where {FT}
+    S = rule.S′
+    w = rule.w
+    return muladd(
+        w[1],
+        g(S[1]),
+        muladd(
+            w[2],
+            g(S[2]),
+            muladd(
+                w[3],
+                g(S[3]),
+                muladd(
+                    w[4],
+                    g(S[4]),
+                    muladd(
+                        w[5],
+                        g(S[5]),
+                        muladd(
+                            w[6],
+                            g(S[6]),
+                            muladd(w[7], g(S[7]), w[8] * g(S[8])),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+end
+
+@inline function _compact_rule_shaft_fraction(
+    rule::_CompactConditionalRule{FT},
+) where {FT}
+    w = rule.w
+    m = rule.shaft_mask
+    z = zero(FT)
+    return ifelse((m & UInt8(0x01)) != UInt8(0), w[1], z) +
+           ifelse((m & UInt8(0x02)) != UInt8(0), w[2], z) +
+           ifelse((m & UInt8(0x04)) != UInt8(0), w[3], z) +
+           ifelse((m & UInt8(0x08)) != UInt8(0), w[4], z) +
+           ifelse((m & UInt8(0x10)) != UInt8(0), w[5], z) +
+           ifelse((m & UInt8(0x20)) != UInt8(0), w[6], z) +
+           ifelse((m & UInt8(0x40)) != UInt8(0), w[7], z) +
+           ifelse((m & UInt8(0x80)) != UInt8(0), w[8], z)
+end
+
 """
     sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S)
 
@@ -347,16 +591,35 @@ mean temperature.
 """
 @inline function _freezing_split(T_node, σ⊥, T_freeze)
     FT = typeof(T_node)
-    t★ = (T_freeze - T_node) / max(σ⊥, ϵ_numerics(FT))
-    p₁ = normal_cdf(t★)
+    z = zero(FT)
+    if !(σ⊥ > ϵ_numerics(FT)) || !(abs(T_freeze - T_node) < FT(2.06) * σ⊥)
+        return (one(FT), z, z, z)
+    end
+    t★ = (T_freeze - T_node) / σ⊥
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    t_abs = abs(t★)
+    φ★ = exp(-FT(0.5) * t_abs * t_abs) * inv_sqrt2π
+    t_as = one(FT) / (one(FT) + FT(0.2316419) * t_abs)
+    poly =
+        t_as * (
+            FT(0.319381530) +
+            t_as * (
+                FT(-0.356563782) +
+                t_as * (
+                    FT(1.781477937) +
+                    t_as * (FT(-1.821255978) + t_as * FT(1.330274429))
+                )
+            )
+        )
+    q = φ★ * poly
+    p₁ = ifelse(t★ >= z, one(FT) - q, q)
     p₂ = one(FT) - p₁
-    φ★ = exp(-t★ * t★ / 2) / sqrt(2 * FT(π))
-    split = (σ⊥ > ϵ_numerics(FT)) & (p₁ > FT(0.02)) & (p₂ > FT(0.02))
+    split = (p₁ > FT(0.02)) & (p₂ > FT(0.02))
     return (
         ifelse(split, p₁, one(FT)),
-        ifelse(split, -φ★ / max(p₁, eps(FT)), zero(FT)),
-        ifelse(split, p₂, zero(FT)),
-        ifelse(split, φ★ / max(p₂, eps(FT)), zero(FT)),
+        ifelse(split, -φ★ / max(p₁, eps(FT)), z),
+        ifelse(split, p₂, z),
+        ifelse(split, φ★ / max(p₂, eps(FT)), z),
     )
 end
 
@@ -394,6 +657,54 @@ may return a scalar or a `NamedTuple` of scalars.
     return add_auto_broadcasters(f(T_pt, q_pt, n.shaft, q_sat_pt))
 end
 
+@inline function _sum_node_points(point_fn::PF, f, n, spread, acc) where {PF}
+    if n.w > zero(n.w)
+        (p₁, t₁), (p₂, t₂) = _temperature_points(n.T, spread)
+        w₁ = n.w * p₁
+        if w₁ > zero(w₁)
+            acc = acc + point_fn(f, n, t₁, spread) * w₁
+        end
+        w₂ = n.w * p₂
+        if w₂ > zero(w₂)
+            acc = acc + point_fn(f, n, t₂, spread) * w₂
+        end
+    end
+    return acc
+end
+
+# Compile-time unrolling keeps `ConditionalRule.nodes` in NVPTX registers.
+@inline function _sum_over_conditional_nodes_unrolled(
+    point_fn::PF,
+    f,
+    rule::ConditionalRule{N},
+    spread::TemperatureSpread,
+) where {PF, N}
+    nodes = rule.nodes
+    @inbounds begin
+        n₁ = nodes[1]
+        ((p₁, t₁), (p₂, t₂)) = _temperature_points(n₁.T, spread)
+        acc = point_fn(f, n₁, t₁, spread) * (n₁.w * p₁)
+        w₁₂ = n₁.w * p₂
+        if w₁₂ > zero(w₁₂)
+            acc = acc + point_fn(f, n₁, t₂, spread) * w₁₂
+        end
+        if N == 8
+            acc = _sum_node_points(point_fn, f, nodes[2], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[3], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[4], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[5], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[6], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[7], spread, acc)
+            acc = _sum_node_points(point_fn, f, nodes[8], spread, acc)
+        else
+            for k in 2:N
+                acc = _sum_node_points(point_fn, f, nodes[k], spread, acc)
+            end
+        end
+    end
+    return drop_auto_broadcasters(acc)
+end
+
 """
     sum_over_conditional_nodes(f, rule, spread)
 
@@ -404,35 +715,12 @@ total water is set so that the evaluator recovers the node's `S′`. The first
 point of the first node is always evaluated (it seeds the accumulator); every
 other point only where its weight is positive.
 """
-function sum_over_conditional_nodes(
-    f, rule::ConditionalRule{N}, spread::TemperatureSpread,
+@inline function sum_over_conditional_nodes(
+    f,
+    rule::ConditionalRule{N},
+    spread::TemperatureSpread,
 ) where {N}
-    nodes = rule.nodes
-    @inbounds begin
-        n₁ = nodes[1]
-        pts = _temperature_points(n₁.T, spread)
-        (p, t) = pts[1]
-        acc = _point_value(f, n₁, t, spread) * (n₁.w * p)
-        for j in 2:length(pts)
-            (p, t) = pts[j]
-            if n₁.w * p > zero(p)
-                acc += _point_value(f, n₁, t, spread) * (n₁.w * p)
-            end
-        end
-        for k in 2:N
-            nₖ = nodes[k]
-            if nₖ.w > zero(nₖ.w)
-                pts = _temperature_points(nₖ.T, spread)
-                for j in 1:length(pts)
-                    (p, t) = pts[j]
-                    if p > zero(p)
-                        acc += _point_value(f, nₖ, t, spread) * (nₖ.w * p)
-                    end
-                end
-            end
-        end
-    end
-    return drop_auto_broadcasters(acc)
+    return _sum_over_conditional_nodes_unrolled(_point_value, f, rule, spread)
 end
 
 """
