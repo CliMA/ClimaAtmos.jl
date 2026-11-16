@@ -250,31 +250,19 @@ compute_prup(_, _, _, _, _) =
     error_diagnostic_variable("Can only compute updraft precipitation \
                                with 0M microphysics and with PrognosticEDMFX")
 
-function compute_prup(state, cache, _,
-    ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,
-)
-    (; ᶜmp_tendencyʲs) = cache.precomputed
-    ᶜρ_dq_tot_dtʲs = cache.scratch.ᶜtemp_scalar
-    @. ᶜρ_dq_tot_dtʲs = 0
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        @. ᶜρ_dq_tot_dtʲs +=
-            state.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
-    end
-    out = cache.scratch.ᶠtemp_field_level
-    Operators.column_integral_definite!(out, ᶜρ_dq_tot_dtʲs)
-    return out
-end
+compute_prup(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
+    cache.precomputed.col_integrated_updraft_precip
 
 add_diagnostic_variable!(short_name = "prup", units = "kg m^-2 s^-1",
     long_name = "Updraft Precipitation",
     comments = """
-    Column integral of the 0-moment precipitation sink of all updrafts,
-    sum over j of ρaʲ dq_totʲ/dt: the gross updraft (convective) production,
-    before below-cloud evaporation. Same sign convention as `pr`
-    (upward-positive, so negative when it precipitates). `pr` is net of
-    below-cloud evaporation, so the gross environment (stratiform) production
-    is `pr - prevap - prup` with `precipitation_evaporation_0m` on and
-    `pr - prup` with it off.
+    Column integral of the 0-moment precipitation sink of the updraft,
+    ρa¹ dq_tot¹/dt, averaged over the substeps of the column physics step: the
+    gross updraft (convective) production, before below-cloud evaporation.
+    Same sign convention as `pr` (upward-positive, so negative when it
+    precipitates). `pr` is net of below-cloud evaporation, so the gross
+    environment (stratiform) production is `pr - prevap - prup` with
+    `precipitation_evaporation_0m` on and `pr - prup` with it off.
     """,
     compute = compute_prup,
 )
@@ -849,8 +837,7 @@ function compute_edt(state, cache, _,
 )
     # The effective scalar diffusivity the model applies to the grid-mean
     # fluxes: the face-native ᶠK_h (see set_face_diffusivities! and
-    # edmfx_sgs_diffusive_flux_tendency!), interpolated to centers for
-    # output.
+    # step_edmf_and_env_turbulence!), interpolated to centers for output.
     (; ᶠK_h) = cache.precomputed
     return @. lazy(ᶜinterp(ᶠK_h))
 end

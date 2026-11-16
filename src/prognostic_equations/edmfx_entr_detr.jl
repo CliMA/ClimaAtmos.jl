@@ -649,10 +649,10 @@ with `(c₁, c₂) = turb_entr_param_vec`, `c_e = turb_entr_tke_coeff` and
 second is the exchange across the updraft edge by the turbulence the updraft
 is embedded in: an edge velocity `c_e √tke` on the perimeter `2πR` of a plume
 of cross section `πR²`, with `R` from `plume_radius`, the radius of the form
-drag. Unlike the dynamical
-entrainment of `compute_entrainment`, neither term scales with the updraft
-velocity. Precomputed into `p.precomputed.ᶜturb_entrʲs` and added to the
-dynamical rate in `edmfx_entr_detr_tendency!`.
+drag. Unlike the dynamical entrainment of `compute_entrainment`, neither term
+scales with the updraft velocity. Precomputed into
+`p.precomputed.ᶜturb_entrʲs` and added to the dynamical rate in the EDMF
+column step (`step_edmf_and_env_turbulence!`).
 """
 function turbulent_entrainment(
     turbconv_params,
@@ -762,117 +762,4 @@ function tail_entrainment_fields(p, f_tail)
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
         p.precomputed
     return (ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)
-end
-
-"""
-    edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
-
-Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
-`q_tot`, and the microphysics tracers carried by the updraft).
-
-Detrainment is **not** applied here because it is absorbed into the
-analytic implicit ρa solve (see
-`solve_sgs_ρa_implicit_stage_analytic!`); scalars are detrained
-implicitly through the area divergence of the mass flux.
-
-The entrainment rate is assembled lazily from the precomputed
-`ᶜentr_vel_scaleʲs`, `ᶜentr_nonvel_rateʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
-velocity via `compute_entrainment`, and the turbulent entrainment
-`ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
-scalar `χʲ` is relaxed toward its **environment** value,
-
-    ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ),
-
-plus `entr Δχ_tail` for `mse` and `q_tot` when `edmf_tail_entr_fraction < 1`
-(`tail_entrainment_increments`).
-
-The generic method is a no-op; the `PrognosticEDMFX` method mutates
-`Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET: Closures" page
-(`docs/src/prophet_closures.md`).
-"""
-edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-
-function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
-    (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
-    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
-        p.precomputed
-    χ_names = sgs_tracer_names(Y)
-    FT = eltype(p.params)
-    thermo_params = CAP.thermodynamics_params(p.params)
-    f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
-    (; dt) = p
-    tail_fields = tail_entrainment_fields(p, f_tail)
-    # One fused column loop for every draft and scalar.
-    DataLayouts.foreach_column(
-        Yₜ.c, Y.c, Fields.local_geometry_field(Y.c), ᶜK, ᶜh_tot,
-        (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-        ᶜarea_bounding_entr_detrʲs, tail_fields,
-    ) do Yₜc, Yc, ᶜlg, ᶜK, ᶜh_tot,
-    (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-    ᶜarea_bounding_entr_detrʲs, tail_fields
-        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
-        ᶜmse⁰ = @. specific_env_mse(
-            Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model,
-        )
-        ᶜχ⁰s = unrolled_map((@name(q_tot), χ_names...)) do χ_name
-            @inline
-            Base.materialize(ᶜspecific_env_value(χ_name, Yc, ᶜρa⁰, turbconv_model))
-        end
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            ᶜsgsʲ = Yc.sgsʲs.:($j)
-            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
-            ᶜuʲ = ᶜuʲs.:($j)
-            ᶜentrʲ = @. compute_entrainment(
-                ᶜentr_vel_scaleʲs.:($$j),
-                ᶜentr_nonvel_rateʲs.:($$j),
-                ᶜarea_bounding_entr_detrʲs.:($$j),
-                get_physical_w(ᶜuʲ, ᶜlg),
-            )
-            ᶜentr_totʲ = @. ᶜentrʲ + ᶜturb_entrʲs.:($$j)
-            @. ᶜsgsʲₜ.mse += ᶜentr_totʲ * (ᶜmse⁰ - ᶜsgsʲ.mse)
-            unrolled_foreach((@name(q_tot), χ_names...), ᶜχ⁰s) do χ_name, ᶜχ⁰
-                @inline
-                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
-                @. ᶜχʲₜ += ᶜentr_totʲ * (ᶜχ⁰ - ᶜχʲ)
-            end
-            # Dynamical entrainment draws from the environment's tail
-            # (`tail_entrainment_increments`); turbulent entrainment, a two-way
-            # exchange outside the ρa equation, mixes the environment and updraft means.
-            if !isempty(tail_fields)
-                (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = tail_fields
-                ᶜρaʲ = ᶜsgsʲ.ρa
-                ᶜtailʲ = @. tail_entrainment_increments(
-                    thermo_params, f_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-                    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
-                )
-                @. ᶜsgsʲₜ.mse += ᶜentrʲ * ᶜtailʲ.mse
-                @. ᶜsgsʲₜ.q_tot += ᶜentrʲ * ᶜtailʲ.q_tot
-            end
-        end
-    end
-    return nothing
-end
-
-# Stability limiters that cap entrainment and detrainment rates below the
-# inverse timescales w/dz and 1/dt. Written for the (since removed) diagnostic
-# EDMF; currently unused.
-limit_entrainment(entr::FT, a, dt) where {FT} = max(
-    min(
-        entr,
-        FT(0.9) * (1 - a) / max(a, eps(FT)) / dt,
-        FT(0.9) * 1 / dt,
-    ),
-    0,
-)
-limit_entrainment(entr::FT, a, w, dz) where {FT} =
-    max(min(entr, FT(0.9) * w / dz), 0)
-
-limit_detrainment(detr::FT, a, dt) where {FT} =
-    max(min(detr, FT(0.9) * 1 / dt), 0)
-limit_detrainment(detr::FT, a, w, dz, dt) where {FT} =
-    limit_detrainment(max(min(detr, FT(0.9) * w / dz), 0), a, dt)
-
-function limit_turb_entrainment(dyn_entr::FT, turb_entr, w, dz) where {FT}
-    return max(min((FT(0.9) * w / dz) - dyn_entr, turb_entr), 0)
 end

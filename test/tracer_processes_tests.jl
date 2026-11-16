@@ -45,10 +45,6 @@ end
     @test isnothing(CA.condensate_phase(@name(ρn_lcl)))
     @test isnothing(CA.condensate_phase(@name(ρq_tot)))
 
-    @test CA.internal_energy_function(TD.Liquid()) ==
-          TD.internal_energy_liquid
-    @test CA.internal_energy_function(TD.Ice()) == TD.internal_energy_ice
-
     FT = Float32
     params = CA.ClimaAtmosParameters(FT)
     CAP = CA.Parameters
@@ -76,10 +72,8 @@ end
     @test CA.sedimenting_tracer_names(Y_dry) == ()
     @test CA.sedimenting_mass_names(Y_dry) == ()
     @test CA.microphysics_tracer_names(Y_dry) == ()
-    @test CA.diffused_gs_scalar_names(Y_dry) == (@name(ρe_tot),)
     @test CA.advected_gs_scalar_names(Y_dry) == (@name(ρ), @name(ρe_tot))
     @test CA.sedimenting_sgs_tracer_names(Y_dry) == ()
-    @test CA.advected_sgs_scalar_names(Y_dry) == ()
 
     # 1M moist state with a passive chemistry tracer and prognostic EDMF
     sgs_type = NamedTuple{
@@ -118,25 +112,12 @@ end
         @name(ρq_rai),
         @name(ρq_sno),
     )
-    @test CA.diffused_gs_scalar_names(Y_1m) ==
-          (@name(ρe_tot), CA.microphysics_tracer_names(Y_1m)...)
     @test CA.advected_gs_scalar_names(Y_1m) ==
           (@name(ρ), @name(ρe_tot), @name(ρq_tot))
 
     @test CA.sedimenting_sgs_tracer_names(Y_1m) ==
           (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
-    @test CA.sedimenting_sgs_mass_names(Y_1m) ==
-          (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
     @test CA.passive_sgs_tracer_names(Y_1m) == (@name(q_gas_A),)
-    @test CA.advected_sgs_scalar_names(Y_1m) == (
-        @name(q_lcl),
-        @name(q_icl),
-        @name(q_rai),
-        @name(q_sno),
-        @name(q_tot),
-        @name(mse),
-        @name(q_gas_A),
-    )
 
     # every sedimenting tracer must have a velocity, every sedimenting mass
     # must have a phase

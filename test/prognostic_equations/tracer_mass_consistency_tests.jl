@@ -3,25 +3,16 @@ Regression tests for discrete consistency between tracer transport and the
 continuity equation (the "χ ≡ 1 test").
 
 If a specific tracer concentration χ is uniform (χ ≡ 1, i.e. ρχ = ρ), then
-every transport pathway must produce ∂(ρχ)/∂t = ∂ρ/∂t discretely, and the
-EDMFX difference-form SGS fluxes must vanish identically. These tests check
-this tracer-mass consistency relation.
+every transport pathway must produce ∂(ρχ)/∂t = ∂ρ/∂t discretely. These
+tests check this tracer-mass consistency relation.
 =#
 using Test
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaCore: Fields, Spaces
-import ClimaTimeSteppers as CTS
 
 include("../test_helpers.jl")
-
-# Measured behind a function barrier: an inline `@allocated` at testset scope
-# counts the allocations of the dynamic dispatch to `f!`.
-function _measure_allocs(f!, args...)
-    f!(args...)
-    return @allocated f!(args...)
-end
 
 @testset "Grid-mean transport consistency over topography" begin
     # Uniform 10 m/s wind over a Schar mountain with linear mesh warping, so
@@ -41,7 +32,6 @@ end
             "z_elem" => 20,
             "dt" => "1secs",
             "t_end" => "10secs",
-            "implicit_microphysics" => false,
             "disable_surface_flux_tendency" => true,
             "output_default_diagnostics" => false,
         );
@@ -120,179 +110,5 @@ end
         ᶜρχₜ .= 0
         CA.subsidence!(ᶜρχₜ, Y.c.ρ, ᶠsubsidence³, ᶜχ_uniform, scheme)
         @test maximum(abs, parent(ᶜρχₜ)) <= 100 * eps(FT) * subsidence_scale
-    end
-end
-
-@testset "EDMFX SGS mass-flux consistency" begin
-    config = CA.AtmosConfig(
-        Dict(
-            "config" => "column",
-            "initial_condition" => "DYCOMS_RF01",
-            "FLOAT_TYPE" => "Float64",
-            "turbconv" => "prognostic_edmfx",
-            "implicit_diffusion" => true,
-            "approximate_linear_solve_iters" => 2,
-            "edmfx_entr_model" => "Generalized",
-            "edmfx_detr_model" => "Generalized",
-            "edmfx_sgs_mass_flux" => true,
-            "edmfx_sgs_diffusive_flux" => true,
-            "edmfx_nh_pressure" => true,
-            "edmfx_vertical_diffusion" => true,
-            "edmfx_filter" => true,
-            "prognostic_tke" => true,
-            "microphysics_model" => "1M",
-            "z_max" => 1500.0,
-            "z_elem" => 30,
-            "z_stretch" => false,
-            "dt" => "120secs",
-            "t_end" => "30mins",
-            "ode_algo" => "ARS222",
-            "output_default_diagnostics" => false,
-        );
-        job_id = "tracer_consistency_edmfx_test",
-    )
-    (; Y, p, simulation) = generate_test_simulation(config)
-    (; integrator) = simulation
-    FT = eltype(Y)
-
-    # Step to develop nontrivial updraft area and velocity structure.
-    for _ in 1:10
-        CTS.step!(integrator)
-    end
-    Y = integrator.u
-    p = integrator.p
-    t = integrator.t
-
-    # The SGS mass flux of q_tot must be accompanied by an identical
-    # moist air mass tendency, mirroring the diffusive-flux treatment.
-    Yₜ = similar(Y)
-    Yₜ .= zero(eltype(Yₜ))
-    CA.edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    flux_scale = maximum(abs, parent(Yₜ.c.ρq_tot))
-    @test flux_scale > 0  # non-vacuous: the SGS q_tot flux is active
-    @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
-
-    # Solving the tridiagonal `(c.ρtke, c.ρtke)` advection block of
-    # `update_sedimentation_jacobian!` (with `(c.ρtke, f.u₃)` omitted) keeps a
-    # localized `ρtke` spike nonnegative and conservative at `C_γ = 2.5` while
-    # `correct_implicit_advection_tendency!` leaves `ρtke` untouched.
-    u₃_orig = copy(Y.f.u₃)
-    tke_orig = copy(Y.c.ρtke)
-    ρ_orig = copy(Y.c.ρ)
-    z_f = Fields.coordinate_field(Y.f).z
-    matrix = integrator.cache.newtons_method_cache.j.cache.matrix.matrix
-    dtγ = FT(p.dtγ)
-    @test !haskey(matrix, (CA.@name(c.ρtke), CA.@name(f.u₃)))
-
-    # With condensates zeroed so `vertical_advection_of_water_tendency!` adds no
-    # sedimentation mass flux to `Yₜ.c.ρ`, solving the tridiagonal
-    # `(c.ρtke, c.ρtke)` advection block on a 1-cell `ρtke` spike at `C_γ ≈ 2.5`
-    # keeps `ρtke` nonnegative and conserves column-integrated `ρtke`, while
-    # `correct_implicit_advection_tendency!` leaves `Yₜ.c.ρtke == 0`.
-    cond_orig = (;
-        ρq_lcl = copy(Y.c.ρq_lcl),
-        ρq_icl = copy(Y.c.ρq_icl),
-        ρq_rai = copy(Y.c.ρq_rai),
-        ρq_sno = copy(Y.c.ρq_sno),
-        q_lclʲ = copy(Y.c.sgsʲs.:(1).q_lcl),
-        q_iclʲ = copy(Y.c.sgsʲs.:(1).q_icl),
-        q_raiʲ = copy(Y.c.sgsʲs.:(1).q_rai),
-        q_snoʲ = copy(Y.c.sgsʲs.:(1).q_sno),
-    )
-    for ρχ_name in (:ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
-        fill!(parent(getproperty(Y.c, ρχ_name)), FT(0))
-    end
-    for χ_name in (:q_lcl, :q_icl, :q_rai, :q_sno)
-        fill!(parent(getproperty(Y.c.sgsʲs.:(1), χ_name)), FT(0))
-    end
-    n_lev = Spaces.nlevels(axes(Y.c))
-    Δz_col = FT(1500) / n_lev
-    @. Y.c.ρ = ρ_orig
-    fill!(parent(Y.c.ρtke), FT(0))
-    parent(Y.c.ρtke)[div(n_lev, 2)] = parent(Y.c.ρ)[div(n_lev, 2)]
-    @. Y.f.u₃ = CA.Geometry.Covariant3Vector(
-        CA.Geometry.WVector(
-            ifelse((z_f > FT(0)) & (z_f < FT(1500)), FT(2.5) * Δz_col / dtγ, FT(0)),
-        ),
-    )
-    CA.set_implicit_precomputed_quantities_core!(Y, p, t)
-    CA.update_sedimentation_jacobian!(matrix, Y, p, dtγ)
-    Yₜ .= zero(eltype(Yₜ))
-    CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    ᶜA_tke = similar(p.scratch.ᶜupwind_dissipation_system)
-    @. ᶜA_tke = -($(matrix[CA.@name(c.ρtke), CA.@name(c.ρtke)]))
-    ᶜΔρtke = similar(Y.c.ρtke)
-    ᶜrhs_tke = @. dtγ * Yₜ.c.ρtke
-    CA.MatrixFields.single_field_solve!(
-        p.scratch.ᶜupwind_dissipation_solver_cache,
-        ᶜΔρtke,
-        ᶜA_tke,
-        ᶜrhs_tke,
-    )
-    Y_solved = copy(Y)
-    @. Y_solved.c.ρtke = Y.c.ρtke + ᶜΔρtke
-    Yₜ_post = similar(Y)
-    CA.correct_implicit_advection_tendency!(Yₜ_post, Y_solved, p, t)
-    @test all(iszero, parent(Yₜ_post.c.ρtke))
-    tke_spike_end = Array(parent(Y_solved.c.ρtke))
-    @test minimum(tke_spike_end) >= -FT(1e-14)
-    @test sum(tke_spike_end) ≈ sum(Array(parent(Y.c.ρtke))) rtol = FT(1e-13)
-
-    @. Y.c.ρ = ρ_orig
-    @. Y.c.ρtke = tke_orig
-    @. Y.f.u₃ = u₃_orig
-    @. Y.c.ρq_lcl = cond_orig.ρq_lcl
-    @. Y.c.ρq_icl = cond_orig.ρq_icl
-    @. Y.c.ρq_rai = cond_orig.ρq_rai
-    @. Y.c.ρq_sno = cond_orig.ρq_sno
-    @. Y.c.sgsʲs.:(1).q_lcl = cond_orig.q_lclʲ
-    @. Y.c.sgsʲs.:(1).q_icl = cond_orig.q_iclʲ
-    @. Y.c.sgsʲs.:(1).q_rai = cond_orig.q_raiʲ
-    @. Y.c.sgsʲs.:(1).q_sno = cond_orig.q_snoʲ
-    CA.set_implicit_precomputed_quantities!(Y, p, t)
-
-    # Non-negative specific humidity clamp across all four sedimentation flux
-    # sites (`implicit_vertical_advection_tendency!`,
-    # `vertical_advection_of_water_tendency!`, `set_precipitation_velocities!`,
-    # and `set_precipitation_surface_fluxes!`): negative condensate in a
-    # pre-Newton state must produce zero sedimentation flux rather than an
-    # upward moisture/energy source from below the surface.
-    Y_neg = copy(Y)
-    @. Y_neg.f.u₃ = zero(Y_neg.f.u₃)
-    for ρχ_name in (:ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
-        getproperty(Y_neg.c, ρχ_name) .= FT(-1e-4) .* Y_neg.c.ρ
-    end
-    CA.set_implicit_precomputed_quantities!(Y_neg, p, t)
-    @. p.precomputed.ᶜwₗ = FT(0.05)
-    @. p.precomputed.ᶜwᵢ = FT(0.1)
-    @. p.precomputed.ᶜwᵣ = FT(4.0)
-    @. p.precomputed.ᶜwₛ = FT(1.0)
-    p.scratch.precip_stage_idx[] = 0
-    CA.set_precipitation_surface_fluxes!(Y_neg, p, p.atmos.microphysics_model)
-    @test maximum(abs, parent(p.precomputed.surface_rain_flux)) == 0
-    @test maximum(abs, parent(p.precomputed.surface_snow_flux)) == 0
-    Yₜ .= zero(eltype(Yₜ))
-    CA.implicit_vertical_advection_tendency!(Yₜ, Y_neg, p, t)
-    for ρχ_name in (:ρ, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
-        @test maximum(abs, parent(getproperty(Yₜ.c, ρχ_name))) == 0
-    end
-    CA.set_precomputed_quantities!(Y, p, t)
-
-    # With χ uniform across the grid mean and all subdomains (χ ≡ 1), the
-    # difference-form SGS fluxes must vanish identically. Only Y is modified;
-    # the precomputed subdomain velocities and densities keep their spun-up
-    # values, so the fluxes vanish because (χᵏ - χ) = 0, not because the SGS
-    # circulation is trivial.
-    for χ_name in (:q_tot, :q_lcl, :q_icl, :q_rai, :q_sno)
-        ᶜρχ = getproperty(Y.c, Symbol(:ρ, χ_name))
-        ᶜρχ .= Y.c.ρ
-        ᶜχʲ = getproperty(Y.c.sgsʲs.:(1), χ_name)
-        ᶜχʲ .= FT(1)
-    end
-    Yₜ .= zero(eltype(Yₜ))
-    CA.edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    tol = FT(1e-10) * flux_scale
-    for ρχ_name in (:ρ, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
-        @test maximum(abs, parent(getproperty(Yₜ.c, ρχ_name))) <= tol
     end
 end

@@ -104,6 +104,8 @@ the projected vertical gradients of `θ_li` [K/m] and `q_tot` [1/m]:
 @inline dry_N²(coeffs, ∂θli∂z, ∂qt∂z) =
     coeffs.Cθ_unsat * ∂θli∂z + coeffs.Cq_unsat * ∂qt∂z
 
+# TODO: remove. The model does not call this function; only
+# `eddy_diffusion_closures_tests.jl` uses it, as a reference.
 """
     buoyancy_gradients(ebgc::AbstractEnvBuoyGradClosure, thermo_params,
                        bg_model::EnvBuoyGradVars)
@@ -426,10 +428,9 @@ function mixing_length_lopez_gomez_2020(
 
     # `l_final` is not floored here: leaving it at its physical value
     # (possibly zero) avoids introducing artificial diffusivities where
-    # eddy activity is genuinely absent. The dissipation-rate consumers
-    # (`tke_dissipation` in `edmfx_tke.jl`, and the implicit Jacobian
-    # inline in `manual_sparse_jacobian.jl`) apply a small local floor
-    # only where division-by-zero would matter.
+    # eddy activity is genuinely absent. The dissipation-rate consumer
+    # (`step_prognostic_tke!`) applies a small local floor only where
+    # division-by-zero would matter.
     l_final = max(l_final, FT(0))    # ensure non-negative only
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
@@ -543,6 +544,8 @@ grids) do not underflow through the intermediate `a*b`.
     return ifelse(same_sign, 2 * a * (b / denom), zero(a))
 end
 
+# TODO: remove. The model does not call this function; only the tests
+# `cloud_fraction.jl` and `displacement_length_wiring.jl` use it.
 """
     set_displacement_buoyancy_gradient!(ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z)
 
@@ -945,7 +948,7 @@ humidities of the diffusing water (`ᶜdiffusing_water_phases`, or their values 
 a PROPHET subdomain). Mass that does not diffuse, rain and snow outside the LES
 closures, counts at `c_pd`, which makes `c_p` the coefficient of `∇T` in the
 gradient of the moist static energy that the PROPHET updrafts diffuse
-(`ᶜupdraft_diffusing_mse!`). In dry configurations (`ᶜq_water === nothing`),
+(`updraft_diffusing_mse!`). In dry configurations (`ᶜq_water === nothing`),
 `c_p = c_pd`.
 
 `c_p` is the coefficient of `∇T` in the sensible-heat part of the diffusive
@@ -1271,6 +1274,7 @@ width, `C → 0` makes the sensitivities vanish smoothly in clear air.
         normal_cdf(FT(λ_eq) / σ_S),
         FT(λ_eq > zero(λ_eq)),
     )
+    C <= zero(FT) && return (zero(FT), zero(FT))
     cp = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
     ∂q_sat_∂T = TD.∂q_vap_sat_∂T(thermo_params, T, ρ)
     L = TD.latent_heat_mixed(
@@ -2008,7 +2012,8 @@ Return the TKE dissipation coefficient `c_d = c_m c_b / Ri_c`.
 This derived closure coefficient combines the eddy-viscosity coefficient `c_m`
 (`tke_ed_coeff`), the static-stability coefficient `c_b`
 (`static_stab_coeff`), and the critical gradient Richardson number `Ri_c`
-(`Ri_crit`), all dimensionless. Used by `tke_dissipation`.
+(`Ri_crit`), all dimensionless. Used by the TKE dissipation in
+`step_prognostic_tke!`.
 
 # Extended help
 

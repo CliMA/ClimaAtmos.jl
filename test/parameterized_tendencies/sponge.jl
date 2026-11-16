@@ -122,6 +122,23 @@ include("../test_helpers.jl")
             @test CA.rayleigh_sponge_tendency_sgs_tracer(ᶜχʲ, ᶜχ, nothing) isa
                   NullBroadcasted
         end
+
+        @testset "Degenerate zd >= z_max returns finite zero" begin
+            for zd_bad in (z_max, FT(2) * z_max)
+                rs_bad = CA.RayleighSponge(;
+                    zd = zd_bad,
+                    α_uₕ = FT(1),
+                    α_w = FT(1),
+                    α_tracer = FT(2),
+                )
+                @test all(iszero, Array(parent(CA.β_rayleigh_uₕ.(rs_bad, ᶜz, z_max))))
+                @test all(iszero, Array(parent(CA.β_rayleigh_u₃.(rs_bad, ᶠz, z_max))))
+                @test all(iszero, Array(parent(CA.β_rayleigh_tracer.(rs_bad, ᶜz, z_max))))
+                vs_bad = CA.ViscousSponge(; zd = zd_bad, κ₂ = κ₂)
+                @test all(iszero, Array(parent(CA.β_viscous.(vs_bad, ᶜz, z_max))))
+                @test all(iszero, Array(parent(CA.β_viscous.(vs_bad, ᶠz, z_max))))
+            end
+        end
     end
 
     # ========================================================================

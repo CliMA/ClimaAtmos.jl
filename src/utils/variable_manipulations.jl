@@ -308,7 +308,7 @@ derivatives.
 The weight `w(a)` [-].
 """
 function sgs_weight_function(a, a_half)
-    if a < 0
+    if a <= 0
         zero(a)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)

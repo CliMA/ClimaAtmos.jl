@@ -4,7 +4,6 @@
 
 import ClimaCore: Fields, Spaces
 
-αₘ(s::RayleighSponge, z, α) = ifelse(z > s.zd, α, zero(α))
 ζ_rayleigh(s::RayleighSponge, z, zmax) = sinpi((z - s.zd) / (zmax - s.zd) / 2)^2
 
 """
@@ -12,9 +11,9 @@ import ClimaCore: Fields, Spaces
     β_rayleigh_u₃(s::RayleighSponge, z, zmax)
     β_rayleigh_tracer(s::RayleighSponge, z, zmax)
 
-Return the Rayleigh damping rate ``β(z) = α · sin²(π (z - zd) / (2 (zmax - zd)))`` for
-`z > zd` and zero below, where `α` is the variable-specific damping coefficient
-(`s.α_uₕ`, `s.α_w`, or `s.α_tracer`) [1/s].
+Return the Rayleigh damping rate ``β(z) = α · sin²(π (z - zd) / (2 (zmax - zd)))``
+for `z > zd` and zero below, where `α` is the variable-specific damping
+coefficient (`s.α_uₕ`, `s.α_w`, or `s.α_tracer`) [1/s].
 
 # Arguments
 
@@ -22,10 +21,12 @@ Return the Rayleigh damping rate ``β(z) = α · sin²(π (z - zd) / (2 (zmax - 
   - `z`: Altitude [m].
   - `zmax`: Domain top height [m].
 """
-β_rayleigh_uₕ(s::RayleighSponge, z, zmax) = αₘ(s, z, s.α_uₕ) * ζ_rayleigh(s, z, zmax)
-β_rayleigh_u₃(s::RayleighSponge, z, zmax) = αₘ(s, z, s.α_w) * ζ_rayleigh(s, z, zmax)
+β_rayleigh_uₕ(s::RayleighSponge, z, zmax) =
+    (z > s.zd && zmax > s.zd) ? s.α_uₕ * ζ_rayleigh(s, z, zmax) : zero(s.α_uₕ)
+β_rayleigh_u₃(s::RayleighSponge, z, zmax) =
+    (z > s.zd && zmax > s.zd) ? s.α_w * ζ_rayleigh(s, z, zmax) : zero(s.α_w)
 β_rayleigh_tracer(s::RayleighSponge, z, zmax) =
-    αₘ(s, z, s.α_tracer) * ζ_rayleigh(s, z, zmax)
+    (z > s.zd && zmax > s.zd) ? s.α_tracer * ζ_rayleigh(s, z, zmax) : zero(s.α_tracer)
 
 """
     rayleigh_sponge_tendency_uₕ(ᶜuₕ, s)

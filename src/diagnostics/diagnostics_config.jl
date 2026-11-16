@@ -27,10 +27,11 @@ and `additional` is empty. The type parameter `A` is the type of the `additional
     interpolation. Set to `false` to interpolate onto height levels spaced exponentially
     to approximate constant-pressure surfaces; the coordinate is still height. True
     pressure coordinates come from `pressure_coordinates: true` on the diagnostic.
-  - `debug_tendency::Bool = false`: include the column-integrated per-process
-    tendency diagnostics (short names of the form `<field>_tend_<process>_colint`).
-    Debug-only; each sample allocates a full `Y`-sized `FieldVector` and runs
-    one extra tendency evaluation.
+  - `debug_tendency::Bool = false`: include the per-process tendency
+    diagnostics of `tendency_diagnostics.jl` (3D fields with short names of the
+    form `tn_<field>_<process>`). Debug-only: instantaneous ARK tendencies run
+    one extra tendency evaluation per sample, and realized operator tendencies
+    record the state around every operator of every step.
 
 A simulation produces no diagnostics when `default = false`, `debug_tendency = false`,
 and `additional` is empty.

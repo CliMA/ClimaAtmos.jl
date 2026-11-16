@@ -6,6 +6,8 @@ import StaticArrays as SA
 import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
+import ClimaCore: DataLayouts, MatrixFields
+import UnrolledUtilities: StaticOneTo, unrolled_filter, unrolled_foreach, unrolled_map
 
 """
     buoyancy(ρ_ref, ρ, gradᵥ_Φ)
@@ -83,34 +85,6 @@ function draft_area(ρa, ρ)
 end
 
 """
-    ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
-
-Return the virtual-mass (buoyancy) term `α_b ᶠbuoyʲ` of the non-hydrostatic
-pressure closure for updrafts, in the units of `ᶠbuoyʲ` (for a covariant3
-component, [m²/s²]).
-
-`α_b` is `pressure_normalmode_buoy_coeff1`, so the effective buoyancy retained
-in the updraft momentum equation is `(1 - α_b) ᶠbuoyʲ`.
-
-# Arguments
-
-  - `params`: Model parameter set.
-  - `ᶠbuoyʲ`: Updraft buoyancy at cell faces, as a covariant3 or contravariant3
-    component.
-
-# Notes
-
-Currently unused: the implicit updraft-momentum solve applies `α_b` directly
-(see `initialize_implicit_problem.jl`).
-"""
-function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
-    turbconv_params = CAP.turbconv_params(params)
-    # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-    return α_b * ᶠbuoyʲ
-end
-
-"""
     pressure_drag_coefficient(
         α_d, scale_height, aʲ, a⁰, a_min, a_max,
         z = 0, z_sfc = 0, c_R = 0, R_max = 0,
@@ -132,10 +106,10 @@ environment is clamped from
 below at `1 - a_max`, which keeps the coefficient finite when the implicit
 velocity solve is handed an extrapolated `a⁰` outside `[0, 1]`.
 
-Shared by the implicit updraft momentum solve
-(`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
-(the pressure-drag term of `edmfx_tke_sources!`), so the kinetic energy the drag
-removes from the updraft is the energy the TKE budget receives.
+Shared by the split EDMF column step (`column_physics_step.jl`) and the TKE
+return-to-isotropy source (the pressure-drag term of `step_prognostic_tke!`),
+so the kinetic energy the drag removes from the updraft is the energy the TKE
+budget receives.
 """
 @inline function pressure_drag_coefficient(
     α_d,
@@ -172,39 +146,6 @@ the surface at slope `c_R` up to `R_max` (`pressure_drag_plume_radius_slope`,
     R_min = min(c_R * max(zero(z), z - z_sfc), R_max)
     a_lb = min(max(a_min, (R_min / scale_height)^2), a_max)
     return scale_height * sqrt(clamp(aʲ, a_lb, a_max))
-end
-
-"""
-    ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
-
-Return the drag term of the non-hydrostatic pressure closure for updrafts,
-
-    α_d (u₃ʲ - u₃⁰) ‖u₃ʲ - u₃⁰‖ / max(H, H_up_min),
-
-a simplified form in which the length scale is fixed at the reference scale
-height `H = R_d T_surf_ref / g`, floored by `min_updraft_top`. The result has
-the units of the velocity difference times an inverse length.
-
-# Arguments
-
-  - `params`: Model parameter set (`α_d` is `pressure_normalmode_drag_coeff`).
-  - `ᶠlg`: Face local geometry, used to take the norm of the velocity difference.
-  - `ᶠu3ʲ`, `ᶠu3⁰`: Updraft and environment vertical velocity at faces, as
-    covariant3 or contravariant3 components.
-
-# Notes
-
-Currently unused: the implicit updraft-momentum solve builds the equivalent
-quadratic drag sink directly (see `initialize_implicit_problem.jl`).
-"""
-function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
-    turbconv_params = CAP.turbconv_params(params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    H_up_min = CAP.min_updraft_top(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-    # We also used to have advection term here: α_a * w_up * div_w_up
-    return α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
-           max(scale_height, H_up_min)
 end
 
 """
@@ -260,10 +201,10 @@ end
 """
     condensate_rescale_ratio(q_cond, q_tot, ϵ)
 
-Return the factor `min(1, q_tot / q_cond)` by which condensates that sum to `q_cond`
-are multiplied so that they cannot exceed the total water `q_tot`, or zero where
-`q_cond` or `q_tot` is not above `ϵ`. Applies alike to specific humidities and to
-densities.
+Return the factor `min(1, q_tot / q_cond)` by which condensates that sum to
+`q_cond` are multiplied so that they cannot exceed the total water `q_tot`, or
+zero where `q_cond` or `q_tot` is not above `ϵ`. Applies alike to specific
+humidities and to densities.
 """
 @inline condensate_rescale_ratio(q_cond, q_tot, ϵ) =
     ifelse((q_cond > ϵ) & (q_tot > ϵ), min(one(ϵ), q_tot / q_cond), zero(ϵ))
@@ -335,7 +276,6 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
     (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
-    # The SGS tracers whose grid-mean densities are prognostic
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
         sgs_tracer_names(Y),
@@ -345,11 +285,15 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         @inline
         (Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j))
     end
-    DataLayouts.foreach_column(Y.c, drafts, ᶜh_tot, ᶜK) do Yc, drafts, ᶜh_tot, ᶜK
-        for (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ) in drafts
-            # Clip the area fraction to [0, 1] and the vertical velocity to
-            # non-negative values, with zero velocity where the face-averaged
-            # area fraction is negligible.
+    DataLayouts.foreach_column(
+        Y.c,
+        drafts,
+        ᶜh_tot,
+        ᶜK;
+        shmem = Val(:none),
+    ) do Yc, drafts, ᶜh_tot, ᶜK
+        unrolled_foreach(drafts) do (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ)
+            @inline
             ᶜρa = @. max(zero_FT, min(ᶜsgsʲ.ρa, ᶜρʲ))
             @. ᶜsgsʲ.ρa = ᶜρa
             @. ᶠu₃ʲ = ifelse(
@@ -357,40 +301,35 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
                 C3(zero_FT),
                 C3(max(ᶠu₃ʲ.components.data.:1, zero_FT)),
             )
-            # Relax mse, q_tot, and the SGS tracers toward the grid mean where
-            # ρa is negligible; elsewhere, floor them at zero and ensure mass
-            # conservation, ρaχʲ ≤ ρχ.
             ᶜnegligible = @. ᶜρa < ϵ
             @. ᶜsgsʲ.mse = ifelse(ᶜnegligible, ᶜh_tot - ᶜK, ᶜsgsʲ.mse)
-            ᶜq_totʲ = @. ifelse(
-                ᶜnegligible,
-                specific(Yc.ρq_tot, Yc.ρ),
-                min(max(zero_FT, ᶜsgsʲ.q_tot), max(zero_FT, Yc.ρq_tot) / ᶜρa),
-            )
-            @. ᶜsgsʲ.q_tot = ᶜq_totʲ
-            MatrixFields.unrolled_foreach(χ_names) do χ_name
-                @inline
-                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
-                ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
-                @. ᶜχʲ = ifelse(
+            if !(microphysics_model isa DryModel)
+                ᶜq_totʲ = @. ifelse(
                     ᶜnegligible,
-                    specific(ᶜρχ, Yc.ρ),
-                    min(max(zero_FT, ᶜχʲ), max(zero_FT, ᶜρχ) / ᶜρa),
+                    specific(Yc.ρq_tot, Yc.ρ),
+                    min(max(zero_FT, ᶜsgsʲ.q_tot), max(zero_FT, Yc.ρq_tot) / ᶜρa),
                 )
+                @. ᶜsgsʲ.q_tot = ᶜq_totʲ
+                unrolled_foreach(χ_names) do χ_name
+                    @inline
+                    ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                    ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+                    @. ᶜχʲ = ifelse(
+                        ᶜnegligible,
+                        specific(ᶜρχ, Yc.ρ),
+                        min(max(zero_FT, ᶜχʲ), max(zero_FT, ᶜρχ) / ᶜρa),
+                    )
+                end
+                if microphysics_model isa
+                   Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+                    ᶜq_cond = @. ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl + ᶜsgsʲ.q_rai + ᶜsgsʲ.q_sno
+                    ᶜratio = @. condensate_rescale_ratio(ᶜq_cond, ᶜq_totʲ, ϵ)
+                    @. ᶜsgsʲ.q_lcl *= ᶜratio
+                    @. ᶜsgsʲ.q_icl *= ᶜratio
+                    @. ᶜsgsʲ.q_rai *= ᶜratio
+                    @. ᶜsgsʲ.q_sno *= ᶜratio
+                end
             end
-            # Within-subdomain condensate rescaling: ensure
-            # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The bound above already
-            # clipped each χʲ ≥ 0, and multiplying by a ratio ≤ 1 preserves
-            # ρaχʲ ≤ ρχ.
-            microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-                continue
-            ᶜq_cond = @. ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl + ᶜsgsʲ.q_rai + ᶜsgsʲ.q_sno
-            ᶜratio = @. condensate_rescale_ratio(ᶜq_cond, ᶜq_totʲ, ϵ)
-            @. ᶜsgsʲ.q_lcl *= ᶜratio
-            @. ᶜsgsʲ.q_icl *= ᶜratio
-            @. ᶜsgsʲ.q_rai *= ᶜratio
-            @. ᶜsgsʲ.q_sno *= ᶜratio
         end
     end
     return nothing

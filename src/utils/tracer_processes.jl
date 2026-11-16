@@ -23,6 +23,9 @@ import UnrolledUtilities: unrolled_filter, unrolled_map
 # Sedimentation
 # ============================================================================
 
+# TODO: remove. The model does not call this function; only
+# `tracer_processes_tests.jl` and the tracer extension docs
+# (`extending_tracers.md`) refer to it.
 """
     sedimentation_velocity_name(ρχ_name)
 
@@ -74,9 +77,8 @@ concentrations, then P3 rime quantities.
 
 The list is a superset of what any one microphysics model carries; filtering
 against the fields actually present in `Y` happens in
-`sedimenting_tracer_names`. Membership is also used directly, e.g. in
-`vertical_diffusion_boundary_layer.jl`, to decide which tracers get the
-rescaled eddy diffusivity.
+`sedimenting_tracer_names`. Membership is also used directly, e.g. to exclude
+these tracers from hyperdiffusion.
 """
 const gs_sedimenting_tracer_candidates = (
     @name(ρq_lcl),
@@ -199,22 +201,6 @@ sedimenting_sgs_tracer_names(Y) =
     )
 
 """
-    sedimenting_sgs_mass_names(Y)
-
-Return a `Tuple` of the `@name`s (relative to `Y.c.sgsʲs.:(1)`) of the
-sedimenting SGS condensate *mass* tracers, whose sedimentation couples to the
-updraft `q_tot` and `mse`.
-
-Returns `()` when prognostic EDMF is not active.
-"""
-sedimenting_sgs_mass_names(Y) =
-    _sedimenting_sgs_names(
-        Val(hasproperty(Y.c, :sgsʲs)),
-        Y,
-        sgs_sedimenting_mass_candidates,
-    )
-
-"""
     _sedimenting_sgs_names(::Val{has_sgs}, Y, candidates)
 
 Filter `candidates` against the fields of the first updraft, dispatching on
@@ -247,51 +233,6 @@ condensate_phase(name) =
     (name == @name(ρq_icl) || name == @name(ρq_sno)) ? TD.Ice() :
     (name == @name(q_lcl) || name == @name(q_rai)) ? TD.Liquid() :
     (name == @name(q_icl) || name == @name(q_sno)) ? TD.Ice() : nothing
-
-"""
-    internal_energy_function(phase)
-
-Return the `Thermodynamics` function that computes the specific internal energy
-[J/kg] of a condensate with the given phase, `TD.Liquid()` or `TD.Ice()`.
-"""
-internal_energy_function(::TD.Liquid) = TD.internal_energy_liquid
-internal_energy_function(::TD.Ice) = TD.internal_energy_ice
-
-"""
-    enthalpy_function(phase)
-
-Return the `Thermodynamics` function that computes the specific enthalpy [J/kg]
-of a condensate with the given phase, `TD.Liquid()` or `TD.Ice()`.
-
-Used by the water-enthalpy part of the diffusive
-enthalpy flux and of its Jacobian.
-"""
-enthalpy_function(::TD.Liquid) = TD.enthalpy_liquid
-enthalpy_function(::TD.Ice) = TD.enthalpy_ice
-
-"""
-    condensate_heat_capacity(phase, thermo_params)
-
-Return the specific heat capacity [J/(kg K)] of a condensate with the given
-phase, `TD.Liquid()` or `TD.Ice()`: the temperature derivative of
-`enthalpy_function(phase)`.
-"""
-condensate_heat_capacity(::TD.Liquid, thermo_params) =
-    TD.Parameters.cp_l(thermo_params)
-condensate_heat_capacity(::TD.Ice, thermo_params) =
-    TD.Parameters.cp_i(thermo_params)
-
-"""
-    latent_heat_function(phase)
-
-Return the `Thermodynamics` function that computes the latent heat [J/kg] of
-the transition from vapor to a condensate with the given phase,
-`TD.latent_heat_vapor` for `TD.Liquid()` and `TD.latent_heat_sublim` for
-`TD.Ice()`. Divided by `cp_m`, it is the temperature change per unit
-condensate mass fraction at fixed enthalpy and `q_tot`.
-"""
-latent_heat_function(::TD.Liquid) = TD.latent_heat_vapor
-latent_heat_function(::TD.Ice) = TD.latent_heat_sublim
 
 """
     condensate_e_int_offset(phase, params)
@@ -364,18 +305,6 @@ microphysics_tracer_names(Y) = (
 )
 
 """
-    diffused_gs_scalar_names(Y)
-
-Return a `Tuple` of the `@name`s (relative to `Y.c`) of the grid-scale scalars
-that the vertical eddy diffusivity diffuses implicitly: `ρe_tot` plus the water
-tracers.
-
-`ρtke` is excluded, because it carries additional dissipation terms and is
-treated separately.
-"""
-diffused_gs_scalar_names(Y) = (@name(ρe_tot), microphysics_tracer_names(Y)...)
-
-"""
     passive_gs_tracer_names(Y)
 
 Return a `Tuple` of the `@name`s (relative to `Y.c`) of the grid-scale tracers
@@ -411,24 +340,6 @@ passive_sgs_tracer_names(Y) =
         name -> isnothing(sgs_sedimentation_velocity_name(name)),
         sgs_tracer_names(Y),
     )
-
-"""
-    advected_sgs_scalar_names(Y)
-
-Return a `Tuple` of the `@name`s (relative to `Y.c.sgsʲs.:(1)`) of all SGS
-scalars whose vertical advection with the updraft velocity is treated
-implicitly: sedimenting tracers, then `q_tot` and `mse`, then passive tracers.
-
-Returns `()` when prognostic EDMF is not active.
-"""
-advected_sgs_scalar_names(Y) =
-    hasproperty(Y.c, :sgsʲs) ?
-    (
-        sedimenting_sgs_tracer_names(Y)...,
-        @name(q_tot),
-        @name(mse),
-        passive_sgs_tracer_names(Y)...,
-    ) : ()
 
 # ============================================================================
 # Name lifting to full state names
