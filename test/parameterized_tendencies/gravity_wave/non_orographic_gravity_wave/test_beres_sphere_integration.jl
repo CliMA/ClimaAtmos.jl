@@ -344,3 +344,164 @@ import ClimaCore.Geometry as Geometry
         @test !isapprox(N_from(dTdz_bottom ./ 2, 1), N_from(dTdz_bottom, 1); rtol = 1e-3)
     end
 end
+
+# ============================================================================
+# Beres heights over topography
+#
+# The Beres source measures its heights from the local surface: the moment
+# fit, the z_bot ≥ 0 clamp, the 2 km floor, the Beres-G window and the origin of
+# its sine transform. A sphere with the DCMIP200 mountain gets the same synthetic
+# updraft in every column, defined by height above the ground: warmest at 1 km and
+# cooling linearly to the environment at 12 km, so it heats from 1 to 12 km (the
+# envelope reaches below the 2 km floor) and cools below 1 km. The column on the
+# mountain top must then give the same envelope, window and launch spectra,
+# Beres-C and Beres-G, as a sea-level column (a flat surface), up to the
+# differences of the terrain-following levels (1 km apart). The launch level, searched in
+# absolute height, must be the first level at or above the surface plus z_top.
+# ============================================================================
+@testset "Beres heights are measured from the local surface" begin
+    comms_ctx = ClimaComms.SingletonCommsContext()
+    longrun_config = joinpath(
+        @__DIR__,
+        "../../../../config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml",
+    )
+    toml_override = Dict(
+        "toml" => [
+            joinpath(@__DIR__, "../../../../toml/prognostic_edmfx.toml"),
+            joinpath(@__DIR__, "../../../../toml/nogw_beres_test.toml"),
+        ],
+    )
+    config = CA.AtmosConfig(
+        (CA.load_yaml_file(longrun_config), toml_override);
+        job_id = "beres_sphere_topography",
+        comms_ctx,
+        config_files = [longrun_config],
+    )
+    config.parsed_args["h_elem"] = 4
+    config.parsed_args["z_elem"] = 45
+    config.parsed_args["z_max"] = 45000.0
+    config.parsed_args["dz_bottom"] = 500.0
+    config.parsed_args["z_stretch"] = false
+    config.parsed_args["topography"] = "DCMIP200"
+    config.parsed_args["dt"] = "120secs"
+    config.parsed_args["t_end"] = "0secs"
+    config.parsed_args["dt_save_state_to_disk"] = "Inf"
+    config.parsed_args["output_default_diagnostics"] = false
+
+    simulation = CA.get_simulation(config)
+    p = simulation.integrator.p
+    Y = simulation.integrator.u
+    FT = eltype(Y.c.ρ)
+    nogw = p.non_orographic_gravity_wave
+    bs_c = nogw.gw_beres_source
+    z_floor = bs_c.z_bot_floor
+
+    # The surface height is the bottom face height.
+    ᶠz = Fields.coordinate_field(Y.f).z
+    z_surface = vec(Array(parent(nogw.gw_z_surface)))
+    @test z_surface == vec(Array(parent(Fields.level(ᶠz, ClimaCore.Utilities.half))))
+    col_mountain = argmax(z_surface)
+    col_flat = argmin(z_surface)
+    @test z_surface[col_mountain] > 500        # setup: a real mountain
+    @test z_surface[col_flat] == 0
+
+    # The same updraft in every column, by height above the ground.
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜz_rel = @. ᶜz - nogw.gw_z_surface
+    (; ᶜρʲs, ᶜTʲs, ᶜT, ᶠu³ʲs, ᶠu³) = p.precomputed
+    ᶜρ = Y.c.ρ
+    @. ᶜρʲs.:(1) = ᶜρ
+    @. ᶜTʲs.:(1) =
+        ᶜT + ifelse(
+            (ᶜz_rel >= 500) & (ᶜz_rel <= 12000),
+            ifelse(
+                ᶜz_rel < 1000,
+                FT(2) * (ᶜz_rel - 500) / 500,
+                FT(2) * (12000 - ᶜz_rel) / 11000,
+            ),
+            FT(0),
+        )
+    @. Y.c.sgsʲs.:(1).ρa =
+        ifelse((ᶜz_rel >= 250) & (ᶜz_rel <= 13000), FT(0.05) * ᶜρ, FT(0))
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    @. ᶠu³ʲs.:(1) = Geometry.Contravariant3Vector(Geometry.WVector(FT(1)), ᶠlg)
+    @. ᶠu³ = Geometry.Contravariant3Vector(Geometry.WVector(FT(0)), ᶠlg)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    @. Y.c.uₕ = Geometry.Covariant12Vector(Geometry.UVVector(FT(0), FT(0)), ᶜlg)
+    @. p.non_orographic_gravity_wave.ᶜuv_temp = Geometry.UVVector(Y.c.uₕ)
+    fill!(nogw.ᶜbuoyancy_frequency, FT(0.012))
+
+    column(f) = vec(Array(parent(f)))
+    nc = length(nogw.gw_c)
+    spectra(f) = [vec(Array(parent(getproperty(f.B0, n)))) for n in 1:nc]
+    results = map((false, true)) do shape_general
+        bs = CA.BeresSourceParams{FT}(;
+            (n => getfield(bs_c, n) for n in fieldnames(typeof(bs_c)))...,
+            beres_shape_general = shape_general,
+        )
+        p_mode = (;
+            p.precomputed,
+            p.params,
+            p.atmos,
+            p.scratch,
+            non_orographic_gravity_wave = merge(nogw, (; gw_beres_source = bs)),
+        )
+        CA.compute_beres_convective_heating!(Y, p_mode, nogw.ᶜbuoyancy_frequency)
+        B0 = spectra(nogw.gw_beres_B0_u)
+        (;
+            active = column(nogw.gw_beres_active),
+            zbot = column(nogw.gw_zbot),
+            ztop = column(nogw.gw_ztop),
+            h = column(nogw.gw_h_heat),
+            Q0 = column(nogw.gw_Q0),
+            dz_level = column(nogw.gw_beres_dz_level),
+            total = [sum(abs(B0[n][col]) for n in 1:nc) for col in eachindex(z_surface)],
+        )
+    end
+    (res_c, res_g) = results
+    for (name, res) in (("Beres-C", res_c), ("Beres-G", res_g))
+        @testset "$name: the mountain column matches a flat surface" begin
+            m, f = col_mountain, col_flat
+            @info "$name, mountain (z_sfc = $(z_surface[m]) m) vs sea level: z_bot $(res.zbot[m]) vs $(res.zbot[f]), z_top $(res.ztop[m]) vs $(res.ztop[f]), Q0 $(res.Q0[m]) vs $(res.Q0[f]), total |B0| $(res.total[m]) vs $(res.total[f])"
+            @test res.active[m] == 1
+            @test res.active[f] == 1
+            # The envelope, in height above the ground, reaches below the floor
+            # and is the same over the mountain as at sea level.
+            @test res.zbot[f] < z_floor
+            @test abs(res.zbot[m] - res.zbot[f]) < 0.05 * res.h[f]
+            @test abs(res.ztop[m] - res.ztop[f]) < 0.05 * res.h[f]
+            @test res.h[m] ≈ res.h[f] rtol = 0.05
+            @test res.Q0[m] ≈ res.Q0[f] rtol = 0.05
+            # The gather window starts at the floor, 2 km above the ground.
+            @test CA._beres_gather_bottom(res.zbot[m], res.ztop[m], z_floor) == z_floor
+            @test res.total[m] ≈ res.total[f] rtol = 0.1
+        end
+    end
+    # The Beres-G transform starts from the ground: its flux relative to the
+    # half-sine flux is the same over the mountain as at sea level.
+    ratio(col) = res_g.total[col] / res_c.total[col]
+    @test ratio(col_mountain) ≈ ratio(col_flat) rtol = 0.1
+
+    # The launch level, searched in absolute height, is the first level at or
+    # above the surface plus z_top.
+    CA.non_orographic_gravity_wave_compute_tendency!(
+        Y,
+        p,
+        p.atmos.non_orographic_gravity_wave,
+    )
+    z_launch = column(nogw.beres_source_ρ_z_u_v_level.:2)
+    level_launch = round.(Int, column(nogw.beres_source_ρ_z_u_v_level.:5))
+    z_top = column(nogw.gw_ztop)
+    active = column(nogw.gw_beres_active)
+    launches_right = map(findall(>(0.5), active)) do col
+        z_above = z_launch[col] - z_surface[col]
+        below =
+            level_launch[col] > 1 ?
+            vec(Array(parent(Fields.level(ᶜz, level_launch[col] - 1))))[col] -
+            z_surface[col] : -Inf
+        z_above >= z_top[col] && below < z_top[col]
+    end
+    @test !isempty(launches_right)
+    @test all(launches_right)
+    @test all(isfinite, Array(Fields.field2array(nogw.uforcing)))
+end

@@ -125,7 +125,7 @@ buffers, the working fields for the upward-marching kernel, and the accumulated 
 
 The `AtmosModel` method errors when a Beres source is configured without a
 `PrognosticEDMFX` turbulence-convection model with at least one updraft, whose draft state
-the source reads, and warns once (`warn_beres_topography`) when the grid has topography.
+the source reads.
 
 The column and sphere branches differ in how the AD99 launch level is set: a column uses
 the height `source_height` and damps from the model top down, a sphere uses
@@ -147,33 +147,8 @@ function non_orographic_gravity_wave_cache(Y, atmos::AtmosModel)
                 "turbulence-convection model with at least one updraft; got " *
                 "$(typeof(turbconv_model)).",
             )
-        warn_beres_topography(axes(Y.c))
     end
     return non_orographic_gravity_wave_cache(Y, nogw)
-end
-
-# Whether the Beres source has been reported to run with topography, which happens once
-# per session.
-const BERES_TOPOGRAPHY_WARNED = Ref(false)
-
-"""
-    warn_beres_topography(space)
-
-Return whether `space` has topography, and log a warning the first time in a session
-that it does.
-
-The Beres source measures heights from sea level, not from the surface: the 2 km floor
-`z_bot_floor`, the clamp `z_bot ≥ 0`, and the origin `z = 0` of the Beres-G sine
-transform. Over topography these are then wrong by the surface height. Called when the
-NOGW cache is built with a Beres source.
-"""
-function warn_beres_topography(space)
-    topography = has_topography(space)
-    if topography && !BERES_TOPOGRAPHY_WARNED[]
-        BERES_TOPOGRAPHY_WARNED[] = true
-        @warn "The Beres convective gravity-wave source runs on a grid with topography, but it measures heights from sea level, not from the surface: the 2 km floor (nogw_beres_z_bot_floor), the clamp z_bot >= 0, and the origin of the Beres-G sine transform are offset by the surface height over land."
-    end
-    return topography
 end
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
@@ -192,7 +167,8 @@ branches are never entered. Otherwise returns the per-column source properties (
 seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level state
 `beres_source_ρ_z_u_v_level`, the diagnostic fields `gw_halfsine`, `gw_launch_flux`,
 `gw_c_centroid`, `gw_beres_mech_flux`, and the Beres-G / mechanical-source launch state:
-the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
+the surface height under each column `gw_z_surface` [m], from which every Beres height is
+measured, the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the peak-normalized in-cloud heating shape `gw_beres_gprofile`
 (`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), the largest model
 level thickness over that window `gw_beres_dz_level` [m], and the obstacle-level updraft
@@ -201,6 +177,15 @@ velocity `gw_w_obstacle` [m/s].
 Called from `non_orographic_gravity_wave_cache`.
 """
 _beres_cache_fields(Y, ::Nothing, ::Val) = (;)
+
+# The surface height [m] under each column, the height of the bottom face, as a level
+# field on the cell centres (zero on a flat grid).
+function _surface_height(Y)
+    z_surface = similar(Fields.level(Y.c.ρ, 1))
+    ᶠz = Fields.coordinate_field(Spaces.face_space(axes(Y.c))).z
+    Fields.field_values(z_surface) .= Fields.field_values(Fields.level(ᶠz, half))
+    return z_surface
+end
 function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
     FT = Spaces.undertype(axes(Y.c))
     return (;
@@ -238,6 +223,7 @@ function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
         gw_beres_gprofile =
         similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
         gw_beres_dz_level = similar(Fields.level(Y.c.ρ, 1)),
+        gw_z_surface = _surface_height(Y),
         gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
     )
 end
@@ -547,9 +533,13 @@ function non_orographic_gravity_wave_compute_tendency!(
     if !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
         compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
 
-        (; gw_ztop, beres_source_ρ_z_u_v_level) = p.non_orographic_gravity_wave
+        (; gw_ztop, gw_z_surface, beres_source_ρ_z_u_v_level) =
+            p.non_orographic_gravity_wave
+        # gw_ztop is a height above the surface; the launch level search runs in
+        # absolute height.
+        ᶜz_top_absolute = @. lazy(gw_ztop + gw_z_surface)
         set_beres_launch_state!(
-            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, ᶜz_top_absolute,
         )
     end
 
@@ -633,7 +623,8 @@ or of the top level when no level reaches `gw_ztop`.
 Mutates `beres_source_ρ_z_u_v_level`, a level field of `(ρ, z, u, v, level)` tuples that
 `non_orographic_gravity_wave_forcing` reads as the Beres launch level. Called from
 `non_orographic_gravity_wave_compute_tendency!` after `compute_beres_convective_heating!`
-has set `gw_ztop`.
+has set `gw_ztop`; `ᶜz` and `gw_ztop` are both absolute heights there (`gw_ztop` plus the
+surface height).
 """
 function set_beres_launch_state!(
     beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
@@ -703,7 +694,8 @@ Extract the per-column convective source properties that the Beres spectrum need
 
 Mutates the Beres fields of `p.non_orographic_gravity_wave`; the return value is unused.
 The outputs are the half-sine amplitude `gw_Q0` [K/s], the heating depth `gw_h_heat` [m], the
-envelope bounds `gw_zbot`/`gw_ztop` [m], the mass-weighted envelope means `gw_u_heat`,
+envelope bounds `gw_zbot`/`gw_ztop` [m above the local surface; every Beres height here is
+measured from the surface, the bottom face of the column], the mass-weighted envelope means `gw_u_heat`,
 `gw_v_heat` [m/s] and `gw_N_source` [1/s], the deposition factor `gw_a_cover` [-], and the
 activation flag `gw_beres_active` (1 or 0). It also fills the Beres-G / mechanical-source
 launch state: the peak-normalized in-cloud heating shape `gw_beres_gprofile`, the
@@ -797,6 +789,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_c_centroid,
         gw_beres_gprofile,
         gw_beres_dz_level,
+        gw_z_surface,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -808,7 +801,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ϵ = eps(FT)
     _zero = FT(0)
     ᶜρ = Y.c.ρ
+    # Every Beres height (the envelope, the floor, the gather window and the Beres-G
+    # transform origin) is measured from the local surface, not from sea level.
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜz_above_surface = @. lazy(ᶜz - gw_z_surface)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
 
@@ -939,7 +935,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # envelope on the actual heating.
     result_field = gw_reduce_result
     ᶜΔz_m = Fields.Δz_field(axes(Y.c))
-    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, ᶜΔz_m)
+    input1 =
+        Base.Broadcast.broadcasted(tuple, ᶜz_above_surface, gw_Q_conv_ic, ᶜΔz_m)
     # `result_field` (gw_reduce_result) is a single 7-slot tuple field reused for
     # both passes. Pass 1 fills slots 1-3 with the heating moments
     # (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) and slot 4 with the height of the column's top cell
@@ -1003,14 +1000,20 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
     # 3D envelope mask (2D z_bot/z_top broadcast over column) and total updraft area
     # fraction, evaluated in the column reduction
-    ᶜin_env = @. lazy(ifelse((ᶜz >= gw_zbot) & (ᶜz <= gw_ztop), FT(1), FT(0)))
+    ᶜin_env = @. lazy(
+        ifelse(
+            (ᶜz_above_surface >= gw_zbot) & (ᶜz_above_surface <= gw_ztop),
+            FT(1),
+            FT(0),
+        ),
+    )
     # (Σⱼ ρaʲ/ρʲ without the drafts whose density is at most ϵ)
     draft_area = (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, sgsʲ.ρa / ρʲ, zero(ρʲ))
     ᶜa_up = @. lazy(mapreduce_with_init(draft_area, +, Y.c.sgsʲs, ᶜρʲs))
     # The activation integral counts only the heating at or above the floor, as the
     # moment fit and the gather do.
     z_floor = FT(gw_beres_source.z_bot_floor)
-    ᶜabove_floor = @. lazy(ifelse(ᶜz >= z_floor, FT(1), FT(0)))
+    ᶜabove_floor = @. lazy(ifelse(ᶜz_above_surface >= z_floor, FT(1), FT(0)))
     input2 = Base.Broadcast.broadcasted(
         tuple,
         gw_Q_conv,
@@ -1111,7 +1114,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # of the convective envelope above the floor, [max(z_bot, z_bot_floor), z_top],
     # linearly interpolated between the two model levels that bracket each point and
     # positive-part masked, then peak-normalized (amplitude stays in Q0; mode (ii)). z is
-    # absolute (rigid-ground origin for sin(m z)). Heating below z_bot_floor is
+    # the height above the local surface (rigid-ground origin for sin(m z)). Heating below z_bot_floor is
     # excluded, mirroring the moment-fit mask in Pass 1: z_bot = z_c − h/2 may legally
     # dip below the floor, and without the mask the sine transform would ingest the
     # PBL/surface-flux heating the fit deliberately excluded. The window starts at the
@@ -1122,7 +1125,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜgather_bottom =
         @. lazy(_beres_gather_bottom(gw_zbot, gw_ztop, z_floor))
     gather_input = Base.Broadcast.broadcasted(
-        tuple, ᶜz, gw_Q_conv_ic, ᶜgather_bottom, gw_ztop,
+        tuple, ᶜz_above_surface, gw_Q_conv_ic, ᶜgather_bottom, gw_ztop,
     )
     # The do-closure is a GPU kernel argument, so it may capture only isbits
     # values — never the type FT itself (same rule the Pass-1 moment reduce
@@ -1142,7 +1145,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # detail finer than this spacing; it sets the edge taper below and the shortest
     # vertical wavelength the Beres-G spectrum uses.
     window_input =
-        Base.Broadcast.broadcasted(tuple, ᶜz, ᶜΔz, ᶜgather_bottom, gw_ztop)
+        Base.Broadcast.broadcasted(
+            tuple, ᶜz_above_surface, ᶜΔz, ᶜgather_bottom, gw_ztop,
+        )
     Operators.column_reduce!(
         gw_beres_dz_level,
         window_input;
@@ -1166,7 +1171,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜw_up = p.scratch.ᶜtemp_scalar_3
     @. ᶜw_up = get_physical_w(ᶜuʲs.:(1), ᶜlg)
     obstacle_frac = FT(gw_beres_source.beres_obstacle_frac)
-    wobs_input = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜw_up, gw_zbot, gw_h_heat)
+    wobs_input = Base.Broadcast.broadcasted(
+        tuple, ᶜz_above_surface, ᶜw_up, gw_zbot, gw_h_heat,
+    )
     Operators.column_reduce!(
         gw_w_obstacle,
         wobs_input;
@@ -1190,10 +1197,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Q_conv_ic is a single linear remap rather than a nonlinear reconstruction
     # from three independently-remapped 2D fields.
     @. gw_halfsine = ifelse(
-        (ᶜz >= gw_zbot) & (ᶜz <= gw_zbot + gw_h_heat),
+        (ᶜz_above_surface >= gw_zbot) & (ᶜz_above_surface <= gw_zbot + gw_h_heat),
         gw_beres_active *
         gw_Q0 *
-        sin(FT(π) * (ᶜz - gw_zbot) / max(gw_h_heat, eps(FT))),
+        sin(FT(π) * (ᶜz_above_surface - gw_zbot) / max(gw_h_heat, eps(FT))),
         FT(0),
     )
 
@@ -2341,7 +2348,8 @@ uniformly on the convective envelope `[z_bot, z_top]` with `span = z_top - z_bot
 unclamped moment depth `h`, which can differ when the envelope is floored at 0 or
 capped at the domain top). `gprofile` is the peak-normalised `NTuple{ng}` of `g`
 at `z_i = z_bot + (i-1)·span/(ng-1)`; `g ≡ 0` below `z_bot` (masked), so
-`∫_0^{z_top} = ∫_{z_bot}^{z_top}` with `z` measured from the rigid ground `z=0`
+`∫_0^{z_top} = ∫_{z_bot}^{z_top}` with `z` measured from the rigid ground `z=0` (the
+local surface)
 (the `W(0)=0` Dirichlet origin — Beres-G is sensitive to launch altitude through
 `sin(m z)`, unlike the half-sine `V_hs`).
 

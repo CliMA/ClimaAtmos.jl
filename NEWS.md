@@ -37,9 +37,12 @@ main
   sources. NaN or infinite drag is reported (once) before the clean-up zeroes it.
 - ![][badge-💥breaking] `nogw_beres_source: true` requires `turbconv: prognostic_edmfx` with
   `updraft_number ≥ 1`; other `turbconv` values (`edmfx`, `diagnostic_edmfx`) now error at
-  construction, as does a Julia-built model without `PrognosticEDMFX`. A warning is
-  logged when the Beres source runs over topography, since it measures heights from sea
-  level.
+  construction, as does a Julia-built model without `PrognosticEDMFX`.
+- ![][badge-🐛bugfix] The Beres source measures its heights from the local surface, not
+  from sea level: the moment fit, the `z_bot ≥ 0` clamp, the 2 km floor, the Beres-G
+  window and the origin of its sine transform. Over topography the floor now sits 2 km
+  above the ground, and the diagnostics `nogw_zbot`/`nogw_ztop` are heights above the
+  surface. Flat (aquaplanet) runs are unchanged.
 - ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
   exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
   layer's flux is divided by the mean mass of the two cells it spans (the model's own

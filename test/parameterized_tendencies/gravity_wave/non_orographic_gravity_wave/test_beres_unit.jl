@@ -1562,21 +1562,3 @@ end
         @test fine.steady / fine.moving ≈ coarse.steady / coarse.moving rtol = 0.02
     end
 end
-
-# ============================================================================
-# The Beres source measures heights from sea level, so it warns, once per
-# session, when it runs on a grid with topography.
-# ============================================================================
-@testset "Beres source warns once on a grid with topography" begin
-    space_with(topography) =
-        CA.get_spaces(
-            CA.SphereGrid(Float64; h_elem = 2, z_elem = 5, z_max = 20000.0, topography),
-        ).center_space
-    hilly = space_with(CA.DCMIP200Topography())
-    flat = space_with(CA.NoTopography())
-    CA.BERES_TOPOGRAPHY_WARNED[] = false
-    @test (@test_logs CA.warn_beres_topography(flat)) == false
-    @test (@test_logs (:warn, r"from sea level") CA.warn_beres_topography(hilly)) == true
-    @test (@test_logs CA.warn_beres_topography(hilly)) == true   # reported once
-    CA.BERES_TOPOGRAPHY_WARNED[] = false
-end

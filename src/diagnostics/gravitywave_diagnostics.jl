@@ -221,7 +221,7 @@ add_diagnostic_variable!(
     short_name = "nogw_zbot",
     long_name = "NOGW Convective Envelope Bottom Height",
     units = "m",
-    comments = "Bottom of the convective heating envelope used by the Beres NOGW source (zero when inactive)",
+    comments = "Bottom of the convective heating envelope used by the Beres NOGW source, as a height above the local surface (zero when inactive)",
     compute! = compute_nogw_zbot!,
 )
 
@@ -254,7 +254,7 @@ add_diagnostic_variable!(
     short_name = "nogw_ztop",
     long_name = "NOGW Convective Envelope Top Height",
     units = "m",
-    comments = "Top of the convective heating envelope used by the Beres NOGW source (zero when inactive)",
+    comments = "Top of the convective heating envelope used by the Beres NOGW source, as a height above the local surface (zero when inactive)",
     compute! = compute_nogw_ztop!,
 )
 
