@@ -481,7 +481,6 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params, store
         store_θ_li && @. ᶜθ_li = ᶜθ_li_reg
         @. ᶠ∂θli∂z = projected_c3_data(ᶠgradᵥ(ᶜθ_li_reg), ᶠlg)
         @. ᶠ∂qt∂z = projected_c3_data(ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
-        return nothing
     end
     return nothing
 end
@@ -521,8 +520,8 @@ end
 """
     ᶜbuoyancy_gradient(p)
 
-Return a lazy center field of the moist buoyancy gradient `N²` [1/s²]
-(`blended_N²`), from the precomputed chain-rule coefficients `ᶜbg_coeffs`, the
+Return a lazy center field of the moist buoyancy gradient `N²` [1/s²],
+`blended_N²` of the precomputed chain-rule coefficients `ᶜbg_coeffs`, the
 cloud fraction, and the centered gradients of `θ_li` and `q_tot`
 (`ᶜVanLeer_gradient`). It is the centered counterpart of the face `ᶠbuoygrad`.
 """

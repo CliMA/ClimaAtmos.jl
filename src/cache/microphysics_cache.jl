@@ -342,7 +342,6 @@ function set_precipitation_velocities!(
         end
 
         set_bottom_precipitation_energy_flux!(sfc_wₕhₜ, ᶜρwₕhₜ, Yc.ρ)
-        return nothing
     end
     return nothing
 end
