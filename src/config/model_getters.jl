@@ -39,6 +39,26 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
+    get_precipitation_evaporation_0m(parsed_args)
+
+Return whether the below-cloud evaporation of the 0-moment precipitation flux is
+on, from the `precipitation_evaporation_0m` config key: `"Kessler"` (the
+Kessler-type evaporation of CloudMicrophysics `Evaporation0M`) → `true`, `~`
+(null, the default) → `false`. Parsed with `parse_option`, so an unknown string
+raises an error. The option is only valid with `microphysics_model: "0M"`, and
+needs a positive `precipitation_evaporation_coefficient` (the ClimaParams
+default is positive); both are checked in `microphysics_0m_parameters`.
+"""
+get_precipitation_evaporation_0m(parsed_args) =
+    !isnothing(
+        parse_option(
+            get(parsed_args, "precipitation_evaporation_0m", nothing),
+            Dict("Kessler" => :Kessler),
+            "precipitation_evaporation_0m",
+        ),
+    )
+
+"""
     get_microphysics_1m_options(parsed_args)
 
 Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword

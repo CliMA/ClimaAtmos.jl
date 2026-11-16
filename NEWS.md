@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (`precipitation_evaporation_0m:
+  "Kessler"`, default off). Evaporated precipitation returns the energy it was
+  removed with, so no energy reaches the surface without water. With
+  `PrognosticEDMFX`, the updraft precipitation timescale is
+  `precipitation_timescale_updraft_ratio * precipitation_timescale` (default
+  ratio 1, unchanged). New diagnostics `prevap`, `tnhusevp` and `prup`. The
+  TRMM 0M EDMF column job turns evaporation on.
 
 0.42.19
 -------

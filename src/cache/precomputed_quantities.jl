@@ -140,12 +140,16 @@ function implicit_precomputed_quantities(Y, atmos)
     # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by
     # update_implicit_microphysics_cache!, called from
     # set_implicit_precomputed_quantities_core!, so autodiff needs Dual-typed
-    # copies.
+    # copies. The same holds for the per-column factors that rescale the
+    # below-cloud evaporation of rain and snow to at most the precipitation
+    # produced in the column.
     implicit_mp_quantities =
         microphysics_model isa EquilibriumMicrophysics0M ?
         (;
             ᶜρ_dq_tot_dt = similar(Y.c, FT),
             ᶜρ_de_tot_dt = similar(Y.c, FT),
+            precip_evap_scale_rai = ones(axes(Fields.level(Y.f, half))),
+            precip_evap_scale_sno = ones(axes(Fields.level(Y.f, half))),
         ) : (;)
 
     # 1M implicit cache: `set_implicit_precomputed_quantities!` rewrites
@@ -409,7 +413,22 @@ function precomputed_quantities(Y, atmos)
         # surface fluxes) live in implicit_precomputed_quantities: the
         # implicit microphysics refresh rewrites them from the Newton
         # iterate, so autodiff needs Dual-typed copies of them.
-        precipitation_quantities = (; ᶜmp_tendency = similar(Y.c, MP0_NT))
+        # Below-cloud evaporation of the precipitation flux (ᶜprecip_evap) and
+        # its column integrals: computed in the explicit stage and frozen
+        # through the Newton iterations. Zero when evaporation is off.
+        ᶜprecip_evap = similar(
+            Y.c,
+            @NamedTuple{
+                ρ_evap_rai::FT, ρ_evap_sno::FT, ρe_evap_rai::FT, ρe_evap_sno::FT,
+            }
+        )
+        fill!(parent(ᶜprecip_evap), 0)
+        precipitation_quantities = (;
+            ᶜmp_tendency = similar(Y.c, MP0_NT),
+            ᶜprecip_evap,
+            col_integrated_precip_evap_rai = zeros(axes(Fields.level(Y.f, half))),
+            col_integrated_precip_evap_sno = zeros(axes(Fields.level(Y.f, half))),
+        )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         # `ᶜmp_tendency_implicit` lives in `implicit_precomputed_quantities`
         # (Newton overwrites it from Dual-typed Y during autodiff), spliced in
