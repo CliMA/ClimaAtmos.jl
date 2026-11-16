@@ -94,7 +94,6 @@ include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("setups", "Setups.jl"))
 include(joinpath("utils", "refstate_thermodynamics.jl"))
 
-include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
@@ -144,13 +143,8 @@ include(joinpath("prognostic_equations", "scm_coriolis.jl"))
 include(joinpath("prognostic_equations", "eddy_diffusion_closures.jl"))
 include(joinpath("prognostic_equations", "mass_flux_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))
-include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
-include(
-    joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
-)
-include(joinpath("prognostic_equations", "surface_flux.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(
@@ -175,6 +169,10 @@ include(
     ),
 )
 include(joinpath("prognostic_equations", "advection.jl"))
+include(joinpath("prognostic_equations", "realized_increments.jl"))
+include(joinpath("prognostic_equations", "column_physics_step.jl"))
+include(joinpath("prognostic_equations", "post_step_physics.jl"))
+include(joinpath("prognostic_equations", "vertical_transport_step.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))

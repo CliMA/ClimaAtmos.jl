@@ -61,3 +61,21 @@ macro any_reltype(obj, ets, warn = true)
         warn = $(esc(warn)),
     ))
 end
+
+"""
+    ColumnSweep <: Function
+
+Supertype for `isbits` column-sweep functors passed to
+`DataLayouts.foreach_column`. Subtyping `Function` keeps warped-grid CUDA
+slice-loop kernels within Julia's vararg specialization heuristics, while the
+`Adapt.adapt_structure` method overrides `Adapt`'s generic closure walker and
+verifies on the host that every subtype is `isbits`.
+"""
+abstract type ColumnSweep <: Function end
+
+function Adapt.adapt_structure(_to, sw::ColumnSweep)
+    isbits(sw) || throw(
+        ArgumentError("$(typeof(sw)) <: ColumnSweep must be isbits for GPU execution"),
+    )
+    return sw
+end

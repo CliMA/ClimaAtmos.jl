@@ -315,15 +315,15 @@ end
     summary_microphysics(io::IO, microphysics_model::NonEquilibriumMicrophysics1M)
 
 Print to `io` the 1-moment microphysics settings that `summary(::AtmosModel)`
-does not surface, because they are struct fields hidden by `typeof`: the substep
-counts and the per-process option selections (e.g. which autoconversion or
+does not surface, because they are struct fields hidden by `typeof`: the
+per-process option selections (e.g. which autoconversion or
 accretion scheme is active, or `disabled` when the option is `nothing`).
 
 # Arguments
 
   - `io`: Stream to print to.
-  - `microphysics_model`: Microphysics model whose substep counts and
-    per-process options are printed.
+  - `microphysics_model`: Microphysics model whose per-process options are
+    printed.
 """
 function summary_microphysics(
     io::IO,
@@ -331,13 +331,10 @@ function summary_microphysics(
 )
     options = microphysics_model.processes
     keys = collect(string.(propertynames(options)))
-    append!(keys, ("n_substeps", "n_substeps_quad"))
     buf = maximum(length, keys)
     print(io, '\n')
     pad(k) = repeat(" ", buf - length(k) + 2)
     line(k, v) = print(io, "  ", pad(k), '`', k, '`', "::", '`', v, '`', '\n')
-    line("n_substeps", microphysics_model.n_substeps)
-    line("n_substeps_quad", microphysics_model.n_substeps_quad)
     for pn in propertynames(options)
         opt = getproperty(options, pn)
         label = isnothing(opt) ? "disabled" : string(nameof(typeof(opt)))

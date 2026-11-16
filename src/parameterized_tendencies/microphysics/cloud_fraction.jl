@@ -47,9 +47,9 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
 
     # Precompute horizontal gradient invariants once before the Picard loop:
     # they depend only on `(ᶜq_tot_nonneg, ᶜθ_li)`, which are fixed during
-    # Picard. The invariants of `hgrad_invariant!` for q_tot and θ_li and the
-    # cross invariant of `hgrad_cross_invariant!` for (θ_li, q_tot) are computed
-    # in one slab loop and then DSSed. The slab loop requests the shared memory
+    # Picard. The invariants of `hgrad_invariant!` for q_tot and θ_li and their
+    # cross invariant for (θ_li, q_tot) are computed in one slab loop and then
+    # DSSed. The slab loop requests the shared memory
     # of the `:medium` level, which its lumped restrictions need, so that it is
     # not first compiled without it.
     if uses_hgrad
@@ -86,29 +86,15 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     fused = cloud_model isa QuadratureCloud && microphysics_model isa MoistMicrophysics
     is_edmf = turbconv_model isa PrognosticEDMFX
     env_state =
-        fused ? cloud_env_state(Y, p, thermo_params; materialize = is_edmf) :
-        nothing
+        fused ? cloud_env_state(Y, p, thermo_params, Val(is_edmf)) : nothing
 
     # Picard iterates: `c0` holds the initial cloud fraction, and the first
     # iterate stays in `ᶜcloud_fraction` until the Aitken step reads it.
     c0 = p.scratch.ᶜtemp_scalar_4
     @. c0 = ᶜcloud_fraction
 
-    # One Picard step: fused buoygrad + covariance + l_mix + α, then the cloud
-    # fraction. The second step applies the Aitken acceleration.
-    function picard_step!(::Val{aitken}) where {aitken}
-        set_covariance_cache!(Y, p, thermo_params; env_state)
-        if fused
-            set_quadrature_cloud_fraction!(Y, p, env_state, c0, Val(aitken))
-        else
-            set_cloud_fraction!(
-                Y, p, microphysics_model, cloud_model, aitken ? c0 : nothing,
-            )
-        end
-        return nothing
-    end
-    picard_step!(Val(false))
-    picard_step!(Val(true))
+    _picard_step!(Y, p, thermo_params, env_state, c0, Val(fused), Val(false))
+    _picard_step!(Y, p, thermo_params, env_state, c0, Val(fused), Val(true))
 
     # TODO: Under `AbstractEDMF`, write `ᶜbuoygrad` and `ᶜl_mix` in one column loop.
     if !uses_covariances(p.atmos)
@@ -127,10 +113,36 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     set_covariance_cache!(Y, p, thermo_params; env_state)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
     final_env_state =
-        fused ? env_state :
-        cloud_env_state(Y, p, thermo_params; materialize = is_edmf)
+        fused ? env_state : cloud_env_state(Y, p, thermo_params, Val(is_edmf))
     set_sgs_moments_and_cloud_fraction!(Y, p, final_env_state)
     set_precip_fraction!(Y, p, final_env_state.ᶜq_precip)
+    return nothing
+end
+
+# One Picard step: fused buoygrad + covariance + l_mix + α, then the cloud
+# fraction. The second step applies the Aitken acceleration.
+function _picard_step!(
+    Y,
+    p,
+    thermo_params,
+    env_state,
+    c0,
+    ::Val{fused},
+    ::Val{aitken},
+) where {fused, aitken}
+    (; cloud_model, microphysics_model) = p.atmos
+    set_covariance_cache!(Y, p, thermo_params; env_state)
+    if fused
+        set_quadrature_cloud_fraction!(Y, p, env_state, c0, Val(aitken))
+    else
+        set_cloud_fraction!(
+            Y,
+            p,
+            microphysics_model,
+            cloud_model,
+            aitken ? c0 : nothing,
+        )
+    end
     return nothing
 end
 
@@ -403,6 +415,9 @@ quadratic term is centred so that the mean of `S` is `μ_S`; its variance
     return (; lin, curv)
 end
 
+# TODO: remove. The model computes this invariant in the fused slab loop of
+# `set_sgs_moments_and_cloud_fraction!`; only the test
+# `displacement_length_wiring.jl` calls this function.
 """
     hgrad_invariant!(ᶜinv, ᶜψ, p)
 
@@ -417,21 +432,6 @@ needs no DSS (single column) the restriction is a no-op and the nodal invariant 
 """
 function hgrad_invariant!(ᶜinv, ᶜψ, p)
     @. ᶜinv = lumpedₕ(norm_sqr(gradₕ(ᶜψ)))
-    buf = p.scratch.ᶜscalar_dss_buffer
-    buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
-    return nothing
-end
-
-"""
-    hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
-
-Write the horizontal-gradient cross invariant `∇_h ψ1 · ∇_h ψ2` into `ᶜinv`, with the
-same gradient estimate and element filter as `hgrad_invariant!`: the nodal
-cross invariant, replaced within each element by its lumped GLL{2} restriction, then one
-weighted DSS (skipped on a space that needs no DSS).
-"""
-function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
-    @. ᶜinv = lumpedₕ(dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2)))
     buf = p.scratch.ᶜscalar_dss_buffer
     buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
     return nothing
@@ -521,8 +521,7 @@ Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
     samples.
  4. θ′θ′, q′q′ and, for the diagnosed correlation, θ′q′ from the displacement,
     transformed to T. The caller fills the horizontal gradient invariants of
-    `q_tot`, `θ_li` and their cross term (`hgrad_invariant!`,
-    `hgrad_cross_invariant!`), which are zero when
+    `q_tot`, `θ_li` and their cross term (`hgrad_invariant!`), which are zero when
     `sgs_variance_horizontal_scale_factor` is 0.
  5. With `sgs_variance_curvature`, the displacement coefficients `ᶜdisp_S`
     (`displacement_curvature_coefficients`) from `ℓ_v = √(2 c_σ) l_d`, the Van Leer
@@ -581,7 +580,7 @@ function set_covariance_cache!(
 
     FT = eltype(p.params)
     diag_corr = p.atmos.tq_correlation_model isa DiagnosedTqCorrelation
-    has_curvature = p.atmos.sgs_variance_curvature
+    has_curvature = hasproperty(p.precomputed, :ᶜdisp_S)
     (;
         ᶜT′T′,
         ᶜq′q′,
@@ -659,12 +658,6 @@ function set_covariance_cache!(
     uses_1m_times =
         p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
         CAP.sgs_cloud_species_constant_timescales(p.params) <= 0
-    τ_mp_params =
-        uses_1m_times ? CAP.cloud_formation_1m_params(p.params) :
-        ConstantMicrophysicsTimescales(
-            FT(CAP.condensation_evaporation_timescale(p.params)),
-            FT(CAP.sublimation_deposition_timescale(p.params)),
-        )
     w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
     q_min = FT(TD.Parameters.q_min(thermo_params))
     c_d = tke_dissipation_coefficient(turbconv_params)
@@ -685,7 +678,7 @@ function set_covariance_cache!(
     # the correlation guard and the fidelity are all evaluated at this state.
     (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) =
         isnothing(env_state) ?
-        cloud_env_state(Y, p, thermo_params; materialize = true) : env_state
+        cloud_env_state(Y, p, thermo_params, Val(true)) : env_state
     ᶜenv_pack = @. lazy(
         tuple(
             ᶜρ_env, ᶜT_mean, ᶜq_mean - ᶜq_precip, ᶜq_lcl + ᶜq_icl, ᶜq_lcl, ᶜq_icl,
@@ -694,26 +687,54 @@ function set_covariance_cache!(
     )
     ᶜinv_pack = @. lazy(tuple(ᶜinv_q, ᶜinv_θq, ᶜinv_θ))
 
-    _set_covariance_cache_loop!(
-        Y, thermo_params,
-        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
-        ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
-        ᶠ∂θli∂z, ᶠ∂qt∂z,
-        ᶜenv_pack, ᶜinv_pack,
-        ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
-        sfc_conditions, ᶜstrain_rate_norm,
-        c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
-        κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
-        A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
-        turbconv_params, sf_params, scale_blending_method,
-        zero_FT, one_FT, ϵ_FT, inf_FT,
-        Val(is_edmf),
-        Val(has_tke),
-        Val(diag_corr),
-        Val(has_curvature),
-        Val(has_α),
-        Val(is_0m),
-    )
+    if uses_1m_times
+        τ_1m_params = CAP.cloud_formation_1m_params(p.params)
+        _set_covariance_cache_loop!(
+            Y, thermo_params,
+            ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+            ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+            ᶠ∂θli∂z, ᶠ∂qt∂z,
+            ᶜenv_pack, ᶜinv_pack,
+            ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+            sfc_conditions, ᶜstrain_rate_norm,
+            c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
+            κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
+            A, τ_1m_params, w_eq, q_min, c_d, c_trunc, vkc,
+            turbconv_params, sf_params, scale_blending_method,
+            zero_FT, one_FT, ϵ_FT, inf_FT,
+            Val(is_edmf),
+            Val(has_tke),
+            Val(diag_corr),
+            Val(has_curvature),
+            Val(has_α),
+            Val(is_0m),
+        )
+    else
+        τ_const_params = ConstantMicrophysicsTimescales(
+            FT(CAP.condensation_evaporation_timescale(p.params)),
+            FT(CAP.sublimation_deposition_timescale(p.params)),
+        )
+        _set_covariance_cache_loop!(
+            Y, thermo_params,
+            ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+            ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+            ᶠ∂θli∂z, ᶠ∂qt∂z,
+            ᶜenv_pack, ᶜinv_pack,
+            ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+            sfc_conditions, ᶜstrain_rate_norm,
+            c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
+            κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
+            A, τ_const_params, w_eq, q_min, c_d, c_trunc, vkc,
+            turbconv_params, sf_params, scale_blending_method,
+            zero_FT, one_FT, ϵ_FT, inf_FT,
+            Val(is_edmf),
+            Val(has_tke),
+            Val(diag_corr),
+            Val(has_curvature),
+            Val(has_α),
+            Val(is_0m),
+        )
+    end
     has_α && set_updraft_variance_fidelity!(
         p.atmos.sgs_variance_fidelity_model, turbconv_model,
         p.atmos.microphysics_model,
@@ -1876,7 +1897,14 @@ Without EDMF, the grid-mean mixing length overwrites `ᶜtemp_scalar` and
 `ᶜtemp_scalar_2` in every covariance update, so a state that must outlive one
 update stays lazy.
 """
-function cloud_env_state(Y, p, thermo_params; materialize)
+@inline cloud_env_state(Y, p, thermo_params; materialize) =
+    cloud_env_state(Y, p, thermo_params, Val(materialize))
+function cloud_env_state(
+    Y,
+    p,
+    thermo_params,
+    ::Val{materialize},
+) where {materialize}
     (; turbconv_model, microphysics_model) = p.atmos
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
@@ -1970,7 +1998,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     # `_disp_curv` of a scalar field give zeros, for which
     # `displacement_condensate` is the truncated-Gaussian expectation.
     ᶜdisp_S_or_zero =
-        p.atmos.sgs_variance_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+        hasproperty(p.precomputed, :ᶜdisp_S) ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
     DataLayouts.foreach_column(
         ᶜsgs_moments, ᶜcloud_fraction, Y.c, ᶜρ_env, ᶜT_mean, ᶜq_mean,
         ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
@@ -1987,59 +2015,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
             thermo_params, σ_abs,
-        )
-    end
-    return nothing
-end
-
-"""
-    set_sgs_moments!(Y, p)
-
-Refresh `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` from the current state
-`Y` without touching `ᶜcloud_fraction` or `ᶜprecip_frac`. Used by
-`set_implicit_precomputed_quantities!` on each Newton iterate (`λ_lagrange`
-follows `q_lcl + q_icl`, which Newton moves): the implicit 1M BMT reads
-`ᶜsgs_moments` directly, while `ᶜcloud_fraction` is not a BMT input and
-`ᶜprecip_frac` only enters the BMT when `sgs_precip_incloud_fraction > 0`
-(off by default). `set_precomputed_quantities!` does not call this helper
-because `set_covariance_cache_and_cloud_fraction!` in its explicit half
-already left `ᶜsgs_moments` current. No-op when `ᶜsgs_moments` is not
-allocated (dry / 0M).
-"""
-NVTX.@annotate function set_sgs_moments!(Y, p)
-    hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
-
-    thermo_params = CAP.thermodynamics_params(p.params)
-    turbconv_model = p.atmos.turbconv_model
-    microphysics_model = p.atmos.microphysics_model
-
-    ᶜρ_env, ᶜT_mean, ᶜq_mean =
-        _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    ᶜq_lcl, ᶜq_icl =
-        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    ᶜq_precip =
-        _get_precip_mean(Y, p, turbconv_model, microphysics_model)
-    sgs_quad = p.atmos.sgs_quadrature
-    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
-
-    FT = eltype(p.params)
-    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
-    c = equilibrium_condensate_truncation(p)
-
-    if p.atmos.sgs_variance_curvature
-        ᶜdisp_S = p.precomputed.ᶜdisp_S
-        @. ᶜsgs_moments = _compute_sgs_moments(
-            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-            max(0, ᶜq_mean - ᶜq_precip), ᶜdisp_S.lin, ᶜdisp_S.curv, c,
-        )
-    else
-        lin₀ = zero(FT)
-        curv₀ = zero(FT)
-        @. ᶜsgs_moments = _compute_sgs_moments(
-            vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-            max(0, ᶜq_mean - ᶜq_precip), lin₀, curv₀, c,
         )
     end
     return nothing

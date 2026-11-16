@@ -4,7 +4,6 @@ energy_humidity_upwinding: first_order
 tracer_upwinding: first_order
 microphysics_model: "1M"
 cloud_model: "grid_scale" # quadrature
-implicit_microphysics: false
 use_sgs_quadrature: false
 #quadrature_order: 3
 config: "column"

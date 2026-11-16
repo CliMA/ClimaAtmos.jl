@@ -179,6 +179,9 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     )
 end
 
+# TODO: remove or move into the test suite. The model applies this operator in
+# two parts (see the docstring); only `column_physics_step_tests.jl` and
+# `les_energy_split_tests.jl` call it, as the reference for those parts.
 """
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
 
@@ -196,14 +199,11 @@ water terms are absent in dry configurations. Total water diffuses into `Yₜ.c.
 tracer `χ` receives `-∇ᵥ·(-ρ D_v ∇ᵥχ)`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`,
 and `ᶜT` from `p.precomputed` and writes `p.scratch` scalar fields.
 
-Applied from `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
-`implicit_tendency!` when it is `Implicit()`. In the implicit case the Jacobian
-(`update_diffusion_jacobian!`) linearizes the enthalpy flux in the same form, and the
-water-species, tracer, and `uₕ` flux divergences, with a frozen eddy viscosity; the `u₃` term and the
-horizontal-gradient part of `τ` are omitted from the Jacobian, which
-affects the Newton convergence rate but not the tendency.
-
-It is a no-op unless the model's axes include the vertical direction
+This is the complete vertical operator. The model applies it in two parts that
+sum to it: the column physics (`step_vertical_diffusion_and_surface!`) solves
+the scalar fluxes, `∂_z(ρνₜ ∂_z uₕ)`, and `∂_z(2ρνₜ ∂_z w)` implicitly, and
+`vertical_smagorinsky_lilly_explicit_tendency!` adds the remaining momentum
+terms. It is a no-op unless the model's axes include the vertical direction
 (`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
 `horizontal_smagorinsky_lilly_tendency!`.
 """
@@ -240,4 +240,76 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
         p.scratch.ᶜtemp_scalar_2;
         precipitation = true,
     )
+end
+
+vertical_smagorinsky_lilly_explicit_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+"""
+    vertical_smagorinsky_lilly_explicit_tendency!(Yₜ, Y, p, t, model)
+
+Add the momentum terms of `vertical_smagorinsky_lilly_tendency!` that the
+column physics does not solve implicitly; return `nothing`.
+
+Write the velocity gradient as `G = Gₕ + Gᵥ`, with `Gₕ` from horizontal and
+`Gᵥ` from vertical derivatives, and let `Gᵥʷ` be the vertical gradient of the
+velocity `(0, 0, w)`. The stress `-νₜ(G + Gᵀ)` splits into
+
+  - `-νₜ (Gᵥ - Gᵥʷ)`, the vertical diffusion of the physical horizontal
+    velocity, and `-2νₜ Gᵥʷ`, the vertical diffusion of `w`, both solved in
+    `step_vertical_diffusion_and_surface!`, and
+  - the remainder `X = -νₜ (Gₕ + Gₕᵀ + Gᵥᵀ - Gᵥʷ)`, applied here.
+
+On flat coordinates the remainder is the cross term `∂_z(ρνₜ ∇ₕw)` in `uₕ`
+and vanishes in `u₃`; over terrain it also carries the slope terms of
+`∇ₕw` and of the contravariant vertical flux. `X` is formed on faces for
+`uₕ` and on centers for `u₃`, with the same operators and boundary conditions
+as `vertical_smagorinsky_lilly_tendency!`, so the two parts sum to that
+operator. Reads `ᶜu`, `ᶠu`, and `ᶜνₜ_v` from `p.precomputed` and overwrites
+`ᶜtemp_UVWxUVW`, `ᶠtemp_UVWxUVW`, and `ᶠtemp_scalar` in `p.scratch`.
+
+It is a no-op unless the model's axes include the vertical direction
+(`is_smagorinsky_vertical`); the `::Nothing` method is a no-op.
+"""
+function vertical_smagorinsky_lilly_explicit_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    model::SmagorinskyLilly,
+)
+    is_smagorinsky_vertical(model) || return nothing
+    (; ᶜu, ᶠu, ᶜνₜ_v) = p.precomputed
+    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar) = p.scratch
+    ᶜρ = Y.c.ρ
+    ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
+    axis_uvw = (Geometry.UVWAxis(),)
+    ∇bc = Operators.SetGradient(
+        Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0)),
+    )
+    ᶠgradᵥ_uvw = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
+
+    # Horizontal momentum, from face stresses
+    ᶠX = ᶠtemp_UVWxUVW
+    @. ᶠX = Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))
+    @. ᶠX =
+        -1 * ᶠinterp(ᶜνₜ_v) *
+        (
+            ᶠX + adjoint(ᶠX) +
+            adjoint(Geometry.project(axis_uvw, ᶠgradᵥ_uvw(UVW(ᶜu)))) -
+            Geometry.project(axis_uvw, ᶠgradᵥ_uvw(UVW(Geometry.WVector(ᶜu))))
+        )
+    @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(ᶠρ * ᶠX) / ᶜρ)
+
+    # Vertical momentum, from center stresses
+    ᶜX = ᶜtemp_UVWxUVW
+    @. ᶜX = Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))
+    @. ᶜX =
+        -1 * ᶜνₜ_v *
+        (
+            ᶜX + adjoint(ᶜX) +
+            adjoint(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))) -
+            Geometry.project(axis_uvw, ᶜgradᵥ(UVW(Geometry.WVector(ᶠu))))
+        )
+    @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜX) / ᶠρ)
+    return nothing
 end

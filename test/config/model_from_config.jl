@@ -103,24 +103,19 @@ end
         @test CA.is_smagorinsky_UVW_coupled(model) == uvw_coupled
     end
 
-    # `check_case_consistency` pairs implicit vertical diffusion only with a
-    # vertically-acting closure. The horizontal-only `UV` closure has no
-    # vertical Jacobian block, so it must be rejected, while `UVW`, `W`, and
-    # `UV_W` are accepted.
+    # Every closure axes option passes `check_case_consistency` on its own.
     consistency(smag) = CA.check_case_consistency(
         CA.AtmosConfig(
             Dict(
                 "config" => "box",
                 "smagorinsky_lilly" => smag,
-                "implicit_diffusion" => true,
                 "turbconv" => nothing,
                 "vert_diff" => nothing,
             );
-            job_id = "smag_$(smag)_imp_diff",
+            job_id = "smag_$(smag)_consistency",
         ).parsed_args,
     )
-    @test_throws AssertionError consistency("UV")
-    for smag in ("UVW", "W", "UV_W")
+    for smag in ("UV", "UVW", "W", "UV_W")
         @test consistency(smag) === nothing
     end
 end

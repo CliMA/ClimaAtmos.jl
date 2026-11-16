@@ -66,7 +66,6 @@ end
 
         # Test numerics structure separately due to nested fields
         @test model.numerics isa CA.AtmosNumerics
-        @test model.numerics.diff_mode isa CA.Explicit
         @test model.numerics.hyperdiff isa Union{Nothing, CA.Hyperdiffusion}
     end
 
@@ -100,7 +99,6 @@ end
         # Test that non-overridden defaults are preserved
         @test model.surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
         @test model.insolation isa CA.IdealizedInsolation
-        @test model.numerics.diff_mode isa CA.Explicit
     end
 end
 

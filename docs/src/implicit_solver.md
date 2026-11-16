@@ -58,25 +58,61 @@ directly by default; setting `use_krylov_method` solves it instead with a
 Jacobian-free Krylov method, which forms Jacobian-vector products by finite
 differences and uses the Jacobian below as a left preconditioner.
 
-Two stage hooks surround the Newton solve on each implicit stage:
+The ARK implicit stage solves only the vertical acoustic-gravity wave core
+(`implicit_tendency!`): resolved continuity, central energy transport plus
+pressure work, central water transport, Exner pressure gradient, buoyancy, and
+Rayleigh sponge damping. Before each stage, `initialize_implicit_stage_problem!`
+(`initialize_imp!`) records the stage-entry `e_tot - Φ` on faces for every
+implicit stage (`record_implicit_stage_entry_energy!`); after the full ARK step
+completes, `post_step_callback!` executes `step_post_ark_physics!` over the
+realized step ``\Delta t``, followed by `dss!`, `constrain_state!`, and
+`set_end_of_step_precomputed_quantities!`. See
+[Discretization and Operators](discretization.md).
 
-  - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
-    resets the stage-weighted precipitation accumulator at the start of a step
-    and, for prognostic PROPHET (`PrognosticEDMFX`), runs the closed-form
-    updraft predictor and warm-starts ``Y[0]``; see
-    [PROPHET Discretization and Time Stepping](prophet_numerics.md).
-  - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
-    stage-weighted surface precipitation fluxes, applies
-    `correct_implicit_advection_tendency!` — which performs the implicit
-    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
-    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
-    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
-    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
-    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
-    microphysics tracers at the solved velocity — and updates a prognostic
-    slab ocean with the post-Newton precipitation increment when the
-    `ManualSparseJacobian` stage accumulator is active; see
-    [Discretization and Operators](discretization.md).
+## Post-ARK Lie-split column physics
+
+Each realized ARK step ``\Delta t`` is followed by a Lie-split post-step
+sequence in `post_step_physics.jl`:
+
+ 1. **Vertical scalar transport (`step_vertical_scalar_transport!`).**
+    Reconstructs the DSS-consistent step-integrated vertical mass flux
+    ``\tilde{F}`` from ``\sum_s b_{\mathrm{imp},s} \, T_{\mathrm{imp},s}^{\rho}``
+    on ``\rho``, removes the central ARK stage transport of ``e_{tot} - \Phi``,
+    ``q_t``, and condensates, and advances grid-mean scalars over ``\Delta t``
+    with a single column tridiagonal M-matrix factorization
+    (`energy_humidity_upwinding` / `tracer_upwinding`: `first_order`,
+    `third_order`, or `vanleer_limiter` via shared-limiter Zalesak FCT; `none`
+    keeps central transport). `PrognosticEDMFX` draft states (`sgsʲs`) stay
+    unchanged here and evolve in `step_column_physics!`.
+ 2. **Precomputed cache refresh (`set_precomputed_quantities!`).** Updates
+    thermodynamics, closures, and face diffusivities ahead of column physics.
+ 3. **Column physics (`step_column_physics!`).**
+      + Under `PrognosticEDMFX`, subcycles at ``\Delta t_{\mathrm{sub}} = \Delta t / n_{\mathrm{sub}}``
+        with ``n_{\mathrm{sub}} = \max(1, \lceil \Delta t / 60\,\mathrm{s} \rceil)``:
+        `step_edmf_and_env_turbulence!` (advective updraft scalars, followed by
+        the conservative grid-mean relative two-stream transport and diffusion,
+        each a tridiagonal solve) ``\to`` `step_prognostic_tke!`
+        ``\to`` `_step_slab_ocean_turbulent!` ``\to``
+        `repair_column_water_conservatively!` ``\to``
+        `enforce_edmf_updraft_constraints!` ``\to`` thermodynamics and
+        cloud-fraction refresh (`refresh_pre_microphysics_thermo!`) ``\to``
+        `step_coupled_microphysics_sedimentation!` ``\to``
+        `_step_slab_ocean_precip!`. Between substeps, closures and face
+        diffusivities are refreshed; surface precipitation and momentum stress
+        fluxes are averaged across substeps.
+      + For all other turbulence configurations, runs a single pass over ``\Delta t``:
+        `step_vertical_diffusion_and_surface!` ``\to`` `step_prognostic_tke!`
+        ``\to`` `_step_slab_ocean_turbulent!` ``\to``
+        `repair_column_water_conservatively!` ``\to``
+        `refresh_pre_microphysics_thermo!` ``\to``
+        `step_coupled_microphysics_sedimentation!` (for moist models) ``\to``
+        `_step_slab_ocean_precip!`.
+ 4. **Finalization (`post_step_callback!`).** Runs `dss!`, `constrain_state!`,
+    and `set_end_of_step_precomputed_quantities!`.
+
+Because the wave-core ARK step and the post-ARK column operators are composed
+sequentially as a Lie splitting, the coupled step is first-order accurate in
+time across the split.
 
 ## Jacobian algorithms
 
@@ -102,17 +138,12 @@ efficient linear solver. The time and memory needed to build the matrix, and the
 time needed to solve with it, then all scale linearly with the number ``N`` of
 values in a column's state vector.
 
-The [`ClimaAtmos.ManualSparseJacobian`](@ref) fills the nonzero entries with
-approximate derivatives, derived analytically from the expressions that compute
-the implicit tendency, and zeroes out blocks belonging to processes that are not
-treated implicitly. Which blocks are nonzero follows from the `AtmosModel` —
-the presence of topography, the diffusion mode, and the prognostic variables in
-``Y`` — and is fixed when the cache is built, not configured by the user.
-
-When grid-scale diffusion is implicit, the configuration is moist, or prognostic
-`ρtke` is active, the linear solve is itself approximate;
-`approximate_linear_solve_iters` (default `2`) sets how many iterations it
-takes.
+The [`ClimaAtmos.ManualSparseJacobian`](@ref) fills the wave-core Jacobian
+blocks analytically (`advection_jacobian_blocks`, plus optional topography
+metric couplings) and places `-I` identity diagonal blocks on every remaining
+scalar, SGS, and surface variable. Eliminating all non-`(uₕ, u₃)` blocks
+produces an exact Schur complement onto `f.u₃`, solved directly with
+`MatrixFields.BlockArrowheadSolve`.
 
 ### Automatic differentiation
 

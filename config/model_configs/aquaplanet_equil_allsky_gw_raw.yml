@@ -1,6 +1,4 @@
 viscous_sponge: false
-implicit_diffusion: false
-approximate_linear_solve_iters: 1
 rad: "allskywithclear"
 dt_save_state_to_disk: "1days"
 orographic_gravity_wave: "raw_topo"
