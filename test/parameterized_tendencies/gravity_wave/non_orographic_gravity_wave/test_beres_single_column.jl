@@ -523,6 +523,51 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test parent(gw_beres_active)[1] == 1
             @test Array(parent(gw_beres_B0_u)) == B0_with_gate
         end
+
+        @testset "A draft with negative area counts as empty in the coverage" begin
+            # The EDMF solver can leave ρa slightly negative. Such a level holds no
+            # updraft, so it adds zero to the coverage, as it adds nothing to the
+            # in-cloud heating; counting the negative value would lower a_cover.
+            # Here the band from z_lo to z_hi has area a0, except the levels from 8
+            # to 9 km, which have area -a0. They lie in the warming upper half of the
+            # band, which sets the envelope (the lower half cools).
+            in_negative = @. (ᶜz >= 8000) & (ᶜz <= 9000)
+            @. Y.c.sgsʲs.:(1).ρa = ifelse(
+                (ᶜz >= z_lo) & (ᶜz <= z_hi),
+                ifelse(in_negative, -a0, a0) * ᶜρ,
+                FT(0),
+            )
+            nogw = p.non_orographic_gravity_wave
+            beres_no_threshold = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                Q0_threshold = FT(0),
+            )
+            p_no_threshold = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (; gw_beres_source = beres_no_threshold),
+                ),
+            )
+            CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
+            ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
+            ρa_col = Array(Fields.field2array(Y.c.sgsʲs.:(1).ρa))[:, 1]
+            ρʲ_col = Array(Fields.field2array(ᶜρʲs.:(1)))[:, 1]
+            dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+            in_env =
+                (center_z .>= parent(gw_zbot)[1]) .& (center_z .<= parent(gw_ztop)[1])
+            mass = ρ_col[in_env] .* dz_col[in_env]
+            area = ρa_col[in_env] ./ ρʲ_col[in_env]
+            expected_a_cover = sum(max.(area, 0) .* mass) / sum(mass)
+            signed_a_cover = sum(area .* mass) / sum(mass)
+            # Setup: the negative levels lie inside the envelope and matter.
+            @test any(in_env .& (center_z .>= 8000) .& (center_z .<= 9000))
+            @test signed_a_cover < 0.9 * expected_a_cover
+            @test parent(gw_a_cover)[1] ≈ expected_a_cover rtol = 1e-6
+        end
     end
 
     # ============================================================================

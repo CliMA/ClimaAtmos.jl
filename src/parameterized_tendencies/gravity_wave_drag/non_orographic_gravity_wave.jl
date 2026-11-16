@@ -1051,10 +1051,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             FT(0),
         ),
     )
-    # (Σⱼ ρaʲ/ρʲ without the drafts whose density is at most ϵ)
-    draft_area = (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, sgsʲ.ρa / ρʲ, zero(ρʲ))
-    ᶜa_up = @. lazy(mapreduce_with_init(draft_area, +, Y.c.sgsʲs, ᶜρʲs))
-    # Total updraft area of each level, as for the in-cloud heating above. Levels below
+    # Total updraft area of each level, Σⱼ max(ρaʲ, 0)/ρʲ without the drafts whose
+    # density is at most ϵ, as for the in-cloud heating above. A draft with a negative
+    # ρaʲ counts as empty, so it cannot lower the coverage of the others. Levels below
     # a_min are left out of the heating fit only (the moments, the gather, and the
     # activation integral); the envelope means u_heat, v_heat, N_source and the
     # coverage a_cover average over the whole envelope, so a column whose updraft is
@@ -1078,7 +1077,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜΔz,
         ᶜin_env,
         gw_Q_conv_ic,
-        ᶜa_up,
         ᶜabove_floor,
         ᶜa_level,
     )
@@ -1101,7 +1099,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         Qic_int_prev,
         a_sum_prev,
     ),
-    (Q, u, v, N, ρ, dz, env, Q_ic, a_up, above_floor, a_level)
+    (Q, u, v, N, ρ, dz, env, Q_ic, above_floor, a_level)
         active = env > _half
         ρdz = ρ * dz
         Q_int = ifelse(
@@ -1114,7 +1112,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         N_sum = ifelse(active, N_sum_prev + N * ρdz, N_sum_prev)
         m_sum = ifelse(active, m_sum_prev + ρdz, m_sum_prev)
         Qic_int = ifelse(active, Qic_int_prev + Q_ic * dz, Qic_int_prev)
-        a_sum = ifelse(active, a_sum_prev + a_up * ρdz, a_sum_prev)
+        a_sum = ifelse(active, a_sum_prev + a_level * ρdz, a_sum_prev)
         return (Q_int, u_sum, v_sum, N_sum, m_sum, Qic_int, a_sum)
     end
 
