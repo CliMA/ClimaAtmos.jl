@@ -1570,8 +1570,9 @@ end
 @testset "Beres-G bins average the spectrum over their width" begin
     # Each transient Beres-G bin holds the spectral density averaged over the bin,
     # [c − dc/2, c + dc/2], not its value at the bin centre. The Beres-G density
-    # oscillates in c near u_heat on scales finer than a bin (its sine transform,
-    # measured from the ground, oscillates in m ≈ N/|c − u_heat|), so centre values
+    # oscillates in c near u_heat on scales finer than a bin (its squared sine
+    # transform, measured from the ground, oscillates in m with a phase of about
+    # 2·m·z_c, z_c the heating centroid, and m ≈ N/|c − u_heat|), so centre values
     # swing as u_heat moves across the bins; averages do not. Profiles as in the
     # edge-taper test above, on the production grid, steady term off.
     FT = Float64
@@ -1861,6 +1862,10 @@ end
               CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED
         @test CA.beres_launch_filter_mode("none") == CA.BERES_LAUNCH_FILTER_NONE
         @test_throws ErrorException CA.beres_launch_filter_mode("cam")
+        @test_throws ErrorException BeresSourceParams{FT}(;
+            kw...,
+            launch_filter_margin = FT(-1),
+        )
         @test BeresSourceParams{FT}(; kw...).launch_filter ==
               CA.BERES_LAUNCH_FILTER_BERES2004
     end

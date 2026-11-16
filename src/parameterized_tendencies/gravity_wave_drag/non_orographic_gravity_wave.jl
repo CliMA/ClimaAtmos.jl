@@ -1374,8 +1374,9 @@ not zero. A jump at an edge makes the sine transform fall off only like `1/m`, w
 flux into the slow bins next to `u_heat` that grows like `1/|ĉ|`. The taper removes the
 jump. `width` is the mean model level thickness over the window, `gw_beres_dz_level`,
 the same scale below which the Beres-G spectrum drops vertical wavenumbers, so the taper
-smooths the edges at the shortest wavelength the spectrum keeps. The amplitude `Q0` is
-not changed.
+smooths the edges at the shortest wavelength the spectrum keeps. The heating the taper
+removes is not lost: the rescaling that follows (`_beres_scale_profile`) gives the profile
+the column heating again.
 """
 @inline function _beres_taper_edges(profile, span, width)
     t = _beres_unwrap_gprofile(profile)
@@ -3236,6 +3237,9 @@ of phase speed `c` excited lower meets a critical level on its way up through th
 heating layer. Every point at and below the highest such crossing is set to zero, and the
 points above it rise to the full profile over `taper_points` gather spacings with a
 raised cosine, as the window edges are tapered, so the cut adds no jump to the profile.
+The taper moves the effective cut up by about one level spacing (`taper_points` gather
+spacings is one `dz_level`), and the heating under it is lost: unlike the window-edge
+taper, this masking is per phase speed and is not rescaled to the column heating.
 Otherwise the profile is returned unchanged.
 """
 @inline _beres_filter_profile(::Nothing, gprofile, c) = gprofile

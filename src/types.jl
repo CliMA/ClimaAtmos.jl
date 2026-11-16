@@ -1073,6 +1073,12 @@ Base.@kwdef struct BeresSourceParams{FT}
                 "got n_ν = $(obj.n_ν)",
             )
         end
+        if obj.launch_filter_margin < 0
+            error(
+                "BeresSourceParams: launch_filter_margin (nogw_beres_launch_filter_margin) " *
+                "must not be negative, got $(obj.launch_filter_margin) m/s",
+            )
+        end
         return obj
     end
 end
