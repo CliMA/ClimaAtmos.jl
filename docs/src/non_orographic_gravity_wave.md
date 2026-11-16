@@ -260,7 +260,7 @@ The Beres source spectrum $B_0(c)$ is propagated upward with the same reflection
   - `height_resolved`: in the Beres-G mode, the heating at height $z$ contributes to the bin $c$ only if the wind between $z$ and the launch level never equals $c$: for each $c$, the gathered profile is set to zero at and below the highest point where it does, and rises back to the full profile over one level spacing $\Delta z_{\text{level}}$ above it (a raised cosine, as at the window edges, so the cut adds no jump), before the sine transform. The taper moves the effective cut up by about one level, and the heating under the mask and the taper is lost: it is not rescaled to the column heating. This goes beyond [beres2004](@cite), whose theory assumes a uniform wind over the heating. The half-sine mode has no profile to mask and uses the `beres2004` filter.
   - `none`: no filter. Such waves are launched with the sign of $c - \bar{u}_{\text{heat}}$ and deposit where the wind first reaches $c$.
 
-`nogw_beres_launch_filter_margin` (default 0 m/s, must not be negative) widens the band on both sides.
+`nogw_beres_launch_filter_margin` (default 0 m/s, must not be negative) widens the band on both sides. The five-way diagnostics (`nogw_b5_*`) apply the filter with the run's one wind range, so their variants of the other shape (half-sine variants in a Beres-G run, transform variants in a half-sine run) see a band that starts at that run's layer bottom, not their own.
 
 The Beres forcing computed this way is added to the AD99 background forcing in each column. The two source spectra are propagated and accumulated independently.
 

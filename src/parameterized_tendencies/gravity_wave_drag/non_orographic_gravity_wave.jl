@@ -3686,6 +3686,13 @@ end
 # pairs offline). The bin loop mirrors _beres_launch_spectrum exactly but
 # accumulates band sums directly (no NTuple{nc} construction: that unrolled
 # tuple is an hours-long CPU compile and a failed GPU compile).
+# Limitation: all five variants use the model's one launch-filter wind range,
+# gw_beres_wind_range, taken over the layer of the shape the run uses (from z_bot
+# for a half-sine run, from max(z_bot, z_bot_floor) for a Beres-G run). The
+# variants of the other shape therefore see that run's band, and the
+# height-resolved filter of the transform variants uses the run's u profile on the
+# Beres-G window. Rebuilding the band per variant would need the column winds,
+# which this CPU-side pass does not read.
 
 # Low-|c| band edge (m/s) separating the QBO-relevant slow waves from the rest.
 const BERES_FIVEWAY_C_BAND = 15

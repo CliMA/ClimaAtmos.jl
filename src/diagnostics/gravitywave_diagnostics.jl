@@ -563,6 +563,9 @@ add_diagnostic_variable!(
 # memoized per time). Per-column scalars remap linearly, so these are safe
 # against the profile/envelope remap inconsistency that affects offline
 # recomputation. Units are internal launch-spectrum units (calibration-relative).
+# The launch filter of every variant uses the run's one wind range, taken over the
+# layer of the run's own shape (see the note above `BERES_FIVEWAY_C_BAND`), so the
+# variants of the other shape see a band that starts at the other bottom.
 import .._compute_beres_fiveway!
 
 # ONE callable-struct type for all 40 compute functions: distinct anonymous
