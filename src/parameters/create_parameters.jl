@@ -668,6 +668,10 @@ function TurbulenceConvectionParameters(
         # entrainment draws the upper half, in moist static energy, of the
         # environment; fraction 1 = environment-mean air.
         edmf_tail_entr_fraction = FT(0.5),
+        # Weight of the clear part of the environment in the updraft buoyancy
+        # reference density (`set_updraft_reference_density_excess!`): 0 = the
+        # grid-mean density, 1 = the clear-fraction blend.
+        edmf_buoyancy_clear_env_weight = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -686,6 +690,10 @@ function TurbulenceConvectionParameters(
     # environment, at most all of it.
     0 < f_tail <= 1 || throw(
         ArgumentError("edmf_tail_entr_fraction must lie in (0, 1]; got $f_tail"),
+    )
+    f_ev = parameters.edmf_buoyancy_clear_env_weight
+    0 <= f_ev <= 1 || throw(
+        ArgumentError("edmf_buoyancy_clear_env_weight must lie in [0, 1]; got $f_ev"),
     )
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)

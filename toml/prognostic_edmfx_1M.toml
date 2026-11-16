@@ -40,6 +40,10 @@ value = 0
 [detr_inv_tau]
 value = 0
 
+[edmf_buoyancy_clear_env_weight]
+value = 1.0
+type = "float"
+
 [detr_coeff]
 value = 0
 

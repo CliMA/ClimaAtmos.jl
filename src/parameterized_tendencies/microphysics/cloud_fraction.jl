@@ -1953,7 +1953,8 @@ Final post-Aitken update for the 1M and 2M schemes, in one column loop: fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)` (`_compute_sgs_moments`), then
 compute `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) at the state `env_state` (`cloud_env_state`), with
-EDMF updraft weighting (`_edmf_weight_cloud_fraction!`).
+EDMF updraft weighting (`_edmf_weight_cloud_fraction!`). Where it is allocated,
+`ᶜcloud_fraction⁰` keeps the environment cloud fraction before the weighting.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
@@ -1973,12 +1974,18 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     # `displacement_condensate` is the truncated-Gaussian expectation.
     ᶜdisp_S_or_zero =
         p.atmos.sgs_variance_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+    # Without `ᶜcloud_fraction⁰`, the copy of the environment cloud fraction
+    # writes `ᶜcloud_fraction` onto itself.
+    ᶜcloud_fraction⁰ =
+        hasproperty(p.precomputed, :ᶜcloud_fraction⁰) ?
+        p.precomputed.ᶜcloud_fraction⁰ : ᶜcloud_fraction
     DataLayouts.foreach_column(
-        ᶜsgs_moments, ᶜcloud_fraction, Y.c, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-        ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
-        _edmf_weighting_fields(Y, p),
-    ) do ᶜsgs_moments, ᶜcloud_fraction, Yc, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-    ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, drafts
+        ᶜsgs_moments, ᶜcloud_fraction, ᶜcloud_fraction⁰, Y.c, ᶜρ_env, ᶜT_mean,
+        ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+        ᶜdisp_S_or_zero, _edmf_weighting_fields(Y, p),
+    ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜcloud_fraction⁰, Yc, ᶜρ_env, ᶜT_mean,
+    ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    drafts
         _sgs_moments_and_cloud_fraction_point!(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
             (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
@@ -1986,6 +1993,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             (@inline @. lazy(_disp_lin(ᶜdisp_S))), (@inline @. lazy(_disp_curv(ᶜdisp_S))),
             c, vthermo, thermo_params, sgs_quad, σ_abs,
         )
+        @. ᶜcloud_fraction⁰ = ᶜcloud_fraction
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
             thermo_params, σ_abs,

@@ -3,6 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Clear-environment
+  updraft buoyancy reference for 1M `PrognosticEDMFX` (provisional parameter
+  `edmf_buoyancy_clear_env_weight`, `f_ev ∈ [0, 1]`, default `0`): updrafts
+  rise through the clear part of the environment, so the updraft buoyancy
+  (`ᶜρ_diffʲs`) is taken against the grid-mean density plus the density excess
+  of the environment with the fraction `f_ev (1 − cf⁰)` of its cloud liquid
+  and ice, and their latent heat, removed, where `cf⁰` is the environment cloud
+  fraction of the SGS closure (`set_updraft_reference_density_excess!`). The
+  excess vanishes in clear and overcast environments. It enters the updraft
+  momentum and area solves and the entrainment closures, which run after the
+  cloud-fraction update of the same state, so restarts are reproducible;
+  the pressure work in the updraft `mse` equation keeps the grid-mean density.
+  `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
+  set `f_ev = 1`, which changes the results of the 1M EDMFX column jobs,
+  `larcform1_1M_prognostic_edmfx`, and the 1M aquaplanet, AMIP target, and
+  benchmark configurations; the 2M RICO job, which also reads the 1M TOML,
+  ignores the weight.
 - ![][badge-🔥behavioralΔ] Tail entrainment for the prognostic EDMF updraft
   (provisional parameter `edmf_tail_entr_fraction`, default `0.5`): the air
   drawn in by the dynamical entrainment is the mean of the top fraction, in

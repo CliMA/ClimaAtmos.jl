@@ -189,6 +189,13 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     subgrid `(T, q_tot)` distribution, ranked by moist static energy, whose
     mean the dynamical EDMF entrainment draws (`tail_entrainment_increments`):
     `1/2` (default) is the upper half, and `1` entrains the environment mean [-].
+  - `edmf_buoyancy_clear_env_weight`: Weight `f_ev ∈ [0, 1]` of the clear part
+    of the environment in the density the updraft buoyancy is referenced to,
+    under 1M microphysics (`set_updraft_reference_density_excess!`): the
+    reference removes the fraction `f_ev (1 − cf⁰)` of the environment cloud
+    condensate and its latent heat, with `cf⁰` the environment cloud fraction
+    of the SGS closure. `1` gives the clear-fraction blend; `0` (default)
+    references the grid-mean density [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -235,6 +242,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sfc_mass_flux_cap_fraction::FT
     edmfx_updraft_kh_diffusion_factor::FT
     edmf_tail_entr_fraction::FT
+    edmf_buoyancy_clear_env_weight::FT
 end
 
 """

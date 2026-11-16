@@ -60,8 +60,10 @@ its flux:
 
 Only the diffusive (intra-subdomain) piece of the Favre-averaged buoyancy
 flux enters this budget. The coherent (mass-flux) piece
-`Σ_m ρa^m (w^m - w) b^m` powers the inter-subdomain (coherent) kinetic energy
-through the buoyancy term of the subdomain momentum equations, which the
+`Σ_m ρa^m (w^m - w) b^m`, together with the work of the updraft–environment
+force pair of `set_updraft_reference_density_excess!` where that is active,
+powers the inter-subdomain (coherent) kinetic energy through the buoyancy
+term of the subdomain momentum equations, which the
 prognostic subdomain velocities already carry; adding it here would
 double-count buoyancy production and spuriously inflate K near cloud tops
 with active drafts.

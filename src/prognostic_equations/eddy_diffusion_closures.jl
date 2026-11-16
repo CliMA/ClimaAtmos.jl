@@ -613,8 +613,7 @@ end
 """
     set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
 
-Column body of `set_strain_rate_norm!`, shared with the fused EDMF
-closure loop.
+Column body of `set_strain_rate_norm!`.
 """
 @inline function set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
     ᶠu_col = @inline @. lazy(C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³))

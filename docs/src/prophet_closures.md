@@ -156,6 +156,20 @@ into the analytic implicit solve for ``\hat{\rho}^j``, and scalars are detrained
 implicitly through the area divergence of the mass flux; see
 [Discretization and Time Stepping](prophet_numerics.md).
 
+**Tail entrainment.** The dynamical entrainment draws the mean of the top
+fraction ``f`` of the environment's Gaussian subgrid ``(T, q_t)`` distribution,
+ranked by moist static energy (`tail_entrainment_increments`;
+``f`` = `edmf_tail_entr_fraction`, ``1/2`` by default, and ``f = 1`` recovers
+the environment mean); turbulent entrainment keeps the mean. The ranking
+follows buoyancy sorting [Blyth1986, Fritsch1990](@cite): of the mixtures
+formed at the updraft edge, the moist ones stay buoyant and continue with the
+updraft, and the dry ones sink away. Moist static energy is conserved under
+mixing and phase change, so the selection carries moisture and heat, and the
+entrained air's buoyancy develops inside the updraft. The clear-air buoyancy
+reference rests on the same picture of the cloud edge: the updraft mixes with
+the moist near field and is buoyed against the clear remainder (see the note
+on the reference density in [PROPHET: Overview and Equations](prophet.md)).
+
 ## Pressure closure
 
 The subgrid pressure perturbation exerts two forces on a draft: a virtual-mass
@@ -181,7 +195,11 @@ diverges [Weller2019](@cite).
 The code implements this in the single-draft, environment-only setting, inside
 the implicit vertical-velocity solve. The virtual-mass effect appears as a
 buoyancy reduction factor ``(1 - \alpha_b)`` with
-``\alpha_b`` = `pressure_normalmode_buoy_coeff1`, applied unconditionally. The
+``\alpha_b`` = `pressure_normalmode_buoy_coeff1`, applied unconditionally.
+With `edmf_buoyancy_clear_env_weight` positive, the buoyancy it multiplies is
+taken against the reference density of `set_updraft_reference_density_excess!`, which adds
+an updraft–environment force pair to the virtual-mass term (see the note on the
+reference density in [PROPHET: Overview and Equations](prophet.md)). The
 form drag,
 
 ```math
