@@ -840,8 +840,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # physical threshold, not eps(FT) on ρa, also makes Float32 and Float64 agree. The
     # area is ρaʲ/ρʲ, the draft's own area fraction, as in the EDMF scheme and in the
     # coverage a_cover below, so the level test and the coverage gate measure the same
-    # thing. The level must also hold some draft mass (ρa > ϵ), so that a_min = 0 does
-    # not divide by zero.
+    # thing. The level must also hold some draft mass (ρa > 0), so that a_min = 0 does
+    # not divide by zero. It compares with 0, not eps(FT): in Float32, ρa at a_min falls
+    # below eps(FT) at 30-35 km, so an eps(FT) test would depend on height.
     a_min = FT(gw_beres_source.a_min)
 
     # Compute Q_conv (grid-mean) and Q_conv_ic (in-cloud) in one fused column loop.
@@ -896,7 +897,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         # Finalize the ρa-weighted in-cloud mean over drafts, on levels whose total
         # updraft area is at least a_min.
         @. ᶜQ_conv_ic = ifelse(
-            (ᶜarea_sum >= a_min) & (ᶜρa_sum > ϵ),
+            (ᶜarea_sum >= a_min) & (ᶜρa_sum > _zero),
             ᶜQ_conv_ic_sum / ᶜρa_sum,
             _zero,
         )
@@ -959,7 +960,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜdraft_area =
             @. lazy(mapreduce_with_init(positive_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
         @. gw_Q_conv_ic = ifelse(
-            (ᶜdraft_area >= a_min) & (ᶜdraft_mass > ϵ),
+            (ᶜdraft_area >= a_min) & (ᶜdraft_mass > FT(0)),
             gw_Q_conv_ic / ᶜdraft_mass,
             FT(0),
         )
