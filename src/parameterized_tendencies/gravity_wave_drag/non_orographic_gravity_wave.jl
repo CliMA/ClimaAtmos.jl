@@ -1234,11 +1234,21 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     )
 
     # (1b) Winds for the launch filter (`beres.launch_filter`): the range of u and v
-    # over the heating layer, from z_bot up to and including the launch level (the
-    # first level at or above z_top), and u, v at the launch level; with the
-    # height-resolved filter also u and v on the gather grid.
+    # over the heating layer, up to and including the launch level (the first level at
+    # or above z_top), and u, v at the launch level; with the height-resolved filter
+    # also u and v on the gather grid. The layer starts where the heating each shape
+    # uses starts: at z_bot for the half-sine, at the gather window bottom
+    # max(z_bot, z_bot_floor) for Beres-G, which has no heating below the floor.
+    shape_general = gw_beres_source.beres_shape_general
+    ᶜlayer_bottom = @. lazy(
+        ifelse(
+            shape_general,
+            _beres_gather_bottom(gw_zbot, gw_ztop, z_floor),
+            gw_zbot,
+        ),
+    )
     wind_input = Base.Broadcast.broadcasted(
-        tuple, ᶜz_above_surface, ᶜu, ᶜv, gw_zbot, gw_ztop,
+        tuple, ᶜz_above_surface, ᶜu, ᶜv, ᶜlayer_bottom, gw_ztop,
     )
     Operators.column_reduce!(
         gw_beres_wind_range,
@@ -1501,9 +1511,11 @@ end
 
 One level of the reduction that sets the launch-filter winds of a column, run upward.
 
-`state = (u_min, u_max, v_min, v_max, u_L, v_L, done)`. Levels from `z_bot` up to and
-including the first level at or above `z_top` (the launch level) update the ranges; the
-launch level also sets `u_L`, `v_L` and `done`. Heights are above the surface.
+`state = (u_min, u_max, v_min, v_max, u_L, v_L, done)`. Levels from `z_bot` (the bottom of
+the heating the shape uses: the envelope bottom for the half-sine, the gather window bottom
+for Beres-G) up to and including the first level at or above `z_top` (the launch level)
+update the ranges; the launch level also sets `u_L`, `v_L` and `done`. Heights are above
+the surface.
 """
 @inline function _beres_wind_range_step(
     (u_min, u_max, v_min, v_max, u_L, v_L, done),

@@ -256,7 +256,7 @@ The Beres source spectrum $B_0(c)$ is propagated upward with the same reflection
 
 **Launch filter.** A wave whose phase speed $c$ equals the wind somewhere between its source in the heating layer and the launch level meets a critical level before it is launched. The config key `nogw_beres_launch_filter` decides what happens to such waves, in each azimuth with that azimuth's wind:
 
-  - `beres2004` (default): every $c$ between the minimum and maximum wind over the heating layer up to the launch level is removed at launch, the steady $c = 0$ bin included when the wind changes sign. This is the filter of [beres2004](@cite) (pp. 332 and 336), also used in CAM.
+  - `beres2004` (default): every $c$ between the minimum and maximum wind over the heating layer up to the launch level is removed at launch (the layer starts at $z_{\text{bot}}$ for the half-sine and at the Beres-G window bottom $\max(z_{\text{bot}}, z_{\text{bot,floor}})$, where the heating Beres-G uses starts), the steady $c = 0$ bin included when the wind changes sign. This is the filter of [beres2004](@cite) (pp. 332 and 336), also used in CAM.
   - `height_resolved`: in the Beres-G mode, the heating at height $z$ contributes to the bin $c$ only if the wind between $z$ and the launch level never equals $c$: for each $c$, the gathered profile is set to zero at and below the highest point where it does, before the sine transform. This goes beyond [beres2004](@cite), whose theory assumes a uniform wind over the heating. The half-sine mode has no profile to mask and uses the `beres2004` filter.
   - `none`: no filter. Such waves are launched with the sign of $c - \bar{u}_{\text{heat}}$ and deposit where the wind first reaches $c$.
 

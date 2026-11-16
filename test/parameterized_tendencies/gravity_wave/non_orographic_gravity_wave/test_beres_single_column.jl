@@ -1058,8 +1058,11 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
         wind_range = tuple_value(nogw.gw_beres_wind_range, 6)
         u_col = Array(Fields.field2array(nogw.ᶜuv_temp.components.data.:1))[:, 1]
         v_col = Array(Fields.field2array(nogw.ᶜuv_temp.components.data.:2))[:, 1]
+        # The layer starts at the bottom of the Beres-G heating, the gather window
+        # bottom max(z_bot, floor), here the floor (z_bot is below it).
         k_launch = findfirst(>=(value(gw_ztop)), center_z)
-        layer = findall(z -> z >= value(gw_zbot), center_z[1:k_launch])
+        layer = findall(z -> z >= z_start, center_z[1:k_launch])
+        @test z_start > value(gw_zbot)
         @test wind_range ==
               (
             minimum(u_col[layer]),
@@ -1086,6 +1089,17 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                     atol = 0,
                 ),
             )
+        end
+
+        # Beres-C (half-sine) starts the launch-filter layer at z_bot itself.
+        let
+            CA.compute_beres_convective_heating!(Y, p, nogw.ᶜbuoyancy_frequency)
+            k_launch_c = findfirst(>=(value(gw_ztop)), center_z)
+            layer_c = findall(z -> z >= value(gw_zbot), center_z[1:k_launch_c])
+            @test minimum(center_z[layer_c]) < z_floor   # setup: the layers differ
+            @test tuple_value(nogw.gw_beres_wind_range, 6)[1:2] ==
+                  (minimum(u_col[layer_c]), maximum(u_col[layer_c]))
+            CA.compute_beres_convective_heating!(Y, p_g, nogw.ᶜbuoyancy_frequency)
         end
 
         # The slow bins next to u_heat carry almost nothing of the launched flux.
