@@ -317,6 +317,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     by the dynamical EDMF entrainment is taken from the upper half of the
     environment's subgrid `(T, q_tot)` distribution, ranked by moist static
     energy (`tail_entrainment_increments`); `0` (default) entrains the mean [-].
+  - `edmf_buoyancy_clear_env_weight`: Fraction `c_b ∈ [0, 1]` of the
+    environment's cloud liquid that is evaporated adiabatically in the density
+    the updraft buoyancy is referenced to (`ᶜupdraft_reference_density`); `0`
+    (default) references the grid-mean density [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -387,6 +391,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
     edmf_tail_entr_weight::FT
+    edmf_buoyancy_clear_env_weight::FT
 end
 
 """

@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Clear-environment updraft buoyancy reference
+  for 1M `PrognosticEDMFX` (provisional parameter
+  `edmf_buoyancy_clear_env_weight`, default `0`): a fraction `c_b` of the
+  environment cloud liquid is evaporated adiabatically in the density the
+  updraft buoyancy is referenced to (`ᶜupdraft_reference_density`), in the
+  explicit closures and in the Picard predictor of the implicit stage.
 - ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
   updraft (provisional parameter `edmf_tail_entr_weight`, default `0`, set to
   `0.5` in `toml/prognostic_edmfx_1M.toml` and

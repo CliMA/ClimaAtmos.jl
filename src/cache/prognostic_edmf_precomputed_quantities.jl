@@ -306,6 +306,55 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
 end
 
 """
+    ᶜupdraft_reference_density(Y, p)
+
+Center field of the density the updraft buoyancy is referenced to.
+
+With `edmf_buoyancy_clear_env_weight = 0` (default) this is the grid-mean
+density `Y.c.ρ`. With weight `c_b ∈ (0, 1]`, a fraction `c_b` of the
+environment's cloud liquid is evaporated adiabatically before the density is
+taken: `T → T − c_b (L_v / c_pm) q_e`, `q_liq → q_liq − c_b q_e`, with
+`q_e = (ρq_lcl − Σⱼ ρaʲ q_lclʲ) / ρ ≥ 0` the environment cloud liquid per unit
+grid-mean mass and `q_tot` unchanged. In a cumulus regime the environment's own
+subgrid condensation at cloud base warms the mean the updraft is compared
+against, and the updraft loses the buoyancy it would have relative to the
+clear air it rises through; referencing it to the environment with that
+condensate evaporated removes the competition. The latent-heat factor uses the
+moist specific heat of the grid mean. Ice is left in place (warm Sc–Cu
+regimes only, for now); with `0M` microphysics the weight is ignored. A positive
+weight writes the density to `p.scratch.ᶜtemp_scalar_4`.
+"""
+function ᶜupdraft_reference_density(Y, p)
+    (; microphysics_model, turbconv_model) = p.atmos
+    c_b = CAP.edmf_buoyancy_clear_env_weight(p.params)
+    (c_b > 0 && microphysics_model isa NonEquilibriumMicrophysics1M) ||
+        return Y.c.ρ
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    # The environment cloud liquid density `ρq_e`, overwritten pointwise by the
+    # reference density.
+    ᶜρ_ref = p.scratch.ᶜtemp_scalar_4
+    @. ᶜρ_ref = Y.c.ρq_lcl
+    for j in 1:n
+        @. ᶜρ_ref -= max(0, Y.c.sgsʲs.:($$j).ρa) * max(0, Y.c.sgsʲs.:($$j).q_lcl)
+    end
+    L_v = TD.Parameters.LH_v0(thermo_params)
+    @. ᶜρ_ref = TD.air_density(
+        thermo_params,
+        ᶜT -
+        FT(c_b) * L_v * max(0, ᶜρ_ref) / Y.c.ρ /
+        TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        ᶜp,
+        ᶜq_tot_nonneg,
+        max(0, ᶜq_liq - FT(c_b) * max(0, ᶜρ_ref) / Y.c.ρ),
+        ᶜq_ice,
+    )
+    return ᶜρ_ref
+end
+
+"""
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
 Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
@@ -371,6 +420,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
 
     entr_model = p.atmos.edmfx_model.entr_model
     zero_FT = FT(0)
@@ -388,9 +438,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     # one fused column loop.
     DataLayouts.foreach_column(
         drafts, ᶜstrain_rate_norm, Y.c, ᶜz, z_sfc, ᶜp, ᶠu³, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰,
-        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
+        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref,
     ) do drafts, ᶜstrain_rate_norm, Yc, ᶜz, z_sfc, ᶜp, ᶠu³, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰,
-    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
+    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref
         for (
                 ᶜentr_vel_scaleʲ,
                 ᶜentr_nonvel_rateʲ,
@@ -408,7 +458,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
             ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
-            ᶜbuoyʲ = @. vertical_buoyancy_acceleration(Yc.ρ, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
+            ᶜbuoyʲ = @. vertical_buoyancy_acceleration(ᶜρ_ref, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
             @. ᶜentr_vel_scaleʲ = entrainment_velocity_scale(
                 thermo_params,
                 turbconv_params,
@@ -453,7 +503,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 
-            @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
+            @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ_ref) / ᶜρʲ
         end
         set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
     end

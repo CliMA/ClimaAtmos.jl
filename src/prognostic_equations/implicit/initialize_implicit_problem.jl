@@ -150,10 +150,11 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             @inline
             (ᶜsnapshot.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j), ᶜρʲs.:($j))
         end
-        DataLayouts.foreach_point(snapshot_drafts, Y.c.ρ) do snapshot_drafts, ᶜρ
+        ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
+        DataLayouts.foreach_point(snapshot_drafts, ᶜρ_ref) do snapshot_drafts, ᶜρ_ref
             for (ᶜsnapshotʲ, ᶜρ_diffʲ, ᶜsgsʲ, ᶜρʲ) in snapshot_drafts
                 @. ᶜsnapshotʲ = ᶜsgsʲ
-                @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
+                @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ_ref) / ᶜρʲ
             end
         end
         (; ᶜmp_tendencyʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
@@ -195,11 +196,14 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             # at zero, and rescale them so that their sum does not exceed `q_totʲ`
             # (`add_updraft_microphysics_sources!`), and refresh the draft
             # thermodynamics at the full iterate. Then refresh `ᶜρ_diffʲs`, the
-            # buoyancy input of the next `u₃` solve, and, between rounds, restore
+            # buoyancy input of the next `u₃` solve, relative to the reference
+            # density at the transported draft state (`ᶜupdraft_reference_density`,
+            # before the sources), and, between rounds, restore
             # the snapshot of the stage-initial draft scalars; the last round
             # leaves the Picard-converged draft scalars as a warm start for the
             # Newton solve.
             last_round = round == n_picard
+            ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
             let dtγ = dtγ
                 round_drafts = unrolled_map(StaticOneTo(n)) do j
                     @inline
@@ -215,8 +219,8 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                     )
                 end
                 DataLayouts.foreach_column(
-                    round_drafts, Y.c.ρ, p.core.ᶜΦ, p.precomputed.ᶜp,
-                ) do round_drafts, ᶜρ, ᶜΦ, ᶜp
+                    round_drafts, ᶜρ_ref, p.core.ᶜΦ, p.precomputed.ᶜp,
+                ) do round_drafts, ᶜρ_ref, ᶜΦ, ᶜp
                     for (ᶜsgsʲ, ᶜρʲ, ᶜρ_diffʲ, ᶜsnapshotʲ, sources_args) in round_drafts
                         if !isempty(sources_args)
                             (
@@ -231,7 +235,7 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                                 ᶜp, microphysics_model, thermo_params, T_min_sgs,
                             )
                         end
-                        @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
+                        @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ_ref) / ᶜρʲ
                         last_round || @. ᶜsgsʲ = ᶜsnapshotʲ
                     end
                 end
