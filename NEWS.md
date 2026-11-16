@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` set the turbulent lateral entrainment
+  `turb_entr_param_vec = [c₁, c₂] = [0.007, 400.0]` (was `[0.001, 1e5]`), so the
+  rate `c₁ exp(-c₂ a)` mixes tracers of narrow updrafts (`a ≲ 0.01`) with the
+  environment and leaves broad updrafts undiluted.
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
   sublimation of the precipitation flux (`precipitation_evaporation_0m:
   "Kessler"`, default off). Evaporated precipitation returns the energy it was

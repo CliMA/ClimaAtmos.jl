@@ -1,4 +1,4 @@
-469
+470
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+470
+- Turbulent lateral entrainment `turb_entr_param_vec = [0.007, 400.0]` in
+  `prognostic_edmfx_1M.toml` and `prognostic_edmfx_1M_mlcloud.toml`. Changes the
+  output of every job that uses these parameter files.
+
 469
 - Non-orographic gravity-wave drag (AD99 and Beres): waves unstable at the launch
   level deposit their momentum in the first layer above it instead of being dropped,
