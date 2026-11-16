@@ -12,7 +12,10 @@ Unit tests for the conditional-moment node rule of the 1M SGS microphysics
   - the distribution parses from the config, the temperature points keep the
     mean temperature and the node's `S′` and lie on either side of the
     freezing point, and the rule reduces to the grid-mean evaluation as the
-    variance vanishes.
+    variance vanishes,
+  - the linearized width `σ_S` and the temperature regression `β_T` keep their
+    Float32 precision and the Cauchy–Schwarz bound where the fluctuations
+    follow the saturation curve.
 =#
 
 using Test
@@ -346,6 +349,93 @@ const CA = ClimaAtmos
                     @test getproperty(out, k) ≈ getproperty(ref, k) atol =
                         (FT == Float32 ? 1e-3 : 1e-6) * scale
                 end
+            end
+        end
+    end
+
+    @testset "σ_S and β_T where q′ ≈ γ T′ (Float32)" begin
+        # A DYCOMS RF01 cloud-layer state with `σ_q = γ σ_T` to four digits
+        # and `corr = 1`, at which the two terms of the saturation-excess
+        # variance cancel. The density sweep moves `γ σ_T` across `σ_q`, and
+        # the last case sets `σ_q = γ σ_T` to rounding. The Cauchy–Schwarz
+        # bound `|β_T| σ_S ≤ σ_T` keeps a node at `S′` within `σ_T |S′| / σ_S`
+        # of the mean temperature.
+        FT = Float32
+        thp = TD.Parameters.ThermodynamicsParameters(CP.create_toml_dict(FT))
+        T = FT(283.8034)
+        T′T′ = FT(6.9575e-3)
+        σ_T = sqrt(T′T′)
+        q′q′ = FT(2.0623e-9)
+        corr = FT(1)
+        q_c = FT(3.711e-4)
+        λ_eq = FT(1e-4)
+        T_min = FT(150)
+        ρ_mid = FT(1.13465)
+        q′q′_mid = (FT(TD.∂q_vap_sat_∂T(thp, T, ρ_mid)) * σ_T)^2
+        for (ρ, qq) in (
+            (FT(1.1345), q′q′), (FT(1.1346), q′q′), (FT(1.1347), q′q′),
+            (FT(1.1348), q′q′), (FT(1.1349), q′q′), (FT(1.1350), q′q′),
+            (ρ_mid, q′q′_mid),
+        )
+            σ_S = CA._sgs_linear_sigma_S(thp, ρ, T, T′T′, qq, corr)
+            β_T = CA.sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, qq, corr)
+            @test isfinite(σ_S) && σ_S >= CA.ϵ_numerics(FT)
+            @test isfinite(β_T)
+            @test abs(β_T) * σ_S <= σ_T * (1 + 2 * eps(FT))
+            λ = CA._continuous_lagrange(q_c, σ_S)
+            rule = CA.conditional_rule(T, σ_S, β_T, -λ, -λ_eq, FT(Inf), T_min)
+            @test sum(n -> n.w, rule.nodes) ≈ 1
+            for n in rule.nodes
+                @test isfinite(n.T)
+                n.w > 0 || continue
+                @test abs(n.T - T) <=
+                      σ_T * abs(n.S′) / σ_S * (1 + 4 * eps(FT)) + eps(T)
+            end
+        end
+    end
+
+    @testset "σ_S and β_T: Float32 against Float64" begin
+        thp32 = TD.Parameters.ThermodynamicsParameters(CP.create_toml_dict(Float32))
+        thp64 = TD.Parameters.ThermodynamicsParameters(CP.create_toml_dict(Float64))
+        ϵ32 = Float64(CA.ϵ_numerics(Float32))
+        # `δ = σ_q / (γ σ_T) − 1` and `m = 1 − corr` run from exact
+        # cancellation (`δ = m = 0`) to anticorrelated fluctuations (`m = 2`).
+        for T in (230.0, 260.0, 290.0, 310.0), ρ in (0.4, 1.2),
+            σ_T in (1e-3, 0.1, 3.0),
+            δ in (-0.5, -1e-3, -1e-6, 0.0, 1e-6, 1e-3, 1.0),
+            m in (0.0, 1e-6, 1e-3, 0.5, 1.0, 2.0)
+
+            σ_q = TD.∂q_vap_sat_∂T(thp64, T, ρ) * σ_T * (1 + δ)
+            (ρ32, T32, T′T′32, q′q′32, corr32) =
+                Float32.((ρ, T, σ_T^2, σ_q^2, 1 - m))
+            (ρ64, T64, T′T′64, q′q′64, corr64) =
+                Float64.((ρ32, T32, T′T′32, q′q′32, corr32))
+            σ_S32 = CA._sgs_linear_sigma_S(thp32, ρ32, T32, T′T′32, q′q′32, corr32)
+            σ_S64 = CA._sgs_linear_sigma_S(thp64, ρ64, T64, T′T′64, q′q′64, corr64)
+            β_T32 = CA.sgs_temperature_regression(
+                thp32, T32, ρ32, σ_S32, T′T′32, q′q′32, corr32,
+            )
+            β_T64 = CA.sgs_temperature_regression(
+                thp64, T64, ρ64, σ_S64, T′T′64, q′q′64, corr64,
+            )
+            @test abs(β_T32) * σ_S32 <= sqrt(T′T′32) * (1 + 2 * eps(Float32))
+            @test abs(β_T64) * σ_S64 <= sqrt(T′T′64) * (1 + 2 * eps(Float64))
+
+            # `σ_S` is 1-Lipschitz in `γ σ_T`, so the Float32 error of `γ`
+            # from Thermodynamics enters once, next to the rounding of the
+            # two variance terms (measured below 0.7 `eps` of
+            # `σ_q + γ σ_T` on this grid) and the Float32 floor.
+            γ32 = TD.∂q_vap_sat_∂T(thp32, T32, ρ32)
+            γ64 = TD.∂q_vap_sat_∂T(thp64, T64, ρ64)
+            σ_T64 = sqrt(T′T′64)
+            scale = sqrt(q′q′64) + γ64 * σ_T64
+            tol = abs(γ32 - γ64) * σ_T64 + 4 * eps(Float32) * scale
+            @test abs(σ_S32 - σ_S64) <= tol + ϵ32
+            # `|∂β_T/∂(γ σ_T)| ≤ σ_T / σ_S²`, and the factor 2 covers the
+            # rounding of `β_T` itself. This first-order bound applies where
+            # `σ_S` is well above the perturbation.
+            if σ_S64 > 1e-3 * scale
+                @test abs(β_T32 - β_T64) <= 2 * tol * σ_T64 / σ_S64^2
             end
         end
     end

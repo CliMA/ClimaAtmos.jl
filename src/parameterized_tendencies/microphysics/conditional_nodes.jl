@@ -178,17 +178,21 @@ end
 """
     sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
 
-Regression slope `β_T = Cov(T′, S′) / σ_S²` [K / (kg/kg)] of the temperature
-on the centred saturation excess `S′ = q′ − γ T′` of the linear closure,
-`γ = ∂q_sat/∂T`, with `Cov(T′, S′) = Cov(T′, q′) − γ Var(T′)` and `σ_S` the
-linearized width (`_sgs_linear_sigma_S`). Since `|Cov(T′, S′)| ≤ σ_T σ_S`, the
-regressed temperature spread `|β_T| σ_S` never exceeds `σ_T`.
+Regression slope `β_T = Cov(T′, S′) / σ_S² = r_TS σ_T / σ_S` [K / (kg/kg)] of
+the temperature on the centred saturation excess `S′ = q′ − γ T′` of the linear
+closure, with `γ = ∂q_sat/∂T`, `σ_S` the linearized width
+(`_sgs_linear_sigma_S`), and `r_TS = (corr_Tq σ_q − γ σ_T) / σ_S` the
+correlation of `T′` and `S′`. The correlation is clamped to `[−1, 1]`, so the
+regressed temperature spread `|β_T| σ_S` stays within `σ_T` (Cauchy–Schwarz)
+where rounding or the floor on `σ_S` puts the quotient outside that range.
 """
 @inline function sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     FT = typeof(σ_S)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
-    return (corr * σ_T * σ_q - γ * σ_T^2) / max(FT(σ_S), ϵ_numerics(FT))^2
+    σ_S_safe = max(σ_S, ϵ_numerics(FT))
+    r_TS = clamp((corr * σ_q - γ * σ_T) / σ_S_safe, -one(FT), one(FT))
+    return r_TS * (σ_T / σ_S_safe)
 end
 
 """

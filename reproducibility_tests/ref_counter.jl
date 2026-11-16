@@ -1,4 +1,4 @@
-470
+471
 
 # **README**
 #
@@ -32,6 +32,15 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+471
+- The linearized saturation-excess width `σ_S` is evaluated as
+  `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`, and the temperature
+  regression on the saturation excess clamps the correlation of `T′` and `S′`
+  to `[−1, 1]`. Changes the output of runs that use `σ_S` (the
+  truncated-Gaussian cloud fraction and the 1M SGS closures): at rounding
+  level in general, and in the node temperatures where `σ_q ≈ γ σ_T` and
+  `corr ≈ 1`.
+
 470
 - Turbulent lateral entrainment `turb_entr_param_vec = [0.007, 400.0]` in
   `prognostic_edmfx_1M.toml` and `prognostic_edmfx_1M_mlcloud.toml`. Changes the
