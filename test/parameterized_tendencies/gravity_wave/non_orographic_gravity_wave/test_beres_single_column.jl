@@ -1169,6 +1169,12 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                 @test span_w / (CA.N_BERES_PROFILE - 1) *
                       (sum(prof_w) - (prof_w[1] + prof_w[end]) / 2) ≈ heating_w rtol =
                     1e-10
+                # The taper comes after the smoothing, so the profile is zero at both
+                # window edges even when smoothed; the other order would smooth
+                # heating back onto the edge points.
+                @test prof_w[1] == 0
+                @test prof_w[end] == 0
+                @test prof_w[2] > 0
             end
         end
     end

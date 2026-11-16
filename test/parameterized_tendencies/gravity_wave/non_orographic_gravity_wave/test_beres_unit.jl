@@ -1950,7 +1950,10 @@ end
         )
         ratio = sum(abs, B_G) / sum(abs, B_C)
         @info "Half-sine from the floor: total |B0| Beres-G / Beres-C = $ratio (model settings), max bin difference at the ground origin outside c_cut = $(maximum(n -> abs(B_G_ground[n] - B_C[n]), resolved) / maximum(abs, B_C)) of the peak"
-        @test 0.5 < ratio < 2
+        # Measured 0.83: the taper removes heating at the window edges that the
+        # rescaling puts back in the middle, and the transform origin at the ground
+        # 2 km below the heating and the cut change the slow bins.
+        @test 0.78 < ratio < 0.88
     end
 
     @testset "Float32 and Float64 agree" begin
