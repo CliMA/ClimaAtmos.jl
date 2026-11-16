@@ -185,6 +185,10 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
+  - `edmf_tail_entr_fraction`: Fraction `f` in `(0, 1]` of the environment's
+    subgrid `(T, q_tot)` distribution, ranked by moist static energy, whose
+    mean the dynamical EDMF entrainment draws (`tail_entrainment_increments`):
+    `1/2` (default) is the upper half, and `1` entrains the environment mean [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -230,6 +234,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
     edmfx_updraft_kh_diffusion_factor::FT
+    edmf_tail_entr_fraction::FT
 end
 
 """
