@@ -6,23 +6,24 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces
 
-αₘ(s::ViscousSponge, z) = ifelse(z > s.zd, s.κ₂, zero(s.κ₂))
 ζ_viscous(s::ViscousSponge, z, zmax) = sinpi((z - s.zd) / (zmax - s.zd) / 2)^2
 
 """
     β_viscous(s::ViscousSponge, z, zmax)
 
 Return the viscous sponge coefficient
-``β(z) = κ₂ · sin²(π (z - zd) / (2 (zmax - zd)))`` for `z > zd` and zero below [m²/s].
+``β(z) = κ₂ · sin²(π (z - zd) / (2 (zmax - zd)))`` for `z > zd` and zero
+below [m²/s].
 
 # Arguments
 
-  - `s`: The `ViscousSponge` model, with lower damping height `zd` [m] and damping
-    coefficient `κ₂` [m²/s].
+  - `s`: The `ViscousSponge` model, with lower damping height `zd` [m] and
+    damping coefficient `κ₂` [m²/s].
   - `z`: Altitude [m].
   - `zmax`: Domain top height [m].
 """
-β_viscous(s::ViscousSponge, z, zmax) = αₘ(s, z) * ζ_viscous(s, z, zmax)
+β_viscous(s::ViscousSponge, z, zmax) =
+    (z > s.zd && zmax > s.zd) ? s.κ₂ * ζ_viscous(s, z, zmax) : zero(s.κ₂)
 
 """
     viscous_sponge_tendency_uₕ(ᶜuₕ, s)
