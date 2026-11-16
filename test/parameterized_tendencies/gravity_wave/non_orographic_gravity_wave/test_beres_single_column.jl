@@ -497,6 +497,22 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             (; gw_beres_B0_u) = nogw
             CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
             @test parent(gw_beres_active)[1] == 1
+            # The coverage is the mass-weighted mean of the draft area ρa/ρʲ over
+            # the whole envelope: a0·ρ/ρʲ (here a0, with ρʲ = ρ) on the band levels
+            # inside it and zero on the rest.
+            ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
+            ρʲ_col = Array(Fields.field2array(ᶜρʲs.:(1)))[:, 1]
+            dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+            in_env =
+                (center_z .>= parent(gw_zbot)[1]) .& (center_z .<= parent(gw_ztop)[1])
+            in_band = in_env .& (center_z .>= z_lo) .& (center_z .<= z_hi)
+            expected_a_cover =
+                sum(
+                    a0 .* ρ_col[in_band] ./ ρʲ_col[in_band] .* ρ_col[in_band] .*
+                    dz_col[in_band],
+                ) /
+                sum(ρ_col[in_env] .* dz_col[in_env])
+            @test parent(gw_a_cover)[1] ≈ expected_a_cover rtol = 0.05
             @test parent(gw_a_cover)[1] > beres.a_min
             B0_with_gate = copy(Array(parent(gw_beres_B0_u)))
             CA.compute_beres_convective_heating!(

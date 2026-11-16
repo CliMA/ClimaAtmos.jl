@@ -1955,9 +1955,11 @@ end
         )
         ratio = sum(abs, B_G) / sum(abs, B_C)
         @info "Half-sine from the floor: total |B0| Beres-G / Beres-C = $ratio (model settings), max bin difference at the ground origin outside c_cut = $(maximum(n -> abs(B_G_ground[n] - B_C[n]), resolved) / maximum(abs, B_C)) of the peak"
-        # Measured 0.83: the taper removes heating at the window edges that the
-        # rescaling puts back in the middle, and the transform origin at the ground
-        # 2 km below the heating and the cut change the slow bins.
+        # A regression guard pinned to the measured 0.83, not a derived bound: the
+        # taper removes heating at the window edges that the rescaling puts back in
+        # the middle, and the transform origin at the ground 2 km below the heating
+        # and the cut change the slow bins. Recompute it if the grid, the taper or
+        # the cut changes.
         @test 0.78 < ratio < 0.88
     end
 
