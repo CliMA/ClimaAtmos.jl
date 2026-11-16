@@ -57,7 +57,7 @@ The files containing the specific components to be tested are in `models/`:
 - `hyperdiff_tendency.jl`
 - `implicit_tendency.jl`
 - `set_cloud_frac.jl`
-- `set_CM_cache.jl`
+- `coupled_microphysics.jl`
 - `sgs.jl`
 
 These define two functions that are used by the harness scripts:

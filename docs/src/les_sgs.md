@@ -10,8 +10,9 @@ simulation, cloud-resolving radiative-convective equilibrium, density-current
 tests — and they act on the grid-mean variables only.
 
 The horizontal tendencies are explicit. The vertical Smagorinsky–Lilly tendency
-follows `implicit_diffusion`, like the prescribed vertical diffusion; the
-vertical AMD tendency currently is explicit.
+is integrated implicitly in the post-ARK column physics step, like the
+prescribed vertical diffusion; the vertical AMD tendency currently is
+explicit.
 
 ## The eddy-viscosity form
 
@@ -212,17 +213,16 @@ left to the configuration. The Smagorinsky and AMD configurations set
 `hyperdiff: ~`, since the closure already damps the grid scale. See
 [Hyperdiffusion](hyperdiffusion.md).
 
-**Implicit vertical diffusion.** With `implicit_diffusion: true`, the vertical
-Smagorinsky–Lilly tendency moves into the implicit tendency, and the eddy
-viscosity is refreshed on every Newton iterate so that it follows the current
-state. The Jacobian linearizes the enthalpy, total-water, microphysics-species,
-passive-tracer, and horizontal-momentum flux divergences with the
-eddy viscosity frozen; the ``u_3`` term and the horizontal-gradient part of
-``\boldsymbol{\mathcal{T}}`` have no Jacobian contribution, which slows Newton
-convergence while leaving the tendency exact. A vertically acting Smagorinsky
-closure satisfies the configuration check for implicit diffusion on its own;
-the AMD closure has no Jacobian block and stays explicit. See
-[Implicit Solver](implicit_solver.md).
+**Implicit vertical diffusion.** The vertical Smagorinsky–Lilly fluxes of
+enthalpy, total water, microphysics species, passive tracers, and horizontal
+momentum, and the vertical stress ``-2 \nu_t \partial_z w`` of ``u_3``, are
+solved implicitly, column by column, in the post-ARK column physics step
+(`step_vertical_diffusion_and_surface!`), with the eddy viscosity of the state
+at the start of the step. The remaining strain terms of the vertical stress,
+including ``\partial_z (\rho \nu_t \nabla_h w)``, are explicit
+(`vertical_smagorinsky_lilly_explicit_tendency!`). The AMD closure stays
+explicit. See
+[Implicit Solver](implicit_solver.md#Post-ARK-Lie-split-column-physics).
 
 ## Configuration and diagnostics
 
@@ -273,7 +273,7 @@ exposes none.
 | Constant horizontal diffusion                                      | [constant_horizontal_diffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/les_sgs_models/constant_horizontal_diffusion.jl)                    |
 | Strain rate and its norm                                           | [src/utils/utilities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/utilities.jl)                                                                                    |
 | Prescribed vertical diffusion, for contrast                        | [Diffusion](diffusion.md)                                                                                                                                                            |
-| Surface-flux tendency                                              | [src/prognostic_equations/surface_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/surface_flux.jl)                                                |
+| Surface fluxes                                                     | [column_physics_step.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/column_physics_step.jl) (`step_vertical_diffusion_and_surface!`)                  |
 | Model types                                                        | [`ClimaAtmos.EddyViscosityModel`](@ref), [`ClimaAtmos.SmagorinskyLilly`](@ref), [`ClimaAtmos.AnisotropicMinimumDissipation`](@ref), [`ClimaAtmos.ConstantHorizontalDiffusion`](@ref) |
 
 See [Configuration Options](configuration_options.md) for the keys named here.

@@ -237,14 +237,10 @@ added by the separate surface-flux tendency, described in
 
 ### Implicit or explicit
 
-Vertical diffusion is stiff at the timesteps of interest, so
-`implicit_diffusion: true` moves the whole tendency into the implicit solve. The
-model's `diff_mode` follows that key: under `Implicit()` the tendency is
-evaluated from `implicit_tendency!` and linearized in the Jacobian; under
-`Explicit()` it is evaluated from `additional_tendency!`. The global
-configurations with a 60 km model top set `implicit_diffusion: true`, as does
-every PROPHET configuration except the advection test, and those pair it with
-`approximate_linear_solve_iters: 2`. See [Implicit Solver](implicit_solver.md).
+Vertical diffusion is stiff at the timesteps of interest and runs implicitly per
+column in the post-ARK column physics (`step_vertical_diffusion_and_surface!` or
+`step_edmf_and_env_turbulence!` in `column_physics_step.jl`). See
+[Implicit Solver](implicit_solver.md).
 
 ## Horizontal diffusion
 
@@ -278,18 +274,18 @@ species flux and its enthalpy use the same diffusivity.
 
 ## Where this is implemented
 
-| Concept                                | Source                                                                                                                                                 |
-|:-------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Prescribed vertical diffusion          | [vertical_diffusion_boundary_layer.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/vertical_diffusion_boundary_layer.jl) |
-| Shared enthalpy and species helpers    | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)                     |
-| Eddy-diffusivity profiles              | [src/types.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/types.jl)                                                                          |
-| LES closures (horizontal and vertical) | [les_sgs_models/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/parameterized_tendencies/les_sgs_models)                                        |
-| PROPHET diffusive fluxes               | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                       |
-| Implicit/explicit dispatch             | [implicit/implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl)               |
-| Surface-flux tendency                  | [src/prognostic_equations/surface_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/surface_flux.jl)                  |
-| Model types                            | [`ClimaAtmos.AbstractVerticalDiffusion`](@ref), [`ClimaAtmos.VerticalDiffusion`](@ref), [`ClimaAtmos.DecayWithHeightDiffusion`](@ref)                  |
+| Concept                                | Source                                                                                                                                                              |
+|:-------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prescribed vertical diffusion          | [column_physics_step.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/column_physics_step.jl) (`step_vertical_diffusion_and_surface!`) |
+| Shared enthalpy and species helpers    | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)                                  |
+| Eddy-diffusivity profiles              | [src/types.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/types.jl)                                                                                       |
+| LES closures (horizontal and vertical) | [les_sgs_models/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/parameterized_tendencies/les_sgs_models)                                                     |
+| PROPHET diffusive fluxes               | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                    |
+| Post-ARK column step                   | [column_physics_step.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/column_physics_step.jl) (`step_column_physics!`)                 |
+| Surface fluxes                         | [column_physics_step.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/column_physics_step.jl) (`step_vertical_diffusion_and_surface!`) |
+| Model types                            | [`ClimaAtmos.AbstractVerticalDiffusion`](@ref), [`ClimaAtmos.VerticalDiffusion`](@ref), [`ClimaAtmos.DecayWithHeightDiffusion`](@ref)                               |
 
-The keys named here are `vert_diff` and `implicit_diffusion`; the horizontal
+The key named here is `vert_diff`; the horizontal
 closures are selected with `smagorinsky_lilly`, `amd_les`,
 `constant_horizontal_diffusion`, and `edmfx_sgs_horizontal_diffusive_flux`. See
 [Configuration Options](configuration_options.md).

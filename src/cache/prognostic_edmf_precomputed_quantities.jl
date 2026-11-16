@@ -4,6 +4,7 @@
 import NVTX
 import Thermodynamics as TD
 import ClimaCore: DataLayouts, Spaces, Fields
+import UnrolledUtilities: StaticOneTo, unrolled_foreach, unrolled_map
 
 """
     saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
@@ -257,51 +258,6 @@ adjustment. The density is diagnosed at the grid-mean pressure.
         ᶜq_liqʲ,
         ᶜq_iceʲ,
     )
-    return nothing
-end
-
-"""
-    set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
-
-Update the per-updraft thermodynamic precomputed quantities — for every
-subdomain `j`, `ᶜq_tot_nonnegʲs.:(j)`, `ᶜq_liqʲs.:(j)`, `ᶜq_iceʲs.:(j)`,
-`ᶜTʲs.:(j)`, `ᶜρʲs.:(j)` — from `Y`, the cached pressure `ᶜp`, and the
-geopotential `ᶜΦ`. Does not touch velocity, kinetic energy, or the
-subdomain-density difference `ᶜρ_diffʲs`.
-
-For `NonEquilibriumMicrophysics1M`/`2M`, draft condensate is taken from the
-prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
-floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
-partition come from a pressure-enthalpy saturation adjustment. `ᶜρʲ` is
-diagnosed at the shared `ᶜp`.
-
-Called from the Picard loop of `initialize_implicit_stage_problem!` after each
-tracer sweep, and from `solve_sgs_updraft_tracers_implicit_stage_analytic!`
-after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
-computes the same thermodynamics (`set_draft_thermo_column!`) in its fused
-column loop.
-"""
-function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
-    (; microphysics_model, turbconv_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
-    (; ᶜp, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρʲs) = p.precomputed
-    T_min_sgs = CAP.T_min_sgs(p.params)
-    drafts = unrolled_map(StaticOneTo(n_mass_flux_subdomains(turbconv_model))) do j
-        @inline
-        (
-            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
-            ᶜρʲs.:($j), Y.c.sgsʲs.:($j),
-        )
-    end
-    DataLayouts.foreach_column(drafts, ᶜΦ, ᶜp) do drafts, ᶜΦ, ᶜp
-        for (ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ) in drafts
-            set_draft_thermo_column!(
-                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
-                microphysics_model, thermo_params, T_min_sgs,
-            )
-        end
-    end
     return nothing
 end
 

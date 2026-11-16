@@ -14,7 +14,7 @@ the analogous horizontal down-gradient terms, both defaulting to `false`:
     `edmfx_sgs_horizontal_diffusive_flux`.
 
 Both terms are always explicit: they are applied in the explicit remainder
-tendency, independently of `diff_mode`. Each requires a horizontal
+tendency. Each requires a horizontal
 discretization, so both return immediately on single columns.
 
 ## Horizontal eddy diffusivity
@@ -194,7 +194,7 @@ no draft flux. The grid mean receives the same flux divergence
 division by ``\hat{\rho}^j``, so the diffusion conserves each scalar and leaves
 the diagnosed environment's scalars unchanged. The area-weighted density
 ``\hat{\rho}^j`` receives no tendency, matching
-`edmfx_sgs_diffusive_flux_tendency!`, so, as in the vertical, the moist mass
+`step_edmf_and_env_turbulence!`, so, as in the vertical, the moist mass
 that ``q_t^j`` diffusion adds and the enthalpy
 ``(h_d^j + \Phi) \nabla_h q_{t,\mathrm{eff}}^j`` of the dry air it displaces go
 to the environment (see

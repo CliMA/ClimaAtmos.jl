@@ -17,7 +17,6 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
-        implicit_microphysics = get(pa, "implicit_microphysics", true),
         precipitation_evaporation_0m = get_precipitation_evaporation_0m(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
@@ -96,12 +95,11 @@ Build the `AtmosNumerics` group from the numerics config keys.
 Reads the upwinding schemes (`energy_humidity_upwinding`, `tracer_upwinding`,
 `edmfx_mse_humidity_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
 converted to a `Symbol`), the `apply_sem_quasimonotone_limiter`,
-`test_dycore_consistency`, and `reproducible_restart` switches, `implicit_diffusion`
-(which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
-`get_hyperdiffusion_model`. `vanleer_limiter` upwinding falls back to `:none` with a
-warning on ClimaCore versions older than 0.14.22.
-`vertical_water_borrowing_species` is parsed separately, by
-`vertical_water_borrowing_species_from_config`.
+`test_dycore_consistency`, and `reproducible_restart` switches, and the
+hyperdiffusion model from `get_hyperdiffusion_model`.
+`vanleer_limiter` upwinding falls back to `:none` with a warning on ClimaCore
+versions older than 0.14.22. `vertical_water_borrowing_species` is parsed
+separately, by `vertical_water_borrowing_species_from_config`.
 """
 function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
     test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
@@ -117,8 +115,6 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     limiter =
         parsed_args["apply_sem_quasimonotone_limiter"] ? QuasiMonotoneLimiter() : nothing
 
-    diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
-
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
     numerics = AtmosNumerics(;
@@ -130,7 +126,6 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         limiter,
         test_dycore_consistency,
         reproducible_restart,
-        diff_mode,
         hyperdiff,
         vertical_water_borrowing_species,
     )
@@ -372,20 +367,17 @@ end
 Build the `JacobianAlgorithm` selected by the config keys `use_dense_jacobian`
 (`AutoDenseJacobian`) and `use_auto_jacobian` (`AutoSparseJacobian`, with
 `padding_bands_per_block` from `auto_jacobian_padding_bands`), falling back to
-`ManualSparseJacobian`. The sparse algorithms take `approximate_solve_iters` from
-`approximate_linear_solve_iters`.
+`ManualSparseJacobian`.
 """
 function jacobian_from_parsed_args(parsed_args)
-    approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
     if parsed_args["use_dense_jacobian"]
         return AutoDenseJacobian()
     elseif parsed_args["use_auto_jacobian"]
         return AutoSparseJacobian(;
-            approximate_solve_iters,
             padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
         )
     else
-        return ManualSparseJacobian(; approximate_solve_iters)
+        return ManualSparseJacobian()
     end
 end
 

@@ -388,7 +388,7 @@ gains it. This transfer acts only on condensate species and carries pure
 condensate rather than a parcel at the source subdomain's composition, which
 makes it structurally distinct from the dynamical entrainment and detrainment
 below. For a single draft ``m`` exchanging with the environment,
-`updraft_sedimentation!` evaluates the first term in two branches according to
+the sedimentation source evaluates the first term in two branches according to
 the sign of ``\partial_z a^m``,
 
 ```math
@@ -408,8 +408,8 @@ sedimentation term of the draft mass equation, applied in the analytic
 ``D_\psi^m``: its own sedimentation source and the dilution
 ``-\psi^m S_{q_t,\mathrm{sed}}^m / \hat{\rho}^m`` by the sedimented mass. For
 ``h_s^m``, ``W_{h_s}^m = \sum_\mu q_\mu^m (h_\mu(T^m) + \Phi) w_\mu^m`` is
-evaluated inside `updraft_sedimentation!`, with laterally entrained environment
-condensate carrying ``h_\mu(T^0) + \Phi``.
+evaluated inside `step_coupled_microphysics_sedimentation!`, with laterally
+entrained environment condensate carrying ``h_\mu(T^0) + \Phi``.
 
 **Subdomain diffusive fluxes.** When `edmfx_vertical_diffusion` is enabled, each
 draft scalar ``\psi^m \in \{h_s^m, q_t^m, q_l^{\mathrm{cl},m}, q_i^{\mathrm{cl},m}, n_l^{\mathrm{cl},m}, n_i^{\mathrm{cl},m}, \chi^m\}``
@@ -494,8 +494,7 @@ uses the sensible-heat, geopotential, and water-enthalpy split of
     One piece of the formulation above is not in the code: the
     perturbation-pressure work
     ``\boldsymbol{u}^m \cdot (\rho^m)^{-1} \nabla p^\dagger`` in the energy
-    equation. `pressure_work.jl` is an explicit, documented no-op dispatch point
-    that reserves the place for it.
+    equation.
 
 ## Coupling to the resolved equations
 
@@ -610,12 +609,10 @@ generic form above.
     is applied; the momentum part is not. It is leading-order once the drafts
     are partially resolved.
 
-The scalar mass fluxes are applied by `edmfx_sgs_mass_flux_tendency!` and the
-diffusive fluxes by `edmfx_sgs_diffusive_flux_tendency!`, both in
-`edmfx_sgs_flux.jl`, gated on the configuration flags
-`edmfx_sgs_mass_flux` and `edmfx_sgs_diffusive_flux` respectively. Because the
-total-water flux moves moist air mass, both tendencies also increment the
-resolved density, consistent with ``\hat{S}_{q_t}`` in the continuity equation.
+The scalar mass fluxes and vertical diffusive fluxes are applied in
+`step_edmf_and_env_turbulence!` (`column_physics_step.jl`). Because the
+total-water flux moves moist air mass, both fluxes also increment the resolved
+density, consistent with ``\hat{S}_{q_t}`` in the continuity equation.
 
 ### Environment as residual
 

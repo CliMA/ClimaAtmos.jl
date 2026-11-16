@@ -381,14 +381,16 @@ to each governing equation.
 
 ## Timestepping
 
-Tendencies are split into an explicit part and an implicit part and advanced
-with a horizontally explicit, vertically implicit (HEVI) additive Runge–Kutta
-method [Ascher1997, Gardner2018](@cite). The implicit part takes the vertical
-terms responsible for sound and gravity waves, falling and sedimenting
-condensate, the Rayleigh damping of ``u_3``, and, when `implicit_diffusion` is
-enabled, the vertical diffusion; the viscous sponge stays explicit. Because the
-implicit part involves no horizontal derivatives, it can be solved independently
-in each column, with no horizontal communication.
+The wave core is advanced with a horizontally explicit, vertically implicit
+(HEVI) additive Runge–Kutta method [Ascher1997, Gardner2018](@cite). Its
+implicit part takes the vertical terms responsible for sound and gravity waves
+and the Rayleigh damping of ``u_3``; the viscous sponge stays explicit. Vertical
+scalar transport, vertical diffusion and surface fluxes, the subgrid-scale
+turbulence and convection, and microphysics with sedimentation follow the ARK
+step as implicit column operators (see
+[Implicit Solver](implicit_solver.md#Post-ARK-Lie-split-column-physics)).
+Because neither part involves horizontal derivatives, each is solved
+independently in each column, with no horizontal communication.
 
 This lifts the timestep restriction from fast vertical dynamics and leaves the
 horizontal propagation of sound waves as the limit, so the maximum timestep
@@ -468,66 +470,22 @@ Laplacian. Reading the terms in order:
     energy), ``(p, \Phi)`` form a hydrostatic pair (``de_{int} + p \, d(1 / \rho) = 0``
     along an adiabat and ``dp / \rho + d\Phi = 0`` in hydrostatic balance, so
     ``-c_p \Gamma z`` cancels ``+\Phi`` in ``h`` along an adiabat). Because
-    continuity ``-D^c[\mathcal{M}^f(\rho)]`` uses central ``I^f(\rho J) / J^f``
-    and is not modified by `T_post_imp!`, pairing central ``I^f(\rho)`` with an
-    upwind ``p / \rho = R_m T`` across a moisture or temperature jump at
-    continuous ``p`` misses ``p`` by ``\tfrac{1}{2}\rho \Delta(R_m T)``;
-    evaluating ``\tilde{\boldsymbol{u}}^v \, I^f(p)`` centrally avoids that
-    pressure-work dipole and gives the post-Newton diffused energy density unit
-    derivative with respect to prognostic ``\rho e_{tot}`` at fixed ``\rho``, so
-    it shares ``I - \Delta t_\gamma \mathcal{D}`` with ``\rho q_t`` and the
-    condensates. Once ``p / \rho`` is split off centrally,
-    ``e_{tot} = e_{int} + \Phi + K`` lacks ``+R_m T`` to cancel ``+\Phi`` along
-    an adiabat; excluding ``\Phi`` from the post-Newton reconstruction keeps
-    ``(p, \Phi)`` together on one central stencil (matching central mass
-    continuity via the discrete product rule
-    ``-D^c[\mathcal{M}^f(\rho) \, I^f(\Phi)] - \Phi \, (-D^c[\mathcal{M}^f(\rho)]) = -I^c[J^f \mathcal{M}^f(\rho) \, G^f(\Phi)] / J``
-    at ``\partial_t \Phi = 0``) and leaves ``e_{tot} - \Phi = e_{int} + K``
-    affine in ``(1, q_t, q_l, q_i)`` at uniform ``(T, \boldsymbol{u})``. In the
-    Newton residual, ``e_{tot}``, ``q_t``, and the sedimenting condensates are
-    central because the central velocity Jacobian blocks advance a central flux
-    to the solved velocity, while the dissipation of an upwind flux would remain
-    at the velocity of the stage predictor (``\rho e_{\mathrm{tke}}`` uses
-    first-order upwinding directly in the residual, sharing its tridiagonal
-    diagonal block with eddy diffusion and TKE dissipation when diffusion is
-    implicit and omitting velocity blocks so ``u^3`` sign reversals preserve
-    M-matrix positivity). After
-    the Newton solve, the `T_post_imp!` hook
-    (`correct_implicit_advection_tendency!`) applies an implicit first-order
-    upwind dissipation at the solved velocity, weighted by ``1 + 2 C_\gamma``
-    when the linear solve omits the scalar advection derivative
-    (`ManualSparseJacobian`, or `AutoSparseJacobian` in dry explicit-diffusion
-    runs, without `use_krylov_method`) and by ``1`` otherwise (so autodiff with
-    scalar advection blocks or `use_krylov_method` avoids ``1 + 2 C_\gamma``
-    over-damping, at the cost of ``O(10^{-2})`` undershoots on sharp spikes),
-    and then the Courant-limited (``\min(1, 1 / C_\gamma)``) difference between
-    the `energy_humidity_upwinding` flux (the van Leer limiter by default,
-    bounded against the local extrema of the dissipated profile with Zalesak
-    flux-corrected transport) and the first-order upwind flux to
-    ``e_{tot} - \Phi``, ``q_t``, and the condensates. One
-    linear implicit operator and one reconstruction act on ``e_{tot} - \Phi``,
-    ``q_t``, and the condensates, so linear reconstructions preserve arbitrary
-    affine relations among them at any stage Courant number (`third_order` is
-    linear and unlimited, so it is not positive on discontinuities), and
-    `vanleer_limiter` (with Zalesak limiting, both scale- and shift-equivariant)
-    preserves the bounds and monotonicity of ``\chi^*`` per implicit stage at
-    every ``C_\gamma > 0`` — keeping the stage positive and monotone wherever
-    the low-order stage ``\chi^*`` is (such as in nondivergent interior flow
-    with uniform or decelerating Courant numbers, while diverging flow, face
-    Courant jumps, or spikes next to a closed boundary can introduce
-    ``O(10^{-2})`` extrema in ``\chi^*``) — while
-    preserving uniform ``(T, \boldsymbol{u})`` across single-profile moisture or
-    condensate variations and on smooth profiles free of limiter clipping; away
-    from Zalesak-clamped faces (such as discrete ramp shoulders), the composite
-    matches the `energy_humidity_upwinding` flux at the solved velocity to
-    leading order in ``\Delta t_\gamma`` for ``C_\gamma \le 1``. With
-    `first_order`, the transport is positive first-order with the leading
-    diffusivity of backward-Euler upwind; with `none`, ``e_{tot} - \Phi``,
-    ``q_t``, and the condensates skip both post-Newton steps, leaving their
-    vertical advection forward-Euler central (unconditionally amplifying without
-    vertical diffusion). Where first-order upwind dissipation acts
-    (`first_order`, or the ``1 - 1 / C_\gamma`` share at ``C_\gamma > 1``), it
-    damps gradients of ``e_{int} + K`` rather than ``h``.
+    continuity ``-D^c[\mathcal{M}^f(\rho)]`` uses central ``I^f(\rho J) / J^f``,
+    evaluating ``\tilde{\boldsymbol{u}}^v \, I^f(p)`` centrally avoids pairing
+    central ``I^f(\rho)`` with an upwind ``p / \rho = R_m T`` across moisture
+    or temperature jumps at continuous ``p``. In the ARK implicit stage,
+    `implicit_tendency!` evaluates central vertical transport on
+    ``\rho e_{tot}``, ``\rho q_t``, and condensate mass tracers while
+    the post-ARK vertical scalar transport (`step_vertical_scalar_transport!`)
+    recovers the DSS-consistent step-integrated mass flux ``\tilde{F}`` from the
+    ARK stage tendencies, removes the central stage transport of ``e_{tot} - \Phi``
+    (preserving the central `(p, \Phi)` hydrostatic pair), ``q_t``, and tracers,
+    and advances all scalars over ``\Delta t`` using a single column tridiagonal
+    M-matrix factorization (`first_order`, `third_order`, or `vanleer_limiter`
+    via Zalesak FCT; `none` keeps central transport). One linear operator and
+    a shared Zalesak FCT limiter act across ``e_{tot} - \Phi``, ``q_t``, and
+    condensates so uniform ``(T, \boldsymbol{u})`` and affine relations among
+    water species are preserved.
   - The radiative flux divergence is explicit and applied separately.
   - Hyperdiffusion is two Laplacians with the completion ``\mathcal{P}`` in
     between, each a weak divergence of a strong gradient.

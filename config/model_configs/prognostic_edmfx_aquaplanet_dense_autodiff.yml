@@ -12,7 +12,6 @@ edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-implicit_diffusion: true
 use_dense_jacobian: true
 update_jacobian_every: stage
 ode_algo: "ARS222"

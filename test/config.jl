@@ -82,3 +82,37 @@ end
         edmfx_tracer_upwinding = :third_order,
     )
 end
+
+@testset "Fixed-value config keys" begin
+    defaults = CA.default_config_dict()
+    for (key, (accepted, _)) in CA.FIXED_VALUE_KEYS
+        # The accepted value is the schema default, so default runs load.
+        @test defaults[key] == accepted
+        config = CA.override_default_config(Dict(key => accepted))
+        @test config[key] == accepted
+        other = accepted isa Bool ? !accepted : accepted + 1
+        @test_throws ArgumentError CA.override_default_config(
+            Dict(key => other),
+        )
+    end
+
+    # The ClimaCoupler AMIP configurations spell out the accepted values.
+    coupler_keys = Dict(
+        "implicit_diffusion" => true,
+        "approximate_linear_solve_iters" => 2,
+        "implicit_microphysics" => true,
+        "microphysics_n_substeps" => 3,
+        "microphysics_n_substeps_quadrature" => 2,
+    )
+    @test CA.override_default_config(coupler_keys) isa AbstractDict
+
+    # No configuration in the repository sets a fixed-value key.
+    for (root, _, files) in walkdir(CA.config_path), f in files
+        endswith(f, ".yml") || continue
+        file = joinpath(root, f)
+        file == CA.default_config_file && continue
+        config = CA.load_yaml_file(file)
+        config isa AbstractDict || continue
+        @test isempty(intersect(keys(config), keys(CA.FIXED_VALUE_KEYS)))
+    end
+end

@@ -257,7 +257,7 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 ### Callbacks
 
   - `default_callbacks = true`: Add the default model and common callbacks. When `false`,
-    only `callbacks` is used.
+    only `callbacks` runs after `post_step_discrete_callback()`.
   - `callbacks = ()`: User-provided callbacks, used only when `default_callbacks` is
     `false`.
   - `callback_kwargs = ()`: Extra keyword arguments forwarded to the default callbacks.
@@ -272,17 +272,15 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 ### Numerics
 
   - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
-  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 2)`: Jacobian algorithm
+  - `jacobian = ManualSparseJacobian()`: Jacobian algorithm
     for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
   - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
   - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
   - `update_constrain_state_every = "stage"`: When state constraints are applied,
-    `"stage"`, `"step"`, or `"dss"`. With `PrognosticEDMFX`, 1-moment microphysics,
-    and `updraft_picard_rounds > 0`, `"dss"` re-clamps the warm-started grid-mean
-    condensates of the Newton guess after the stage-entering state is copied, which
-    can produce an upward surface precipitation flux in a single-iteration Newton
-    solve.
+    `"stage"`, `"step"`, or `"dss"`.
+  - `post_step_hook! = Returns(nothing)`: Optional callable invoked inside
+    `step_post_ark_physics!`.
 
 ### Diagnostics helpers
 
@@ -338,10 +336,11 @@ function AtmosSimulation(
     # Diagnostics
     diagnostics = CAD.DiagnosticsConfig(),
     # Numerics
-    jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 2),
+    jacobian::JacobianAlgorithm = ManualSparseJacobian(),
     debug_jacobian = false,
     update_cache_every = "stage",
     update_constrain_state_every = "stage",
+    post_step_hook! = Returns(nothing),
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
@@ -403,9 +402,12 @@ function AtmosSimulation(
         ode_algo = ode_config,
         jacobian,
         update_cache_every,
+        post_step_hook!,
     )
 
-    # Combine all callbacks
+    # Combine all callbacks; prepend the post-step physics callback
+    # unconditionally so simulations with `default_callbacks = false` also
+    # execute it ahead of user, saving, and diagnostic callbacks.
     discrete_callbacks = @timed_log verbose "Assembled callbacks" if default_callbacks
         checkpoint_frequency = parse_checkpoint_frequency(checkpoint_frequency)
         (
@@ -420,9 +422,14 @@ function AtmosSimulation(
                 callback_kwargs...,
             )...)
     else
-        callbacks
+        callbacks isa CTS.DiscreteCallback ? (callbacks,) :
+        callbacks isa CTS.CallbackSet ? callbacks.discrete_callbacks :
+        Tuple(callbacks)
     end
-    callback_set = CTS.CallbackSet(discrete_callbacks...)
+    callback_set = CTS.CallbackSet(
+        post_step_discrete_callback(),
+        discrete_callbacks...,
+    )
 
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,

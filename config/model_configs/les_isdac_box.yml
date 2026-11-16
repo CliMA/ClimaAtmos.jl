@@ -5,8 +5,6 @@ config: "box"
 # microphysics
 microphysics_model: "1M"
 # diffusion
-implicit_diffusion: false
-approximate_linear_solve_iters: 2
 hyperdiff: ~
 smagorinsky_lilly: "UVW"
 # time- and spatial discretization

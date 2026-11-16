@@ -33,7 +33,6 @@ function amip_target(context, output_dir)
     viscous_sponge =
         CA.ViscousSponge{FT}(; zd = params.zd_viscous, κ₂ = params.kappa_2_sponge)
 
-    diff_mode = CA.Implicit()
     hyperdiff = CA.cam_se_hyperdiffusion(FT)
 
     aerosol_names = (
@@ -97,13 +96,12 @@ function amip_target(context, output_dir)
         rayleigh_sponge,
         viscous_sponge,
         hyperdiff,
-        diff_mode,
         aerosol_names,
         reproducible_restart = true,
         test_dycore_consistency = true,
     )
 
-    jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2)
+    jacobian = CA.ManualSparseJacobian()
     max_newton_iters_ode = 1
 
     newtons_method = CTS.NewtonsMethod(;
@@ -212,17 +210,21 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
-            # Precomputed scratch fields for microphysics (uninitialized until tendencies run)
-            :ᶜmp_tendency,
+            # Populated during the microphysics sweep; uninitialized on read-only load
+            :ᶜwₕhₜ,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
             :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
-            # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
-            :ᶠu₃_tendencyʲs,
-            :ᶜρa_tendencyʲs,
+            # Realized turbulent surface fluxes (and updraft surface BCs derived
+            # from them) stay preserved at end-of-step for diagnostics, so a
+            # freshly loaded checkpoint recomputes them on the post-step state
+            # until the next step runs (checked below after stepping).
+            :sfc_conditions,
+            :sfc_q_tot_buoyantʲs,
+            :sfc_mse_buoyantʲs,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -273,7 +275,6 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             :hyperdiffusion_ghost_buffer,
             :data_handler,
-            :ᶜmp_tendency,
             :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
             :rc,
             # The raw RRTMGP solver contains internal workspaces that are

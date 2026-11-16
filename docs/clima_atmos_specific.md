@@ -8,14 +8,14 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
   - `src/config/`: YAML→typed-object translation layer (formerly `src/solver/`). `cli_options.jl` defines `--config_file` and `--job_id`; `yaml_helper.jl` loads `config/default_configs/default_config.yml` and merges overlay YAML; `atmos_config.jl` defines `AtmosConfig`; `model_getters.jl` and `type_getters.jl` translate config into a runnable model; `solve.jl` runs it. `parsed_args` reads are confined to this folder.
   - `src/simulation/AtmosSimulations.jl`: high-level `AtmosSimulation(config)` construction.
   - `src/cache/`: precomputed quantities allocated once per stage. Naming convention: `set_*_precomputed_quantities!(Y, p, t)` — never allocate inside these functions.
-  - `src/prognostic_equations/`: tendency accumulation and implicit/explicit splitting.
+  - `src/prognostic_equations/`: tendency accumulation, implicit vertical wave-core solver, and post-ARK vertical transport and split column physics (`post_step_physics.jl`, `vertical_transport_step.jl`, `column_physics_step.jl`).
   - `src/parameterized_tendencies/`: parameterization implementations.
-      + `microphysics/`: microphysics tendency orchestration, SGS quadrature, limiters, Jacobian.
+      + `microphysics/`: microphysics tendency orchestration, coupled microphysics-sedimentation sweep, SGS quadrature, and limiters.
       + `radiation/`: RRTMGP wrappers and idealized radiation (`held_suarez.jl`).
       + `gravity_wave_drag/`: non-orographic and orographic GWD.
       + `les_sgs_models/`: Smagorinsky–Lilly, anisotropic minimum dissipation, constant horizontal diffusion.
       + `sponge/`: Rayleigh and viscous sponge tendencies.
-  - EDMF code lives in `src/cache/{prognostic,diagnostic}_edmf_precomputed_quantities.jl` and `src/prognostic_equations/edmfx_*.jl`, not under `parameterized_tendencies/`.
+  - EDMF code lives in `src/cache/{prognostic,diagnostic}_edmf_precomputed_quantities.jl`, `src/prognostic_equations/edmfx_*.jl`, and `src/prognostic_equations/column_physics_step.jl`, not under `parameterized_tendencies/`.
   - `src/atmospheric_profiles_library/`: `AtmosphericProfilesLibrary` submodule (imported as `APL`) holding the published single-column case profiles (BOMEX, DYCOMS, Rico, TRMM-LBA, ...) that `src/setups/` builds on. It depends only on interpolation packages, not on the rest of ClimaAtmos. Tested in `test/atmospheric_profiles_library.jl`. `docs/src/atmospheric_profiles_library.md` plots every profile, and a new profile variable needs its units in `docs/src/atmospheric_profiles_library_plots.jl`.
   - `src/callbacks/`, `src/diagnostics/`, `src/setups/`, `src/surface_conditions/`, `src/topography/`, `src/parameters/`, `src/utils/`: remaining domain subtrees. Search by physics/runtime concept first.
   - `config/`: YAML/TOML config library. `default_configs/default_config.yml` is the schema baseline; `common_configs/` holds reusable numerics; `model_configs/`, `gpu_configs/`, `mpi_configs/`, `perf_configs/`, and `longrun_configs/` are scenario overlays.
@@ -48,15 +48,15 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 `test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_edmfx`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
 
-| Change area                | Test group          | Example Buildkite job         |
-|:-------------------------- |:------------------- |:----------------------------- |
-| Prognostic equations       | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
-| EDMFX diffusion / limiters | `dynamics_edmfx`    | `prognostic_edmfx_*`          |
-| Microphysics / EDMF        | `parameterizations` | `prognostic_edmfx_*`          |
-| Restarts                   | Buildkite only      | `Restarting` group            |
-| Initialization from file   | `restarts`          | `test_init_with_file.jl`      |
-| Diagnostics                | `diagnostics`       | any `--diagnostics` job       |
-| Config semantics           | `infrastructure`    | `config.jl`                   |
+| Change area                                 | Test group          | Example Buildkite job         |
+|:------------------------------------------- |:------------------- |:----------------------------- |
+| Prognostic equations & post-ARK column step | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
+| EDMFX diffusion / limiters                  | `dynamics_edmfx`    | `prognostic_edmfx_*`          |
+| Microphysics / EDMF                         | `parameterizations` | `prognostic_edmfx_*`          |
+| Restarts                                    | Buildkite only      | `Restarting` group            |
+| Initialization from file                    | `restarts`          | `test_init_with_file.jl`      |
+| Diagnostics                                 | `diagnostics`       | any `--diagnostics` job       |
+| Config semantics                            | `infrastructure`    | `config.jl`                   |
 
 ### Running a single test group
 

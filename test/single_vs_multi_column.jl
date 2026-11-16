@@ -31,7 +31,6 @@ const IGNORED = Set([
     :hyperdiffusion_ghost_buffer,
     :data_handler,
     :rc,
-    :ᶜmp_tendency,
     :rrtmgp_solver,
     # Unwritten when every SGS tracer is a microphysics species
     :ᶜ∇²sgs_tracerʲs,

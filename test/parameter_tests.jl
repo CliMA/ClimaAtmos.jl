@@ -50,12 +50,10 @@ end
 
     # Options set on the model select the parameters loaded for it
     model = CA.NonEquilibriumMicrophysics1M(;
-        n_substeps = 3,
         rain_autoconversion = CMP.PrescribedNd(),
         cloud_ice_formation = CMP.TemperatureDependent(),
         rain_snow_accretion = nothing,
     )
-    @test model.n_substeps == 3
     params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
     processes = params.microphysics_1m_params.processes
     @test processes.rain_autoconversion isa CMP.PrescribedNd

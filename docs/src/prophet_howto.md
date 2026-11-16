@@ -31,8 +31,6 @@ edmfx_sgs_diffusive_flux: true     # diffusive (K-theory) SGS fluxes
 edmfx_vertical_diffusion: true     # apply the diffusive tendency to the drafts too
 edmfx_nh_pressure: true            # pressure (form) drag on the drafts
 edmfx_filter: true                 # state filters on the draft variables
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 ```
 
 Nearly all physics configurations in `config/model_configs/` set exactly this
@@ -233,12 +231,9 @@ residual is then reconstructed from a small ``\hat{\rho}^0`` and the blend of
 starts substituting grid-mean values, so subdomain sums stop being exact. Treat
 this as a closure problem, not a limiter problem.
 
-**Timestep failures.** The physics configurations in `config/model_configs/`
-all set
-`implicit_diffusion: true` and `approximate_linear_solve_iters: 2`, because the
-diffusive coupling between the grid mean and the drafts is stiff at the
-timesteps of interest. Check those first, then that `edmfx_filter: true` is
-set.
+**Timestep failures.** The diffusive coupling between the grid mean and the
+drafts is stiff at the timesteps of interest, so the post-ARK column step
+integrates it implicitly. Check that `edmfx_filter: true` is set.
 
 **Reproducibility.** Changing any PROPHET parameter or flag changes simulation
 output, so the reference counter in `reproducibility_tests/ref_counter.jl` has

@@ -60,20 +60,12 @@ defaults unless set in the parameter TOML), and
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 
 """
-    NonEquilibriumMicrophysics1M(;
-        n_substeps = 3,
-        n_substeps_quad = 2,
-        process_options...,
-    )
+    NonEquilibriumMicrophysics1M(; process_options...)
 
 Non-equilibrium 1-moment microphysics with prognostic cloud and precipitation mass.
 
 Carries `ρq_tot`, `ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno`, with conversion
 rates from CloudMicrophysics.jl. Selected by `microphysics_model: "1M"`.
-
-The substep counts are handed to CloudMicrophysics' averaged tendency
-evaluation, which subdivides the dynamics step into substeps and returns the
-time-averaged rates; this keeps the explicit sources stable at large `dt`.
 
 `process_options` selects the variant used for each individual process; they are
 collected into a `CMP.Microphysics1MOptions`, which documents the full list of
@@ -107,16 +99,7 @@ and one built from an unmodified configuration file agree (see
 
 # Fields
 
-  - `n_substeps`: Number of substeps used when the tendencies are evaluated at
-    grid-mean conditions (no SGS quadrature) [-].
-  - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
-    over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
-    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
-    and `snow_deposition_sublimation` are routed to either `microphysics_1m_params`
-    (bulk CM BMT) or `microphysics_1m_implicit_params` (SGS-integrated implicit
-    source) by `create_parameters.jl`, driven by the `implicit_microphysics` config
-    toggle.
 
 # Examples
 
@@ -125,7 +108,6 @@ import ClimaAtmos as CA
 import CloudMicrophysics.Parameters as CMP
 
 model = CA.NonEquilibriumMicrophysics1M(;
-    n_substeps = 1,
     rain_autoconversion = CMP.PrescribedNd(),
     cloud_ice_formation = CMP.ConstantTimescale(),
     rain_snow_accretion = nothing,  # process off
@@ -133,28 +115,17 @@ model = CA.NonEquilibriumMicrophysics1M(;
 ```
 """
 struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
-    n_substeps::Int  # number of microphysics substeps
-    n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
     processes::OPT  # per-process variant selection (CMP.Microphysics1MOptions)
-    function NonEquilibriumMicrophysics1M(;
-        n_substeps = 3,
-        n_substeps_quad = 2,
-        process_options...,
-    )
+    function NonEquilibriumMicrophysics1M(; process_options...)
         # Override CM's `ConstantTimescale` ice formation and
         # `DepositionAndSublimation` snow defaults to match
-        # `default_config.yml`. `create_parameters.jl` splits
-        # `cloud_liquid_formation`, `cloud_ice_formation`,
-        # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
-        # between `microphysics_1m_params` (bulk) and
-        # `microphysics_1m_implicit_params` (implicit) based on
-        # `implicit_microphysics`.
+        # `default_config.yml`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
             snow_deposition_sublimation = CMP.DepositionWithoutCloudCondensate(),
             process_options...,
         )
-        return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
+        return new{typeof(processes)}(processes)
     end
 end
 
@@ -1746,7 +1717,8 @@ is ignored.
 function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
     w1 = FT(1.5)
     t1 = FT(600)
-    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+    t_ft = FT(t)
+    return t_ft < t1 ? w1 * sinpi(t_ft / t1) : FT(0)
 end
 
 """
@@ -1795,10 +1767,9 @@ end
 
 Whether a process is integrated explicitly or implicitly.
 
-Subtypes: `Explicit` and `Implicit`. Used for the `diff_mode` numerics option
-(config key `implicit_diffusion`) and for `microphysics_tendency_timestepping`
-(hard-coded to `Implicit()` when microphysics is active; `implicit_microphysics`
-instead controls whether 1M cond/subl flow through the implicit cache).
+Subtypes: `Explicit` and `Implicit`. Used for
+`microphysics_tendency_timestepping`, which is `Implicit()` when microphysics is
+active.
 """
 abstract type AbstractTimesteppingMode end
 
@@ -1860,10 +1831,10 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 """
-    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
+    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, HD, VWB}
 
-Numerical options of an `AtmosModel`: upwinding schemes, limiter, diffusion
-timestepping mode, hyperdiffusion, and debugging switches.
+Numerical options of an `AtmosModel`: upwinding schemes, limiter,
+hyperdiffusion, and debugging switches.
 
 The upwinding fields hold `Val` symbols so that the scheme is a compile-time
 dispatch: `Val(:none)`, `Val(:first_order)`, `Val(:third_order)`, or
@@ -1894,14 +1865,12 @@ symbols or strings.
     Picard iteration). Should be disabled for production runs.
   - `limiter`: `nothing`, or `QuasiMonotoneLimiter` for horizontal tracer
     transport.
-  - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for
-    vertical diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, HD, VWB}
     # Enable specific upwinding schemes for specific equations
     energy_humidity_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1913,8 +1882,6 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
     # Whether the simulation is reproducible when restarting from a restart file
     reproducible_restart::Bool
     limiter::LIM
-    # Timestepping mode for diffusion: Explicit() or Implicit()
-    diff_mode::DM
     # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
     # Tracers the vertical water borrowing limiter applies to:
@@ -1933,7 +1900,6 @@ Base.broadcastable(x::AtmosNumerics) = tuple(x)
         test_dycore_consistency = false,
         reproducible_restart = false,
         limiter = nothing,
-        diff_mode = Explicit(),
         hyperdiff = Hyperdiffusion{Float32}(...),
         vertical_water_borrowing_species = nothing,
     )
@@ -1944,19 +1910,19 @@ types for compile-time dispatch.
 # Keyword Arguments
 
   - `energy_humidity_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot`,
-    `ρq_tot`, and the sedimenting microphysics species in vertical advection.
-    Valid values are `:none`, `:first_order`, `:third_order`, and
-    `:vanleer_limiter`, given as a `Symbol`, a `String`, or an already-wrapped
-    `Val`. `:first_order` gives positive first-order transport of `e_tot - Φ`,
-    `q_tot`, and the sedimenting species with the leading diffusivity of
-    backward-Euler upwind; `:third_order` is linear and unlimited (not positive
-    or monotone on discontinuities); `:none` skips their post-Newton dissipation
-    and antidiffusion, leaving their vertical advection forward-Euler central
-    under one Newton iteration with `ManualSparseJacobian` (amplifying
-    oscillatory modes unless vertical diffusion damps them).
-  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the passive non-water
-    grid-scale tracers (`ρtke` uses implicit first-order upwinding directly in
-    the Newton residual), same valid values.
+    `ρq_tot`, and the sedimenting microphysics species in post-ARK vertical
+    transport (`step_vertical_scalar_transport!`), given as a `Symbol`, a
+    `String`, or a `Val`. `:first_order` solves the implicit upwind M-matrix
+    alone; `:third_order` adds unlimited high-order antidiffusion;
+    `:vanleer_limiter` applies the shared Zalesak FCT limiter; `:none` keeps
+    central wave-core transport in `implicit_tendency!`. For the number and
+    rime species, which the wave core does not transport, `:none` selects the
+    limited scheme. `ρtke` uses the implicit upwind solve for `:first_order`
+    and the limited scheme otherwise.
+  - `tracer_upwinding = :vanleer_limiter`: Upwinding for passive non-water
+    grid-scale tracers and `PrognosticEDMFX` `ρaʲ` in post-ARK vertical
+    transport (`step_vertical_scalar_transport!`), using the same four modes;
+    `:none` is explicit central transport, which is unstable for any time step.
   - `edmfx_mse_humidity_upwinding = :first_order`: Upwinding for the EDMF
     subdomain `mse`, `q_tot`, and sedimenting microphysics species; `:none` or
     `:first_order`.
@@ -1968,7 +1934,6 @@ types for compile-time dispatch.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
     transport.
-  - `diff_mode = Explicit()`: Timestepping mode for vertical diffusion.
   - `hyperdiff`: Hyperdiffusion model; defaults to a `Float32` `Hyperdiffusion`
     with the CAM-SE vorticity coefficient, `divergence_damping_factor = 5`, and
     `prandtl_number = 1.0`. Pass `nothing` to disable hyperdiffusion.
@@ -1990,7 +1955,6 @@ function AtmosNumerics(;
     test_dycore_consistency = false,
     reproducible_restart = false,
     limiter = nothing,
-    diff_mode = Explicit(),
     hyperdiff = Hyperdiffusion{Float32}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         divergence_damping_factor = 5,
@@ -2019,7 +1983,6 @@ function AtmosNumerics(;
         test_dycore_consistency,
         reproducible_restart,
         limiter,
-        diff_mode,
         hyperdiff,
         vertical_water_borrowing_species,
     )
@@ -2064,9 +2027,8 @@ value. The keyword constructor accepts plain `Bool`s for all of them.
   - `scale_blending_method`: `AbstractScaleBlendingMethod` used to blend the
     mixing-length scales (`edmfx_scale_blending`).
   - `updraft_picard_rounds`: Number of velocity ↔ buoyancy-affecting-tracers
-    Picard rounds inside `initialize_implicit_stage_problem!` before the final
-    `u₃` and `ρa` analytic solves. `0` reproduces the single-pass behavior
-    (`edmfx_updraft_picard_rounds`).
+    Picard rounds inside `step_edmf_and_env_turbulence!` before the final `u₃`
+    and `ρa` solves. `0` runs a single pass (`edmfx_updraft_picard_rounds`).
 """
 struct EDMFXModel{
     EEM, EDM, ESDFH <: ValTF, EHD <: ValTF,
@@ -2091,7 +2053,8 @@ end
     EDMFXModel(; entr_model = nothing, detr_model = nothing, sgs_mass_flux = false,
                sgs_diffusive_flux = false, sgs_diffusive_flux_horizontal = false,
                nh_pressure = false, vertical_diffusion = false,
-               horizontal_diffusion = false, filter = false, scale_blending_method)
+               horizontal_diffusion = false, filter = false, scale_blending_method,
+               updraft_picard_rounds = 0)
 
 Create an `EDMFXModel`, lifting the two cache-shaping switches to `Val` types
 and storing the rest as plain `Bool`s.
@@ -2110,7 +2073,7 @@ and storing the rest as plain `Bool`s.
   - `filter = false`: Enable relaxation of negative updraft velocities.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
   - `updraft_picard_rounds = 0`: Picard rounds for the velocity ↔ tracer
-    sub-solve at implicit-stage initialization; `0` disables the loop.
+    sub-solve in `step_edmf_and_env_turbulence!`; `0` disables the loop.
 
 Each switch may also be given as an already-wrapped `Val{true}`/`Val{false}`.
 An unrecognized keyword, such as a misspelled switch, raises a `MethodError`.
@@ -2754,7 +2717,7 @@ With no keyword arguments the model is a minimal dry atmosphere:
   - `IdealizedInsolation()`, and no radiation, turbulence-convection, gravity
     wave, sponge, or forcing model.
   - Numerics: Van Leer limited upwinding for `ρe_tot`, `ρq_tot`, and the
-    tracers, `Explicit()` diffusion, and CAM-SE-like `Float32` hyperdiffusion.
+    tracers, and CAM-SE-like `Float32` hyperdiffusion.
 
 The admissible names, grouped into the sub-struct that owns each one; see that
 struct's docstring for the full list of admissible values.
@@ -2776,8 +2739,7 @@ struct's docstring for the full list of admissible values.
   - [`AtmosSurface`](@ref): `flux_scheme`, `temperature`, `boundary_overrides`,
     `surface_albedo`.
   - `AtmosNumerics`: the five `*_upwinding` options,
-    `test_dycore_consistency`, `reproducible_restart`, `limiter`, `diff_mode`,
-    `hyperdiff`, `vertical_water_borrowing_species`.
+    `test_dycore_consistency`, `reproducible_restart`, `limiter`, `hyperdiff`,, `vertical_water_borrowing_species`.
   - [`AtmosChem`](@ref): `chemistry_model`.
   - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
     `cosp`, and `disable_surface_flux_tendency`.

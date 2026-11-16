@@ -39,8 +39,9 @@ accumulates, in order:
 
 `Yₜ_lim` collects the tracer tendencies that are subject to the horizontal
 limiters (see `limiters_func!`); everything else accumulates into `Yₜ`. The
-implicitly treated counterparts (vertical acoustic/advective terms, diffusion when
-`p.atmos.diff_mode == Implicit()`) live in `implicit_tendency!`.
+implicitly treated vertical acoustic and advective terms live in
+`implicit_tendency!`; vertical diffusion, surface fluxes, and microphysics run
+in the column physics (`step_column_physics!`).
 
 # Returns
 
@@ -58,8 +59,6 @@ Add the tendencies of `remaining_tendency!` to `Yₜ`, overwriting `Yₜ_lim`.
 Returns `Yₜ`.
 """
 function add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    # The SGS diffusive flux of the cloud condensate reads `ᶜsgs_moments`.
-    ensure_sgs_moments!(Y, p)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
@@ -98,19 +97,18 @@ Accumulates contributions from:
   - Idealized Held-Suarez forcing (when `radiation_mode isa HeldSuarezForcing`).
   - Single-column Coriolis forcing, prescribed large-scale advection, subsidence,
     and external forcings (see `external_forcing_tendency!`).
-  - Vertical diffusion and EDMFX SGS diffusive fluxes, only when
-    `p.atmos.diff_mode == Explicit()` (implicit diffusion is applied in
-    `implicit_tendency!`).
   - Surface fluxes, radiation, EDMFX TKE, and chemistry.
   - Non-orographic and orographic gravity-wave drag.
-  - Surface temperature evolution, pressure work, Smagorinsky-Lilly, AMD LES, and
-    constant horizontal diffusion.
+  - Surface temperature evolution, horizontal Smagorinsky-Lilly and the
+    vertical Smagorinsky-Lilly momentum terms not solved in the column
+    physics, AMD LES, and constant horizontal diffusion.
   - Tracer nonnegativity restoration at the cost of water vapor, and finally
     `zero_velocity_tendency!` for advection tests (which must remain last so no
     later call reintroduces velocity tendencies).
 
-Microphysics and surface precipitation are applied in `implicit_tendency!`,
-not here. Called from `remaining_tendency!`. Returns `nothing`.
+Vertical diffusion, surface fluxes, microphysics, and surface precipitation run
+in the column physics (`step_column_physics!`), not here. Called from
+`remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
@@ -184,29 +182,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
-    if p.atmos.diff_mode == Explicit()
-        vertical_diffusion_boundary_layer_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            p.atmos.vertical_diffusion,
-        )
-        edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-        edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    end
-
-    surface_flux_tendency!(Yₜ, Y, p, t)
-
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
 
     # Chemistry tendencies
     chemistry_tendency!(Yₜ, Y, p, t, p.atmos.chemistry_model)
-
-    # Unified microphysics tendencies: always applied in the implicit stage
-    # (`implicit_tendency!`). `implicit_microphysics` only controls whether
-    # cond/subl flows through the implicit cache with a Jacobian or stays in
-    # the frozen bulk tendency; both paths run in the implicit stage.
 
     non_orographic_gravity_wave_apply_tendency!(
         Yₜ,
@@ -222,18 +201,11 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.orographic_gravity_wave,
     )
 
-    # NOTE: Microphysics tendencies should be applied before calling this function,
-    # because precipitation cache is used in this function
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface.temperature)
-
-    # NOTE: All ρa tendencies should be applied before calling this function
-    pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     sl = p.atmos.smagorinsky_lilly
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
-    if p.atmos.diff_mode == Explicit()
-        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
-    end
+    vertical_smagorinsky_lilly_explicit_tendency!(Yₜ, Y, p, t, sl)
 
     amd_tendency!(Yₜ, Y, p, t, p.atmos.amd_les)
 
@@ -253,21 +225,101 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    prescribed_flow_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+Compute explicit vertical transport, vertical momentum PGF/buoyancy/Rayleigh
+sponge, and `zero_velocity_tendency!` for `PrescribedFlow`. Microphysics and
+sedimentation run in `post_step_callback!`. Mutates `Yₜ`.
+"""
+function prescribed_flow_vertical_advection_tendency!(Yₜ, Y, p, t)
+    (; rayleigh_sponge) = p.atmos
+    (; energy_humidity_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; params) = p
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠu³, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    cp_d = CAP.cp_d(params)
+    zero_dt = zero(eltype(params))
+    sedimenting_names = sedimenting_tracer_names(Y)
+    passive_names = passive_gs_tracer_names(Y)
+
+    # Explicit vertical transport by the prescribed flow: continuity, central
+    # geopotential and pressure work paired with `energy_humidity_upwinding` on
+    # `e_tot - Φ`, `q_tot`, and all microphysics tracers, `tracer_upwinding` on
+    # passive grid-scale tracers, and first-order upwind on `ρtke`.
+    # Microphysics and sedimentation run in `post_step_callback!`.
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜp, ᶜΦ,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜp, ᶜΦ
+        ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
+        @. Yₜc.ρ -= ᶜadvdivᵥ(ᶠρ * ᶠu³)
+
+        ᶜχ_e = @. lazy(specific(Yc.ρe_tot, Yc.ρ) - ᶜΦ)
+        @. Yₜc.ρe_tot -= ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜΦ) + ᶠu³ * ᶠinterp(ᶜp))
+        add_vertical_transport!(
+            Yₜc.ρe_tot, ᶠρ, ᶠu³, ᶜχ_e, zero_dt, energy_humidity_upwinding,
+        )
+        if MatrixFields.has_field(Yc, @name(ρq_tot))
+            ᶜq_tot = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
+            add_vertical_transport!(
+                Yₜc.ρq_tot, ᶠρ, ᶠu³, ᶜq_tot, zero_dt, energy_humidity_upwinding,
+            )
+        end
+        MatrixFields.unrolled_foreach(sedimenting_names) do ρχ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, Yc.ρ))
+            add_vertical_transport!(
+                ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, zero_dt, energy_humidity_upwinding,
+            )
+        end
+        MatrixFields.unrolled_foreach(passive_names) do ρχ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, Yc.ρ))
+            add_vertical_transport!(
+                ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, zero_dt, tracer_upwinding,
+            )
+        end
+        if MatrixFields.has_field(Yc, @name(ρtke))
+            ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+            add_vertical_transport!(
+                Yₜc.ρtke, ᶠρ, ᶠu³, ᶜtke, zero_dt, Val(:first_order),
+            )
+        end
+        return nothing
+    end
+
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+    DataLayouts.foreach_column(
+        Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        rst_u₃ isa NullBroadcasted ? () : rst_u₃,
+    ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃
+        add_implicit_u₃_tendency!(
+            Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+            thermo_params, cp_d,
+        )
+        rst_u₃ isa Tuple || @. Yₜf.u₃ += rst_u₃
+        return nothing
+    end
+
+    zero_velocity_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
     fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-Compute the full tendency explicitly, by adding the tendencies of
-`remaining_tendency!` to those of `implicit_tendency!`, together with the
-vertical advection corrections that the implicit path applies after the Newton
-solve (`add_vertical_advection_corrections!` with a unit Courant limiter), so
-that `energy_humidity_upwinding` and `tracer_upwinding` take full effect.
-
-Experimental timestepping mode used by `args_integrator` when `prescribed_flow` is
-set, where the flow is imposed and implicit treatment of sound waves is
-unnecessary. Mutates `Yₜ` and `Yₜ_lim`.
+Compute the full tendency explicitly for `PrescribedFlow` by evaluating
+`remaining_tendency!` and `prescribed_flow_vertical_advection_tendency!`.
+Mutates `Yₜ` and `Yₜ_lim`.
 """
 function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    implicit_tendency!(Yₜ, Y, p, t)
-    add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    add_vertical_advection_corrections!(Yₜ, Y, p, zero(p.dtγ))
+    remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    prescribed_flow_vertical_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
