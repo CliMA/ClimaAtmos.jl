@@ -1340,10 +1340,13 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 
     # Mechanical (Ext 3) c≈0 launched flux β_mech, zonal direction — the
     # band-resolved Ext-3 export. β_mech is deposited only in the c≈0 (low-`c`)
-    # bin and its sign carries the E/W deceleration direction (opposes U).
+    # bin and its sign carries the E/W deceleration direction (opposes U). It is
+    # multiplied by the coverage a_cover, as the kernel deposits it and as
+    # gw_launch_flux reports the launched flux.
     let beres = gw_beres_source
         mech(active, u, N, w) = _beres_mech_flux_value(active, u, N, w, beres)
         @. gw_beres_mech_flux =
+            gw_a_cover *
             mech(gw_beres_active, gw_u_heat, gw_N_source, gw_w_obstacle)
     end
 end

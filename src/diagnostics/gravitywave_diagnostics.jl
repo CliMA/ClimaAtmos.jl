@@ -515,7 +515,7 @@ add_diagnostic_variable!(
     short_name = "nogw_beres_mech_flux",
     long_name = "NOGW Beres-G Mechanical (Obstacle) Steady Flux",
     units = "Pa",
-    comments = "Mechanical/obstacle steady (nu=0) launched momentum flux beta_mech (Extension 3, tau_mech ~ rho0*U*w_b^2/N) deposited in the c~0 low-c bin; signed to oppose U (E/W direction). Zero unless nogw_beres_mechanical_source and active.",
+    comments = "Mechanical/obstacle steady (nu=0) launched momentum flux beta_mech (Extension 3, tau_mech ~ rho0*U*w_b^2/N) deposited in the c~0 low-c bin, times the updraft coverage a_cover as deposited; signed to oppose U (E/W direction). Zero unless nogw_beres_mechanical_source and active.",
     compute! = compute_nogw_beres_mech_flux!,
 )
 

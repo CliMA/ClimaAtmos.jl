@@ -568,6 +568,52 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test signed_a_cover < 0.9 * expected_a_cover
             @test parent(gw_a_cover)[1] ≈ expected_a_cover rtol = 1e-6
         end
+
+        @testset "The mechanical flux diagnostic carries the coverage" begin
+            # The kernel deposits the steady mechanical flux times a_cover, so the
+            # diagnostic reports it times a_cover too. A westward wind of 5 m/s and
+            # a 1 m/s updraft (its cell-centre velocity, which sets the obstacle
+            # velocity) give a nonzero obstacle flux.
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+            nogw = p.non_orographic_gravity_wave
+            fill!(nogw.ᶜuv_temp, Geometry.UVVector(FT(-5), FT(0)))
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            @. p.precomputed.ᶜuʲs.:(1) = Geometry.Covariant123Vector(
+                Geometry.UVWVector(FT(-5), FT(0), FT(1)),
+                ᶜlg,
+            )
+            beres_mech = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                Q0_threshold = FT(0),
+                beres_mechanical_source = true,
+            )
+            p_mech = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (; gw_beres_source = beres_mech),
+                ),
+            )
+            CA.compute_beres_convective_heating!(Y, p_mech, ᶜbuoyancy_frequency)
+            value(f) = parent(f)[1]
+            a_cover = value(gw_a_cover)
+            launched = CA._beres_mech_flux_value(
+                value(gw_beres_active),
+                value(nogw.gw_u_heat),
+                value(nogw.gw_N_source),
+                value(nogw.gw_w_obstacle),
+                beres_mech,
+            )
+            @test value(gw_beres_active) == 1
+            @test value(nogw.gw_w_obstacle) ≈ 1 rtol = 1e-6
+            @test a_cover < FT(0.1)              # the factor matters
+            @test launched > 0                    # opposes the westward wind
+            @test value(nogw.gw_beres_mech_flux) ≈ a_cover * launched rtol = 1e-6
+        end
     end
 
     # ============================================================================
