@@ -19,6 +19,7 @@ dt_rad: "1hours"
 topography: "Earth"
 topography_damping_factor: 5.0
 mesh_warp_type: "SLEVE"
+curl_form_metric: true
 rad: "allskywithclear"
 insolation: "timevarying"
 surface_setup: "DefaultMoninObukhov"

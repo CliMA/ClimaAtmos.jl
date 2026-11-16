@@ -1,5 +1,7 @@
 import ClimaCore:
-    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies
+    Geometry, Hypsography, Fields, Spaces, Meshes, Grids, CommonGrids, Topologies,
+    Operators
+import StaticArrays: @SMatrix, SVector
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
@@ -43,6 +45,8 @@ Create an ExtrudedCubedSphereGrid with topography support.
   - `mesh_warp_type = SLEVEWarp{FT}()`: mesh warping type ([`SLEVEWarp`](@ref) or
     [`LinearWarp`](@ref))
   - `topo_smoothing = false`: apply topography smoothing
+  - `curl_form_metric = false`: replace the vertical metric terms with the
+    curl form of [`curl_form_metric`](@ref); requires `deep_atmosphere = true`
 """
 function SphereGrid(
     ::Type{FT};
@@ -63,6 +67,7 @@ function SphereGrid(
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
     discretization::Union{Grids.Discretization, Nothing} = nothing,
+    curl_form_metric = false,
     z_mesh = get_z_mesh(FT; z_max, z_elem, z_stretch, dz_bottom, dz_top, z_pbl),
 ) where {FT}
     n_quad_points = nh_poly + 1
@@ -93,7 +98,119 @@ function SphereGrid(
         discretization,
     )
 
-    return grid
+    return curl_form_metric ? ClimaAtmos.curl_form_metric(grid) : grid
+end
+
+const DeepExtrudedGrid =
+    Grids.ExtrudedFiniteDifferenceGrid{
+        <:Any,
+        <:Any,
+        <:Any,
+        <:Geometry.DeepSphericalGlobalGeometry,
+    }
+
+"""
+    curl_form_metric(grid)
+
+Return `grid` with the contravariant metric `J ∂ξ³/∂x` at cell centers and faces
+replaced by the conservative curl form of Kopriva (2006),
+
+    J a³ = D₁(Q G₂) - D₂(Q G₁) + Jₕ x̂,
+
+where `D₁` and `D₂` are the spectral element derivatives, `Gₖ = r x̂ × ∂x̂/∂ξᵏ` with
+`x̂` the radial unit vector and `r` the planet radius, `Jₕ` is the Jacobian of the
+horizontal grid on the sphere of radius `r`, and `Q ≈ (R² - r²) / (2r)` with
+`R = r + z`. `Q` is accumulated up each column so that its vertical difference
+across a cell is `R Δz / r` at the cell center, matching the horizontal metric
+`J ∂ξʰ/∂x` already in `grid`. The term `Jₕ x̂` is the curl of `r G / 2`, which
+is constant along each column and so leaves the discrete identity intact. In
+Cartesian components, the discrete divergence of a uniform vector field then
+vanishes to round-off for any terrain. `J`, `WJ`, and the horizontal rows of the
+metric are unchanged.
+
+See also [`SphereGrid`](@ref).
+"""
+function curl_form_metric(grid::DeepExtrudedGrid)
+    global_geometry = grid.global_geometry
+    r = global_geometry.radius
+    ᶜspace = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+    ᶠspace = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    ᶜlg = Fields.local_geometry_field(ᶜspace)
+    ᶠlg = Fields.local_geometry_field(ᶠspace)
+    ᶜR = r .+ Fields.coordinate_field(ᶜspace).z
+    ᶠR = r .+ Fields.coordinate_field(ᶠspace).z
+
+    # Q = (R² - r²) / (2r) + E / r, where E absorbs the offset of the cell-center
+    # radius from the mean of its face radii, so that δ₃Q = R Δz / r exactly.
+    ᶜinterp = Operators.InterpolateF2C()
+    ᶜΔz = (lg -> parent(lg.∂x∂ξ)[3, 3]).(ᶜlg)
+    ᶠE = similar(ᶠR)
+    Operators.column_accumulate!(+, ᶠE, @. (ᶜR - ᶜinterp(ᶠR)) * ᶜΔz; init = 0)
+    ᶠQ = @. ((ᶠR^2 - r^2) / 2 + ᶠE) / r
+    ᶜQ = @. ᶜinterp(ᶠQ)
+
+    return Grids.ExtrudedFiniteDifferenceGrid(
+        grid.horizontal_grid,
+        grid.vertical_grid,
+        grid.hypsography,
+        global_geometry,
+        Fields.field_values(curl_form_Ja³(ᶜlg, ᶜQ, global_geometry)),
+        Fields.field_values(curl_form_Ja³(ᶠlg, ᶠQ, global_geometry)),
+    )
+end
+
+# Gₖ = r x̂ × ∂x̂/∂ξᵏ in Cartesian components, from the horizontal block s A of
+# ∂x∂ξ, where s = R / r and the columns of A are r ∂x̂/∂ξᵏ in the local frame.
+function radial_cross_tangent(lg, global_geometry, k)
+    s = (global_geometry.radius + lg.coordinates.z) / global_geometry.radius
+    M = parent(lg.∂x∂ξ)
+    G = parent(Geometry.local_to_cartesian(global_geometry, lg.coordinates))
+    return G * SVector(-M[2, k] / s, M[1, k] / s, zero(s))
+end
+
+# Jₕ x̂ = det(A) x̂ in Cartesian components, with A as in `radial_cross_tangent`.
+function radial_horizontal_jacobian(lg, global_geometry)
+    s = (global_geometry.radius + lg.coordinates.z) / global_geometry.radius
+    M = parent(lg.∂x∂ξ)
+    Jₕ = (M[1, 1] * M[2, 2] - M[1, 2] * M[2, 1]) / s^2
+    G = parent(Geometry.local_to_cartesian(global_geometry, lg.coordinates))
+    return G * SVector(zero(s), zero(s), Jₕ)
+end
+
+# Local geometry with J ∂ξ³/∂x = D₁(Q G₂) - D₂(Q G₁) + Jₕ x̂, differentiated in
+# Cartesian components because the local frame rotates between nodes.
+function curl_form_Ja³(lg, Q, global_geometry)
+    grad = Operators.Gradient()
+    G₁ = radial_cross_tangent.(lg, Ref(global_geometry), 1)
+    G₂ = radial_cross_tangent.(lg, Ref(global_geometry), 2)
+    Jₕx̂ = radial_horizontal_jacobian.(lg, Ref(global_geometry))
+    component(u, i) = parent(u)[i]
+    ∂(f, k) = component.(grad.(f), k)
+    Ja³ = ntuple(
+        X ->
+            ∂(Q .* component.(G₂, X), 1) .- ∂(Q .* component.(G₁, X), 2) .+
+            component.(Jₕx̂, X),
+        3,
+    )
+    return with_vertical_metric.(lg, SVector.(Ja³...), Ref(global_geometry))
+end
+
+# Replace the vertical row of ∂x∂ξ so that J ∂ξ³/∂x equals Ja³, keeping the
+# horizontal rows and J: for ∂x∂ξ = [s A 0; dᵀ d₃], J ∂ξ³/∂x = (-J dᵀ (s A)⁻¹, J) / d₃.
+function with_vertical_metric(lg, Ja³_cart, global_geometry)
+    G = parent(Geometry.local_to_cartesian(global_geometry, lg.coordinates))
+    (p₁, p₂, q) = G' * Ja³_cart
+    M = parent(lg.∂x∂ξ)
+    d₁ = -(p₁ * M[1, 1] + p₂ * M[2, 1]) / q
+    d₂ = -(p₁ * M[1, 2] + p₂ * M[2, 2]) / q
+    ∂x∂ξ = @SMatrix [
+        M[1, 1] M[1, 2] M[1, 3]
+        M[2, 1] M[2, 2] M[2, 3]
+        d₁ d₂ lg.J/q
+    ]
+    return Geometry.LocalGeometry(
+        lg.coordinates, lg.J, lg.WJ, Geometry.Tensor(∂x∂ξ, axes(lg.∂x∂ξ)),
+    )
 end
 
 """

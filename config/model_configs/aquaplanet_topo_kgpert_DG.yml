@@ -19,13 +19,12 @@ dt_rad: "1hours"
 topography: "Earth"
 topography_damping_factor: 5.0
 mesh_warp_type: "SLEVE"
+curl_form_metric: true
 rad: "allskywithclear"
 insolation: "timevarying"
 surface_setup: "DefaultMoninObukhov"
   #turbconv: "edonly_edmfx"
-turbconv: "prognostic_edmfx"
 implicit_diffusion: true
-prognostic_tke: true
 edmfx_sgs_diffusive_flux: true
 edmfx_sgs_horizontal_diffusive_flux: true
 edmfx_horizontal_diffusion: true
@@ -44,7 +43,7 @@ initial_condition: "WeatherModel"
 start_date: "20100701"
 output_dir: "/resnick/scratch/asridhar/weathertest"
 # Rebalance the IC column pressure against the model's discrete Exner-split
-# vertical PGF 
+# vertical PGF
 ic_hydrostatic_rebalance: true
 # era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
 # So far, only tried with era5_ic_full_pressure = false

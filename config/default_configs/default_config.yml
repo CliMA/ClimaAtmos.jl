@@ -255,6 +255,9 @@ tracer_nonnegativity_method:
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false
+curl_form_metric:
+  help: "Use the Kopriva (2006) curl form for the vertical metric terms on the deep-atmosphere sphere [`true`, `false` (default)]"
+  value: false
 start_date:
   help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"

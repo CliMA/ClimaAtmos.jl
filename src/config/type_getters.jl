@@ -634,6 +634,7 @@ function get_grid(parsed_args, params, context)
             nh_poly = parsed_args["nh_poly"],
             bubble = parsed_args["bubble"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
+            curl_form_metric = parsed_args["curl_form_metric"],
             kwargs...,
         )
     elseif config == "column"
