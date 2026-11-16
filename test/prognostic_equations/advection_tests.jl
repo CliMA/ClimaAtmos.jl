@@ -114,6 +114,12 @@ include("../test_helpers.jl")
         end
         return S
     end
+    # Tʲ from mse and the water partition, as `set_draft_temperatures_and_densities!`
+    # diagnoses it, with ρʲ held fixed.
+    function diagnose_draft_temperature!()
+        ᶜstateʲ = CA.ᶜdraft_thermo_state(Y, p, 1)
+        @. p.precomputed.ᶜTʲs.:(1) = CA.thermo_T(ᶜstateʲ)
+    end
     function mse_and_q_tot_tendencies()
         fill!(Yₜ, FT(0))
         CA.edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, FT(0), turbconv_model)
@@ -247,9 +253,10 @@ include("../test_helpers.jl")
 
         # The (mse, mse), (mse, q_μ), and (q_tot, q_μ) blocks match central
         # differences of the tendencies in a smooth direction, with Tʲ
-        # evaluated from the perturbed state and ρʲ held fixed. The blocks contain dtγ ∂T/∂Y - I for
+        # rediagnosed and ρʲ held fixed. The blocks contain dtγ ∂T/∂Y - I for
         # dtγ = 1 and omit the dilution diagonal -ρ̂⁻¹ S of the (mse, mse)
         # block.
+        diagnose_draft_temperature!()
         CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
         ᶜv = @. sin(ᶜz / FT(700)) + FT(0.5)
         mse_state = CA.@name(c.sgsʲs.:(1).mse)
@@ -260,10 +267,13 @@ include("../test_helpers.jl")
             χ_old = copy(χ)
             δ = FT(1e-6) * maximum(abs, arr(χ_old))
             @. χ = χ_old + δ * ᶜv
+            diagnose_draft_temperature!()
             (mse_plus, q_tot_plus) = mse_and_q_tot_tendencies()
             @. χ = χ_old - δ * ᶜv
+            diagnose_draft_temperature!()
             (mse_minus, q_tot_minus) = mse_and_q_tot_tendencies()
             @. χ = χ_old
+            diagnose_draft_temperature!()
             ∂mse = matrix[mse_state, state]
             Jv = arr(@. ∂mse * ᶜv)
             if state == mse_state

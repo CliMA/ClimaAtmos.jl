@@ -1698,7 +1698,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     (; ᶜρʲs) = p.precomputed
     (; ᶜT⁰) = ᶜenv_thermo_fields(Y, p)
     ᶠu³ʲ_lazy = compute_ᶠu³(Y.c.uₕ, Y.c.ρ, Y.f.sgsʲs.:(1).u₃)
-    ᶜstateʲ = ᶜdraft_thermo_state(Y, p, 1)
+    (; ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ) = ᶜdraft_thermo_fields(Y, p, 1)
     (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     FT = Spaces.undertype(axes(Y.c))
     turbconv_model = p.atmos.turbconv_model
@@ -1765,7 +1765,9 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ),
         )
     end
-    thermo_inputs = isempty(mass_names) ? () : (ᶜstateʲ, ᶜT⁰, ᶜΦ)
+    thermo_inputs =
+        isempty(mass_names) ? () :
+        (ᶜTʲ, ᶜT⁰, ᶜΦ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
 
     # One column loop: the advection of every updraft scalar, then the
     # sedimentation of each microphysics tracer (in the order of
@@ -1826,20 +1828,11 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         ᶜa = @. draft_area(max(zero_FT, ᶜsgsʲ.ρa), ᶜρʲ)
         ᶜ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
         ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
-        (ᶜstateʲ_lazy, ᶜT⁰_col, ᶜΦ_col) =
-            isempty(thermo_inputs) ? ntuple(Returns(nothing), 3) : thermo_inputs
-        # (a register copy of the draft state evaluated from `Y`, which the blocks
-        # below read several times)
-        ᶜstateʲ_col = isempty(thermo_inputs) ? nothing : register_copy(ᶜstateʲ_lazy)
-        ᶜTʲ = isempty(thermo_inputs) ? nothing : (@. lazy(thermo_T(ᶜstateʲ_col)))
+        (ᶜTʲ_col, ᶜT⁰_col, ᶜΦ_col, ᶜq_tot_nonnegʲ_col, ᶜq_liqʲ_col, ᶜq_iceʲ_col) =
+            isempty(thermo_inputs) ? ntuple(Returns(nothing), 6) : thermo_inputs
         ᶜinv_cp_mʲ =
             isempty(thermo_inputs) ? nothing :
-            (@. 1 / TD.cp_m(
-                thermo_params,
-                thermo_q_tot_nonneg(ᶜstateʲ_col),
-                thermo_q_liq(ᶜstateʲ_col),
-                thermo_q_ice(ᶜstateʲ_col),
-            ))
+            (@. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ_col, ᶜq_liqʲ_col, ᶜq_iceʲ_col))
 
         MatrixFields.unrolled_foreach(
             map(tuple, sed_names, species),
@@ -1881,7 +1874,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimented mass enters with -mseʲ.
             phase = condensate_phase(χ_name)
             h_cond_func = enthalpy_function(phase)
-            ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ) + ᶜΦ_col
+            ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ_col) + ᶜΦ_col
             ᶜh_cond⁰ = @. h_cond_func(thermo_params, ᶜT⁰_col) + ᶜΦ_col
             @. ∂ᶜmseʲ_∂ᶜχʲ_col +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) * (
@@ -1913,7 +1906,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @inline
             L_ν = latent_heat_function(condensate_phase(ν_name))
             @. ∂ᶜmseʲ_∂ᶜq_νʲ +=
-                ∂ᶜmseʲ_diag * DiagonalMatrixRow(L_ν(thermo_params, ᶜTʲ))
+                ∂ᶜmseʲ_diag * DiagonalMatrixRow(L_ν(thermo_params, ᶜTʲ_col))
         end
         @. ∂ᶜmseʲ_diag += ᶜadv_q_tot
     end
