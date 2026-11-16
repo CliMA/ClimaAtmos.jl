@@ -732,7 +732,19 @@ import Thermodynamics as TD
                 )
                 @test c_hi_0 == c
                 @test c_hi_cu < c
-                @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-4)
+                q_tail = FT(0.49) * tanh(FT(4) * FT(0.01) / FT(0.49))
+                @test c_hi_cu ≈ CA.normal_cdf_inv(1 - q_tail) rtol = FT(1e-3)
+                # The clamp form with an area floor.
+                c_hi_cu_floor = CA._env_tail_c_hi_from_sums(
+                    FT(0),
+                    FT(1),
+                    c,
+                    FT(4),
+                    FT(2e-3),
+                )
+                @test c_hi_cu_floor ≈ CA.normal_cdf_inv(FT(1 - 4 * 2e-3)) rtol =
+                    FT(1e-3)
+                @test CA._env_tail_c_hi_from_sums(FT(0), FT(1), c, FT(4)) == c
 
                 # Detrained condensate fraction is 0 at or below equilibrium and
                 # (q_c - q_c_eq) / q_c above equilibrium.
@@ -765,4 +777,26 @@ import Thermodynamics as TD
         end
     end
 
+    @testset "Subsaturation-deficit floor ε_rel" begin
+        for FT in (Float32, Float64)
+            σ_abs = FT(1e-5)
+            sigma_S = FT(2e-4)
+            α = FT(0.5)
+            floor_0 = CA.CloudFractionFloor(σ_abs, FT(0))
+            floor_1 = CA.CloudFractionFloor(σ_abs, FT(0.05))
+            # A number is `σ_abs` with `ε_rel = 0`.
+            @test CA._sgs_augmented_sigma(sigma_S, α, floor_0, FT(-1e-3)) ==
+                  CA._sgs_augmented_sigma(sigma_S, α, σ_abs, FT(-1e-3))
+            # `ε_rel` widens σ_aug only in subsaturated air.
+            @test CA._sgs_augmented_sigma(sigma_S, α, floor_1, FT(-1e-3)) ≈
+                  sqrt((α * sigma_S)^2 + (FT(0.05) * FT(1e-3))^2 + σ_abs^2)
+            @test CA._sgs_augmented_sigma(sigma_S, α, floor_1, FT(1e-4)) ==
+                  CA._sgs_augmented_sigma(sigma_S, α, floor_0, FT(1e-4))
+            # The wider σ_aug lowers the cover of trace condensate in
+            # subsaturated air.
+            cf_0 = CA._compute_cloud_fraction(FT(1e-5), FT(-1e-3), sigma_S, α, floor_0)
+            cf_1 = CA._compute_cloud_fraction(FT(1e-5), FT(-1e-3), sigma_S, α, floor_1)
+            @test cf_1 < cf_0
+        end
+    end
 end

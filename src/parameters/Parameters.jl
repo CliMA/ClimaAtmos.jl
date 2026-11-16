@@ -349,6 +349,15 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `_env_subsat_cu_switch`, evaluated at the larger of the two bounding face
     gradients `ᶠ∂θli∂z` of the cell so that the subsaturated cumulus switch
     vanishes across strong stratocumulus inversions; default `0.0115` [K/m].
+  - `sgs_env_tail_area_floor`: Updraft-area floor `a_floor ≥ 0` of the
+    tail probability (`_env_tail_c_hi_from_sums`): `0` (default) selects
+    `q_tail = 0.49 tanh(w_cu c_tail a_up / 0.49)`, positive values
+    `q_tail = clamp(w_cu c_tail max(a_up, a_floor), 0, 0.49)` [-].
+  - `cloud_fraction_eps_rel`: Subsaturation-deficit scaling `ε_rel ≥ 0` of the
+    augmented cloud-fraction width
+    `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`
+    (`_sgs_augmented_sigma`); this supersedes the ClimaParams default, and `0`
+    (default) leaves the absolute floor alone [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -425,6 +434,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_env_updraft_tail_truncation_coeff::FT
     sgs_env_subsat_rh_transition::FT
     sgs_env_subsat_gamma_crit::FT
+    sgs_env_tail_area_floor::FT
+    cloud_fraction_eps_rel::FT
 end
 
 """

@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Two options of the PROPHET cloud-fraction
+  closure (provisional parameters; the defaults leave results unchanged):
+  `cloud_fraction_eps_rel` (`ε_rel`, default `0`, superseding the ClimaParams
+  value) adds the subsaturation-deficit term to the augmented width,
+  `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, which keeps trace
+  condensate in subsaturated air patchy; `sgs_env_tail_area_floor` selects the
+  updraft-area dependence of the environment tail probability, the tanh form
+  `0.49 tanh(w_cu c_tail a_up / 0.49)` that vanishes with the updraft area at
+  `0` (default) or the clamp form `clamp(w_cu c_tail max(a_up, a_floor), 0, 0.49)`
+  for positive values.
 - ![][badge-✨feature/enhancement] Subsaturated-environment upper-tail
   truncation and convective environment autoconversion velocity for 1M
   `PrognosticEDMFX` (provisional parameters

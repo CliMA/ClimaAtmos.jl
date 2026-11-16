@@ -818,6 +818,12 @@ function SGSQuadratureParameters(
         sgs_env_updraft_tail_truncation_coeff = FT(0),
         sgs_env_subsat_rh_transition = FT(0.03),
         sgs_env_subsat_gamma_crit = FT(0.0115),
+        # Updraft-area floor of the tail probability: 0 = the tanh form,
+        # which vanishes with the updraft area.
+        sgs_env_tail_area_floor = FT(0),
+        # Subsaturation-deficit scaling of the augmented cloud-fraction width
+        # (`_sgs_augmented_sigma`): 0 = absolute floor alone.
+        cloud_fraction_eps_rel = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

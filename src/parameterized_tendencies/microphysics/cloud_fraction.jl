@@ -1083,10 +1083,12 @@ end
 #
 # The *cloud fraction* uses the augmented width (`_sgs_augmented_sigma`)
 #
-#     σ_aug = sqrt((α · σ_S)² + σ_abs²),
+#     σ_aug = sqrt((α · σ_S)² + (ε_rel · δ_sub)² + σ_abs²),
 #
 # whose absolute floor `σ_abs` keeps CF finite in the singular limit
-# `(q_c, σ_S²) → 0`. Equilibrium condensate `min(q_c, q_c_eq)` is normalized
+# `(q_c, σ_S²) → 0` and whose subsaturation term `ε_rel · δ_sub`
+# (`cloud_fraction_eps_rel`, default 0) keeps trace condensate in
+# subsaturated air patchy. Equilibrium condensate `min(q_c, q_c_eq)` is normalized
 # by `σ_aug` and the non-equilibrium excess `max(0, q_c − q_c_eq)` by
 # `sqrt(σ_aug² + δ_sub²)`, with the subsaturation deficit
 # `δ_sub = max(0, −μ_S)` (`_compute_cloud_fraction`). Saturated cloud decks
@@ -1684,26 +1686,61 @@ high.
 end
 
 """
-    _sgs_augmented_sigma(sigma_S, α, σ_abs)
+    CloudFractionFloor{FT}
+
+Floor of the augmented saturation-excess width of the cloud-fraction closure
+(`_sgs_augmented_sigma`): the absolute floor `σ_abs` [kg/kg]
+(`cloud_fraction_sigma_abs`) and the subsaturation-deficit scaling `ε_rel` [-]
+(`cloud_fraction_eps_rel`), as one isbits broadcast scalar. A number in its
+place is `σ_abs` with `ε_rel = 0`.
+"""
+struct CloudFractionFloor{FT}
+    σ_abs::FT
+    ε_rel::FT
+end
+Base.broadcastable(x::CloudFractionFloor) = tuple(x)
+
+"""
+    cloud_fraction_floor(params)
+
+The `CloudFractionFloor` of the model parameters.
+"""
+cloud_fraction_floor(params) = CloudFractionFloor(
+    CAP.cloud_fraction_sigma_abs(params),
+    oftype(CAP.cloud_fraction_sigma_abs(params), CAP.cloud_fraction_eps_rel(params)),
+)
+_floor_σ_abs(floor::Number) = floor
+_floor_σ_abs(floor::CloudFractionFloor) = floor.σ_abs
+_floor_ε_rel(floor::Number) = zero(floor)
+_floor_ε_rel(floor::CloudFractionFloor) = floor.ε_rel
+
+"""
+    _sgs_augmented_sigma(sigma_S, α, floor, mu_S = 0)
 
 Augmented saturation-excess standard deviation of the cloud-fraction closure
 [kg/kg],
 
-    σ_aug = sqrt((α · σ_S)² + σ_abs²),
+    σ_aug = sqrt((α · σ_S)² + (ε_rel · δ_sub)² + σ_abs²),
 
-floored at `ϵ_numerics(FT)`.
+floored at `ϵ_numerics(FT)`, with the subsaturation deficit
+`δ_sub = max(0, −μ_S)` and `(σ_abs, ε_rel)` from `floor` (a
+`CloudFractionFloor`, or the number `σ_abs` with `ε_rel = 0`).
 
 `σ_S` is the saturation-excess width from the resolved gradients, scaled by
 the variance fidelity `α`, and `σ_abs` the absolute floor that keeps the width
 finite where `σ_S` vanishes. The equilibrium condensate `q_c_eq` vanishes with
-`σ_S` in subsaturated air, so the absolute floor suffices for the equilibrium
-part of the condensate; the subsaturation deficit widens the normalization of
-the non-equilibrium excess only (`_compute_cloud_fraction`).
+`σ_S` in subsaturated air; the term `ε_rel δ_sub` widens the equilibrium part
+there as well, keeping trace condensate in subsaturated air patchy, and
+vanishes with continuous first derivative at saturation, so saturated decks
+reach overcast. The subsaturation deficit also widens the normalization of the
+non-equilibrium excess (`_compute_cloud_fraction`).
 """
-@inline function _sgs_augmented_sigma(sigma_S, α, σ_abs)
+@inline function _sgs_augmented_sigma(sigma_S, α, floor, mu_S = zero(sigma_S))
     FT = typeof(sigma_S)
     σ_var = FT(α) * FT(sigma_S)
-    return max(sqrt(σ_var^2 + FT(σ_abs)^2), ϵ_numerics(FT))
+    δ_sub = max(zero(FT), -FT(mu_S))
+    σ_floor_sq = (FT(_floor_ε_rel(floor)) * δ_sub)^2 + FT(_floor_σ_abs(floor))^2
+    return max(sqrt(σ_var^2 + σ_floor_sq), ϵ_numerics(FT))
 end
 
 """
@@ -1718,7 +1755,7 @@ Cloud fraction `CF = Φ(z)` [-] of a subdomain holding condensate `q_c`, where
 
     C = min(q_c, q_c_eq) / σ_aug + max(0, q_c − q_c_eq) / √(σ_aug² + δ_sub²).
 
-Here `σ_aug = _sgs_augmented_sigma(sigma_S, α, σ_abs)` is the augmented
+Here `σ_aug = _sgs_augmented_sigma(sigma_S, α, σ_abs, mu_S)` is the augmented
 width, `δ_sub = max(0, −μ_S)` the subsaturation deficit, and
 `q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c, c_hi)` the condensate
 that the subdomain's own saturation-excess fluctuations support.
@@ -1748,7 +1785,7 @@ the cloud fraction is zero.
 )
     FT = typeof(mu_S)
     FT(q_c) <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
-    σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_abs)
+    σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_abs, mu_S)
     q_c_eq = equilibrium_condensate(
         FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c, FT(c_hi),
     )
@@ -1917,6 +1954,7 @@ function _materialize_env_tail_partition!(
     c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
     rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
     gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+    a_floor = FT(CAP.sgs_env_tail_area_floor(p.params))
     # The total updraft area, overwritten pointwise by `c_hi`.
     @. ᶜc_hi = zero(FT)
     for j in 1:n_mass_flux_subdomains(turbconv_model)
@@ -1926,7 +1964,8 @@ function _materialize_env_tail_partition!(
     _materialize_subsat_cu_switch!(
         ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
     )
-    @. ᶜc_hi = _env_tail_c_hi_from_sums(ᶜc_hi, ᶜw_cu, $(FT(c)), $(c_tail))
+    @. ᶜc_hi =
+        _env_tail_c_hi_from_sums(ᶜc_hi, ᶜw_cu, $(FT(c)), $(c_tail), $(a_floor))
     return ᶜc_hi
 end
 
@@ -2006,18 +2045,27 @@ function _materialize_subsat_cu_switch!(
 end
 
 """
-    _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+    _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail, a_floor = 0)
 
 Upper truncation quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))` of the subsaturated
-environment's saturation-excess PDF for tail probability
-`q_tail = clamp(w_eff c_tail max(a_up, 2e-3), 0, 0.49)`; returns `c` when
+environment's saturation-excess PDF for the tail probability `q_tail` occupied
+by updrafts of total area `a_up`, with `q_max = 0.49`. With `a_floor = 0`
+(`sgs_env_tail_area_floor`), `q_tail = q_max tanh(w_eff c_tail max(a_up, 0) / q_max)`,
+which vanishes with the updraft area; with `a_floor > 0`,
+`q_tail = clamp(w_eff c_tail max(a_up, a_floor), 0, q_max)`. Returns `c` when
 `q_tail == 0`.
 """
-@inline function _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+@inline function _env_tail_c_hi_from_sums(
+    a_up, w_eff, c, c_tail, a_floor = zero(a_up),
+)
     FT = typeof(a_up)
-    a_eff = max(a_up, FT(2e-3))
-    q_tail = clamp(w_eff * FT(c_tail) * a_eff, zero(FT), FT(0.49))
-    q_tail_safe = clamp(q_tail, eps(FT), FT(0.49))
+    q_max = FT(0.49)
+    q_tail = ifelse(
+        a_floor > zero(FT),
+        clamp(w_eff * FT(c_tail) * max(a_up, FT(a_floor)), zero(FT), q_max),
+        q_max * tanh(w_eff * FT(c_tail) * max(a_up, zero(FT)) / q_max),
+    )
+    q_tail_safe = clamp(q_tail, eps(FT), q_max)
     return ifelse(
         q_tail > zero(FT),
         min(FT(c), normal_cdf_inv(one(FT) - q_tail_safe)),
@@ -2090,6 +2138,7 @@ function set_quadrature_cloud_fraction!(
     zero_FT = zero(eltype(p.params))
     sgs_quad = p.atmos.sgs_quadrature
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    σ_floor = cloud_fraction_floor(p.params)
     c = equilibrium_condensate_truncation(p)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
@@ -2104,7 +2153,7 @@ function set_quadrature_cloud_fraction!(
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜc_hi, drafts
         ᶜcf = @. _compute_cloud_fraction(
             $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c), ᶜc_hi,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_floor), $(c), ᶜc_hi,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcf, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
@@ -2137,6 +2186,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     zero_FT = zero(eltype(p.params))
     sgs_quad = p.atmos.sgs_quadrature
     σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    σ_floor = cloud_fraction_floor(p.params)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     c = equilibrium_condensate_truncation(p)
@@ -2157,7 +2207,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
             (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
             ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             (@inline @. lazy(_disp_lin(ᶜdisp_S))), (@inline @. lazy(_disp_curv(ᶜdisp_S))),
-            c, ᶜc_hi, vthermo, thermo_params, sgs_quad, σ_abs,
+            c, ᶜc_hi, vthermo, thermo_params, sgs_quad, σ_floor,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
@@ -2224,7 +2274,7 @@ end
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
         ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c, ᶜc_hi,
-        vthermo, thermo_params, sgs_quad, σ_abs,
+        vthermo, thermo_params, sgs_quad, σ_floor,
     )
 
 Part of the column loop of `set_sgs_moments_and_cloud_fraction!`: fill the SGS
@@ -2240,7 +2290,7 @@ calls beside it.
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
     ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c, ᶜc_hi,
-    vthermo, thermo_params, sgs_quad, σ_abs,
+    vthermo, thermo_params, sgs_quad, σ_floor,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
         vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
@@ -2258,7 +2308,7 @@ calls beside it.
         ᶜq_cloud - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         ᶜsgs_moments.sigma_S,
         ᶜα,
-        $(σ_abs),
+        $(σ_floor),
         lin,
         curv,
         c,
