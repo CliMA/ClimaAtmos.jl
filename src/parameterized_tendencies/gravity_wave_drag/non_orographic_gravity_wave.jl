@@ -2082,86 +2082,6 @@ compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
     wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
 """
-    compute_beres_spectrum(beres::BeresSourceParams, beres_active_val, c, u_heat_val,
-                           Q0_val, h_val, N_val, gw_ncval)
-    compute_beres_spectrum(::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val,
-                           N_val, gw_ncval)
-
-Return the Beres launch spectrum for one column, as an `NTuple{nc}` of the momentum flux
-`B₀(c)` carried by each phase-speed bin [Pa].
-
-Delegates to the `BeresSourceParams` method of `wave_source` when the column is convecting
-(`beres_active_val > 0.5`), and returns all zeros otherwise.
-
-The `::Nothing` method covers the AD99-only configuration.
-
-The propagation kernel no longer calls this function: it reads the per-column spectrum
-precomputed in `compute_beres_convective_heating!`. This half-sine-only path is kept for
-tests and diagnostics.
-"""
-function compute_beres_spectrum(
-    beres::BeresSourceParams,
-    beres_active_val,
-    c,
-    u_heat_val,
-    Q0_val,
-    h_val,
-    N_val,
-    gw_ncval::Val{nc},
-) where {nc}
-    FT1 = typeof(Q0_val)
-    if beres_active_val > FT1(0.5)
-        wave_source(c, u_heat_val, Q0_val, h_val, N_val, beres, gw_ncval)
-    else
-        # No Beres contribution for non-convecting columns
-        ntuple(_ -> FT1(0), Val(nc))
-    end
-end
-
-function compute_beres_spectrum(
-    ::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val, N_val,
-    gw_ncval::Val{nc},
-) where {nc}
-    ntuple(_ -> typeof(Q0_val)(0), Val(nc))
-end
-
-"""
-    _beres_launch_summary(beres, active, c, u_heat, Q0, h, N, gw_ncval) -> (s0, s1)
-
-Summarize the launched Beres spectrum of one column into two scalars.
-
-Returns the total launched flux magnitude `s0 = Σₙ |B₀(cₙ)|` and the phase-speed first
-moment `s1 = Σₙ cₙ·|B₀(cₙ)|`, whose ratio `s1/s0` is the flux-weighted spectral centroid
-`⟨c⟩` [m/s]. The launched Beres spectrum does not depend on the horizontal wavenumber band
-(the `ink` loop of the kernel), only on phase speed, so this single evaluation captures the
-whole launched spectrum.
-
-Called from `compute_beres_convective_heating!` to fill the `gw_launch_flux` and
-`gw_c_centroid` diagnostics.
-"""
-@inline function _beres_launch_summary(
-    beres,
-    active,
-    c,
-    u_heat,
-    Q0,
-    h,
-    N,
-    gw_ncval::Val{nc},
-) where {nc}
-    FT1 = typeof(Q0)
-    B0 = compute_beres_spectrum(beres, active, c, u_heat, Q0, h, N, gw_ncval)
-    s0 = FT1(0)
-    s1 = FT1(0)
-    for n in 1:nc
-        b = abs(B0[n])
-        s0 += b
-        s1 += c[n] * b
-    end
-    return (s0, s1)
-end
-
-"""
     waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
                                    gw_ncval, beres_source, source_mode::Val{MODE})
 
@@ -3567,8 +3487,7 @@ end
 @inline _beres_unwrap_gprofile(x) = x
 
 # Per-column launch spectrum gated by the activation flag: zeros for non-convecting
-# columns (mirrors the old in-kernel `compute_beres_spectrum` gate), else the full
-# Beres / Beres-G spectrum. Called from a `@.` broadcast over surface fields in
+# columns, else the full Beres / Beres-G spectrum. Called from a `@.` broadcast over surface fields in
 # `compute_beres_convective_heating!` (B0 is AD99-wavenumber independent, so it is
 # precomputed once per column rather than rebuilt inside the kernel `ink` loop).
 @inline function _beres_launch_spectrum_or_zero(
