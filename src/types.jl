@@ -942,6 +942,27 @@ Subtypes:
 """
 abstract type AbstractGravityWave end
 
+# Launch filters of the Beres source (`BeresSourceParams` field `launch_filter`).
+const BERES_LAUNCH_FILTER_NONE = 0
+const BERES_LAUNCH_FILTER_BERES2004 = 1
+const BERES_LAUNCH_FILTER_HEIGHT_RESOLVED = 2
+
+"""
+    beres_launch_filter_mode(name)
+
+Return the `BeresSourceParams.launch_filter` code of the config value `name` of
+`nogw_beres_launch_filter`: `"beres2004"`, `"height_resolved"` or `"none"`.
+"""
+function beres_launch_filter_mode(name)
+    name == "beres2004" && return BERES_LAUNCH_FILTER_BERES2004
+    name == "height_resolved" && return BERES_LAUNCH_FILTER_HEIGHT_RESOLVED
+    name == "none" && return BERES_LAUNCH_FILTER_NONE
+    error(
+        "nogw_beres_launch_filter must be \"beres2004\", \"height_resolved\" or " *
+        "\"none\" (got: \"$name\")",
+    )
+end
+
 """
     BeresSourceParams{FT}(; Q0_threshold, beres_scale_factor, σ_x, ν_min, ν_max, n_ν, kwargs...)
 
@@ -986,6 +1007,22 @@ convective heating.
     `PrognosticEDMFX`) instead of the dry-static-energy budget `Q₁`.
   - `detailed_diagnostics`: Whether to expose the `nogw_*` source-internal
     extended diagnostics.
+  - `launch_filter`: Which launched waves are removed because they meet a critical
+    level inside the heating layer, between their source and the launch level [-]:
+      + `BERES_LAUNCH_FILTER_BERES2004` (default): every phase speed between the
+        minimum and maximum wind over the heating layer up to the launch level, in
+        each azimuth with that azimuth's wind, including the steady `c = 0` bin
+        (Beres et al. 2004, pp. 332 and 336; CAM `gw_beres_src`).
+      + `BERES_LAUNCH_FILTER_HEIGHT_RESOLVED`: with the gathered profile (Beres-G),
+        the heating at a height contributes to a phase speed only if the wind
+        between that height and the launch level never equals it; the profile below
+        the highest such level is masked before the sine transform. This goes beyond
+        Beres et al. (2004), whose theory assumes a uniform wind over the heating.
+        The half-sine path, which has no profile to mask, uses the Beres (2004)
+        filter.
+      + `BERES_LAUNCH_FILTER_NONE`: no filter; such waves are launched with the sign
+        of `c - u_heat` and deposit where the wind first reaches their phase speed.
+  - `launch_filter_margin`: Widens the filter band by this much on both sides [m/s].
   - `n_h_avg`: Number of heating depths to average over, to smooth the resonance
     in the source spectrum; `1` disables averaging [-].
   - `Δh_frac`: Fractional half-range of that averaging, `h ± Δh_frac · h` [-].
@@ -1014,6 +1051,10 @@ Base.@kwdef struct BeresSourceParams{FT}
     beres_mech_weight::FT = FT(1.0)       # mechanical ν=0 weight (analogue of thermal Q_t²(0)); sets β_mech relative to β_therm
     heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
     detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
+
+    # --- launch filter of waves that meet a critical level inside the heating layer ---
+    launch_filter::Int = BERES_LAUNCH_FILTER_BERES2004 # see the docstring
+    launch_filter_margin::FT = FT(0) # m/s, widens the filter band on both sides
 
     # --- h-averaging (resonance smoothing; default off) ---
     n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)

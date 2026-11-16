@@ -168,7 +168,9 @@ seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level st
 `beres_source_ρ_z_u_v_level`, the diagnostic fields `gw_halfsine`, `gw_launch_flux`,
 `gw_c_centroid`, `gw_beres_mech_flux`, and the Beres-G / mechanical-source launch state:
 the surface height under each column `gw_z_surface` [m], from which every Beres height is
-measured, the precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
+measured, the launch-filter winds `gw_beres_wind_range` (`(u_min, u_max, v_min, v_max, u_L, v_L)` over the heating layer up to the launch level, with `u_L`, `v_L` at the launch
+level) and `gw_beres_u_profile`, `gw_beres_v_profile` (u and v on the gather grid), the
+precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the peak-normalized in-cloud heating shape `gw_beres_gprofile`
 (`NTuple{N_BERES_PROFILE, FT}` on `[max(z_bot, z_bot_floor), z_top]`), the mean model
 level thickness over that window `gw_beres_dz_level` [m], and the obstacle-level updraft
@@ -224,6 +226,14 @@ function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
         similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
         gw_beres_dz_level = similar(Fields.level(Y.c.ρ, 1)),
         gw_z_surface = _surface_height(Y),
+        # Launch-filter winds: the range of u and v over the heating layer up to the
+        # launch level and the winds there, and u, v on the gather grid.
+        gw_beres_wind_range =
+        similar(Fields.level(Y.c.ρ, 1), NTuple{6, FT}),
+        gw_beres_u_profile =
+        similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+        gw_beres_v_profile =
+        similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
         gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
     )
 end
@@ -790,6 +800,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_beres_gprofile,
         gw_beres_dz_level,
         gw_z_surface,
+        gw_beres_wind_range,
+        gw_beres_u_profile,
+        gw_beres_v_profile,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -1166,6 +1179,40 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_beres_dz_level,
     )
 
+    # (1b) Winds for the launch filter (`beres.launch_filter`): the range of u and v
+    # over the heating layer, from z_bot up to and including the launch level (the
+    # first level at or above z_top), and u, v at the launch level; with the
+    # height-resolved filter also u and v on the gather grid.
+    wind_input = Base.Broadcast.broadcasted(
+        tuple, ᶜz_above_surface, ᶜu, ᶜv, gw_zbot, gw_ztop,
+    )
+    Operators.column_reduce!(
+        gw_beres_wind_range,
+        wind_input;
+        init = (FT(Inf), FT(-Inf), FT(Inf), FT(-Inf), FT(0), FT(0), FT(0)),
+        transform = _beres_wind_range_result,
+    ) do state, level_input
+        _beres_wind_range_step(state, level_input)
+    end
+    if gw_beres_source.launch_filter == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED
+        let _ng_val = ng_val
+            for (wind_profile, ᶜwind) in
+                ((gw_beres_u_profile, ᶜu), (gw_beres_v_profile, ᶜv))
+                wind_gather_input = Base.Broadcast.broadcasted(
+                    tuple, ᶜz_above_surface, ᶜwind, ᶜgather_bottom, gw_ztop,
+                )
+                Operators.column_reduce!(
+                    wind_profile,
+                    wind_gather_input;
+                    init = _beres_gather_init(FT, ng_val),
+                    transform = first,
+                ) do state, level_input
+                    _beres_gather_wind_step(state, level_input, _ng_val)
+                end
+            end
+        end
+    end
+
     # (2) Obstacle-level updraft velocity w_b for the mechanical source (Ext 3):
     # the per-draft physical vertical velocity where the draft penetrates the
     # stable shear layer above the convective top, sampled at obstacle height =
@@ -1323,6 +1370,60 @@ on the model levels. Returns the updated state; `first` of the final state is th
 end
 
 """
+    _beres_gather_wind_step(state, (z, wind, z_bot, z_top), Val(ng))
+
+One level of gathering a wind component onto the Beres-G gather grid, as
+`_beres_gather_step` gathers the heating but with no masking: each point
+`z_i = z_bot + (i-1)·(z_top - z_bot)/(ng-1)` in the segment `z_prev < z_i ≤ z` takes the
+linear interpolation of the wind between the two levels. The height-resolved launch
+filter reads the result.
+"""
+@inline function _beres_gather_wind_step(
+    (values, z_prev, wind_prev),
+    (z, wind, z_bot, z_top),
+    ng_val::Val{ng},
+) where {ng}
+    FT = typeof(z)
+    dz_g = max(z_top - z_bot, eps(FT)) / FT(ng - 1)
+    new_values = ntuple(ng_val) do i
+        z_i = z_bot + (i - 1) * dz_g
+        in_segment = (z_prev < z_i) & (z_i <= z)
+        weight = (z_i - z_prev) / (z - z_prev)
+        ifelse(in_segment, wind_prev + weight * (wind - wind_prev), values[i])
+    end
+    return (new_values, z, wind)
+end
+
+"""
+    _beres_wind_range_step(state, (z, u, v, z_bot, z_top))
+
+One level of the reduction that sets the launch-filter winds of a column, run upward.
+
+`state = (u_min, u_max, v_min, v_max, u_L, v_L, done)`. Levels from `z_bot` up to and
+including the first level at or above `z_top` (the launch level) update the ranges; the
+launch level also sets `u_L`, `v_L` and `done`. Heights are above the surface.
+"""
+@inline function _beres_wind_range_step(
+    (u_min, u_max, v_min, v_max, u_L, v_L, done),
+    (z, u, v, z_bot, z_top),
+)
+    FT = typeof(z)
+    in_layer = (z >= z_bot) & (done < FT(0.5))
+    at_launch = in_layer & (z >= z_top)
+    return (
+        ifelse(in_layer, min(u_min, u), u_min),
+        ifelse(in_layer, max(u_max, u), u_max),
+        ifelse(in_layer, min(v_min, v), v_min),
+        ifelse(in_layer, max(v_max, v), v_max),
+        ifelse(at_launch, u, u_L),
+        ifelse(at_launch, v, v_L),
+        ifelse(at_launch, one(done), done),
+    )
+end
+_beres_wind_range_result(state) =
+    (state[1], state[2], state[3], state[4], state[5], state[6])
+
+"""
     _beres_precompute_launch_spectra!(nogw)
 
 Fill the per-column Beres launch spectra `gw_beres_B0_u` and `gw_beres_B0_v` of the NOGW
@@ -1350,6 +1451,9 @@ function _beres_precompute_launch_spectra!(nogw)
         gw_ztop,
         gw_beres_gprofile,
         gw_beres_dz_level,
+        gw_beres_wind_range,
+        gw_beres_u_profile,
+        gw_beres_v_profile,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -1378,40 +1482,58 @@ function _beres_precompute_launch_spectra!(nogw)
     let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval,
         z_floor = gw_beres_source.z_bot_floor
 
+        # One builder per azimuth (`Val(1)` for u, `Val(2)` for v), which selects
+        # that azimuth's winds for the launch filter.
         if beres.beres_shape_general
-            function b0g(active, u, Q0, h, N, zbot, ztop, gprof, dz_level, w)
+            b0g(azimuth) = function (
+                active, u, Q0, h, N, zbot, ztop, gprof, dz_level, w, wind_range,
+                wind_profile,
+            )
                 z_gather = _beres_gather_bottom(zbot, ztop, z_floor)
+                taper_points =
+                    dz_level / max((ztop - z_gather) / (N_BERES_PROFILE - 1), eps(dz_level))
+                launch_filter = _beres_launch_filter(
+                    beres, wind_range, wind_profile, azimuth, taper_points,
+                )
                 return BeresB0(
                     _beres_launch_spectrum_or_zero(
                         active, cgrid, u, Q0, h, N, z_gather, ztop - z_gather,
-                        gprof, w, beres, ncv, Val(true); dz_level,
+                        gprof, w, beres, ncv, Val(true); dz_level, launch_filter,
                     ),
                 )
             end
-            @. gw_beres_B0_u = b0g(
+            b0g_u = b0g(Val(1))
+            b0g_v = b0g(Val(2))
+            @. gw_beres_B0_u = b0g_u(
                 gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
                 gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
-                gw_w_obstacle,
+                gw_w_obstacle, gw_beres_wind_range, gw_beres_u_profile,
             )
-            @. gw_beres_B0_v = b0g(
+            @. gw_beres_B0_v = b0g_v(
                 gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
                 gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
-                gw_w_obstacle,
+                gw_w_obstacle, gw_beres_wind_range, gw_beres_v_profile,
             )
         else
-            b0hs(active, u, Q0, h, N, zbot, ztop, w) = BeresB0(
-                _beres_launch_spectrum_or_zero(
-                    active, cgrid, u, Q0, h, N, zbot, ztop - zbot, nothing, w,
-                    beres, ncv, Val(false),
-                ),
-            )
-            @. gw_beres_B0_u = b0hs(
+            b0hs(azimuth) =
+                (active, u, Q0, h, N, zbot, ztop, w, wind_range) -> BeresB0(
+                    _beres_launch_spectrum_or_zero(
+                        active, cgrid, u, Q0, h, N, zbot, ztop - zbot, nothing, w,
+                        beres, ncv, Val(false);
+                        launch_filter = _beres_launch_filter(
+                            beres, wind_range, nothing, azimuth,
+                        ),
+                    ),
+                )
+            b0hs_u = b0hs(Val(1))
+            b0hs_v = b0hs(Val(2))
+            @. gw_beres_B0_u = b0hs_u(
                 gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_w_obstacle,
+                gw_zbot, gw_ztop, gw_w_obstacle, gw_beres_wind_range,
             )
-            @. gw_beres_B0_v = b0hs(
+            @. gw_beres_B0_v = b0hs_v(
                 gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_w_obstacle,
+                gw_zbot, gw_ztop, gw_w_obstacle, gw_beres_wind_range,
             )
         end
     end
@@ -2923,6 +3045,121 @@ function wave_source(
 end
 
 """
+    BeresLaunchFilter(mode, wind_min, wind_max, margin, wind_profile, wind_launch,
+                      taper_points)
+
+The launch filter of one Beres azimuth in one column; see `BeresSourceParams`
+(`launch_filter`). `mode` is `BERES_LAUNCH_FILTER_NONE`, `BERES_LAUNCH_FILTER_BERES2004`
+or `BERES_LAUNCH_FILTER_HEIGHT_RESOLVED`; `wind_min`, `wind_max` [m/s] are the range of
+this azimuth's wind over the heating layer up to the launch level, `margin` [m/s] widens
+that range on both sides, `wind_profile` is the wind on the gather grid (Beres-G) or
+`nothing` (half-sine), `wind_launch` [m/s] is the wind at the launch level, and
+`taper_points` is the width, in gather spacings, of the raised-cosine taper the
+height-resolved filter puts on the edge of the heating it keeps (0 for a hard edge).
+"""
+struct BeresLaunchFilter{FT, P}
+    mode::Int
+    wind_min::FT
+    wind_max::FT
+    margin::FT
+    wind_profile::P
+    wind_launch::FT
+    taper_points::FT
+end
+
+# The launch filter of azimuth 1 (u) or 2 (v) from the column's launch-filter winds
+# `wind_range = (u_min, u_max, v_min, v_max, u_L, v_L)` and that azimuth's wind on the
+# gather grid (`nothing` for the half-sine path).
+@inline function _beres_launch_filter(
+    beres,
+    wind_range_raw,
+    wind_profile_raw,
+    ::Val{azimuth},
+    taper_points = 0,
+) where {azimuth}
+    wind_range = _beres_unwrap_gprofile(wind_range_raw)
+    FT = typeof(wind_range[1])
+    (i_min, i_max, i_launch) = azimuth == 1 ? (1, 2, 5) : (3, 4, 6)
+    return BeresLaunchFilter(
+        beres.launch_filter,
+        wind_range[i_min],
+        wind_range[i_max],
+        FT(beres.launch_filter_margin),
+        _beres_unwrap_gprofile(wind_profile_raw),
+        wind_range[i_launch],
+        FT(taper_points),
+    )
+end
+
+# Whether the filter removes the phase speed `c` outright: the Beres (2004) filter removes
+# every `c` in the wind range over the layer (± margin); the height-resolved filter does
+# so only without a gathered profile to mask (the half-sine path).
+@inline _beres_filter_removes(::Nothing, c) = false
+@inline function _beres_filter_removes(f::BeresLaunchFilter, c)
+    in_band = (c >= f.wind_min - f.margin) & (c <= f.wind_max + f.margin)
+    removes_band =
+        (f.mode == BERES_LAUNCH_FILTER_BERES2004) | (
+            (f.mode == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED) &
+            (f.wind_profile === nothing)
+        )
+    return removes_band & in_band
+end
+# Whether `c` lies in the filter band at all, for the source terms with no profile to
+# mask (the mechanical steady term).
+@inline _beres_filter_band(::Nothing, c) = false
+@inline _beres_filter_band(f::BeresLaunchFilter, c) =
+    (f.mode != BERES_LAUNCH_FILTER_NONE) &
+    (c >= f.wind_min - f.margin) &
+    (c <= f.wind_max + f.margin)
+
+"""
+    _beres_filter_profile(launch_filter, gprofile, c)
+
+Return the gathered heating profile the phase speed `c` sees through the launch filter.
+With the height-resolved filter, the heating at a gather point contributes only if the
+wind between that point and the launch level never comes within `margin` of `c`: a wave
+of phase speed `c` excited lower meets a critical level on its way up through the
+heating layer. Every point at and below the highest such crossing is set to zero, and the
+points above it rise to the full profile over `taper_points` gather spacings with a
+raised cosine, as the window edges are tapered, so the cut adds no jump to the profile.
+Otherwise the profile is returned unchanged.
+"""
+@inline _beres_filter_profile(::Nothing, gprofile, c) = gprofile
+@inline _beres_filter_profile(::BeresLaunchFilter{FT, Nothing}, gprofile, c) where {FT} =
+    gprofile
+@inline function _beres_filter_profile(
+    f::BeresLaunchFilter{FT, <:NTuple{ng}},
+    gprofile::NTuple{ng},
+    c,
+) where {FT, ng}
+    f.mode == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED || return gprofile
+    # The highest segment whose winds bracket c ± margin: between gather points s and
+    # s + 1, or, for s = ng, between the top gather point and the launch level. Every
+    # point at and below its lower end s is cut. (Literal tuple indices only: a
+    # runtime index into an NTuple does not compile on the GPU.)
+    w = f.wind_profile
+    i_cut = maximum(
+        ntuple(Val(ng)) do s
+            w_upper = s < ng ? w[min(s + 1, ng)] : f.wind_launch
+            crosses =
+                (min(w[s], w_upper) <= c + f.margin) &
+                (max(w[s], w_upper) >= c - f.margin)
+            ifelse(crosses, s, 0)
+        end,
+    )
+    width = max(f.taper_points, eps(FT))
+    return ntuple(Val(ng)) do j
+        d = FT(j - i_cut)   # distance above the cut, in gather spacings
+        factor = ifelse(
+            (i_cut > 0) & (d < f.taper_points),
+            (1 - cos(FT(π) * d / width)) / 2,
+            one(FT),
+        )
+        ifelse(j > i_cut, gprofile[j] * factor, zero(gprofile[j]))
+    end
+end
+
+"""
     N_BERES_BIN_SAMPLES
 
 Number of equally spaced phase speeds across each bin `[c - dc/2, c + dc/2]` over which a
@@ -2937,7 +3174,8 @@ const N_BERES_BIN_SAMPLES = 8
 """
     _beres_transient_bin(c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
                          n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
-                         n_h_avg, Δh_frac, scale_factor, Val(n_bin_samples))
+                         n_h_avg, Δh_frac, scale_factor, launch_filter,
+                         Val(n_bin_samples))
 
 Return the signed transient momentum flux carried by the phase-speed bin centred at
 `c_n` of width `dc` [Pa]: `scale_factor` times the spectral density, signed by the
@@ -2953,9 +3191,18 @@ moves; the bin average does not. Sub-samples with `|ĉ|` or `|c|` below `1e-6` m
 contribute zero. The half-sine path takes the centre value, averaged over `n_h_avg`
 heating depths in `h ± Δh_frac·h` when `n_h_avg > 1`.
 
+`launch_filter` (a `BeresLaunchFilter`, or `nothing` for none) removes the phase speeds in
+the wind range over the heating layer or, height-resolved, masks the profile each phase
+speed sees (`_beres_filter_profile`).
+
 Shared by `_beres_launch_spectrum` and the five-way diagnostic `_beres_banded_spectrum`.
+
+The function is `@noinline` as a GPU compile-time guard, as `_beres_spectrum_single_h`:
+the launch-spectrum builder unrolls one call per phase-speed bin (251), and inlined, the
+sample loop and the launch filter's profile masking in each make a block that LLVM takes
+hours to compile.
 """
-@inline function _beres_transient_bin(
+@noinline function _beres_transient_bin(
     c_n,
     dc,
     u_heat,
@@ -2976,6 +3223,7 @@ Shared by `_beres_launch_spectrum` and the five-way diagnostic `_beres_banded_sp
     n_h_avg,
     Δh_frac,
     scale_factor,
+    launch_filter,
     ::Val{n_bin_samples},
 ) where {n_bin_samples}
     FT = typeof(c_n)
@@ -2985,12 +3233,16 @@ Shared by `_beres_launch_spectrum` and the five-way diagnostic `_beres_banded_sp
         for k in 1:n_bin_samples
             c_k = c_n + dc * ((FT(k) - FT(0.5)) / FT(n_bin_samples) - FT(0.5))
             ĉ_k = c_k - u_heat
-            usable = (abs(ĉ_k) >= FT(1e-6)) & (abs(c_k) >= FT(1e-6))
+            usable =
+                (abs(ĉ_k) >= FT(1e-6)) & (abs(c_k) >= FT(1e-6)) &
+                !_beres_filter_removes(launch_filter, c_k)
             acc +=
                 usable ?
                 sign(ĉ_k) * _beres_spectrum_single_h(
                     c_k, ĉ_k, h, u_heat, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
-                    n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
+                    n_groups, boole_w, use_VG,
+                    _beres_filter_profile(launch_filter, gprofile, c_k), z_bot,
+                    span, m_max,
                 ) : FT(0)
         end
         # The integral is a flux per unit phase speed; times the bin width it is the
@@ -2998,7 +3250,8 @@ Shared by `_beres_launch_spectrum` and the five-way diagnostic `_beres_banded_sp
         return scale_factor * (acc / FT(n_bin_samples)) * dc
     end
     c_hat = c_n - u_heat
-    abs(c_hat) < FT(1e-6) && return FT(0)
+    ((abs(c_hat) < FT(1e-6)) | _beres_filter_removes(launch_filter, c_n)) &&
+        return FT(0)
     result = if n_h_avg <= 1
         _beres_spectrum_single_h(
             c_n, c_hat, h, u_heat, N2, N_source,
@@ -3069,6 +3322,7 @@ function _beres_launch_spectrum(
     shape_mode::Val{SG} = Val(beres.beres_shape_general);
     dz_level = zero(u_heat),
     n_bin_samples::Val = Val(N_BERES_BIN_SAMPLES),
+    launch_filter = nothing,
 ) where {nc, SG}
     (;
         σ_x,
@@ -3118,8 +3372,14 @@ function _beres_launch_spectrum(
     cmax = -c[1]
     n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
     has_c0_bin = abs(c[n_zero]) < FT(1e-6)
+    # The launch filter treats the c = 0 bin as any other: removed when c = 0 lies in
+    # the filter band, or, height-resolved, built from the heating above the highest
+    # point where the wind between it and the launch level changes sign.
     steady_therm =
-        (beres_steady_source && has_c0_bin) ?
+        (
+            beres_steady_source && has_c0_bin &&
+            !_beres_filter_removes(launch_filter, zero(FT))
+        ) ?
         _beres_steady_flux(
             u_heat,
             N_source,
@@ -3133,13 +3393,16 @@ function _beres_launch_spectrum(
             FT(beres_steady_dc_frac),
             ν_min,
             use_VG,
-            gprofile,
+            _beres_filter_profile(launch_filter, gprofile, zero(FT)),
             z_bot,
             span,
             m_max,
         ) : FT(0)
     steady_mech =
-        (beres_mechanical_source && has_c0_bin) ?
+        (
+            beres_mechanical_source && has_c0_bin &&
+            !_beres_filter_band(launch_filter, zero(FT))
+        ) ?
         _beres_mech_flux(
             u_heat,
             N_source,
@@ -3157,7 +3420,7 @@ function _beres_launch_spectrum(
             val = _beres_transient_bin(
                 c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
                 n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
-                n_h_avg, Δh_frac, scale_factor, n_bin_samples,
+                n_h_avg, Δh_frac, scale_factor, launch_filter, n_bin_samples,
             )
 
             # Deposit the steady (ν=0) flux into the c≈0 bin only.
@@ -3200,6 +3463,7 @@ end
     gw_ncval::Val{nc},
     shape_mode::Val = Val(beres.beres_shape_general);
     dz_level = zero(u_heat),
+    launch_filter = nothing,
 ) where {nc}
     FT = typeof(u_heat)
     # Unwrap ClimaCore's AutoBroadcaster (if present) to the concrete NTuple.
@@ -3207,7 +3471,7 @@ end
     if active > FT(0.5)
         return _beres_launch_spectrum(
             c, u_heat, Q0, h, N_source, z_bot, span, gprofile, w_obstacle,
-            beres, gw_ncval, shape_mode; dz_level,
+            beres, gw_ncval, shape_mode; dz_level, launch_filter,
         )
     else
         return ntuple(_ -> FT(0), gw_ncval)
@@ -3330,26 +3594,9 @@ function _beres_with_flags(
     mechanical::Bool,
 ) where {FT}
     return BeresSourceParams{FT}(;
-        Q0_threshold = b.Q0_threshold,
-        beres_scale_factor = b.beres_scale_factor,
-        σ_x = b.σ_x,
-        ν_min = b.ν_min,
-        ν_max = b.ν_max,
-        n_ν = b.n_ν,
-        h_heat_min = b.h_heat_min,
-        z_bot_floor = b.z_bot_floor,
-        a_min = b.a_min,
-        beres_steady_source = b.beres_steady_source,
-        beres_steady_dc_frac = b.beres_steady_dc_frac,
-        beres_L_system = b.beres_L_system,
-        heating_latent = b.heating_latent,
-        detailed_diagnostics = b.detailed_diagnostics,
+        (n => getfield(b, n) for n in fieldnames(BeresSourceParams{FT}))...,
         beres_shape_general = shape_general,
         beres_mechanical_source = mechanical,
-        beres_obstacle_frac = b.beres_obstacle_frac,
-        beres_mech_weight = b.beres_mech_weight,
-        n_h_avg = b.n_h_avg,
-        Δh_frac = b.Δh_frac,
     )
 end
 
@@ -3389,6 +3636,7 @@ function _beres_banded_spectrum(
     c_band::FT,
     dz_level::FT = zero(FT),
     n_bin_samples::Val = Val(N_BERES_BIN_SAMPLES),
+    launch_filter = nothing,
 ) where {FT}
     (;
         σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac,
@@ -3412,14 +3660,21 @@ function _beres_banded_spectrum(
     n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
     has_c0_bin = abs(c[n_zero]) < FT(1e-6)
     steady_therm =
-        (beres_steady_source && has_c0_bin) ?
+        (
+            beres_steady_source && has_c0_bin &&
+            !_beres_filter_removes(launch_filter, zero(FT))
+        ) ?
         _beres_steady_flux(
             u_heat, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x,
-            L_system, FT(beres_steady_dc_frac), ν_min, use_VG, gprofile,
+            L_system, FT(beres_steady_dc_frac), ν_min, use_VG,
+            _beres_filter_profile(launch_filter, gprofile, zero(FT)),
             z_bot, span, m_max,
         ) : FT(0)
     steady_mech =
-        (beres_mechanical_source && has_c0_bin) ?
+        (
+            beres_mechanical_source && has_c0_bin &&
+            !_beres_filter_band(launch_filter, zero(FT))
+        ) ?
         _beres_mech_flux(
             u_heat, N_source, w_obstacle, scale_factor,
             FT(beres_mech_weight), σ_x, L_system,
@@ -3432,7 +3687,7 @@ function _beres_banded_spectrum(
         val = _beres_transient_bin(
             c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
             n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
-            n_h_avg, Δh_frac, scale_factor, n_bin_samples,
+            n_h_avg, Δh_frac, scale_factor, launch_filter, n_bin_samples,
         )
         v = Float64(val + steady_flux * FT(n == n_zero))
         band = (abs(c_n) <= c_band) ? (c_n > 0 ? 1 : 2) : (c_n > 0 ? 3 : 4)
@@ -3477,6 +3732,8 @@ function _compute_beres_fiveway!(p, time)
     wa = Array(parent(nogw.gw_w_obstacle))
     gpa = Array(parent(nogw.gw_beres_gprofile))  # (..., N_BERES_PROFILE, ...)
     dza = Array(parent(nogw.gw_beres_dz_level))
+    wra = Array(parent(nogw.gw_beres_wind_range))  # (..., 6, ...)
+    upa = Array(parent(nogw.gw_beres_u_profile))   # (..., N_BERES_PROFILE, ...)
 
     variants = (
         ("base", _beres_with_flags(beres, false, false), false),
@@ -3518,11 +3775,25 @@ function _compute_beres_fiveway!(p, time)
             Val(N_BERES_PROFILE),
         )
         gprof_hs = _beres_hs_gprofile(z_bot, z_top, ha[I])
+        # The zonal launch filter, as the model builds it for the u azimuth.
+        fdim6 = findfirst(d -> size(wra, d) == 6 && sz2[d] == 1, 1:ndims(wra))
+        component(A, fd, k) =
+            A[CartesianIndex(ntuple(d -> d == fd ? k : I[d], Val(ndims(A))))]
+        wind_range = ntuple(k -> component(wra, fdim6, k), Val(6))
+        u_profile = ntuple(k -> component(upa, fdim, k), Val(N_BERES_PROFILE))
         for (vname, vparams, use_hs) in variants
             z_window = use_hs ? z_bot : z_gather
+            uses_profile = vparams.beres_shape_general
+            taper_points =
+                dza[I] / max((z_top - z_window) / (N_BERES_PROFILE - 1), eps(FT))
+            launch_filter = _beres_launch_filter(
+                vparams, wind_range, uses_profile ? u_profile : nothing, Val(1),
+                taper_points,
+            )
             sums = _beres_banded_spectrum(
                 gw_c, ua[I], Q0a[I], ha[I], Na[I], z_window, z_top - z_window,
                 use_hs ? gprof_hs : gprof, wa[I], vparams, nc, c_band, dza[I],
+                Val(N_BERES_BIN_SAMPLES), launch_filter,
             )
             for (kb, bname) in enumerate(bands)
                 maps["nogw_b5_$(vname)_$(bname)"][I] = FT(sums[kb])

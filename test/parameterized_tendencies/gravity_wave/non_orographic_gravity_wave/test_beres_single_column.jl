@@ -478,6 +478,16 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         fill!(gw_zbot, FT(2000.0))
         fill!(gw_ztop, FT(7000.0))
         fill!(gw_w_obstacle, FT(0.0))
+        # Launch-filter winds of this envelope: u over [2, 7.5] km (up to the launch
+        # level, the first level at or above z_top = 7 km) runs from -9.2 to -7 m/s,
+        # and v is zero. The default (Beres 2004) filter removes those phase speeds.
+        u_of(z) = FT(-10.0) + z * FT(20.0 / z_max)
+        z_launch = center_z[findfirst(>=(FT(7000)), center_z)]
+        z_first = center_z[findfirst(>=(FT(2000)), center_z)]
+        fill!(
+            p.non_orographic_gravity_wave.gw_beres_wind_range,
+            (u_of(z_first), u_of(z_launch), FT(0), FT(0), u_of(z_launch), FT(0)),
+        )
         # The forcing kernel reads the precomputed launch spectra
         # gw_beres_B0_u/v, not the scalar source fields above, so rebuild them
         # from the values just set.
@@ -916,11 +926,30 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
 
         # The launch spectra are the ones built from that profile, on that window,
         # with that level spacing.
-        for (B0, wind) in ((gw_beres_B0_u, gw_u_heat), (gw_beres_B0_v, gw_v_heat))
+        # The launch-filter winds: the range of u and v over the heating layer up to
+        # the launch level (the first level at or above z_top), and those winds.
+        wind_range = tuple_value(nogw.gw_beres_wind_range, 6)
+        u_col = Array(Fields.field2array(nogw.ᶜuv_temp.components.data.:1))[:, 1]
+        v_col = Array(Fields.field2array(nogw.ᶜuv_temp.components.data.:2))[:, 1]
+        k_launch = findfirst(>=(value(gw_ztop)), center_z)
+        layer = findall(z -> z >= value(gw_zbot), center_z[1:k_launch])
+        @test wind_range ==
+              (
+            minimum(u_col[layer]),
+            maximum(u_col[layer]),
+            minimum(v_col[layer]),
+            maximum(v_col[layer]),
+            u_col[k_launch],
+            v_col[k_launch],
+        )
+        for (azimuth, B0, wind) in
+            ((1, gw_beres_B0_u, gw_u_heat), (2, gw_beres_B0_v, gw_v_heat))
+            launch_filter =
+                CA._beres_launch_filter(bs_g, wind_range, nothing, Val(azimuth))
             expected_B0 = CA._beres_launch_spectrum(
                 gw_c, value(wind), value(gw_Q0), value(gw_h_heat),
                 value(gw_N_source), z_start, span, profile, value(gw_w_obstacle),
-                bs_g, gw_ncval, Val(true); dz_level,
+                bs_g, gw_ncval, Val(true); dz_level, launch_filter,
             )
             @test all(
                 isapprox.(

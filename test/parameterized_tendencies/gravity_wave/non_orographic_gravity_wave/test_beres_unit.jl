@@ -1636,7 +1636,7 @@ end
                     c_f, dc / 64, FT(5.3), h, N^2, N, Q0^2, beres_g.σ_x^2,
                     beres_g.ν_min, dν, (beres_g.n_ν - 1) ÷ 4, boole_w, true,
                     profile, z_lo, span, FT(π) / dz_level, 1, FT(0.1),
-                    beres_g.beres_scale_factor, Val(1),
+                    beres_g.beres_scale_factor, nothing, Val(1),
                 ),
             )
         end
@@ -1708,5 +1708,167 @@ end
         @test fine.moving ≈ coarse.moving rtol = 0.02
         @test fine.steady == coarse.steady
         @test fine.steady / fine.moving ≈ coarse.steady / coarse.moving rtol = 0.02
+    end
+end
+
+# ============================================================================
+# Launch filter: waves that meet a critical level inside the heating layer, on
+# their way from the heating to the launch level, are removed (Beres 2004) or,
+# height-resolved, see only the heating above their critical level.
+#
+# The wind rises linearly from -15 m/s at the bottom of the gather window (2 km)
+# to +5 m/s at the launch level just above its top (14 km), so u_heat is about
+# -5 m/s and every phase speed in [-15, 5] m/s meets a critical level in the
+# layer, the steady c = 0 wave included.
+# ============================================================================
+@testset "Beres launch filter" begin
+    FT = Float64
+    ng = CA.N_BERES_PROFILE
+    z_lo, z_top, z_launch = FT(2000), FT(14000), FT(14500)
+    span = z_top - z_lo
+    z_points = z_lo .+ (0:(ng - 1)) .* (span / (ng - 1))
+    wind(z) = FT(-15) + FT(20) * (z - z_lo) / (z_launch - z_lo)
+    wind_profile = ntuple(i -> wind(z_points[i]), Val(ng))
+    wind_range = (FT(-15), FT(5), FT(0), FT(0), FT(5), FT(0))
+    g = _halfsine_profile(Val(ng), FT)
+    u_heat = FT(-5)
+    kw = (;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(2e-6),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+        beres_shape_general = true,
+    )
+    dc, cmax = FT(0.8), FT(40)
+    nc = Int(2 * cmax / dc + 1)
+    c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+    n_zero = findfirst(iszero, c)
+    filter_of(mode; margin = FT(0), profile = wind_profile) = CA._beres_launch_filter(
+        BeresSourceParams{FT}(; kw..., launch_filter = mode, launch_filter_margin = margin),
+        wind_range,
+        profile,
+        Val(1),
+    )
+    beres_g = BeresSourceParams{FT}(; kw...)
+    spectrum(filter; profile = g, beres = beres_g) = _beres_launch_spectrum(
+        c, u_heat, FT(5e-5), span, FT(0.012), z_lo, span, profile, FT(0), beres,
+        Val(nc); dz_level = FT(600), launch_filter = filter,
+    )
+    B_plain = spectrum(nothing)
+    B_none = spectrum(filter_of(CA.BERES_LAUNCH_FILTER_NONE))
+    B_2004 = spectrum(filter_of(CA.BERES_LAUNCH_FILTER_BERES2004))
+    B_2004_margin = spectrum(filter_of(CA.BERES_LAUNCH_FILTER_BERES2004; margin = FT(2)))
+    B_height = spectrum(filter_of(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED))
+    # Bins whose whole width lies inside or outside a band [lo, hi].
+    inside(n, lo, hi) = (c[n] - dc / 2 >= lo) && (c[n] + dc / 2 <= hi)
+    outside(n, lo, hi) = (c[n] + dc / 2 < lo) || (c[n] - dc / 2 > hi)
+
+    @testset "none leaves the spectrum unchanged" begin
+        @test B_none == B_plain
+        @test abs(B_plain[n_zero]) > 0          # setup: a steady flux to remove
+    end
+
+    @testset "beres2004 removes the wind range over the layer" begin
+        @test all(n -> B_2004[n] == 0, filter(n -> inside(n, -15, 5), 1:nc))
+        @test B_2004[n_zero] == 0               # the steady c = 0 wave too
+        @test all(n -> B_2004[n] == B_plain[n], filter(n -> outside(n, -15, 5), 1:nc))
+        @test any(n -> B_plain[n] != 0, filter(n -> inside(n, -15, 5), 1:nc))
+    end
+
+    @testset "the margin widens the band" begin
+        @test all(n -> B_2004_margin[n] == 0, filter(n -> inside(n, -17, 7), 1:nc))
+        widened = filter(n -> inside(n, 5, 7) || inside(n, -17, -15), 1:nc)
+        @test !isempty(widened)
+        @test all(n -> B_2004[n] != 0, widened)
+        @test all(
+            n -> B_2004_margin[n] == B_plain[n],
+            filter(n -> outside(n, -17, 7), 1:nc),
+        )
+    end
+
+    @testset "height_resolved keeps the heating above each critical level" begin
+        f = filter_of(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED)
+        # c = -10 m/s: the wind reaches it at 5 km, so the heating below is masked.
+        z_crit = z_lo + (FT(-10) + 15) / 20 * (z_launch - z_lo)
+        masked = CA._beres_filter_profile(f, g, FT(-10))
+        @test all(i -> masked[i] == 0, findall(z -> z <= z_crit, collect(z_points)))
+        above = findall(z -> z > z_crit + span / (ng - 1), collect(z_points))
+        @test all(i -> masked[i] == g[i], above)
+        # c = 4.9 m/s: the wind reaches it between the window top and the launch
+        # level, so nothing is left; c = 6 m/s is never reached, so all is left.
+        @test all(iszero, CA._beres_filter_profile(f, g, FT(4.9)))
+        @test CA._beres_filter_profile(f, g, FT(6)) == g
+        # The margin lowers the critical level of c = -10 m/s (the wind is within
+        # 2 m/s of it already at -12 m/s) and widens the band.
+        f_margin = filter_of(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED; margin = FT(2))
+        @test count(iszero, CA._beres_filter_profile(f_margin, g, FT(-10))) >
+              count(iszero, masked)
+        @test all(iszero, CA._beres_filter_profile(f_margin, g, FT(6)))
+        # In the spectrum: unchanged outside the band, partly kept inside it (more
+        # where the critical level is low), and the steady c = 0 wave is built from
+        # the heating above the zero-wind level.
+        @test all(n -> B_height[n] == B_plain[n], filter(n -> outside(n, -15, 5), 1:nc))
+        n_low = argmin(abs.(collect(c) .+ 12))
+        n_high = argmin(abs.(collect(c) .- 4))
+        @test B_height[n_low] != 0
+        @test abs(B_height[n_low] / B_plain[n_low]) >
+              abs(B_height[n_high] / B_plain[n_high])
+        @test B_height[n_zero] != 0
+        B_above_zero_wind =
+            spectrum(nothing; profile = CA._beres_filter_profile(f, g, FT(0)))
+        @test B_height[n_zero] == B_above_zero_wind[n_zero]
+        # With a taper, the kept heating rises from zero over that many gather
+        # spacings above the cut instead of jumping.
+        f_taper = CA._beres_launch_filter(
+            BeresSourceParams{FT}(;
+                kw..., launch_filter = CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED,
+            ),
+            wind_range,
+            wind_profile,
+            Val(1),
+            4,
+        )
+        tapered = CA._beres_filter_profile(f_taper, g, FT(-10))
+        i_first = findfirst(!iszero, masked)
+        @test tapered[i_first] < masked[i_first]
+        @test tapered[i_first + 4] == masked[i_first + 4]
+    end
+
+    @testset "the half-sine path uses the Beres (2004) band in both filter modes" begin
+        beres_hs = BeresSourceParams{FT}(; kw..., beres_shape_general = false)
+        spectrum_hs(filter) = _beres_launch_spectrum(
+            c, u_heat, FT(5e-5), span, FT(0.012), z_lo, span, nothing, FT(0),
+            beres_hs, Val(nc); launch_filter = filter,
+        )
+        B_hs_2004 =
+            spectrum_hs(filter_of(CA.BERES_LAUNCH_FILTER_BERES2004; profile = nothing))
+        B_hs_height =
+            spectrum_hs(
+                filter_of(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED; profile = nothing),
+            )
+        @test B_hs_height == B_hs_2004
+        @test all(n -> B_hs_2004[n] == 0, filter(n -> -15 <= c[n] <= 5, 1:nc))
+    end
+
+    @testset "the five-way diagnostic applies the same filter" begin
+        f = filter_of(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED)
+        sums = CA._beres_banded_spectrum(
+            c, u_heat, FT(5e-5), span, FT(0.012), z_lo, span, g, FT(0), beres_g,
+            nc, FT(15), FT(600), Val(CA.N_BERES_BIN_SAMPLES), f,
+        )
+        @test sums[5] + sums[6] + sums[7] + sums[8] ≈ sum(abs, B_height) rtol = 1e-10
+        @test sums[10] ≈ abs(B_height[n_zero]) rtol = 1e-10
+    end
+
+    @testset "configuration values" begin
+        @test CA.beres_launch_filter_mode("beres2004") == CA.BERES_LAUNCH_FILTER_BERES2004
+        @test CA.beres_launch_filter_mode("height_resolved") ==
+              CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED
+        @test CA.beres_launch_filter_mode("none") == CA.BERES_LAUNCH_FILTER_NONE
+        @test_throws ErrorException CA.beres_launch_filter_mode("cam")
+        @test BeresSourceParams{FT}(; kw...).launch_filter ==
+              CA.BERES_LAUNCH_FILTER_BERES2004
     end
 end

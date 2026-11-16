@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] New config key `nogw_beres_launch_filter`: Beres waves whose
+  phase speed equals the wind between the heating and the launch level are removed at
+  launch. `beres2004` (default) removes every phase speed between the minimum and
+  maximum wind over the heating layer up to the launch level, per azimuth and including
+  the steady `c = 0` bin; `height_resolved` (Beres-G) keeps, for each phase speed, only
+  the heating above its highest critical level in the layer; `none` launches them, as
+  before. `nogw_beres_launch_filter_margin` widens the band.
 - ![][badge-🐛bugfix] The steady (`c = 0`) Beres source counts the horizontal
   wavenumbers of both signs: its horizontal constant is `H = (σx²/2)·E1(k_min²σx²/2)`,
   twice what it was, so the steady flux is twice as large at the same

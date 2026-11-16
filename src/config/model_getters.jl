@@ -526,6 +526,12 @@ function get_non_orographic_gravity_wave_model(
                 beres_mech_weight = FT(
                     get(parsed_args, "nogw_beres_mechanical_weight", 1.0),
                 ),
+                launch_filter = beres_launch_filter_mode(
+                    get(parsed_args, "nogw_beres_launch_filter", "beres2004"),
+                ),
+                launch_filter_margin = FT(
+                    get(parsed_args, "nogw_beres_launch_filter_margin", 0.0),
+                ),
             )
         else
             nothing
