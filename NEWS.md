@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The Julia-API default gravity-wave cadences (`dt_nogw`,
+  `dt_ogw` in the `callback_kwargs` of `AtmosSimulation`) are 1800 s, the same as the
+  `default_config.yml` defaults; they were 3 hours. Runs set up from a config file are
+  unchanged.
+- ![][badge-🐛bugfix] The Beres coverage `a_cover` counts a draft whose `ρa` is negative
+  as empty, as the in-cloud heating does, so a slightly negative `ρa` no longer lowers it.
+  The `nogw_beres_mech_flux` diagnostic includes the `a_cover` factor the kernel deposits.
 - ![][badge-🐛bugfix] Levels whose total updraft area is below the Beres `a_min`
   (1e-4) are left out of the Beres heating fit (the moments that set the depth and `Q0`,
   the Beres-G profile, and the activation integral); the coverage and the envelope-mean

@@ -626,8 +626,8 @@ so a longer cadence buys speed at the cost of resolving the parameterization in 
   - `dt_subcol = "Inf"`: COSP subcolumn cadence. Consumed by the `AtmosModel` method and not
     forwarded; the default disables COSP.
   - `dt_rad = "6hours"`: RRTMGP radiation cadence, on the `AtmosRadiation` method.
-  - `dt_nogw = "3hours"`, `dt_ogw = "3hours"`: Gravity-wave cadences, on the
-    `AtmosGravityWave` method.
+  - `dt_nogw = "1800secs"`, `dt_ogw = "1800secs"`: Gravity-wave cadences, on the
+    `AtmosGravityWave` method; the same as the `default_config.yml` defaults.
 
 # Returns
 
@@ -688,8 +688,8 @@ end
 
 # Gravity-wave component callbacks (both orographic and non-orographic)
 function default_model_callbacks(gravity_wave::AtmosGravityWave;
-    dt_nogw = "3hours",
-    dt_ogw = "3hours",
+    dt_nogw = "1800secs",
+    dt_ogw = "1800secs",
     start_date,
     dt,
     t_start,
