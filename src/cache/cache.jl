@@ -50,7 +50,6 @@ state and may be overwritten by any function.
 """
 mutable struct AtmosCache{
     FT,
-    MAW,
     AM,
     NUM,
     CAP,
@@ -75,14 +74,8 @@ mutable struct AtmosCache{
 
     # Implicit stage window `γ · dt`, resolved from the ODE scheme at
     # construction (`imex_gamma`); zero for schemes without a single-γ DIRK
-    # diagonal (fully explicit, variable-γ ESDIRK). Read by the 1M microphysics
-    # cache when `mp_averaging isa StageAveraging`.
+    # diagonal (fully explicit, variable-γ ESDIRK).
     const dtγ::FT
-
-    # Dispatch tag selecting the 1M bulk-tendency averaging window
-    # (`StepAveraging` ⇒ `dt`, `StageAveraging` ⇒ `dtγ`). Baked in at
-    # construction from `update_cache_every` and the scheme's γ availability.
-    const mp_averaging::MAW
 
     # AtmosModel
     const atmos::AM
@@ -172,13 +165,12 @@ gravity waves, radiation, tracers).
 # Keyword Arguments
 
   - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
-    explicit), used to extract `dtγ`, `b_imp` stage weights, and the
-    `compensate_explicit_scalar_advection` flag.
-  - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
-    stage-weighted surface precipitation accumulator and scalar advection
-    dissipation weight.
+    explicit), used to extract `dtγ` and the number of tableau stages.
+  - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm.
   - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
-    or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
+    or `"stage"`).
+  - `post_step_hook! = Returns(nothing)`: Optional callable invoked inside
+    `step_post_ark_physics!`.
 
 # Returns
 
@@ -194,6 +186,7 @@ function build_cache(
     ode_algo = nothing,
     jacobian = ManualSparseJacobian(),
     update_cache_every = "step",
+    post_step_hook! = Returns(nothing),
 )
     FT = eltype(params)
     dt = FT(dt)
@@ -205,9 +198,6 @@ function build_cache(
         )
     end
     dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
-    mp_averaging =
-        (update_cache_every == "stage" && !isnothing(γ)) ?
-        StageAveraging() : StepAveraging()
 
     aerosol_names = atmos.radiation.aerosol_names
     time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
@@ -284,44 +274,13 @@ function build_cache(
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = atmos.surface.boundary_overrides
-    has_noneq_precip =
-        atmos.microphysics_model isa Union{
-            NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M,
-            NonEquilibriumMicrophysics2MP3,
-        }
-    b_imp_stages, n_imp_stages =
-        (jacobian isa ManualSparseJacobian && has_noneq_precip) ?
-        imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
-    if atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature &&
-       has_noneq_precip &&
-       !iszero(dtγ) &&
-       n_imp_stages == 0
-        @warn(
-            "Stage-weighted surface precipitation accumulator is disabled for \
-             this solver/Jacobian configuration; `SlabOceanTemperature` \
-             receives only the pointwise stage flux while the atmosphere \
-             applies the post-solve sedimentation increment."
-        )
-    end
-    compensate_explicit_scalar_advection =
-        !iszero(dtγ) &&
-        (
-            jacobian isa ManualSparseJacobian || (
-                jacobian isa AutoSparseJacobian &&
-                atmos.microphysics_model isa DryModel &&
-                atmos.diff_mode != Implicit()
-            )
-        ) &&
-        ode_algo isa CTS.IMEXAlgorithm &&
-        !isnothing(ode_algo.newtons_method) &&
-        isnothing(ode_algo.newtons_method.krylov_method)
+    n_tableau_stages =
+        ode_algo isa CTS.IMEXAlgorithm ? length(ode_algo.tableau.b_imp) : 8
     scratch = temporary_quantities(
         Y,
         atmos;
-        b_imp_stages,
-        n_imp_stages,
-        compensate_explicit_scalar_advection,
+        n_tableau_stages,
+        post_step_hook!,
     )
 
     precomputed = precomputed_quantities(Y, atmos)
@@ -334,7 +293,6 @@ function build_cache(
         scratch,
         dt,
         dtγ,
-        mp_averaging,
         conservation_check,
         external_forcing,
     )
@@ -361,8 +319,8 @@ function build_cache(
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
-    # `dt` and `dtγ` share `FT`; `mp_averaging`'s type is its own parameter.
-    # The remaining 18 args supply the parametric slots of `AtmosCache`.
+    # `dt` and `dtγ` share `FT`. The remaining 18 args supply the parametric
+    # slots of `AtmosCache`.
     parametric_args = (
         atmos,
         numerics,
@@ -384,8 +342,8 @@ function build_cache(
         conservation_check,
     )
 
-    return AtmosCache{FT, typeof(mp_averaging), map(typeof, parametric_args)...}(
-        dt, dtγ, mp_averaging, parametric_args...,
+    return AtmosCache{FT, map(typeof, parametric_args)...}(
+        dt, dtγ, parametric_args...,
     )
 end
 

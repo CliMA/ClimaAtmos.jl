@@ -463,7 +463,7 @@ end
 @testset "face shear production equals the momentum flux work" begin
     # The TKE shear production `ρ ᶜinterp(2 ᶠK_u ‖𝔈‖²)` is the kinetic energy
     # the vertical momentum flux `-2 ρ K_u 𝔈` removes from the horizontal wind
-    # (`edmfx_tke_sources!`). With uniform `ρ` and `Δz`, the column sums of the
+    # (`step_prognostic_tke!`). With uniform `ρ` and `Δz`, the column sums of the
     # production and of `-uₕ · ∂ₜuₕ` agree to roundoff by summation by parts,
     # for any face viscosity profile; the zero-gradient boundary faces carry no
     # flux and no production.

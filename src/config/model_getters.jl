@@ -14,9 +14,10 @@ Accepted values:
   - `"1M"`: `NonEquilibriumMicrophysics1M`, built from the config keys parsed by
     `get_microphysics_1m_options`.
   - `"2M"`: `NonEquilibriumMicrophysics2M`.
-  - `"2MP3"`: `NonEquilibriumMicrophysics2MP3`.
 
-Any other value raises an error. `params` is accepted for interface uniformity with the
+`"2MP3"` raises an `ArgumentError`, because the coupled microphysics sweep of
+the post-ARK column step does not support P3 ice. Any other value raises an
+error. `params` is accepted for interface uniformity with the
 other model getters and is unused.
 """
 function get_microphysics_model(parsed_args, params = nothing)
@@ -30,10 +31,16 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
-        NonEquilibriumMicrophysics2MP3()
+        throw(
+            ArgumentError(
+                "`microphysics_model: \"2MP3\"` is not supported: the coupled \
+                 microphysics sweep of the post-ARK column step does not \
+                 support P3 ice. Use \"2M\" for two-moment microphysics.",
+            ),
+        )
     else
         error(
-            """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", "2M", or "2MP3".""",
+            """Unknown microphysics_model `$model_name`. Expected: "dry", "0M", "1M", or "2M".""",
         )
     end
 end
@@ -64,20 +71,14 @@ get_precipitation_evaporation_0m(parsed_args) =
 Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword
 arguments for [`NonEquilibriumMicrophysics1M`](@ref).
 
-The substep counts come from `microphysics_n_substeps` (`n_substeps`) and
-`microphysics_n_substeps_quadrature` (`n_substeps_quad`).
-
-The remaining keys select the process-option type that controls dispatch inside
+The keys select the process-option type that controls dispatch inside
 `bulk_microphysics_tendencies`; a value of `~` (null) disables the process (`nothing`).
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
-  - `cloud_liquid_formation`: `"CloudLiquidFormation"`. The `implicit_microphysics`
-    config toggle routes it between CM's bulk-averaged tendency and the
-    SGS-integrated implicit source.
+  - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"TemperatureDependentIceNumber"`,
-    `"ConstantTimescale"`, `"TemperatureDependent"`. Routed by `implicit_microphysics`
-    the same way as `cloud_liquid_formation`.
+    `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
   - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`, `"KK2000"`. `Kessler1M` is the Kessler
@@ -89,10 +90,8 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     the ClimaParams `prescribed_cloud_droplet_number_concentration`, the value also used by the
     radiation effective radius.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
-  - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
-    the same way as `cloud_liquid_formation`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`. Routed by
-    `implicit_microphysics` the same way as `cloud_liquid_formation`.
+  - `rain_condensation_evaporation`: `"RainEvaporation"`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
     `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
@@ -105,9 +104,6 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
 """
 function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
-
-    n_substeps = parsed_args["microphysics_n_substeps"]
-    n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
 
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
@@ -234,8 +230,6 @@ function get_microphysics_1m_options(parsed_args)
         "vapor_relaxation",
     )
     return (;
-        n_substeps,
-        n_substeps_quad,
         cloud_liquid_formation,
         cloud_ice_formation,
         cloud_ice_melt,
@@ -1028,34 +1022,17 @@ function get_detrainment_model(parsed_args)
 end
 
 """
-    get_tracers(parsed_args)
-
-Return the prescribed tracer names as a `NamedTuple`
-`(; aerosol_names, time_varying_trace_gas_names)`, read from the
-`prescribed_aerosols` and `time_varying_trace_gases` config keys.
-"""
-function get_tracers(parsed_args)
-    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
-    return (; aerosol_names, time_varying_trace_gas_names)
-end
-
-"""
     check_case_consistency(parsed_args)
 
 Assert that the configuration describes a self-consistent case, erroring otherwise.
 
 Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
-run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
-vertical diffusion is paired with a turbulence-convection model, a vertical
-diffusion model, or a vertically-acting Smagorinsky-Lilly closure; and that
-prescribed flow is used only with flat topography and an explicit solver. Each
-check is independent. Called at the top of `get_atmos`.
+run (`initial_condition: ISDAC`) uses a moist microphysics model; and that
+prescribed flow is used only with flat topography. Each check is independent. Called at the top of `get_atmos`.
 """
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
     microphysics = parsed_args["microphysics_model"]
-    imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
     topography = parsed_args["topography"]
@@ -1152,30 +1129,10 @@ function check_case_consistency(parsed_args)
         )
     end
 
-    # Implicit vertical diffusion is only supported for the closures that have a
-    # matching Jacobian block: EDMF, the prescribed vertical diffusion models,
-    # and a vertically-acting Smagorinsky-Lilly closure. AMD has no Jacobian
-    # branch and so stays explicit.
-    if imp_vert_diff
-        @assert(
-            !isnothing(turbconv) ||
-            !isnothing(vert_diff) ||
-            smagorinsky_vertical,
-            "Implicit vertical diffusion is only supported when using a " *
-            "turbulence convection model, a vertical diffusion model, or a " *
-            "Smagorinsky-Lilly closure that acts on the vertical axis.",
-        )
-    end
-
     if !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
             "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
              which is needed for topography. Thus, prescribed flow must have flat surface."
-        )
-        @assert(
-            !parsed_args["implicit_microphysics"] &&
-            !parsed_args["implicit_diffusion"],
-            "Prescribed flow does not use the implicit solver."
         )
     end
 end
@@ -1225,10 +1182,9 @@ end
 Assemble the `AtmosWater` group from a configuration.
 
 Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`,
-`get_tracer_nonnegativity_method` and `get_sgs_variance_fidelity_model`, and reads `implicit_microphysics` (which selects
-`Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
-(the curvature-aware equilibrium condensate) and the four terminal velocity
-keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
+`get_tracer_nonnegativity_method` and `get_sgs_variance_fidelity_model`, and reads
+`sgs_variance_curvature` (the curvature-aware equilibrium condensate) and the four
+terminal velocity keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
 `cloud_liquid_terminal_velocity` (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity`
 (`Fixed`, `Chen2022`), `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`,
 `Blk1M`, `Chen2022`); `Fixed` uses the fixed fall speed of the species from `params`.
@@ -1275,10 +1231,6 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     terminal_velocity_snow =
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
-    # `implicit_microphysics` controls which 1M processes (cloud
-    # liquid/ice formation, rain evaporation, snow sublimation) flow
-    # through the implicit cache with a Jacobian; the microphysics
-    # tendency itself is always applied in the implicit stage.
     return AtmosWater(;
         microphysics_model,
         cloud_model,

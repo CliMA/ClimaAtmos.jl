@@ -7,8 +7,6 @@ site_longitude: -149.0
 turbconv: "prognostic_edmfx"
 
 # solve implicitly
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 edmfx_sgsflux_upwinding: first_order
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"

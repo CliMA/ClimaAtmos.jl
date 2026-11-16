@@ -27,8 +27,6 @@ Below is the default BOMEX configuration
 ```yaml
 initial_condition: "Bomex"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true

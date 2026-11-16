@@ -60,6 +60,8 @@ order, later entries winning); `nothing` returns the defaults unchanged. Only ke
 exist in `default_config.yml` are overridden, and each value is coerced to the type of
 the corresponding default via `coerce_to_default`. Keys absent from the schema (other
 than `job_id`) are reported: an error if `strict_config` is `true`, a warning otherwise.
+Keys of `FIXED_VALUE_KEYS` set to anything but their one accepted value raise an
+`ArgumentError` (see `check_fixed_value_keys`).
 """
 override_default_config(config_files::AbstractString) =
     override_default_config(load_yaml_file(config_files))
@@ -84,6 +86,61 @@ const EXCEPTED_KEYS = Set([
 
 # Keys that take one value per column of a multi-column run, as a list
 const PER_COLUMN_KEYS = Set(["site_latitude", "site_longitude", "cfsite_number"])
+
+# Keys that select a single behavior. Each maps to the one accepted value (the
+# default in `default_config.yml`) and to the reason no other value is
+# supported. The keys stay in the schema so that configurations that spell out
+# the accepted value, such as the ClimaCoupler AMIP configurations, still load.
+# TODO: remove these keys and `check_fixed_value_keys` once the ClimaCoupler
+# configurations stop setting `implicit_diffusion` and
+# `approximate_linear_solve_iters`.
+const FIXED_VALUE_KEYS = Dict(
+    "implicit_diffusion" => (
+        true,
+        "vertical diffusion, surface fluxes, and EDMF transport are always \
+         integrated implicitly in the post-ARK column physics step",
+    ),
+    "implicit_microphysics" => (
+        true,
+        "1M cloud formation, rain evaporation, and snow sublimation are always \
+         integrated with the other microphysics processes in the post-ARK \
+         coupled microphysics sweep",
+    ),
+    "approximate_linear_solve_iters" => (
+        2,
+        "the wave-core Newton solve uses the selected Jacobian algorithm \
+         directly, with no approximate linear solve",
+    ),
+    "microphysics_n_substeps" => (
+        3,
+        "the coupled microphysics sweep chooses its own substeps",
+    ),
+    "microphysics_n_substeps_quadrature" => (
+        2,
+        "the coupled microphysics sweep chooses its own substeps",
+    ),
+)
+
+"""
+    check_fixed_value_keys(config)
+
+Throw an `ArgumentError` when `config` sets a key of `FIXED_VALUE_KEYS` to a
+value other than the one accepted value.
+"""
+function check_fixed_value_keys(config)
+    for (key, (accepted, reason)) in FIXED_VALUE_KEYS
+        haskey(config, key) || continue
+        value = config[key]
+        value == accepted && continue
+        throw(
+            ArgumentError(
+                "`$key: $(repr(value))` is not supported: $reason. Remove \
+                 `$key` from the configuration or set it to $(repr(accepted)).",
+            ),
+        )
+    end
+    return nothing
+end
 
 """
     coerce_to_default(::Type{T}, v) -> T
@@ -165,24 +222,11 @@ function override_default_config(config_dict::AbstractDict;)
         msg = "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
         config["strict_config"] ? error(msg) : @warn msg
     end
+    check_fixed_value_keys(config)
 
     config == default_config && @info "Using default configuration"
 
     return config
-end
-
-"""
-    non_default_config_entries(config, defaults = default_config_dict())
-
-Return a `Dict` with the entries of `config` whose values differ from `defaults`.
-"""
-function non_default_config_entries(config, defaults = default_config_dict())
-    non_defaults = Dict()
-    for k in keys(config)
-        defaults[k] == config[k] && continue
-        non_defaults[k] = config[k]
-    end
-    return non_defaults
 end
 
 """

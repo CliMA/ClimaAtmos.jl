@@ -35,13 +35,11 @@ edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
-implicit_diffusion: true
 implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: true
 implicit_sgs_mass_flux: true
-approximate_linear_solve_iters: 2
 ode_algo: "ARS222"
 microphysics_model: "0M"
 

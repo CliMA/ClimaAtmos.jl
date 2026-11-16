@@ -6,8 +6,6 @@ initial_condition: "ARMVARANAL"
 external_forcing_file: artifact"arm_sgp_varanal_forcing"/sgp60varanarucC1.c1.20100901.000000.cdf
 start_date: "20100918" # YYYYMMDD
 turbconv: "prognostic_edmfx"
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 rayleigh_sponge: true
 viscous_sponge: true
 edmfx_entr_model: "Generalized"

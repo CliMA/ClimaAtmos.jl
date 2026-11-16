@@ -85,11 +85,8 @@ function get_bench_items(
     jac_alg,
     jac_cache,
 )
-    (; topography_flag, diffusion_flag) = jac_cache.derivative_flags
+    (; topography_flag) = jac_cache.derivative_flags
     (; matrix) = jac_cache
-    eddy_diffs =
-        CA.use_derivative(diffusion_flag) ?
-        CA.eddy_diffusivity_coefficients!(Y, p) : nothing
     # Matches the flag passed by `set_covariance_cache_and_cloud_fraction!`.
     store_θ_li =
         CA.uses_covariances(p.atmos) &&
@@ -102,78 +99,6 @@ function get_bench_items(
         (
             "  implicit_vertical_advection_tendency!",
             () -> CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t),
-        ),
-        (
-            "    vertical_advection_of_water_tendency!",
-            () -> CA.vertical_advection_of_water_tendency!(Yₜ, Y, p, t),
-        ),
-        (
-            "  microphysics_tendency!",
-            () -> CA.microphysics_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.microphysics_model,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  edmfx_sgs_vertical_advection_tendency!",
-            () -> CA.edmfx_sgs_vertical_advection_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  edmfx_sgs_diffusive_flux_tendency!",
-            () -> CA.edmfx_sgs_diffusive_flux_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  edmfx_entr_detr_tendency!",
-            () -> CA.edmfx_entr_detr_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  edmfx_sgs_mass_flux_tendency!",
-            () -> CA.edmfx_sgs_mass_flux_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  edmfx_boundary_condition_tendency!",
-            () -> CA.edmfx_boundary_condition_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
-            "  sgs_u₃ + sgs_ρa implicit_tendency!",
-            () -> begin
-                CA.sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-                CA.sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-            end,
         ),
         (
             "set_implicit_precomputed_quantities! (total)",
@@ -243,15 +168,6 @@ function get_bench_items(
         ("    set_precip_fraction!", () -> CA.set_precip_fraction!(Y, p)),
         ("  set_face_diffusivities!", () -> CA.set_face_diffusivities!(Y, p)),
         (
-            "  set_microphysics_tendency_cache!",
-            () -> CA.set_microphysics_tendency_cache!(
-                Y,
-                p,
-                p.atmos.microphysics_model,
-                p.atmos.turbconv_model,
-            ),
-        ),
-        (
             "remaining_tendency! (total)",
             () -> CA.remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t),
         ),
@@ -272,20 +188,8 @@ function get_bench_items(
             () -> CA.viscous_sponge_tendency!(Yₜ, Y, p),
         ),
         (
-            "  surface_flux_tendency!",
-            () -> CA.surface_flux_tendency!(Yₜ, Y, p, t),
-        ),
-        (
-            "  edmfx_tke_tendency!",
-            () -> CA.edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model),
-        ),
-        (
             "initialize_implicit_stage_problem!",
             () -> CA.initialize_implicit_stage_problem!(Y, p, p.dt),
-        ),
-        (
-            "correct_implicit_advection_tendency!",
-            () -> CA.correct_implicit_advection_tendency!(Yₜ, Y, p, t),
         ),
         (
             "update_jacobian! (total)",
@@ -299,50 +203,6 @@ function get_bench_items(
                 p,
                 p.dt,
                 topography_flag,
-            ),
-        ),
-        (
-            "  update_sedimentation_jacobian!",
-            () -> CA.update_sedimentation_jacobian!(matrix, Y, p, p.dt),
-        ),
-        (
-            "  update_diffusion_jacobian!",
-            () -> CA.update_diffusion_jacobian!(
-                matrix,
-                Y,
-                p,
-                p.dt,
-                diffusion_flag,
-                eddy_diffs,
-            ),
-        ),
-        (
-            "  update_sgs_advection_jacobian!",
-            () -> CA.update_sgs_advection_jacobian!(matrix, Y, p, p.dt),
-        ),
-        (
-            "  update_sgs_diffusion_and_entr_detr_jacobian!",
-            () -> CA.update_sgs_diffusion_and_entr_detr_jacobian!(
-                matrix,
-                Y,
-                p,
-                p.dt,
-                diffusion_flag,
-            ),
-        ),
-        (
-            "  update_sgs_boundary_condition_jacobian!",
-            () ->
-                CA.update_sgs_boundary_condition_jacobian!(matrix, Y, p, p.dt),
-        ),
-        (
-            "  update_sgs_massflux_jacobian!",
-            () -> CA.update_sgs_massflux_jacobian!(
-                matrix,
-                Y,
-                p,
-                p.dt,
-                diffusion_flag,
             ),
         ),
     ]
@@ -390,9 +250,6 @@ function compute_refs(state, jac_alg, jac_cache)
     Yₜ_rem_c = snap(Yₜ_rem.c)
     Yₜ_rem_f = snap(Yₜ_rem.f)
     Yₜ_lim_c = snap(Yₜ_lim.c)
-    Yₜ_corr = similar(Yₜ)
-    CA.correct_implicit_advection_tendency!(Yₜ_corr, Y, p, t)
-    Yₜ_corr_c = snap(Yₜ_corr.c)
     return (;
         Y_after_init_c,
         Y_after_init_f,
@@ -403,7 +260,6 @@ function compute_refs(state, jac_alg, jac_cache)
         Yₜ_rem_c,
         Yₜ_rem_f,
         Yₜ_lim_c,
-        Yₜ_corr_c,
         ᶠK_h = snap(p.precomputed.ᶠK_h),
         ᶠK_u = snap(p.precomputed.ᶠK_u),
         ᶜgradᵥ_θ = snap(p.precomputed.ᶜgradᵥ_θ_liq_ice),
@@ -416,7 +272,6 @@ function compute_refs(state, jac_alg, jac_cache)
         ᶜq′q′ = snap(p.precomputed.ᶜq′q′),
         ᶜcorr_Tq = snap(p.precomputed.ᶜcorr_Tq),
         ᶜα = snap(p.precomputed.ᶜα),
-        ᶜmp_tendency⁰ = snap(p.precomputed.ᶜmp_tendency⁰),
         rain_flux = snap(p.precomputed.surface_rain_flux),
         snow_flux = snap(p.precomputed.surface_snow_flux),
     )
@@ -433,7 +288,6 @@ function report_equivalence(ref, new)
         ("remaining Yₜ.c", ref.Yₜ_rem_c, new.Yₜ_rem_c),
         ("remaining Yₜ.f", ref.Yₜ_rem_f, new.Yₜ_rem_f),
         ("remaining Yₜ_lim.c", ref.Yₜ_lim_c, new.Yₜ_lim_c),
-        ("correct_implicit Yₜ.c", ref.Yₜ_corr_c, new.Yₜ_corr_c),
         ("ᶠK_h", ref.ᶠK_h, new.ᶠK_h),
         ("ᶠK_u", ref.ᶠK_u, new.ᶠK_u),
         ("ᶜgradᵥ_θ_liq_ice", ref.ᶜgradᵥ_θ, new.ᶜgradᵥ_θ),
@@ -446,7 +300,6 @@ function report_equivalence(ref, new)
         ("ᶜq′q′", ref.ᶜq′q′, new.ᶜq′q′),
         ("ᶜcorr_Tq", ref.ᶜcorr_Tq, new.ᶜcorr_Tq),
         ("ᶜα", ref.ᶜα, new.ᶜα),
-        ("ᶜmp_tendency⁰", ref.ᶜmp_tendency⁰, new.ᶜmp_tendency⁰),
         ("surface_rain_flux", ref.rain_flux, new.rain_flux),
         ("surface_snow_flux", ref.snow_flux, new.snow_flux),
     )

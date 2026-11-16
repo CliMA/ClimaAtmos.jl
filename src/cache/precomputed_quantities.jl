@@ -10,12 +10,8 @@ import ClimaCore: DataLayouts, Spaces, Fields
 Allocate the precomputed fields of the Smagorinsky-Lilly closure: the center and
 face strain-rate tensors `ᶜS`/`ᶠS`, the horizontal and vertical strain-rate norms,
 mixing lengths, eddy viscosities, and eddy diffusivities. Return an empty
-`NamedTuple` when `model` is `nothing`.
-
-The fields live with the implicit precomputed quantities when the vertical
-tendency is implicit (`diff_mode == Implicit()`) and with the explicit ones
-otherwise, so that autodiff gets Dual-typed copies exactly when the implicit
-stage writes to them.
+`NamedTuple` when `model` is `nothing`. The fields live with the explicit
+precomputed quantities, since the wave-core implicit stage does not read them.
 """
 smagorinsky_lilly_fields(Y, ::Nothing) = (;)
 function smagorinsky_lilly_fields(Y, ::SmagorinskyLilly)
@@ -67,11 +63,8 @@ velocity and thermodynamic quantities (`ᶜp` is shared across all subdomains):
     `ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`), plus the
     subdomain air densities `ᶜρʲs` [kg/m³].
 
-For implicit microphysics, Dual-compatible copies are also allocated: the
-density-weighted 0M sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`, and (for all
-non-dry models) `surface_rain_flux`, `surface_snow_flux`, and
-`col_integrated_precip_energy_tendency`, which are rewritten from the current
-Newton iterate during the implicit solve.
+For `NonEquilibriumMicrophysics1M` with covariance quadrature, `ᶜsgs_moments` is
+also allocated here so autodiff gets Dual-typed copies.
 """
 function implicit_precomputed_quantities(Y, atmos)
     (; microphysics_model, turbconv_model) = atmos
@@ -106,14 +99,6 @@ function implicit_precomputed_quantities(Y, atmos)
             )
         end
     sgs_quantities = (;)
-    # Picard sub-iteration snapshots: only allocated when the loop is on.
-    picard_scratch =
-        turbconv_model isa PrognosticEDMFX &&
-        atmos.edmfx_model.updraft_picard_rounds > 0 ?
-        (;
-            ᶠsgsʲs_picard_snapshot = similar(Y.f.sgsʲs),
-            ᶜsgsʲs_picard_snapshot = similar(Y.c.sgsʲs),
-        ) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -134,98 +119,22 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            picard_scratch...,
-        ) : (;)
-    # Density-weighted 0M microphysics sources: rewritten from the current
-    # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by
-    # update_implicit_microphysics_cache!, called from
-    # set_implicit_precomputed_quantities_core!, so autodiff needs Dual-typed
-    # copies. The same holds for the per-column factors that rescale the
-    # below-cloud evaporation of rain and snow to at most the precipitation
-    # produced in the column.
-    implicit_mp_quantities =
-        microphysics_model isa EquilibriumMicrophysics0M ?
-        (;
-            ᶜρ_dq_tot_dt = similar(Y.c, FT),
-            ᶜρ_de_tot_dt = similar(Y.c, FT),
-            precip_evap_scale_rai = ones(axes(Fields.level(Y.f, half))),
-            precip_evap_scale_sno = ones(axes(Fields.level(Y.f, half))),
         ) : (;)
 
-    # 1M implicit cache: `set_implicit_precomputed_quantities!` rewrites
-    # `ᶜsgs_moments` (via `set_sgs_moments!`) and `ᶜmp_tendency_implicit*`
-    # (via `update_implicit_1m_tendency!`) from the current Newton iterate.
-    # Live here so autodiff gets Dual-typed copies. Allocation guards match
-    # the write guards in `set_sgs_moments!` and `update_implicit_1m_tendency!`
-    # (1M, and 1M + PrognosticEDMFX for the subdomain variants).
+    # 1M SGS moments: `ᶜsgs_moments` is updated from the current state during
+    # covariance setup, so allocate it here for Dual-typed copies.
     SGSMomentsNT = @NamedTuple{sigma_S::FT, λ_lagrange::FT, λ_eq::FT}
-    MP1_NT = @NamedTuple{
-        dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT,
-    }
     implicit_1m_moments =
         uses_covariances(atmos) &&
         microphysics_model isa NonEquilibriumMicrophysics1M ?
         (; ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) : (;)
-    implicit_1m_tendency_quantities =
-        microphysics_model isa NonEquilibriumMicrophysics1M ?
-        (;
-            ᶜmp_tendency_implicit = (
-                let f = similar(Y.c, MP1_NT)
-                    fill!(parent(f), zero(FT))
-                    f
-                end
-            ),
-            (
-                turbconv_model isa PrognosticEDMFX ?
-                (;
-                    ᶜmp_tendency_implicitʲs = (
-                        let f = similar(Y.c, NTuple{n, MP1_NT})
-                            fill!(parent(f), zero(FT))
-                            f
-                        end
-                    ),
-                    ᶜmp_tendency_implicit⁰ = (
-                        let f = similar(Y.c, MP1_NT)
-                            fill!(parent(f), zero(FT))
-                            f
-                        end
-                    ),
-                ) : (;)
-            )...,
-        ) : (;)
-
-    # Surface precipitation fluxes need Dual-typed copies so that
-    # set_precipitation_surface_fluxes! can be called during the implicit
-    # stage (AD writes Dual values into these fields).
-    implicit_sfc_precip_quantities =
-        if !(microphysics_model isa DryModel)
-            (;
-                surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-                surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
-                col_integrated_precip_energy_tendency = zeros(
-                    axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
-                ),
-            )
-        else
-            (;)
-        end
-    # The Smagorinsky-Lilly eddy viscosity is refreshed by the implicit stage
-    # when its vertical tendency is implicit, so autodiff needs Dual-typed
-    # copies of these fields in that case (and only in that case).
-    implicit_smagorinsky_quantities =
-        atmos.diff_mode == Implicit() ?
-        smagorinsky_lilly_fields(Y, atmos.smagorinsky_lilly) : (;)
 
     return (;
         gs_quantities...,
         moist_gs_quantities...,
         sgs_quantities...,
         prognostic_sgs_quantities...,
-        implicit_mp_quantities...,
         implicit_1m_moments...,
-        implicit_1m_tendency_quantities...,
-        implicit_sfc_precip_quantities...,
-        implicit_smagorinsky_quantities...,
     )
 end
 
@@ -248,14 +157,6 @@ TODO: Reduce the number of cached values by computing them on the fly.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
-    # TEMPORARY: 2M and 2M+P3 microphysics are broken under the
-    # CloudMicrophysics 0.37 compat bump (missing required `q_tot` arg in - block
-    # them here until that's fixed. Remove this assertion once compatibility
-    # is restored.
-    @assert !(
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
-    ) "2M and 2M+P3 microphysics are temporarily disabled: incompatible with CloudMicrophysics 0.37 pending a fix."
     @assert !(atmos.microphysics_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
@@ -266,7 +167,7 @@ function precomputed_quantities(Y, atmos)
     n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
     @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
-        ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
+        ᶜwₕhₜ = Geometry.WVector.(zeros(cspace)),
         # Moist buoyancy gradient N² at centers; same physical quantity as the
         # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
         # (cloud-fraction-blended) vertical gradient instead of the two-point
@@ -393,56 +294,45 @@ function precomputed_quantities(Y, atmos)
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+        (
+            !(atmos.microphysics_model isa DryModel) ?
+            (;
+                col_integrated_precip_energy_tendency = zeros(
+                    axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+                ),
+            ) : (;)
+        )...,
     )
     sedimentation_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
 
-    # Helper named tuples for microphysics cache
-    MP0_NT = @NamedTuple{dq_tot_dt::FT, e_tot_hlpr::FT}
-    MP1_NT = @NamedTuple{
-        dq_lcl_dt::FT, dq_icl_dt::FT, dq_rai_dt::FT, dq_sno_dt::FT,
-    }
-    MP23_NT = @NamedTuple{
-        dq_lcl_dt::FT, dn_lcl_dt::FT, dq_rai_dt::FT, dn_rai_dt::FT,
-        dq_ice_dt::FT, dq_rim_dt::FT, db_rim_dt::FT,
-    }
-
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
-        # ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt (used in the implicit tendency and the
-        # surface fluxes) live in implicit_precomputed_quantities: the
-        # implicit microphysics refresh rewrites them from the Newton
-        # iterate, so autodiff needs Dual-typed copies of them.
-        # Below-cloud evaporation of the precipitation flux (ᶜprecip_evap) and
-        # its column integrals: computed in the explicit stage and frozen
-        # through the Newton iterations. Zero when evaporation is off.
-        ᶜprecip_evap = similar(
-            Y.c,
-            @NamedTuple{
-                ρ_evap_rai::FT, ρ_evap_sno::FT, ρe_evap_rai::FT, ρe_evap_sno::FT,
-            }
-        )
+        # Step means of the 0M precipitation mass and energy tendencies
+        # [kg m⁻³ s⁻¹] and [W m⁻³], below-cloud evaporation of the precipitation
+        # flux [kg m⁻³ s⁻¹], its column integrals, and the column-integrated
+        # updraft precipitation [kg m⁻² s⁻¹], written by
+        # `step_coupled_microphysics_sedimentation!`. The evaporation stays
+        # zero when it is off.
+        ᶜprecip_evap = similar(Y.c, @NamedTuple{ρ_evap_rai::FT, ρ_evap_sno::FT})
         fill!(parent(ᶜprecip_evap), 0)
         precipitation_quantities = (;
-            ᶜmp_tendency = similar(Y.c, MP0_NT),
+            ᶜρ_dq_tot_dt = zeros(axes(Y.c)),
+            ᶜρ_de_tot_dt = zeros(axes(Y.c)),
             ᶜprecip_evap,
             col_integrated_precip_evap_rai = zeros(axes(Fields.level(Y.f, half))),
             col_integrated_precip_evap_sno = zeros(axes(Fields.level(Y.f, half))),
+            col_integrated_updraft_precip = zeros(axes(Fields.level(Y.f, half))),
         )
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
-        # `ᶜmp_tendency_implicit` lives in `implicit_precomputed_quantities`
-        # (Newton overwrites it from Dual-typed Y during autodiff), spliced in
-        # at the top of this NamedTuple.
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
             ᶜwᵢ = similar(Y.c, FT),
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
-            ᶜmp_tendency = similar(Y.c, MP1_NT),
         )
     elseif atmos.microphysics_model isa
            Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
-        # 2-moment microphysics
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
             ᶜwᵢ = similar(Y.c, FT),
@@ -450,55 +340,25 @@ function precomputed_quantities(Y, atmos)
             ᶜwₛ = similar(Y.c, FT),
             ᶜwₙₗ = similar(Y.c, FT),
             ᶜwₙᵣ = similar(Y.c, FT),
-            ᶜmp_tendency = similar(Y.c, MP23_NT),
         )
-        # Add additional quantities for 2M + P3
         if atmos.microphysics_model isa NonEquilibriumMicrophysics2MP3
             precipitation_quantities = (;
-                # liquid quantities (2M warm rain)
                 precipitation_quantities...,
-                # ice quantities (P3)
                 ᶜwnᵢ = similar(Y.c, FT),
-                ᶜScoll = similar(Y.c,
-                    @NamedTuple{
-                        ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,
-                        ∂ₜL_rim::FT, ∂ₜL_ice::FT, ∂ₜB_rim::FT,
-                    }
-                ),
             )
         end
     else
         precipitation_quantities = (;)
     end
-    if atmos.microphysics_model isa EquilibriumMicrophysics0M
+    if atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_sgs_quantities = (;
-            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP0_NT}),
-        )
-        if atmos.turbconv_model isa PrognosticEDMFX
-            precipitation_sgs_quantities = (;
-                precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP0_NT),
-            )
-        end
-    elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
-        # `ᶜmp_tendency_implicitʲs` and `ᶜmp_tendency_implicit⁰` live in
-        # `implicit_precomputed_quantities` so autodiff gets Dual copies.
-        precipitation_sgs_quantities = (;
-            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
         )
-        if atmos.turbconv_model isa PrognosticEDMFX
-            precipitation_sgs_quantities = (;
-                precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP1_NT),
-            )
-        end
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M
         precipitation_sgs_quantities = (;
-            ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP23_NT}),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -506,12 +366,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
         )
-        if atmos.turbconv_model isa PrognosticEDMFX
-            precipitation_sgs_quantities = (;
-                precipitation_sgs_quantities...,
-                ᶜmp_tendency⁰ = similar(Y.c, MP23_NT),
-            )
-        end
     else
         precipitation_sgs_quantities = (;)
     end
@@ -525,8 +379,6 @@ function precomputed_quantities(Y, atmos)
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜarea_bounding_entr_detrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
-            ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
             # Per-updraft surface conditions at level 1.
             sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
@@ -544,13 +396,8 @@ function precomputed_quantities(Y, atmos)
         ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
     )
 
-    # Allocated here only when the vertical Smagorinsky-Lilly tendency is
-    # explicit; with `diff_mode == Implicit()` these fields are written by
-    # `set_implicit_precomputed_quantities!` and so are allocated alongside the
-    # other implicit quantities, which autodiff duplicates as Dual-typed copies.
     smagorinsky_lilly_quantities =
-        atmos.diff_mode == Explicit() ?
-        smagorinsky_lilly_fields(Y, atmos.smagorinsky_lilly) : (;)
+        smagorinsky_lilly_fields(Y, atmos.smagorinsky_lilly)
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
@@ -827,31 +674,14 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
 end
 
 """
-    set_implicit_precomputed_quantities_core!(Y, p, t)
+    _set_implicit_grid_mean_precomputed_quantities!(Y, p, t)
 
-The subset of the implicit precomputed quantities that depends only on `Y`,
-not on the SGS covariances. Updates the velocity fields (`ᶜu`, `ᶠu³`, `ᶠu`,
-`ᶜK`) and the thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`,
-`ᶜq_ice`, `ᶜh_tot`, `ᶜp`), plus their EDMFX subdomain versions when the
-`turbconv_model` is `PrognosticEDMFX`. Refreshes the density-weighted
-microphysics sources and surface precipitation fluxes via
-`update_implicit_microphysics_cache!`. When `p.atmos.diff_mode == Implicit()`,
-also refreshes the Smagorinsky-Lilly eddy viscosity and diffusivity.
-
-The 1M implicit tendency `ᶜmp_tendency_implicit*` is NOT refreshed here: it
-depends on the SGS covariances, which `set_explicit_precomputed_quantities!`
-owns. See `set_implicit_precomputed_quantities!` (the full version used by
-the Newton inner loop) and `set_precomputed_quantities!` (the step cache
-composite) for how the covariance-dependent piece is sequenced.
-
-This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
-at the surface and at the model top (i.e., to enforce the impenetrable boundary
-conditions). If the `turbconv_model` is `PrognosticEDMFX`, the filter does the
-same for each `ᶠu³ʲ`. In the future, we will probably want to move this
-filtering elsewhere, but doing it here ensures that it occurs whenever the
-precomputed quantities are updated.
+Update the grid-mean implicit precomputed quantities (`ᶜu`, `ᶠu³`, `ᶠu`, `ᶜK`,
+`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, `ᶜh_tot`, `ᶜp`) from state `Y` and
+enforce impenetrable top and bottom velocity boundary conditions. Returns `ᶠuₕ³`
+stored in `p.scratch.ᶠtemp_CT3`.
 """
-NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
+NVTX.@annotate function _set_implicit_grid_mean_precomputed_quantities!(Y, p, t)
     (; turbconv_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp) =
@@ -990,28 +820,27 @@ NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
         )
     end
 
+    return ᶠuₕ³
+end
+
+"""
+    set_implicit_precomputed_quantities_core!(Y, p, t)
+
+Update the grid-mean implicit precomputed quantities and, for
+`PrognosticEDMFX`, the draft and environment thermodynamic and velocity fields
+from state `Y` at time `t`.
+
+Applies the surface and model-top impenetrable velocity conditions on `ᶠu³` (and
+each `ᶠu³ʲ` under `PrognosticEDMFX`). Called from post-step column physics and
+full cache refreshes (`set_precomputed_quantities!`,
+`set_end_of_step_precomputed_quantities!`).
+"""
+NVTX.@annotate function set_implicit_precomputed_quantities_core!(Y, p, t)
+    ᶠuₕ³ = _set_implicit_grid_mean_precomputed_quantities!(Y, p, t)
+    (; turbconv_model) = p.atmos
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
-    elseif !(isnothing(turbconv_model))
-        # Do nothing for other turbconv models for now
-    end
-
-    # Microphysics is always treated implicitly: refresh ᶜρ_dq_tot_dt /
-    # ᶜρ_de_tot_dt (0M) and the surface precipitation fluxes so they track
-    # the Newton iterate. The surface flux fields have Dual-typed copies in
-    # `implicit_precomputed_quantities`, so AD can write into them safely.
-    update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
-
-    # With implicit vertical diffusion, the vertical Smagorinsky-Lilly tendency
-    # is part of `implicit_tendency!`, so its eddy viscosity has to follow the
-    # Newton iterate rather than the stage-initial state.
-    if p.atmos.diff_mode == Implicit()
-        set_smagorinsky_lilly_precomputed_quantities!(
-            Y,
-            p,
-            p.atmos.smagorinsky_lilly,
-        )
     end
     return nothing
 end
@@ -1019,54 +848,76 @@ end
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
-Update all implicit precomputed quantities for `Y` at time `t`, used by the
-Newton inner loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!`
-and then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
-(because Newton moves `q_lcl + q_icl`, and `λ_lagrange` in `ᶜsgs_moments`
-follows that sum) and overwrites the implicit 1M condensation / sublimation
-tendency `ᶜmp_tendency_implicit*` at the Newton iterate.
-
-The SGS covariances `ᶜT′T′`, `ᶜq′q′`, `ᶜcorr_Tq`, `ᶜα` that
-`update_implicit_1m_tendency!` reads are frozen through the Newton solve at
-their last `set_explicit_precomputed_quantities!` values; only
-`ᶜsgs_moments` and the 1M BMT call track the iterate.
+Update only the grid-mean wave-core precomputed quantities for `Y` at time `t`
+during Newton inner stages (`cache_imp!`) and wave-core Jacobian evaluation,
+skipping EDMF draft and environment thermodynamics.
 """
 function set_implicit_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities_core!(Y, p, t)
-    if has_implicit_1m_microphysics(p)
-        set_sgs_moments!(Y, p)
-        update_implicit_1m_tendency!(
-            Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
-        )
-    end
+    _set_implicit_grid_mean_precomputed_quantities!(Y, p, t)
     return nothing
 end
 
 """
-    set_explicit_precomputed_quantities!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t; update_sfc = true)
 
 Update the precomputed quantities that are handled explicitly based on the
-current state `Y`. This is only called before each evaluation of
-`remaining_tendency!`, though it includes quantities used in both
-`implicit_tendency!` and `remaining_tendency!`.
+current state `Y`.
 
-Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
-and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
-precipitation terminal velocities (unless they depend on the state, in which case
-`set_implicit_precomputed_quantities_core!` sets them; see
-`state_dependent_precipitation_velocities`), the microphysics tendency cache,
-surface precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
-Smagorinsky-Lilly quantities (each step only when the corresponding model
-component is active). Reads the implicit precomputed quantities, so it must follow
-`set_implicit_precomputed_quantities_core!` at the same state. Returns `nothing`.
+When `is_stage_cache_update(Y, p)` is `true` (intermediate ARK stages), skips
+surface conditions, vertical EDMF closures/diffusivities/mixing length, and
+covariances, updating only the horizontal EDMF and Smagorinsky-Lilly
+diffusivities read by `remaining_tendency!`.
+
+When `update_sfc` is `false` (end-of-step finalization in `post_step_callback!`),
+skips `update_surface_conditions!` so realized turbulent surface fluxes stay
+intact while refreshing `sfc_conditions.T_sfc` from `Y.sfc.T` for
+`SlabOceanTemperature`.
 """
-NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_explicit_precomputed_quantities!(
+    Y,
+    p,
+    t;
+    update_sfc::Bool = true,
+)
     (; turbconv_model) = p.atmos
 
     FT = eltype(p.params)
 
-    if !isnothing(p.sfc_setup)
-        SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
+    if is_stage_cache_update(Y, p)
+        if turbconv_model isa AbstractEDMF &&
+           (
+               p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+               p.atmos.edmfx_model.horizontal_diffusion isa Val{true}
+           ) &&
+           !iscolumn(axes(Y.c))
+            thermo_params = CAP.thermodynamics_params(p.params)
+            set_buoyancy_gradient_inputs!(Y, p, thermo_params, false)
+            ᶜlg = Fields.local_geometry_field(Y.c)
+            @. p.precomputed.ᶜbuoygrad = blended_N²(
+                p.precomputed.ᶜbg_coeffs,
+                p.precomputed.ᶜcloud_fraction,
+                projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg),
+            )
+            set_strain_rate_norm!(Y, p)
+            set_horizontal_diffusivities!(Y, p)
+        end
+        sl = p.atmos.smagorinsky_lilly
+        if !isnothing(sl) && is_smagorinsky_horizontal(sl)
+            set_smagorinsky_lilly_precomputed_quantities!(Y, p, sl)
+        end
+        return nothing
+    end
+
+    if update_sfc
+        if !isnothing(p.sfc_setup)
+            SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
+        end
+    elseif p.atmos.surface.temperature isa
+           SurfaceConditions.SlabOceanTemperature &&
+           !isnothing(p.atmos.surface.flux_scheme)
+        Fields.field_values(p.precomputed.sfc_conditions.T_sfc) .=
+            Fields.field_values(Y.sfc.T)
     end
 
     if turbconv_model isa PrognosticEDMFX
@@ -1074,7 +925,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
     if turbconv_model isa EDOnlyEDMFX
         set_edonly_precomputed_quantities_env_closures!(Y, p, t)
-        # TODO do I need env precipitation/cloud formation here?
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
@@ -1101,43 +951,27 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
     end
 
-    # Cache precipitation terminal velocities for grid mean and prognostic EDMF
-    # updrafts, unless `set_implicit_precomputed_quantities_core!` already set them
-    # at this state.
-    state_dependent_precipitation_velocities(p.atmos) || set_precipitation_velocities!(
+    set_smagorinsky_lilly_precomputed_quantities!(
         Y,
         p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
+        p.atmos.smagorinsky_lilly,
     )
-    # Compute microphysics sources from grid mean and sub-domains.
-    # Always compute ᶜmp_tendency (and, for 0M, ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt)
-    # here so both are fresh. When microphysics is implicit, the implicit stage
-    # will additionally refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt from the (now-fresh)
-    # ᶜmp_tendency using the current Newton-iterate Y, avoiding the allocating
-    # BMT broadcast.
-    set_microphysics_tendency_cache!(
-        Y,
-        p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
-    # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
-    # because for the 0 moment microphysics it's an integral of the q_tot sink).
-    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
-    # The Smagorinsky-Lilly quantities are set here only when the vertical
-    # tendency is explicit; with `diff_mode == Implicit()` they are set in
-    # `set_implicit_precomputed_quantities!`, which runs on every Newton
-    # iterate, so recomputing them here would be redundant.
-    if p.atmos.diff_mode == Explicit()
-        set_smagorinsky_lilly_precomputed_quantities!(
-            Y,
-            p,
-            p.atmos.smagorinsky_lilly,
-        )
-    end
+    return nothing
+end
 
+"""
+    set_end_of_step_precomputed_quantities!(Y, p, t)
+
+Refresh end-of-step precomputed quantities after post-step `dss!` and
+`constrain_state!` without overwriting realized turbulent surface fluxes
+(`sfc_conditions.ρ_flux_uₕ`, `ρ_flux_h_tot`, `ρ_flux_q_tot`) or bottom
+precipitation fluxes (`surface_rain_flux`, `surface_snow_flux`,
+`col_integrated_precip_energy_tendency`).
+"""
+function set_end_of_step_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities_core!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t; update_sfc = false)
     return nothing
 end
 
@@ -1145,33 +979,11 @@ end
     set_precomputed_quantities!(Y, p, t)
 
 Update all precomputed quantities in `p.precomputed` based on the current
-state `Y`.
-
-Calls, in order:
-
- 1. `set_implicit_precomputed_quantities_core!` — the `Y`-only subset of
-    implicit precomputed quantities (velocity + thermodynamics, surface
-    precip, 0M density-weighted sources).
- 2. `set_explicit_precomputed_quantities!` — the explicit cache, which
-    includes `set_covariance_cache_and_cloud_fraction!` (refreshing
-    `ᶜT′T′`, `ᶜq′q′`, `ᶜcorr_Tq`, `ᶜα`, `ᶜcloud_fraction`, `ᶜprecip_frac`,
-    and `ᶜsgs_moments`).
- 3. `update_implicit_1m_tendency!` when `has_implicit_1m_microphysics(p)`
-    — the implicit 1M condensation / sublimation tendency, now evaluated
-    against the fresh SGS covariances. `set_sgs_moments!` is NOT called
-    here: step 2 already left `ᶜsgs_moments` current.
-
-The Newton inner loop (`cache_imp!`) calls the full
-`set_implicit_precomputed_quantities!` instead, which bundles the 1M
-refresh with step 1 since the covariances are frozen through Newton.
+state `Y` via `set_implicit_precomputed_quantities_core!` and
+`set_explicit_precomputed_quantities!`.
 """
 function set_precomputed_quantities!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     set_explicit_precomputed_quantities!(Y, p, t)
-    if has_implicit_1m_microphysics(p)
-        update_implicit_1m_tendency!(
-            Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
-        )
-    end
     return nothing
 end
