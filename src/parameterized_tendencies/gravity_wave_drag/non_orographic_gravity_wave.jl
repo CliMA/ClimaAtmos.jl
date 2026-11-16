@@ -716,12 +716,16 @@ at least one updraft.
 
 Two heating profiles are built from the mass-flux divergence of dry-static-energy
 anomalies, `s = c_pd·T + g·z` (the `g·z` terms cancel in the anomaly, leaving
-`c_pd·(Tʲ − T̄)`). Levels whose total updraft area `Σⱼ max(ρaʲ, 0)/ρʲ` is below `a_min`
+`c_pd·(Tʲ − T̄)`): the vertical convergence of the updrafts' eddy flux
+`ρʲ·(wʲ − w̄)·(sʲ − s̄)`. This is a transport term. It moves heat within the column, its
+mass-weighted column integral is zero when the flux vanishes at the draft base and top,
+and it is not the latent heating of the drafts (that is the `heating_latent` option).
+Levels whose total updraft area `Σⱼ max(ρaʲ, 0)/ρʲ` is below `a_min`
 are left out of the heating fit: their in-cloud heating is zero, so they enter neither the
 moment fit nor the gather, and they are left out of the activation integral. The envelope
 means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over the whole envelope.
 
-  - `gw_Q_conv` — the grid-mean Yanai heat source Q₁, i.e. the draft anomalies weighted by
+  - `gw_Q_conv` — the grid-mean flux convergence, i.e. the draft anomalies weighted by
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
     `Q0_threshold` is calibrated to grid-mean magnitudes.
   - `gw_Q_conv_ic` — the ρaʲ-weighted in-cloud (conditional-mean) heating, with no area
@@ -826,10 +830,15 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
 
-    # Compute DSE-based mass-flux Q₁ (Yanai apparent heat source):
-    #   ρ·Q₁ ≈ -∂/∂z [Mᶜ·(s_c − s̄)]  where s = cp_d·T + g·z
-    # Note 1: Beres activation is always determined by Q₁, regardless of whether we use 0M or 1M microphysics. Only latent heating computation differs between microphysics schemes.
-    # Note 2: MSE (h = cp·T + gz + Lv·q) is conserved under condensation, so its mass-flux divergence gives Q₁−Q₂, masking the latent-heating signal. DSE works because Tʲ is saturation-adjusted: the warming from condensation along the parcel trajectory is already encoded in Tʲ, so cp_d·(Tʲ − T̄) weighs the cumulative latent heat release.
+    # Convergence of the updrafts' eddy flux of dry static energy s = cp_d·T + g·z,
+    #   ρ·cp_d·Q = -∂/∂z [Σⱼ ρʲ·(wʲ − w̄)·(sʲ − s̄)·aʲ]
+    # for the grid mean, and per draft without aʲ and divided by ρʲ in place of ρ for
+    # the in-cloud heating. It is a vertical transport term: it moves heat within the
+    # column (typically cooling the lower part of the draft and warming the upper part),
+    # and its mass-weighted column integral is zero when the flux vanishes at the draft
+    # base and top. It is not the latent heating of the drafts, which the
+    # `heating_latent` option computes instead for the in-cloud profile.
+    # The activation always uses the grid-mean value, for 0M and 1M microphysics alike.
     #
     # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
     cp_d = FT(CAP.cp_d(p.params))
@@ -875,7 +884,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             # `Val(:none)`)
             ᶠρu³_diff = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ * (ᶠu³ʲ - ᶠu³)
 
-            # Convert from W/m³ to heating rate K/s (grid-mean Q₁)
+            # Convert from W/m³ to a heating rate in K/s (grid-mean flux convergence)
             @. ᶜQ_conv_sum +=
                 -(ᶜadvdivᵥ(ᶠρu³_diff * ᶠinterp(ᶜa_scalar))) / (Yc.ρ * cp_d)
 
@@ -903,10 +912,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         )
     end
 
-    # When enabled, replace the in-cloud DSE flux-divergence Q₁
+    # When enabled, replace the in-cloud dry-static-energy flux convergence
     # just computed in gw_Q_conv_ic with Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾, the
     # ρaʲ-weighted in-cloud mean of the per-draft latent heating.
-    # The grid-mean gw_Q_conv (Q₁) above is left untouched, as it still drives activation criteria and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
+    # The grid-mean gw_Q_conv above is left untouched: it still drives the activation,
+    # whose Q0_threshold is calibrated to grid-mean magnitudes of the flux convergence.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
         # Run CM BMT on both 1M parameter sets and sum: the bulk set carries
@@ -1118,7 +1128,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 
     # Unpack Pass 2 results, and set the beres_active flag: GRID-MEAN amplitude above
     # threshold AND heating depth above minimum. The activation trigger always uses
-    # grid-mean Q₁ (slot 1) to ensure the same activation criteria between 0M and 1M
+    # grid-mean flux convergence gw_Q_conv (slot 1) to ensure the same activation criteria between 0M and 1M
     # microphysics. The grid-mean amplitude is the half-sine peak of the heating over the
     # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
     Q0_threshold = gw_beres_source.Q0_threshold
@@ -2929,8 +2939,9 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
 
     # Vertical shape factor at m₀. Classical: half-sine V_hs_sq, optionally
     # h-averaged to smooth the m₀ ≈ π/h resonance (the transient `n_h_avg`
-    # mechanism). Beres-G: |gs(m₀)|² of the gathered profile (single eval — the
-    # real profile self-smooths; Ext 1 applies to the thermal-steady term too).
+    # mechanism). Beres-G: |gs(m₀)|² of the gathered profile, evaluated once at m₀
+    # with no averaging, so the thermal steady term uses the Beres-G shape as the
+    # transient bins do.
     # `span = z_top - z_bot` (clamped envelope width) must match the gather grid.
     Vbar = if shape_general && gprofile !== nothing
         # The gathered profile resolves vertical wavelengths down to two gather
@@ -3341,8 +3352,9 @@ for the default `0`).
 
   - `gprofile === nothing` or `shape_general=false` → classical half-sine `V_hs`
     (with `n_h_avg` resonance averaging), Beres (2004);
-  - `shape_general=true` with a profile → Beres-G `|gs(m)|²` (Ext 1), single
-    evaluation (the real profile self-smooths; `n_h_avg` bypassed).
+  - `shape_general=true` with a profile → Beres-G `|gs(m)|²` (Ext 1); each transient
+    bin averages it over `N_BERES_BIN_SAMPLES` phase speeds across the bin, and the
+    `n_h_avg` depth averaging, which belongs to the half-sine, does not apply.
 
 The `c≈0` bin sums `β_therm` (thermal steady, shape-aware) and, when
 `beres_mechanical_source`, `β_mech` (Ext 3 obstacle term from `w_obstacle`).
