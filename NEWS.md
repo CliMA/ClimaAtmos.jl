@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` turn on the clear-environment
+  buoyancy reference (`0.5`), the environment tail truncation (`c_tail = 4`)
+  with the convective autoconversion velocity (`c_w = 1`, `w_d = 0.13 m/s`),
+  constant cloud-species timescales, `ε_rel = 0.05`, cloud condensate on the
+  cloudy quadrature nodes, and retuned 1M autoconversion, ice-number, and
+  snow parameters; the 1M EDMFX long-run configurations use the quadrature
+  cloud model with Kessler 1M autoconversion and fixed terminal velocities.
 - ![][badge-✨feature/enhancement] Two options of the PROPHET cloud-fraction
   closure (provisional parameters; the defaults leave results unchanged):
   `cloud_fraction_eps_rel` (`ε_rel`, default `0`, superseding the ClimaParams
