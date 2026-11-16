@@ -29,6 +29,9 @@ main
   would vanish over both signs; with the flux signed by the intrinsic phase speed both
   signs give flux of the same sign. `nogw_beres_steady_dc_frac` and
   `nogw_beres_L_system` are documented as free knobs.
+- The mechanical (obstacle) steady Beres source (`nogw_beres_mechanical_source`, off by
+  default) uses the same horizontal constant, so its flux also doubles at the same
+  `nogw_beres_mechanical_weight`.
 - ![][badge-🐛bugfix] Beres convective gravity waves break by the stress limit: a Beres
   bin breaks where `B0/ĉ³ ≥ ½ρk/N`, since its `B0` is a stress. The AD99 form, divided by
   the launch density, let Beres waves carry about `1/ρ_source` (4-7 times) more amplitude
