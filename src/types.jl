@@ -1897,6 +1897,8 @@ symbols or strings.
     velocity jump penalty of the vector-invariant horizontal DG form.
   - `dg_vi_shear_floor`: floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
+  - `dg_lmars_floor`: floor ε of the LMARS contact speed `max(|u*|, ε c)` and
+    of its upwind rate `max(|F*_ρ|, ε ρ c)`; zero is pure LMARS.
   - `dg_vi_interface_flux`: `Val(:rusanov)`, `Val(:rusanov_moist)`, or
     `Val(:es)`, the variables the vector-invariant DG face penalties act on
     (conserved `ρe_tot` and `u`; the energy at fixed composition with the
@@ -1928,6 +1930,7 @@ struct AtmosNumerics{
     DGIF,
     DGVP,
     DGSF,
+    DGLF,
     DGVIF,
     DGTP,
     DGFV,
@@ -1963,8 +1966,10 @@ struct AtmosNumerics{
     dg_volume_flux::DGVF
     # FDDG interface dissipation: Val(:roe_eos) (Roe eigenstructure from the
     # model's equation of state by autodiff of the Thermodynamics pressure),
-    # Val(:rusanov), or Val(:moist_es) (Lax-Friedrichs on the conserved vector with total
-    # water: a sink of every convex entropy, the moist one included).
+    # Val(:rusanov), Val(:moist_es) (Lax-Friedrichs on the conserved vector with total
+    # water: a sink of every convex entropy, the moist one included), or
+    # Val(:lmars) (low-Mach approximate Riemann solver: acoustic damping at c,
+    # every carried quantity upwinded by the interface mass flux).
     dg_interface_flux::DGIF
     # VI-form DG velocity jump penalty: Val(:rusanov) (uniform |u| + c on the
     # horizontal velocity jump) or Val(:wave_selective) (|u_n| + c on the
@@ -1973,6 +1978,8 @@ struct AtmosNumerics{
     dg_vi_velocity_penalty::DGVP
     # Floor ε on the wave-selective shear speed, as a fraction of c.
     dg_vi_shear_floor::DGSF
+    # Floor ε on the LMARS contact speed and upwind rate, as a fraction of c.
+    dg_lmars_floor::DGLF
     # VI-form DG face penalty variables: Val(:rusanov) (⟦ρe_tot⟧, ⟦u⟧),
     # Val(:rusanov_moist) ({c_v,m}⟦T⟧ + ⟦K⟧ with the water flux carrying
     # mass and phase energies), or Val(:es) (entropy-variable jumps).
@@ -2033,6 +2040,8 @@ types for compile-time dispatch.
     vector-invariant horizontal DG form, `:rusanov` or `:wave_selective`.
   - `dg_vi_shear_floor = 0.05`: Floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
+  - `dg_lmars_floor = 0`: Floor ε of the LMARS contact speed `max(|u*|, ε c)`;
+    zero is pure LMARS.
   - `dg_vi_interface_flux = :rusanov`: Variables of the vector-invariant DG
     face penalties, `:rusanov` (conserved), `:rusanov_moist` (energy at fixed
     composition) or `:es` (entropy variables).
@@ -2071,6 +2080,7 @@ function AtmosNumerics(;
     dg_interface_flux = :roe_eos,
     dg_vi_velocity_penalty = :rusanov,
     dg_vi_shear_floor = 0.05,
+    dg_lmars_floor = 0.0,
     dg_vi_interface_flux = :rusanov,
     dg_tracer_penalty = :acoustic,
     dg_fddg_vertical = :vi,
@@ -2098,6 +2108,7 @@ function AtmosNumerics(;
         Val(Symbol(dg_interface_flux)),
         Val(Symbol(dg_vi_velocity_penalty)),
         dg_vi_shear_floor,
+        dg_lmars_floor,
         Val(Symbol(dg_vi_interface_flux)),
         Val(Symbol(dg_tracer_penalty)),
         Val(Symbol(dg_fddg_vertical)),

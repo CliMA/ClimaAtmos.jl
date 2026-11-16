@@ -151,8 +151,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         "dg_volume_flux must be kg_exner, div_exner, or kg_kpep, got $dg_volume_flux",
     )
     dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe_eos"))
-    dg_interface_flux in (:roe_eos, :moist_es, :rusanov) || error(
-        "dg_interface_flux must be roe_eos, moist_es, or rusanov, got $dg_interface_flux",
+    dg_interface_flux in (:roe_eos, :moist_es, :rusanov, :lmars) || error(
+        "dg_interface_flux must be roe_eos, moist_es, rusanov, or lmars, got $dg_interface_flux",
     )
     dg_vi_velocity_penalty =
         Symbol(get(parsed_args, "dg_vi_velocity_penalty", "rusanov"))
@@ -163,6 +163,9 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_vi_shear_floor = FT(get(parsed_args, "dg_vi_shear_floor", 0.05))
     dg_vi_shear_floor >= 0 ||
         error("dg_vi_shear_floor must be nonnegative, got $dg_vi_shear_floor")
+    dg_lmars_floor = FT(get(parsed_args, "dg_lmars_floor", 0))
+    dg_lmars_floor >= 0 ||
+        error("dg_lmars_floor must be nonnegative, got $dg_lmars_floor")
     (dg_vi_velocity_penalty != :rusanov && dg_equation_form != :vi) &&
         @warn "dg_vi_velocity_penalty only applies to dg_equation_form = vi; \
                it is ignored with dg_equation_form = $dg_equation_form."
@@ -201,6 +204,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_interface_flux,
         dg_vi_velocity_penalty,
         dg_vi_shear_floor,
+        dg_lmars_floor,
         dg_vi_interface_flux,
         dg_tracer_penalty,
         dg_fddg_vertical,

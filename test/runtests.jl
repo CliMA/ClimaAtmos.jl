@@ -70,6 +70,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "DG VI entropy-variable penalties" begin @time include("prognostic_equations/dg_vi_es_interface_tests.jl") end
     @safetestset "DG equation-of-state Roe dissipation" begin @time include("prognostic_equations/dg_roe_eos_tests.jl") end
     @safetestset "DG moist entropy-variable dissipation" begin @time include("prognostic_equations/dg_moist_es_tests.jl") end
+    @safetestset "DG LMARS dissipation" begin @time include("prognostic_equations/dg_lmars_tests.jl") end
     @safetestset "DG flux-form KPEP" begin @time include("prognostic_equations/dg_kpep_tests.jl") end
     @safetestset "DG full flux-form momentum KE" begin @time include("prognostic_equations/dg_full_flux_kep_tests.jl") end
     @safetestset "DG flux-form tracer-mass consistency" begin @time include("prognostic_equations/dg_fddg_tracer_consistency_tests.jl") end

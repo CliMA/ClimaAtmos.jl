@@ -725,6 +725,12 @@ function dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ, ᶠτ, ᶠρ)
         ᶠτ,
         Operators.tendency_completion(ᶠtemp_UVW; numflux),
     )
+    # the surface and top-face w are set by the boundary conditions
+    fill!(Fields.level(ᶠdivρτ, half), zero(eltype(ᶠdivρτ)))
+    fill!(
+        Fields.level(ᶠdivρτ, Spaces.nlevels(axes(Y.f)) - half),
+        zero(eltype(ᶠdivρτ)),
+    )
     @. Yₜ.f.u₃ -= C3(ᶠdivρτ / ᶠρ)
     return nothing
 end
@@ -918,18 +924,19 @@ function dg_fddg_flux_setup(Y, p)
         (@. ᶜΦ - phi_r(thermo_params, ᶜp) + ᶜK -
             FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)) :
         (@. ᶜΦ - phi_r(thermo_params, ᶜp))
+    ᶜc = dg_sound_speed(Y, p)
     y = map(
         (
-            ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ,
+            ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, c, φ,
             e_int, q_tot, q_liq, q_ice, λq, λqc, ψ, θ, Π,
         ) -> (;
             ρ, ρe, e, p = p_, pm = pm_, ρm = ρm_, uv,
             u1 = u1_, u2 = u2_, u3 = u3_,
-            E1 = E1_, E2 = E2_, E3 = E3_, λ, φ,
+            E1 = E1_, E2 = E2_, E3 = E3_, λ, c, φ,
             e_int, q_tot, q_liq, q_ice, λq, λqc, ψ, θ, Π,
         ),
-        Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
-        ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc, ᶜψ_kpep,
+        Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜc,
+        ᶜΦ, ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc, ᶜψ_kpep,
         ᶜθ_v_diff, ᶜΠ,
     )
     # volume flux family and interface dissipation
@@ -950,9 +957,18 @@ function dg_fddg_flux_setup(Y, p)
         kennedy_gruber_advective_rusanov_cartesian
     elseif moist_es
         MoistESInterface{Nslots}(iface_central, thermo_params)
+    elseif dg_interface_flux === Val(:lmars)
+        CentralMinusDissipation(
+            iface_central,
+            LMARSDissipation(FT(p.atmos.numerics.dg_lmars_floor)),
+        )
     else
         RoeEOSInterface(iface_central, thermo_params)
     end
+    # LMARS upwinds the carried quantities by its own interface mass flux, so
+    # they get no separate tracer penalty
+    ᶜλ_tracer =
+        dg_interface_flux === Val(:lmars) ? (@. zero(ᶜλ_tracer)) : ᶜλ_tracer
     return (;
         eE1,
         eE2,
@@ -994,20 +1010,24 @@ end
 Mass-weighted residual of `ρχ` for a specific quantity `χ` carried by the
 mass flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with
 `F_ρ` the density slot of `volume_flux`, and the interface flux
-`F*_ρ {χ} − (λχ/2){ρ}(χ⁺ − χ⁻)` with `F*_ρ` the density slot of
-`mass_interface` (its mass dissipation included) and the ρ-weighted tracer
-penalty at the rate `λχ`. For uniform `χ` the residual is `χ` times the
-density residual, so a uniform specific quantity stays uniform.
+`F*_ρ {χ} − (r/2 + (λχ/2){ρ})(χ⁺ − χ⁻)` with `F*_ρ` the density slot of
+`mass_interface` (its mass dissipation included), `r` its upwind rate
+([`carried_upwind_rate`](@ref)), and the ρ-weighted tracer penalty at the
+rate `λχ`. For uniform `χ` the residual is `χ` times the density residual, so
+a uniform specific quantity stays uniform.
 """
 function dg_carried_tracer_residual(volume_flux, mass_interface, y, ᶜχ, ᶜλχ)
     FT = Spaces.undertype(axes(ᶜχ))
     yχ = map((yy, c, l) -> merge(yy, (; χ = c, λχ = l)), y, ᶜχ, ᶜλχ)
     vol(na, nb, ya, yb) =
         (; ρχ = volume_flux(na, nb, ya, yb).ρ * (ya.χ + yb.χ) / 2)
-    ifc(n, (ym,), (yp,)) = (;
-        ρχ = mass_interface(n, (ym,), (yp,)).ρ * (ym.χ + yp.χ) / 2 -
-             max(ym.λχ, yp.λχ) / 2 * (ym.ρ + yp.ρ) / 2 * (yp.χ - ym.χ)
-    )
+    ifc(n, (ym,), (yp,)) =
+        let F = mass_interface(n, (ym,), (yp,)).ρ
+            r =
+                carried_upwind_rate(mass_interface, F, ym, yp) +
+                max(ym.λχ, yp.λχ) * (ym.ρ + yp.ρ) / 2
+            (; ρχ = F * (ym.χ + yp.χ) / 2 - r / 2 * (yp.χ - ym.χ))
+        end
     dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(ᶜχ))
     fill!(parent(dy), 0)
     Operators.add_flux_differencing_divergence!(vol, dy, yχ)
@@ -1359,10 +1379,12 @@ end
 
 Mass-weighted center residuals of two scalars `χa`, `χb` carried by the mass
 flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with `F_ρ`
-the density slot of `volume_flux`, and the interface flux `F*_ρ {χ}` with
-`F*_ρ` the density slot of `interface`, including its mass dissipation. This
-is the transport that makes `χ` kinetic-energy consistent with the density
-(the horizontal kinetic-energy lemma with `F_{ρχ} = {χ} F_ρ`).
+the density slot of `volume_flux`, and the interface flux
+`F*_ρ {χ} − (r/2)⟦χ⟧` with `F*_ρ` the density slot of `interface`, including
+its mass dissipation, and `r` its upwind rate ([`carried_upwind_rate`](@ref),
+zero except for LMARS). This is the transport that makes `χ` kinetic-energy
+consistent with the density (the horizontal kinetic-energy lemma with
+`F_{ρχ} = {χ} F_ρ`); the upwind part is a kinetic-energy sink.
 """
 function dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
     FT = Spaces.undertype(axes(ᶜχa))
@@ -1373,7 +1395,11 @@ function dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
         end
     ifc(n, (ym,), (yp,)) =
         let F = interface(n, (ym,), (yp,)).ρ
-            (; a = F * (ym.χa + yp.χa) / 2, b = F * (ym.χb + yp.χb) / 2)
+            r = carried_upwind_rate(interface, F, ym, yp)
+            (;
+                a = F * (ym.χa + yp.χa) / 2 - r / 2 * (yp.χa - ym.χa),
+                b = F * (ym.χb + yp.χb) / 2 - r / 2 * (yp.χb - ym.χb),
+            )
         end
     dy = Fields.Field(NamedTuple{(:a, :b), NTuple{2, FT}}, axes(ᶜχa))
     fill!(parent(dy), 0)
@@ -1449,6 +1475,7 @@ Flux-form momentum for the vertical velocity with
     in a radial frame, `−w uₕ / r` on centers and `+|uₕ|² / r` on faces, with
     the face-to-center weights the adjoint of the center-to-face average, so
     the pair exchanges kinetic energy exactly.
+
   - a face dissipation of `w`, the `ρ_f`-weighted jump penalty
     [`shear_jump_penalty_lift`](@ref) at the shear speed `max(|{u_n}|, ε c)`
     with `ρ_f` the dual density: an exact kinetic-energy sink that conserves
@@ -1456,6 +1483,8 @@ Flux-form momentum for the vertical velocity with
     the removed kinetic energy is returned as internal energy. Without it
     `w` has no face dissipation, since its advection no longer exchanges
     energy with the Roe-damped `uₕ` through the vector-invariant terms.
+    With `dg_interface_flux = lmars` the horizontal advection upwinds `w` by
+    the interface mass flux instead, and this penalty is off.
 
 The physical vertical acceleration `a` is applied as `u₃ += J_v a` with the
 covariant horizontal compensation `uₕ += (I_c(J_v a) / J_v) e_z ⋅ e_i`, which
@@ -1511,20 +1540,23 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
     # ½ ρ_f w², so it is an exact kinetic-energy sink that conserves
     # momentum and moves no mass (the KPEP gravity pairing is unchanged); the
     # removed kinetic energy reappears as internal energy since E is fixed
-    ε = FT(p.atmos.numerics.dg_vi_shear_floor)
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶠρ_dual = @. ᶠρJ / ᶠJ
-    pen_w = Operators.lifting_correction(
-        shear_jump_penalty_lift,
-        FT,
-        ᶠw,
-        ᶠρ_dual,
-        (@. ᶠinterp(ᶜuv)),
-        (@. ᶠinterp($(dg_sound_speed(Y, p)))),
-        one(FT),
-        ε,
-    )
-    @. ẇ += $(dg_zero_boundary_faces!(pen_w))
+    # (LMARS upwinds w in its horizontal advection instead)
+    if p.atmos.numerics.dg_interface_flux !== Val(:lmars)
+        ε = FT(p.atmos.numerics.dg_vi_shear_floor)
+        ᶠJ = Fields.local_geometry_field(Y.f).J
+        ᶠρ_dual = @. ᶠρJ / ᶠJ
+        pen_w = Operators.lifting_correction(
+            shear_jump_penalty_lift,
+            FT,
+            ᶠw,
+            ᶠρ_dual,
+            (@. ᶠinterp(ᶜuv)),
+            (@. ᶠinterp($(dg_sound_speed(Y, p)))),
+            one(FT),
+            ε,
+        )
+        @. ẇ += $(dg_zero_boundary_faces!(pen_w))
+    end
 
     @. Yₜ.f.u₃ += Geometry.Covariant3Vector(ᶠJv * ẇ)
     # cancel the horizontal velocity the u₃ increment induces through the

@@ -1,0 +1,57 @@
+horizontal_discretization: "DG"
+dg_equation_form: "fddg"
+dg_volume_flux: "kg_kpep"
+dg_interface_flux: "lmars"
+dg_lmars_floor: 0.0 # pure LMARS; e.g. 0.05 floors the contact speed and upwind rate at 0.05 c
+dg_fddg_vertical: "full_flux"
+dg_tracer_penalty: "advective" # unused with lmars: tracers are upwinded by the LMARS mass flux
+hyperdiff: ~
+apply_zhang_shu_limiter: false
+update_constrain_state_every: "stage"
+config: "sphere"
+h_elem: 30
+z_elem: 63
+z_max: 50000.0
+dt: "30secs"
+rayleigh_sponge: true
+dz_bottom: 30.0
+dt_rad: "1hours"
+topography: "Earth"
+topography_damping_factor: 5.0
+mesh_warp_type: "SLEVE"
+rad: "allskywithclear"
+insolation: "timevarying"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "edonly_edmfx"
+implicit_diffusion: true
+edmfx_sgs_diffusive_flux: true
+edmfx_sgs_horizontal_diffusive_flux: true
+edmfx_horizontal_diffusion: true
+  #turbconv: "prognostic_edmfx"
+  #prognostic_tke: true
+  #edmfx_entr_model: "Generalized"
+  #edmfx_detr_model: "Generalized"
+  #edmfx_nh_pressure: true
+  #edmfx_vertical_diffusion: true
+  #edmfx_filter: true
+  #edmfx_sgs_mass_flux: true
+toml: ["toml/longrun_aquaplanet.toml"]
+  #toml: ["toml/prognostic_edmfx.toml"]
+microphysics_model: "0M"
+use_sgs_quadrature: true
+initial_condition: "WeatherModel"
+start_date: "20100701"
+output_dir: "/resnick/scratch/asridhar/weathertest_lmars"
+# Rebalance the IC column pressure against the model's discrete Exner-split
+# vertical PGF
+ic_hydrostatic_rebalance: true
+# era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
+# So far, only tried with era5_ic_full_pressure = false
+era5_ic_full_pressure: true # false = hydrostatic p from surface pressure; true = read 3D p from file
+t_end: "7days"
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+diagnostics:
+  # Instantaneous snapshots (no reduction_time => not time-averaged)
+  - short_name: [ua, va, wa, rv, ta, hus, pfull, rhoa, hur, ts, ke, pr, clw, cli, lwp, clivi]
+    period: 6hours

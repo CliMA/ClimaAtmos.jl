@@ -4,12 +4,13 @@ horizontal DG dynamics (dg_equation_form = :fddg). The volume fluxes are
 pressure-free advective fluxes (Kennedy-Gruber, divergence form, and
 Kennedy-Gruber with the two-point Exner force of `kg_kpep`); the pressure
 force is the Exner-split gradient. The interface dissipations use the model's
-equation of state (`roe_eos`, `moist_es`) or a uniform Rusanov rate. State
-fields: `ρ`, `ρe`, `e`, `p`, `uv` (orthonormal horizontal velocity), `u1`,
-`u2`, `u3` (Cartesian components of the horizontal velocity), `E1`, `E2`,
-`E3` (tangential projections of the Cartesian unit vectors), `λ` (Rusanov
+equation of state (`roe_eos`, `moist_es`), the low-Mach approximate Riemann
+solver (`lmars`), or a uniform Rusanov rate. State fields: `ρ`, `ρe`, `e`,
+`p`, `uv` (orthonormal horizontal velocity), `u1`, `u2`, `u3` (Cartesian
+components of the horizontal velocity), `E1`, `E2`, `E3` (tangential
+projections of the Cartesian unit vectors), `λ` (Rusanov speed), `c` (sound
 speed); `pm = p − p_ref` and `ρm = ρ − ρ_ref` are the deviations from the
-hydrostatic reference used in the Roe wave amplitudes.
+hydrostatic reference used in the Roe and LMARS wave amplitudes.
 =#
 
 """
@@ -81,7 +82,7 @@ Two-point flux of `dg_volume_flux = kg_kpep`, a callable
 plus, in the momentum slots, the whole Exner force in the two-point form of
 Souza et al. (2023),
 
-    {ρ} [ (ψ_b − ψ_a)/2 + c_pd {θ_v′} (Π_b − Π_a)/2 ] (ê_c ⋅ J∇ξ)_a,
+    {ρ} [ (ψ_b − ψ_a)/2 + c_pd {θ_v′} (Π_b − Π_a)/2 ] × (ê_c ⋅ J∇ξ)_a,
 
 with the own-node metric. `ψ` is `Φ − Φ_r(p)`, plus the non-horizontal
 kinetic energy when the vertical exchange is vector-invariant; `θ` is
@@ -359,6 +360,86 @@ function (f::RoeEOSInterface)(normal, (y⁻,), (y⁺,))
         ρu3 = F.ρu3 - D.ρu3 / 2,
     )
 end
+
+"""
+    LMARSDissipation(ε)
+
+Callable `(normal, y⁻, y⁺) -> D` giving the dissipation of the low-Mach
+approximate Riemann solver (LMARS; Chen et al. 2013) relative to the
+Kennedy--Gruber central flux, for [`CentralMinusDissipation`](@ref). With
+`ρ̄ = {ρ}`, `c̄ = {c}` and the interface velocity
+`u* = {u_n} − ⟦p_m⟧/(2ρ̄c̄)`, the interface mass flux is the upwind
+`F*_ρ = ρ̄u* − s⟦ρ_m⟧/2` at the contact speed `s = max(|u*|, ε c̄)`; every
+carried quantity is upwinded by it at the rate
+[`lmars_carried_rate`](@ref) `r`; and the interface pressure
+`p* = {p} − ρ̄c̄⟦u_n⟧/2` damps the normal velocity jump:
+
+    D_ρ    = ⟦p_m⟧/c̄ + s⟦ρ_m⟧,
+    D_ρu_c = D_ρ{u_c} + r⟦u_c⟧ + ρ̄c̄⟦u_n⟧ n̂_c,
+    D_ρe   = D_ρ{h} + r⟦h⟧,
+
+with `h = e + p/ρ` the specific total enthalpy, which includes `Φ`. The
+`D_ρ{u_c}` part exchanges no kinetic energy, the other two are kinetic-energy
+sinks, and `D_ρ{h}` moves the potential energy of the mass it moves. At low
+Mach number the acoustic part equals that of [`RoeEOSDissipation`](@ref); the
+contact and shear waves are damped advectively. `ε = 0` is pure LMARS. State
+fields: `ρ`, `e`, `p`, `pm`, `ρm`, `uv`, `u1`, `u2`, `u3`, `E1`, `E2`, `E3`,
+`c` (sound speed).
+"""
+struct LMARSDissipation{FT}
+    ε::FT
+end
+
+"""
+    lmars_carried_rate(F, y⁻, y⁺, ε)
+
+Rate `r = max(|F|, ε {ρ}{c})` [kg m⁻² s⁻¹] at which a specific quantity `χ`
+carried by the LMARS interface mass flux `F` is upwinded: `F{χ} − r⟦χ⟧/2`,
+which is `F χ^up` for `ε = 0`.
+"""
+@inline lmars_carried_rate(F, y⁻, y⁺, ε) =
+    max(abs(F), ε * (y⁻.ρ + y⁺.ρ) / 2 * (y⁻.c + y⁺.c) / 2)
+
+function (d::LMARSDissipation)(normal, y⁻, y⁺)
+    n1 = y⁻.E1' * normal
+    n2 = y⁻.E2' * normal
+    n3 = y⁻.E3' * normal
+    ρ̄ = (y⁻.ρ + y⁺.ρ) / 2
+    c̄ = (y⁻.c + y⁺.c) / 2
+    un⁻ = y⁻.uv' * normal
+    un⁺ = y⁺.uv' * normal
+    Δp = y⁺.pm - y⁻.pm
+    u_star = (un⁻ + un⁺) / 2 - Δp / (2 * ρ̄ * c̄)
+    s = max(abs(u_star), d.ε * c̄)
+    Dρ = Δp / c̄ + s * (y⁺.ρm - y⁻.ρm)
+    r = lmars_carried_rate(ρ̄ * (un⁻ + un⁺) / 2 - Dρ / 2, y⁻, y⁺, d.ε)
+    h⁻ = y⁻.e + y⁻.p / y⁻.ρ
+    h⁺ = y⁺.e + y⁺.p / y⁺.ρ
+    a = ρ̄ * c̄ * (un⁺ - un⁻)
+    return (
+        ρ = Dρ,
+        ρe = Dρ * (h⁻ + h⁺) / 2 + r * (h⁺ - h⁻),
+        ρu1 = Dρ * (y⁻.u1 + y⁺.u1) / 2 + r * (y⁺.u1 - y⁻.u1) + a * n1,
+        ρu2 = Dρ * (y⁻.u2 + y⁺.u2) / 2 + r * (y⁺.u2 - y⁻.u2) + a * n2,
+        ρu3 = Dρ * (y⁻.u3 + y⁺.u3) / 2 + r * (y⁺.u3 - y⁻.u3) + a * n3,
+    )
+end
+
+"""
+    carried_upwind_rate(interface, F, y⁻, y⁺)
+
+Rate [kg m⁻² s⁻¹] at which the specific quantities carried by the interface
+mass flux `F` of `interface` are upwinded at a face: `lmars_carried_rate` for
+the LMARS dissipation, zero for the others, whose carried quantities are
+penalized at their own rates.
+"""
+carried_upwind_rate(interface, F, y⁻, y⁺) = zero(F)
+carried_upwind_rate(
+    f::CentralMinusDissipation{<:Any, <:LMARSDissipation},
+    F,
+    y⁻,
+    y⁺,
+) = lmars_carried_rate(F, y⁻, y⁺, f.dissipation.ε)
 
 # Floor on the total specific humidity inside the moist entropy: the vapor
 # mixing entropy has a `q ln q` term whose derivative diverges as q → 0, and
