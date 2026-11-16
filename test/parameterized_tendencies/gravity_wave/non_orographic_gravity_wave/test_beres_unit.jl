@@ -1051,8 +1051,11 @@ end
             c, u_heat, Q0, h, N_source, FT(0), h, nothing, FT(0), beres_hs,
             Val(nc),
         )
+        # One sample per bin: the half-sine path takes the bin-centre value, so the
+        # shape factors are compared at the same phase speeds.
         B_g = _beres_launch_spectrum(
-            c, u_heat, Q0, h, N_source, FT(0), h, g, FT(0), beres_g, Val(nc),
+            c, u_heat, Q0, h, N_source, FT(0), h, g, FT(0), beres_g, Val(nc);
+            n_bin_samples = Val(1),
         )
 
         peak = maximum(abs, B_hs)
@@ -1463,13 +1466,12 @@ end
         # wavelength 2π|c − u_heat|/N under two level thicknesses, which the
         # gathered profile does not resolve. Within 0.8·c_cut, the taper alone
         # leaves about 1% of the flux, the cut none.
-        # Moving u_heat by 0.4 m/s changes the total by 8% for the staircase but
-        # by 14% for the cut half-sine: single bins still swing as u_heat moves
-        # across the 0.8 m/s bins, because each bin takes the spectrum at its
-        # centre (the transform measured from the ground oscillates in m). That
-        # check is broken for the half-sine until the bins are averaged over
-        # their width (B2.8). The untapered, uncut profile, for contrast, puts
-        # more than 1% within 2 m/s of u_heat.
+        # How the total moves with u_heat is checked below for the transient bins
+        # alone: the steady c = 0 bin still swings with u_heat (it uses
+        # |gs(N/|u_heat|)|² of the gathered profile, F04, awaiting a decision),
+        # by 13% of the total for the cut half-sine when u_heat moves 0.4 m/s.
+        # The untapered, uncut profile, for contrast, puts more than 1% within
+        # 2 m/s of u_heat.
         FT = Float64
         z_floor = 2000.0
         half_sine(z) = 2000 <= z <= 14000 ? sin(π * (z - 2000) / 12000) : 0.0
@@ -1501,8 +1503,7 @@ end
         near_share(B, u_heat; within = 2) =
             sum(abs(B[n]) for n in 1:nc if abs(c[n] - u_heat) < within; init = 0.0) /
             sum(abs, B)
-        for (Q, z_lo, z_top, total_steady) in
-            ((half_sine, 5000.0, 14000.0, false), (staircase, 2000.0, 14000.0, true))
+        for (Q, z_lo, z_top) in ((half_sine, 5000.0, 14000.0), (staircase, 2000.0, 14000.0))
             span = z_top - z_lo
             dz_level = mean_spacing(z_lo, z_top)
             c_cut = N * dz_level / π
@@ -1517,11 +1518,6 @@ end
                 @test near_share(B, u_heat) < 0.01
                 @test near_share(B, u_heat; within = 0.8 * c_cut) < 1e-4   # the cut
                 sum(abs, B)
-            end
-            if total_steady
-                @test abs(totals[2] / totals[1] - 1) < 0.1
-            else
-                @test_broken abs(totals[2] / totals[1] - 1) < 0.1   # B2.8
             end
             B_raw = spectrum(raw, z_lo, span, FT(5.3), FT(0))
             @info "Beres-G taper and cut (window $(z_lo)-$(z_top) m, dz_level = $(round(dz_level)) m): near-u_heat share $(near_share(B_raw, FT(5.3))) untreated, total flux treated/untreated = $(totals[1] / sum(abs, B_raw)), change for +0.4 m/s = $(totals[2] / totals[1] - 1)"
@@ -1540,6 +1536,110 @@ end
 # dc (same cmax) must then leave the total launched flux and the steady share
 # unchanged.
 # ============================================================================
+@testset "Beres-G bins average the spectrum over their width" begin
+    # Each transient Beres-G bin holds the spectral density averaged over the bin,
+    # [c − dc/2, c + dc/2], not its value at the bin centre. The Beres-G density
+    # oscillates in c near u_heat on scales finer than a bin (its sine transform,
+    # measured from the ground, oscillates in m ≈ N/|c − u_heat|), so centre values
+    # swing as u_heat moves across the bins; averages do not. Profiles as in the
+    # edge-taper test above, on the production grid, steady term off.
+    FT = Float64
+    half_sine(z) = 2000 <= z <= 14000 ? sin(π * (z - 2000) / 12000) : 0.0
+    z_levels = BERES_GRID.z
+    block_value = map(eachindex(z_levels)) do k
+        block = (8 * ((k - 1) ÷ 8) + 1):min(8 * ((k - 1) ÷ 8) + 8, length(z_levels))
+        half_sine(sum(z_levels[block]) / length(block))
+    end
+    staircase(zz) = block_value[findfirst(==(zz), z_levels)]
+    kw = (;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(2e-6),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+        beres_shape_general = true,
+        beres_steady_source = false,
+    )
+    beres_g = BeresSourceParams{FT}(; kw...)
+    dc, cmax = FT(0.8), FT(40)
+    nc = Int(2 * cmax / dc + 1)
+    c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+    Q0, h, N = FT(5e-5), FT(12000), FT(0.012)
+    boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
+    dν = (beres_g.ν_max - beres_g.ν_min) / FT(beres_g.n_ν - 1)
+    for (Q, z_lo, z_top) in ((half_sine, 5000.0, 14000.0), (staircase, 2000.0, 14000.0))
+        span = z_top - z_lo
+        dz_level = mean_spacing(z_lo, z_top)
+        profile = CA._beres_taper_edges(
+            CA._beres_peaknorm(gather_profile(Q, z_lo, z_top; z_floor = 2000.0)),
+            span,
+            dz_level,
+        )
+        spectrum(u_heat, samples) = CA._beres_launch_spectrum(
+            c, u_heat, Q0, h, N, z_lo, span, profile, FT(0), beres_g, Val(nc);
+            dz_level, n_bin_samples = samples,
+        )
+        # Moving u_heat by 0.4 m/s (half a bin) barely changes the total
+        # transient flux with the bin average; with centre values it swings.
+        swing(samples) =
+            abs(
+                sum(abs, spectrum(FT(5.7), samples)) /
+                sum(abs, spectrum(FT(5.3), samples)) - 1,
+            )
+        swing_avg = swing(Val(CA.N_BERES_BIN_SAMPLES))
+        swing_centre = swing(Val(1))
+        # The bins sum to the integral of the density over c, from a grid 64
+        # times finer (centre values there are already bin averages).
+        fine_total = sum((-cmax - dc / 2 + dc / 128):(dc / 64):(cmax + dc / 2)) do c_f
+            abs(
+                CA._beres_transient_bin(
+                    c_f, dc / 64, FT(5.3), h, N^2, N, Q0^2, beres_g.σ_x^2,
+                    beres_g.ν_min, dν, (beres_g.n_ν - 1) ÷ 4, boole_w, true,
+                    profile, z_lo, span, FT(π) / dz_level, 1, FT(0.1),
+                    beres_g.beres_scale_factor, Val(1),
+                ),
+            )
+        end
+        coarse_avg = sum(abs, spectrum(FT(5.3), Val(CA.N_BERES_BIN_SAMPLES)))
+        coarse_centre = sum(abs, spectrum(FT(5.3), Val(1)))
+        @info "Beres-G bin averaging (window $(z_lo)-$(z_top) m): +0.4 m/s swing $(swing_avg) averaged, $(swing_centre) centre; bins/fine integral $(coarse_avg / fine_total) averaged, $(coarse_centre / fine_total) centre"
+        @test swing_avg < 0.03
+        @test coarse_avg ≈ fine_total rtol = 0.01
+    end
+
+    @testset "The five-way diagnostic uses the same bins" begin
+        # _beres_banded_spectrum shares the per-bin function with the model
+        # spectrum, so its band sums equal the model spectrum's.
+        beres_s = BeresSourceParams{FT}(; kw..., beres_steady_source = true)
+        z_lo, z_top = 2000.0, 14000.0
+        dz_level = mean_spacing(z_lo, z_top)
+        profile = CA._beres_taper_edges(
+            CA._beres_peaknorm(gather_profile(half_sine, z_lo, z_top; z_floor = 2000.0)),
+            z_top - z_lo,
+            dz_level,
+        )
+        for u_heat in (FT(5.3), FT(-7.9))
+            B = CA._beres_launch_spectrum(
+                c, u_heat, Q0, h, N, z_lo, z_top - z_lo, profile, FT(0), beres_s,
+                Val(nc); dz_level,
+            )
+            sums = CA._beres_banded_spectrum(
+                c, u_heat, Q0, h, N, z_lo, z_top - z_lo, profile, FT(0), beres_s,
+                nc, FT(15), dz_level,
+            )
+            band_abs(low, east) =
+                sum(
+                    abs(B[n]) for n in 1:nc if ((abs(c[n]) <= 15) == low) &&
+                        ((c[n] > 0) == east); init = 0.0)
+            @test sums[5] ≈ band_abs(true, true) rtol = 1e-10
+            @test sums[6] ≈ band_abs(true, false) rtol = 1e-10
+            @test sums[7] ≈ band_abs(false, true) rtol = 1e-10
+            @test sums[8] ≈ band_abs(false, false) rtol = 1e-10
+        end
+    end
+end
+
 @testset "Beres launch flux does not depend on the bin width" begin
     FT = Float64
     beres = BeresSourceParams{FT}(;

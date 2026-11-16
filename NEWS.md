@@ -27,7 +27,9 @@ main
   below the floor, and is tapered to zero at both window edges over the mean level
   thickness in the window; vertical wavenumbers above `π` over that thickness are dropped
   from the spectrum, and the steady flux is zero beyond the wavenumber the profile
-  resolves. The profile uses only the positive part of the in-cloud heating, as before.
+  resolves. Each transient Beres-G bin holds the spectrum averaged over the bin width (8
+  sub-samples) instead of its value at the bin centre. The profile uses only the
+  positive part of the in-cloud heating, as before.
   These remove spurious flux in the slow bins next to the heating-layer wind and in the
   `c = 0` bin.
 - ![][badge-🐛bugfix] Beres launch level: the heating top is clamped to the column's own

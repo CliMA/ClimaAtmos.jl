@@ -2912,6 +2912,112 @@ function wave_source(
 end
 
 """
+    N_BERES_BIN_SAMPLES
+
+Number of equally spaced phase speeds across each bin `[c - dc/2, c + dc/2]` over which a
+transient Beres-G bin averages the spectral density [-]. Chosen from a convergence check
+on a frozen 1M state (400 active columns, 63-level grid, 0.8 m/s bins): going from 8 to 16
+samples changes the bin values by 0.3% (summed absolute change over all bins and
+columns), the median column-total flux by 0.1%, and the area-weighted total by 0.01%;
+going from 4 to 8 changes the bin values by 1.9%.
+"""
+const N_BERES_BIN_SAMPLES = 8
+
+"""
+    _beres_transient_bin(c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
+                         n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
+                         n_h_avg, Δh_frac, scale_factor, Val(n_bin_samples))
+
+Return the signed transient momentum flux carried by the phase-speed bin centred at
+`c_n` of width `dc` [Pa]: `scale_factor` times the spectral density, signed by the
+intrinsic phase speed `ĉ = c - u_heat`, times `dc`. The `c = 0` bin carries no transient
+flux (it holds the steady term).
+
+With the gathered profile (`use_VG`), the signed density is averaged over
+`n_bin_samples` equally spaced phase speeds across the bin, `c_n + dc·((k - 1/2)/n - 1/2)`,
+instead of taken at its centre. The Beres-G density varies on scales finer than a bin near
+`u_heat` (the sine transform measured from the ground oscillates in the vertical
+wavenumber `m ≈ N/|ĉ|`), so a value at the bin centre swings from bin to bin as `u_heat`
+moves; the bin average does not. Sub-samples with `|ĉ|` or `|c|` below `1e-6` m/s
+contribute zero. The half-sine path takes the centre value, averaged over `n_h_avg`
+heating depths in `h ± Δh_frac·h` when `n_h_avg > 1`.
+
+Shared by `_beres_launch_spectrum` and the five-way diagnostic `_beres_banded_spectrum`.
+"""
+@inline function _beres_transient_bin(
+    c_n,
+    dc,
+    u_heat,
+    h,
+    N2,
+    N_source,
+    Q0_sq,
+    σ_x_sq,
+    ν_min,
+    dν,
+    n_groups,
+    boole_w,
+    use_VG,
+    gprofile,
+    z_bot,
+    span,
+    m_max,
+    n_h_avg,
+    Δh_frac,
+    scale_factor,
+    ::Val{n_bin_samples},
+) where {n_bin_samples}
+    FT = typeof(c_n)
+    abs(c_n) < FT(1e-6) && return FT(0)
+    if use_VG
+        acc = FT(0)
+        for k in 1:n_bin_samples
+            c_k = c_n + dc * ((FT(k) - FT(0.5)) / FT(n_bin_samples) - FT(0.5))
+            ĉ_k = c_k - u_heat
+            usable = (abs(ĉ_k) >= FT(1e-6)) & (abs(c_k) >= FT(1e-6))
+            acc +=
+                usable ?
+                sign(ĉ_k) * _beres_spectrum_single_h(
+                    c_k, ĉ_k, h, u_heat, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
+                    n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
+                ) : FT(0)
+        end
+        # The integral is a flux per unit phase speed; times the bin width it is the
+        # flux the bin carries.
+        return scale_factor * (acc / FT(n_bin_samples)) * dc
+    end
+    c_hat = c_n - u_heat
+    abs(c_hat) < FT(1e-6) && return FT(0)
+    result = if n_h_avg <= 1
+        _beres_spectrum_single_h(
+            c_n, c_hat, h, u_heat, N2, N_source,
+            Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+            use_VG, gprofile, z_bot, span, m_max,
+        )
+    else
+        # Half-sine averaged over n_h_avg values of h in [h-Δh, h+Δh] per
+        # Beres (2004) Section 2, Figure 4.
+        Δh = Δh_frac * h
+        h_min = h - Δh
+        h_max = h + Δh
+        dh = (h_max - h_min) / FT(n_h_avg - 1)
+        acc = FT(0)
+        for ih in 1:n_h_avg
+            h_i = h_min + FT(ih - 1) * dh
+            acc += _beres_spectrum_single_h(
+                c_n, c_hat, h_i, u_heat, N2, N_source,
+                Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                false, nothing, z_bot, span,
+            )
+        end
+        acc / FT(n_h_avg)
+    end
+    # The integral is a flux per unit phase speed; times the bin width it is the flux
+    # the bin carries.
+    return sign(c_hat) * scale_factor * result * dc
+end
+
+"""
     _beres_launch_spectrum(c, u_heat, Q0, h, N_source, z_bot, span, gprofile, w_obstacle, beres, gw_ncval)
 
 The full per-column Beres launch momentum-flux spectrum `B0` (NTuple over phase
@@ -2951,6 +3057,7 @@ function _beres_launch_spectrum(
     gw_ncval::Val{nc},
     shape_mode::Val{SG} = Val(beres.beres_shape_general);
     dz_level = zero(u_heat),
+    n_bin_samples::Val = Val(N_BERES_BIN_SAMPLES),
 ) where {nc, SG}
     (;
         σ_x,
@@ -3036,42 +3143,11 @@ function _beres_launch_spectrum(
     ntuple(
         n -> begin
             c_n = c[n]
-            c_hat = c_n - u_heat
-
-            val = if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
-                FT(0)
-            else
-                result = if use_VG || n_h_avg <= 1
-                    # Beres-G (fixed gathered profile, no h-averaging) or the
-                    # classical single-h half-sine.
-                    _beres_spectrum_single_h(
-                        c_n, c_hat, h, u_heat, N2, N_source,
-                        Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                        use_VG, gprofile, z_bot, span, m_max,
-                    )
-                else
-                    # Half-sine averaged over n_h_avg values of h in [h-Δh, h+Δh]
-                    # per Beres (2004) Section 2, Figure 4.
-                    Δh = Δh_frac * h
-                    h_min = h - Δh
-                    h_max = h + Δh
-                    dh = (h_max - h_min) / FT(n_h_avg - 1)
-                    acc = FT(0)
-                    for ih in 1:n_h_avg
-                        h_i = h_min + FT(ih - 1) * dh
-                        acc += _beres_spectrum_single_h(
-                            c_n, c_hat, h_i, u_heat, N2, N_source,
-                            Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                            false, nothing, z_bot, span,
-                        )
-                    end
-                    acc / FT(n_h_avg)
-                end
-
-                # The integral is a flux per unit phase speed; times the bin
-                # width it is the flux the bin carries.
-                sign(c_hat) * scale_factor * result * dc
-            end
+            val = _beres_transient_bin(
+                c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
+                n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
+                n_h_avg, Δh_frac, scale_factor, n_bin_samples,
+            )
 
             # Deposit the steady (ν=0) flux into the c≈0 bin only.
             val + steady_flux * FT(n == n_zero)
@@ -3301,6 +3377,7 @@ function _beres_banded_spectrum(
     nc::Int,
     c_band::FT,
     dz_level::FT = zero(FT),
+    n_bin_samples::Val = Val(N_BERES_BIN_SAMPLES),
 ) where {FT}
     (;
         σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac,
@@ -3341,34 +3418,11 @@ function _beres_banded_spectrum(
     sums = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     for n in 1:nc
         c_n = c[n]
-        c_hat = c_n - u_heat
-        val = if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
-            FT(0)
-        else
-            result = if use_VG || n_h_avg <= 1
-                _beres_spectrum_single_h(
-                    c_n, c_hat, h, u_heat, N2, N_source,
-                    Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                    use_VG, gprofile, z_bot, span, m_max,
-                )
-            else
-                Δh = Δh_frac * h
-                h_min = h - Δh
-                h_max = h + Δh
-                dh = (h_max - h_min) / FT(n_h_avg - 1)
-                acc = FT(0)
-                for ih in 1:n_h_avg
-                    h_i = h_min + FT(ih - 1) * dh
-                    acc += _beres_spectrum_single_h(
-                        c_n, c_hat, h_i, u_heat, N2, N_source,
-                        Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                        false, nothing, z_bot, span,
-                    )
-                end
-                acc / FT(n_h_avg)
-            end
-            sign(c_hat) * scale_factor * result * dc
-        end
+        val = _beres_transient_bin(
+            c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
+            n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
+            n_h_avg, Δh_frac, scale_factor, n_bin_samples,
+        )
         v = Float64(val + steady_flux * FT(n == n_zero))
         band = (abs(c_n) <= c_band) ? (c_n > 0 ? 1 : 2) : (c_n > 0 ? 3 : 4)
         is_c0 = has_c0_bin && n == n_zero
