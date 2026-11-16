@@ -47,6 +47,49 @@ FT = eltype(Y.c.ρ)
 ᶜz = Fields.coordinate_field(Y.c).z
 center_z = Array(Fields.field2array(ᶜz))[:, 1]
 
+# A deep updraft (area fraction 0.05 from 3 to 12 km, warmest at 6.5 km) and, if
+# `thin_layer`, a nearly empty one above it (area 1e-5, below a_min, from 13 to 20 km)
+# with a large cold anomaly (-3 K), whose in-cloud heating is large but meaningless.
+# The 12-13 km gap keeps the deep updraft's levels from seeing the thin layer through
+# the flux at their faces. Returns the envelope and amplitude the Beres extraction
+# gives.
+function beres_thin_layer_envelope(Y, p; thin_layer)
+    FT = eltype(Y.c.ρ)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    (; ᶜρʲs, ᶜTʲs, ᶜT, ᶠu³ʲs, ᶠu³) = p.precomputed
+    ᶜρ = Y.c.ρ
+    @. ᶜρʲs.:(1) = ᶜρ
+    @. ᶜTʲs.:(1) =
+        ᶜT + ifelse(
+            (ᶜz >= 3000) & (ᶜz <= 10000),
+            FT(2) * sin(FT(π) * (ᶜz - 3000) / 7000),
+            ifelse(thin_layer & (ᶜz > 13000) & (ᶜz <= 20000), FT(-3), FT(0)),
+        )
+    a_thin = thin_layer ? FT(1e-5) : FT(0)
+    @. Y.c.sgsʲs.:(1).ρa = ifelse(
+        (ᶜz >= 3000) & (ᶜz <= 12000),
+        FT(0.05) * ᶜρ,
+        ifelse((ᶜz > 13000) & (ᶜz <= 20000), a_thin * ᶜρ, FT(0)),
+    )
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    @. ᶠu³ʲs.:(1) = Geometry.Contravariant3Vector(Geometry.WVector(FT(1)), ᶠlg)
+    @. ᶠu³ = Geometry.Contravariant3Vector(Geometry.WVector(FT(0)), ᶠlg)
+    nogw = p.non_orographic_gravity_wave
+    fill!(nogw.ᶜbuoyancy_frequency, FT(0.012))
+    CA.compute_beres_convective_heating!(Y, p, nogw.ᶜbuoyancy_frequency)
+    value(f) = parent(f)[1]
+    return (;
+        z_bot = value(nogw.gw_zbot),
+        z_top = value(nogw.gw_ztop),
+        h = value(nogw.gw_h_heat),
+        Q0 = value(nogw.gw_Q0),
+        a_cover = value(nogw.gw_a_cover),
+        u_heat = value(nogw.gw_u_heat),
+        active = value(nogw.gw_beres_active),
+    )
+end
+const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
+
 # ============================================================================
 # Phase A — Beres in-cloud heating extraction (synthetic updraft)
 #
@@ -331,9 +374,47 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             @test res.active == 1
         end
 
+        @testset "Levels with near-empty updrafts are left out of the fit (a_min)" begin
+            # With a nearly empty updraft (area below a_min) above the deep one, the
+            # envelope, amplitude and envelope means equal the ones without that
+            # layer, and the envelope top stays below it. The moment-matched top
+            # can lie above the highest heated level (a half-sine fit reaches h/2
+            # above the centroid), so it is compared with the run without the
+            # layer, not with that level. With no per-level floor, the layer's
+            # heating moves the envelope up.
+            with_layer = beres_thin_layer_envelope(Y, p; thin_layer = true)
+            without_layer = beres_thin_layer_envelope(Y, p; thin_layer = false)
+            @test with_layer.active == 1
+            @test with_layer.z_top < 13000
+            @test with_layer.z_top == without_layer.z_top
+            @test with_layer.z_bot == without_layer.z_bot
+            @test with_layer.h ≈ without_layer.h rtol = 1e-10
+            @test with_layer.Q0 ≈ without_layer.Q0 rtol = 1e-10
+            @test with_layer.a_cover ≈ without_layer.a_cover rtol = 1e-10
+            BERES_THIN_LAYER_FLOAT64[] = with_layer
+            nogw = p.non_orographic_gravity_wave
+            bs_no_floor = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                a_min = FT(1e-9),
+            )
+            p_no_floor = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (; gw_beres_source = bs_no_floor),
+                ),
+            )
+            no_floor = beres_thin_layer_envelope(Y, p_no_floor; thin_layer = true)
+            @test no_floor.z_top > with_layer.z_top + 1000   # the check has power
+        end
+
         @testset "Columns with near-empty updrafts stay inactive (a_min)" begin
             # A column is active only when its coverage a_cover (the mass-weighted
-            # mean updraft area over the envelope) is at least a_min = 1e-4. With
+            # mean updraft area over the envelope) is at least a_min = 1e-4, and
+            # levels with less updraft area than a_min are left out of the fit. With
             # the area fraction uniform in the whole column, a_cover equals it.
             # The heating threshold is set to zero so that only the coverage gate
             # decides; the in-cloud heating, and so the envelope, does not depend
@@ -361,23 +442,30 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             for (a, expected_active) in ((0.99 * beres.a_min, 0), (1.01 * beres.a_min, 1))
                 @. Y.c.sgsʲs.:(1).ρa = FT(a) * ᶜρ
                 CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
-                @test parent(gw_a_cover)[1] ≈ a rtol = 1e-10
-                @test parent(gw_h_heat)[1] > beres.h_heat_min
+                # Below a_min every level is left out, so there is no envelope and
+                # no coverage; above it the coverage is the area fraction.
+                if expected_active == 1
+                    @test parent(gw_a_cover)[1] ≈ a rtol = 1e-10
+                    @test parent(gw_h_heat)[1] > beres.h_heat_min
+                else
+                    @test parent(gw_a_cover)[1] == 0
+                end
                 @test parent(gw_beres_active)[1] == expected_active
             end
 
-            # A regular deep column (area fraction a0 in the band) is active, and
-            # its launch spectra are the same as without the coverage gate.
+            # A regular deep column (area fraction a0 in the band, none outside)
+            # is active, and its launch spectra are the same with a 10 times lower
+            # a_min: every level is either well above both values or empty.
             @. Y.c.sgsʲs.:(1).ρa =
                 ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
             (; gw_beres_B0_u) = nogw
-            CA.compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
+            CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
             @test parent(gw_beres_active)[1] == 1
-            @test parent(gw_a_cover)[1] > beres.a_min
+            @test parent(gw_a_cover)[1] ≈ a0 rtol = 1e-6
             B0_with_gate = copy(Array(parent(gw_beres_B0_u)))
             CA.compute_beres_convective_heating!(
                 Y,
-                with_source(source_with(; a_min = FT(0))),
+                with_source(source_with(; Q0_threshold = FT(0), a_min = FT(1e-5))),
                 ᶜbuoyancy_frequency,
             )
             @test parent(gw_beres_active)[1] == 1
@@ -1048,5 +1136,28 @@ end
         @test all(isfinite, Q_ic)
         @test any(!=(0), Q_ic[band])
         @test all(==(0), Q_ic[.!band])
+    end
+end
+
+# ---------------------------------------------------------------------------
+# The minimum updraft area is a physical threshold, so a Float32 build of the
+# same column gives the envelope of the Float64 build (third, separate build).
+# ---------------------------------------------------------------------------
+@testset "Beres envelope with a near-empty layer: Float32 agrees with Float64" begin
+    config32 = CA.AtmosConfig(
+        (CA.load_yaml_file(config_file), Dict("FLOAT_TYPE" => "Float32"));
+        job_id = "beres_single_column_float32",
+        comms_ctx,
+        config_files = [config_file],
+    )
+    sim32 = CA.get_simulation(config32)
+    @test eltype(sim32.integrator.u.c.ρ) == Float32
+    res32 =
+        beres_thin_layer_envelope(sim32.integrator.u, sim32.integrator.p; thin_layer = true)
+    res64 = BERES_THIN_LAYER_FLOAT64[]
+    @test !isnothing(res64)
+    @test res32.active == res64.active == 1
+    for key in (:z_bot, :z_top, :h, :Q0, :a_cover)
+        @test getproperty(res32, key) ≈ getproperty(res64, key) rtol = 1e-3 atol = 1e-6
     end
 end

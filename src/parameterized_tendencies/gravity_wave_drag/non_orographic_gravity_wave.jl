@@ -716,7 +716,10 @@ at least one updraft.
 
 Two heating profiles are built from the mass-flux divergence of dry-static-energy
 anomalies, `s = c_pd·T + g·z` (the `g·z` terms cancel in the anomaly, leaving
-`c_pd·(Tʲ − T̄)`):
+`c_pd·(Tʲ − T̄)`). Levels whose total updraft area `Σⱼ max(ρaʲ, 0)/ρ` is below `a_min` are
+left out: their in-cloud heating is zero, so they enter neither the moment fit nor the
+gather, and they are left out of the envelope means (`u_heat`, `v_heat`, `N_source`,
+`a_cover`) and of the activation integral.
 
   - `gw_Q_conv` — the grid-mean Yanai heat source Q₁, i.e. the draft anomalies weighted by
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
@@ -829,6 +832,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
     cp_d = FT(CAP.cp_d(p.params))
 
+    # Levels whose total updraft area Σⱼ max(ρaʲ, 0)/ρ is below a_min (the same minimum
+    # as the whole-column coverage gate) carry no in-cloud heating: there the draft is
+    # numerically present but physically empty, and its conditional mean is noise. This
+    # physical threshold, not eps(FT) on ρa, also makes Float32 and Float64 agree.
+    a_min = FT(gw_beres_source.a_min)
+
     # Compute Q_conv (grid-mean) and Q_conv_ic (in-cloud) in one fused column loop.
     DataLayouts.foreach_column(
         gw_Q_conv, gw_Q_conv_ic, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶠu³ʲs, ᶜρʲs, ᶜTʲs, ᶜT,
@@ -876,8 +885,13 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             @. ᶜρa_sum += max(ᶜρaʲ, _zero)
         end
         @. ᶜQ_conv = ᶜQ_conv_sum
-        # Finalize the ρa-weighted in-cloud mean over drafts
-        @. ᶜQ_conv_ic = ifelse(ᶜρa_sum > ϵ, ᶜQ_conv_ic_sum / ᶜρa_sum, _zero)
+        # Finalize the ρa-weighted in-cloud mean over drafts, on levels whose total
+        # updraft area is at least a_min.
+        @. ᶜQ_conv_ic = ifelse(
+            ᶜρa_sum >= a_min * Yc.ρ,
+            ᶜQ_conv_ic_sum / ᶜρa_sum,
+            _zero,
+        )
     end
 
     # When enabled, replace the in-cloud DSE flux-divergence Q₁
@@ -931,8 +945,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         # densities max(ρaʲ, 0) [kg/m³].
         positive_draft_mass = sgsʲ -> max(sgsʲ.ρa, zero(sgsʲ.ρa))
         ᶜdraft_mass = @. lazy(draft_sum(positive_draft_mass, Y.c.sgsʲs))
-        @. gw_Q_conv_ic =
-            ifelse(ᶜdraft_mass > eps(FT), gw_Q_conv_ic / ᶜdraft_mass, FT(0))
+        @. gw_Q_conv_ic = ifelse(
+            ᶜdraft_mass >= a_min * Y.c.ρ,
+            gw_Q_conv_ic / ᶜdraft_mass,
+            FT(0),
+        )
     end
 
     # `ᶜuv_temp` holds UVVector(uₕ), which `non_orographic_gravity_wave_compute_tendency!`
@@ -1023,6 +1040,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # (Σⱼ ρaʲ/ρʲ without the drafts whose density is at most ϵ)
     draft_area = (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, sgsʲ.ρa / ρʲ, zero(ρʲ))
     ᶜa_up = @. lazy(mapreduce_with_init(draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    # Total updraft area of each level, as for the in-cloud heating above; levels below
+    # a_min are left out of every envelope average and of the activation integral.
+    nonnegative_draft_mass = sgsʲ -> max(sgsʲ.ρa, zero(sgsʲ.ρa))
+    ᶜa_level = @. lazy(draft_sum(nonnegative_draft_mass, Y.c.sgsʲs) / ᶜρ)
     # The activation integral counts only the heating at or above the floor, as the
     # moment fit and the gather do.
     z_floor = FT(gw_beres_source.z_bot_floor)
@@ -1039,6 +1060,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_Q_conv_ic,
         ᶜa_up,
         ᶜabove_floor,
+        ᶜa_level,
     )
     # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum).
     # Same 7-slot `result_field` as Pass 1, which used only slots 1-3 for the
@@ -1059,8 +1081,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         Qic_int_prev,
         a_sum_prev,
     ),
-    (Q, u, v, N, ρ, dz, env, Q_ic, a_up, above_floor)
-        active = env > _half
+    (Q, u, v, N, ρ, dz, env, Q_ic, a_up, above_floor, a_level)
+        active = (env > _half) & (a_level >= a_min)
         ρdz = ρ * dz
         Q_int = ifelse(
             active & (above_floor > _half),
@@ -1083,7 +1105,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
-    a_min = gw_beres_source.a_min
     _one = FT(1)
     N_source_default = FT(0.01)
     DataLayouts.foreach_column(
