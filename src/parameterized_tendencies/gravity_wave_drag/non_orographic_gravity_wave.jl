@@ -2354,14 +2354,14 @@ end
                 # critical level, so it is absorbed in the layer below and deposits
                 # its flux there, like the sign-change test further down (which is
                 # skipped here because the reflection test needs `c_hat ≠ 0`).
-                if c_hat == 0.0
+                if c_hat == zero(c_hat)
                     mask = Base.setindex(mask, false, n)
                     fm = fm + B0[n]
                 else
                     c_hat0 = c[n] - u_source_eff
                     # define the criterion which determines if wave is reflected at this level (test).
                     test = abs(c_hat) * kwv - ω_r
-                    if test >= 0.0
+                    if test >= zero(test)
                         # wave has undergone total internal reflection. remove it from the propagating set.
                         mask = Base.setindex(mask, false, n)
                     else
@@ -2379,17 +2379,17 @@ end
                             # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
                             # breaking, then add its momentum flux to the accumulated sum at
                             # this level.
-                            # set mask=0.0 to remove phase speed band c[n] from the set of active
+                            # set mask=0 to remove phase speed band c[n] from the set of active
                             # waves moving upwards to the next level.
                             Foc = B0[n] / (c_hat)^3 - fac
-                            if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
+                            if Foc >= zero(Foc) || (c_hat0 * c_hat <= zero(c_hat))
                                 mask = Base.setindex(mask, false, n)
                                 fm = fm + B0[n]
                             end
                         end
-                    end # (test >= 0.0)
+                    end # (test >= 0)
 
-                end #(c_hat == 0.0)
+                end # (c_hat == 0)
             end # mask = 0
             return (mask, fm)
         end
