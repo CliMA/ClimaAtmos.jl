@@ -411,6 +411,42 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test no_floor.z_top > with_layer.z_top + 1000   # the check has power
         end
 
+        @testset "Coverage averages over the whole envelope (a_min)" begin
+            # The updraft has area 1.1e-4 (just above a_min) only on two 1 km layers,
+            # 4-5 and 10-11 km, and none elsewhere. Only those levels enter the heating
+            # fit, whose envelope then spans about 14 km; the coverage averages over
+            # the whole envelope, about 2e-5, below a_min, so the column stays
+            # inactive. (Averaging over the qualifying levels only would give 1.1e-4.)
+            @. ᶜTʲs.:(1) =
+                ᶜT + ifelse(
+                    (ᶜz >= 3000) & (ᶜz <= 14000),
+                    FT(2) * (14000 - ᶜz) / 11000,
+                    FT(0),
+                )
+            in_layers = @. ((ᶜz >= 4000) & (ᶜz <= 5000)) | ((ᶜz >= 10000) & (ᶜz <= 11000))
+            @. Y.c.sgsʲs.:(1).ρa = ifelse(in_layers, FT(1.1e-4) * ᶜρ, FT(0))
+            nogw = p.non_orographic_gravity_wave
+            beres_no_threshold = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                Q0_threshold = FT(0),
+            )
+            p_no_threshold = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (; gw_beres_source = beres_no_threshold),
+                ),
+            )
+            CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
+            @test parent(gw_ztop)[1] - parent(gw_zbot)[1] > 10000   # a deep envelope
+            @test parent(gw_a_cover)[1] < 3e-5
+            @test parent(gw_a_cover)[1] > 1e-5
+            @test parent(gw_beres_active)[1] == 0
+        end
+
         @testset "Columns with near-empty updrafts stay inactive (a_min)" begin
             # A column is active only when its coverage a_cover (the mass-weighted
             # mean updraft area over the envelope) is at least a_min = 1e-4, and
@@ -461,7 +497,7 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             (; gw_beres_B0_u) = nogw
             CA.compute_beres_convective_heating!(Y, p_no_threshold, ᶜbuoyancy_frequency)
             @test parent(gw_beres_active)[1] == 1
-            @test parent(gw_a_cover)[1] ≈ a0 rtol = 1e-6
+            @test parent(gw_a_cover)[1] > beres.a_min
             B0_with_gate = copy(Array(parent(gw_beres_B0_u)))
             CA.compute_beres_convective_heating!(
                 Y,

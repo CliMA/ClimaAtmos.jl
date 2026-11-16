@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Levels whose total updraft area is below the Beres `a_min`
+  (1e-4) are left out of the Beres heating fit (the moments that set the depth and `Q0`,
+  the Beres-G profile, and the activation integral); the coverage and the envelope-mean
+  winds and buoyancy frequency still average over the whole envelope. This replaces a
+  density guard that compared `ρa` with `eps(FT)`, so Float32 and Float64 agree.
 - ![][badge-🔥behavioralΔ] Beres-G (`nogw_beres_shape_mode: sine_transform`) transforms
   the gathered in-cloud heating itself instead of its peak-normalized shape times the
   half-sine amplitude `Q0`. After the gather, an optional Gaussian smoothing
