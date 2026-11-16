@@ -690,7 +690,14 @@ subsaturation deficit ``\delta_{\mathrm{sub}} = \max(0, -\mu_S)`` of the
 cloud-available water (`_compute_cloud_fraction`), because filling the clear
 fraction at mean deficit ``\delta_{\mathrm{sub}}`` takes condensate of that
 order. Subsaturated air with detrained or residual condensate therefore stays
-patchy, and quiescent saturated decks become overcast. Microphysical rates are
+patchy, and quiescent saturated decks become overcast. Under `PrognosticEDMFX`,
+the upper tail of the subsaturated environment's saturation-excess distribution
+that mass-flux updrafts occupy can be truncated at the quantile
+``c_{\mathrm{hi}} = \min(c, \Phi^{-1}(1 - q_{\mathrm{tail}})) \le c``, with the
+tail probability ``q_{\mathrm{tail}}`` proportional to the updraft area and to a
+switch that is active in subsaturated, statically unstable warm layers
+(`_materialize_env_tail_partition!`, `sgs_env_updraft_tail_truncation_coeff`).
+Microphysical rates are
 evaluated at each node and aggregated linearly, which preserves total water
 and total energy at the subdomain level because the bulk rates preserve them
 pointwise.

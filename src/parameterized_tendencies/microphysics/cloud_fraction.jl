@@ -1208,41 +1208,56 @@ truncated to `[−c, c]` is stretched to keep unit variance; `1` for `c = Inf`.
 end
 
 """
-    truncated_displacement_condensate(mu_S, sigma_S, c)
+    truncated_displacement_condensate(mu_S, sigma_S, c, c_hi = c)
 
 Expected saturation excess `E[max(0, S)]` for `S = μ_S + s σ_S x`, with the
-displacement `x` standard normal truncated to `[−c, c]` and `s`
-(`truncated_displacement_scale`) keeping the variance `σ_S²` of the covariance
-closure. With `Z = Φ(c) − Φ(−c)` and `a = max(−c, −μ_S / (s σ_S))`,
+displacement `x` standard normal truncated to `[−c, c_hi]` (`c_hi ≤ c`) and `s`
+(`truncated_displacement_scale(c)`) keeping the variance `σ_S²` of the symmetric
+covariance closure. With `Z = Φ(c_hi) − Φ(−c)` and
+`a = clamp(−μ_S / (s σ_S), −c, c_hi)`,
 
-    E[max(0, S)] = (μ_S (Φ(c) − Φ(a)) + s σ_S (φ(a) − φ(c))) / Z,
+    E[max(0, S)] = (μ_S (Φ(c_hi) − Φ(a)) + s σ_S (φ(a) − φ(c_hi))) / Z,
 
-which is zero for `μ_S ≤ −s c σ_S`, where no displaced parcel reaches
+which is zero for `μ_S ≤ −s c_hi σ_S`, where no environment parcel reaches
 saturation, and `μ_S` for `μ_S ≥ s c σ_S`. The displacement acts on the
 linearized profiles, so the truncation bounds how far it extrapolates the
-gradients. `c = Inf` returns `truncated_gaussian_condensate(μ_S, σ_S)` exactly.
-The factors that depend on `c` alone keep the parameter's type.
+gradients; when `c_hi < c`, the upper tail `(c_hi, c]` occupied by convective
+updrafts is excluded from the environment average
+(`_materialize_env_tail_partition!`). `c = c_hi = Inf` returns
+`truncated_gaussian_condensate(μ_S, σ_S)` exactly.
 """
-@inline function truncated_displacement_condensate(mu_S, sigma_S, c)
+@inline function truncated_displacement_condensate(mu_S, sigma_S, c, c_hi = c)
     FT = typeof(mu_S)
-    isfinite(c) || return truncated_gaussian_condensate(mu_S, sigma_S)
+    c_hi_eff = min(FT(c), FT(c_hi))
+    gaussian = truncated_gaussian_condensate(mu_S, sigma_S)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    Z = one(c) - 2 * normal_cdf(-c)
+    c_finite = ifelse(isfinite(c), c, one(c))
+    c_hi_finite = ifelse(isfinite(c_hi_eff), c_hi_eff, FT(c_finite))
+    Φ_neg_c = ifelse(isfinite(c), FT(normal_cdf(-c_finite)), zero(FT))
+    Z = ifelse(
+        c_hi_eff == FT(c),
+        FT(one(c) - 2 * normal_cdf(-c_finite)),
+        normal_cdf(c_hi_finite) - Φ_neg_c,
+    )
     σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
-    a = clamp(-mu_S / σ, -c, c)
-    # Upper-tail differences, accurate where `a` approaches `c`. Each difference
-    # takes the same expression at both ends, so it vanishes exactly where `a`
-    # is clamped to `c`.
-    I₀ = normal_cdf(-a) - normal_cdf(-c)
-    I₁ = (exp(-a^2 / 2) - exp(-c^2 / 2)) * inv_sqrt2π
-    return max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
+    a_lo = ifelse(isfinite(c), -FT(c_finite), FT(-Inf))
+    a = clamp(-mu_S / σ, a_lo, c_hi_finite)
+    # Upper-tail differences, accurate where `a` approaches `c_hi`. Each
+    # difference takes the same expression at both ends, so it vanishes
+    # exactly where `a` is clamped to `c_hi`.
+    I₀ = normal_cdf(-a) - normal_cdf(-c_hi_finite)
+    I₁ = (exp(-a^2 / 2) - exp(-c_hi_finite^2 / 2)) * inv_sqrt2π
+    truncated = max(zero(FT), (mu_S * I₀ + σ * I₁) / max(Z, ϵ_numerics(FT)))
+    return ifelse(isfinite(c) | isfinite(c_hi_eff), truncated, gaussian)
 end
 
 """
-    equilibrium_condensate(mu_S, sigma_S, lin, curv, c)
+    equilibrium_condensate(mu_S, sigma_S, lin, curv, c, c_hi = c)
 
 Equilibrium condensate the SGS closures relax toward: the truncated-displacement
-expectation `truncated_displacement_condensate(μ_S, σ_S, c)`, or, with nonzero
+expectation `truncated_displacement_condensate(μ_S, σ_S, c, c_hi)`, whose upper
+truncation `c_hi ≤ c` removes the tail occupied by mass-flux updrafts in
+subsaturated convective layers (`_materialize_env_tail_partition!`), or, with nonzero
 curvature `curv` (`sgs_variance_curvature`), the curvature-aware
 `displacement_condensate(μ_S, σ_S, lin, curv)`, whose tail is bounded by the
 quadratic where the curvature is negative. With `sgs_variance_curvature`, the
@@ -1250,9 +1265,9 @@ callers pass `c = Inf` (`equilibrium_condensate_truncation`), so a cell with
 `curv = 0`, such as the bottom and top cells, has the Gaussian expectation, the
 limit of the curvature-aware one as `curv → 0`.
 """
-@inline equilibrium_condensate(mu_S, sigma_S, lin, curv, c) = ifelse(
+@inline equilibrium_condensate(mu_S, sigma_S, lin, curv, c, c_hi = c) = ifelse(
     iszero(curv),
-    truncated_displacement_condensate(mu_S, sigma_S, c),
+    truncated_displacement_condensate(mu_S, sigma_S, c, oftype(mu_S, c_hi)),
     displacement_condensate(mu_S, sigma_S, lin, curv),
 )
 
@@ -1694,7 +1709,7 @@ end
 """
     _compute_cloud_fraction(
         q_c, mu_S, sigma_S, α, σ_abs,
-        lin = zero(mu_S), curv = zero(mu_S), c = oftype(mu_S, 3),
+        lin = zero(mu_S), curv = zero(mu_S), c = oftype(mu_S, 3), c_hi = c,
     )
 
 Cloud fraction `CF = Φ(z)` [-] of a subdomain holding condensate `q_c`, where
@@ -1705,7 +1720,7 @@ Cloud fraction `CF = Φ(z)` [-] of a subdomain holding condensate `q_c`, where
 
 Here `σ_aug = _sgs_augmented_sigma(sigma_S, α, σ_abs)` is the augmented
 width, `δ_sub = max(0, −μ_S)` the subsaturation deficit, and
-`q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c)` the condensate
+`q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c, c_hi)` the condensate
 that the subdomain's own saturation-excess fluctuations support.
 
 Condensate up to `q_c_eq` is normalized by `σ_aug`. In subsaturated air,
@@ -1729,12 +1744,14 @@ the cloud fraction is zero.
     lin = zero(mu_S),
     curv = zero(mu_S),
     c = oftype(mu_S, 3),
+    c_hi = c,
 )
     FT = typeof(mu_S)
     FT(q_c) <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
     σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_abs)
-    q_c_eq =
-        equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
+    q_c_eq = equilibrium_condensate(
+        FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c, FT(c_hi),
+    )
     q_c_eq_part = min(FT(q_c), q_c_eq)
     q_c_neq_part = max(zero(FT), FT(q_c) - q_c_eq)
     δ_sub = max(zero(FT), -FT(mu_S))
@@ -1745,15 +1762,16 @@ end
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α, σ_abs, c,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, σ_abs, c, c_hi = c,
     )
 
 Fused overload for the Picard iterates of `set_quadrature_cloud_fraction!`.
 
 `μ_S` and `σ_S` come from `_sgs_saturation_moments` at the cloud-available
 water `q_tot` (total water less precipitation), and the cloud fraction from the
-scalar method with zero displacement coefficients and the displacement
-truncation `c` (`equilibrium_condensate_truncation`), in one broadcast kernel,
+scalar method with zero displacement coefficients, the displacement
+truncation `c` (`equilibrium_condensate_truncation`), and the upper truncation
+`c_hi` (`_materialize_env_tail_partition!`), in one broadcast kernel,
 so the moments are never materialized to a `Field`. After the Picard
 iteration, `set_sgs_moments_and_cloud_fraction!` evaluates the final cloud
 fraction with the curvature-aware coefficients where they are configured.
@@ -1772,6 +1790,7 @@ fraction with the curvature-aware coefficients where they are configured.
     α,
     σ_abs,
     c,
+    c_hi = c,
 )
     q_c = q_liq + q_ice
     FT = typeof(q_c)
@@ -1781,14 +1800,14 @@ fraction with the curvature-aware coefficients where they are configured.
     )
     return _compute_cloud_fraction(
         q_c, moments.mu_S, moments.sigma_S, α, σ_abs,
-        zero(moments.mu_S), zero(moments.mu_S), c,
+        zero(moments.mu_S), zero(moments.mu_S), c, c_hi,
     )
 end
 
 """
     _compute_sgs_moments(
         thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α,
-        q_tot_cloud = q_tot, lin = 0, curv = 0, c = Inf32,
+        q_tot_cloud = q_tot, lin = 0, curv = 0, c = Inf32, c_hi = c,
     )
 
 The SGS moments `(sigma_S, λ_lagrange, λ_eq)` of the 1M condensate closures:
@@ -1802,14 +1821,14 @@ The SGS moments `(sigma_S, λ_lagrange, λ_eq)` of the 1M condensate closures:
     vanish).
   - `λ_eq`: the multiplier of the equilibrium condensate `max(0, λ_eq + S′)`,
     the mean of the Gaussian whose expectation is the equilibrium condensate
-    `q_c_eq = equilibrium_condensate(μ_{S,cloud}, σ_S, lin, curv, c)` of the
+    `q_c_eq = equilibrium_condensate(μ_{S,cloud}, σ_S, lin, curv, c, c_hi)` of the
     mean cloud excess `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)`
     (`q_tot_cloud = q_tot − q_rai − q_sno`): the expectation under the
     displacement truncated at `c` standard deviations
     (`truncated_displacement_condensate`), or, with nonzero displacement
     coefficients `(lin, curv)` (`displacement_curvature_coefficients`), the
     curvature-aware `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
-    For the untruncated Gaussian (`c = Inf`, `curv = 0`), `λ_eq` is
+    For the untruncated Gaussian (`c = c_hi = Inf`, `curv = 0`), `λ_eq` is
     `μ_{S,cloud}` itself; where the truncated `q_c_eq` vanishes,
     `λ_eq = −Inf`, so that no node holds equilibrium condensate. The nodes
     keep the Gaussian `S′`, so with truncation or curvature only the mean
@@ -1830,6 +1849,7 @@ directly, matching the σ_S → 0 limit.
     lin = zero(ρ),
     curv = zero(ρ),
     c = Inf32,
+    c_hi = c,
 )
     FT = typeof(ρ)
     q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
@@ -1851,10 +1871,10 @@ directly, matching the σ_S → 0 limit.
     # `λ_eq = −Inf` puts the equilibrium cloud edge at infinity, which the
     # node rule gives zero weight. All are evaluated and `ifelse` selects one,
     # so the kernel has no branch on the curvature.
-    q_c_eq = equilibrium_condensate(mu_S_cloud, sigma_S, lin, curv, c)
+    q_c_eq = equilibrium_condensate(mu_S_cloud, sigma_S, lin, curv, c, c_hi)
     λ_eq_fit = _continuous_lagrange(q_c_eq, sigma_S)
     λ_eq_trunc = ifelse(
-        isinf(c),
+        isinf(c) & isinf(c_hi),
         mu_S_cloud,
         ifelse(q_c_eq > zero(FT), λ_eq_fit, FT(-Inf)),
     )
@@ -1863,12 +1883,159 @@ directly, matching the σ_S → 0 limit.
 end
 
 """
+    _env_tail_partition_active(p)
+
+Return `true` when subsaturated-environment upper-tail truncation is active:
+`PrognosticEDMFX` with `NonEquilibriumMicrophysics` and a positive
+`sgs_env_updraft_tail_truncation_coeff`.
+"""
+@inline function _env_tail_partition_active(p)
+    FT = eltype(p.params)
+    c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
+    return p.atmos.turbconv_model isa PrognosticEDMFX &&
+           p.atmos.microphysics_model isa NonEquilibriumMicrophysics &&
+           c_tail > zero(FT)
+end
+
+"""
+    _materialize_env_tail_partition!(
+        ᶜc_hi, ᶜw_cu, Y, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, c,
+    )
+
+Write the per-cell upper truncation quantile `c_hi` of the subsaturated
+environment's saturation-excess distribution (`_env_tail_c_hi_from_sums`) into
+`ᶜc_hi` and return it. The total updraft area and the subsaturated-cumulus
+switch (`_materialize_subsat_cu_switch!`, written to `ᶜw_cu`) set the tail
+probability occupied by mass-flux updrafts.
+"""
+function _materialize_env_tail_partition!(
+    ᶜc_hi, ᶜw_cu, Y, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, c,
+)
+    FT = eltype(p.params)
+    (; turbconv_model) = p.atmos
+    (; ᶜρʲs) = p.precomputed
+    c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
+    rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
+    gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+    # The total updraft area, overwritten pointwise by `c_hi`.
+    @. ᶜc_hi = zero(FT)
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        @. ᶜc_hi +=
+            max(zero(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+    end
+    _materialize_subsat_cu_switch!(
+        ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
+    )
+    @. ᶜc_hi = _env_tail_c_hi_from_sums(ᶜc_hi, ᶜw_cu, $(FT(c)), $(c_tail))
+    return ᶜc_hi
+end
+
+"""
+    _env_subsat_switch(thermo_params, T_mean, ρ_env, q_cloud, rh_trans)
+
+Fourth-order rational subsaturation switch `s_rh · w_warm ∈ [0, 1]`, with
+`s_rh = u² / (1 + u²)`, `u = (max(0, q_sat(T_mean, ρ_env) − q_cloud) / (ΔRH_trans q_sat))²`,
+and warm-cloud ramp `w_warm = clamp((T_mean − 263.15 K) / 10 K, 0, 1)`.
+"""
+@inline function _env_subsat_switch(thermo_params, T_mean, ρ_env, q_cloud, rh_trans)
+    FT = typeof(T_mean)
+    q_sat = TD.q_vap_saturation(thermo_params, T_mean, ρ_env)
+    δ_sub = max(zero(FT), q_sat - q_cloud)
+    δ_trans = max(FT(rh_trans) * max(q_sat, ϵ_numerics(FT)), ϵ_numerics(FT))
+    u = (δ_sub / δ_trans)^2
+    s_rh = u^2 / (one(FT) + u^2)
+    w_warm = clamp((T_mean - FT(263.15)) / FT(10), zero(FT), one(FT))
+    return s_rh * w_warm
+end
+
+"""
+    _env_subsat_cu_switch(
+        thermo_params, T_mean, ρ_env, q_cloud, rh_trans, dθli_dz, gamma_crit,
+    )
+
+Subsaturated-cumulus switch `w_cu = s_rh · w_warm · s_instab ∈ [0, 1]`,
+combining `_env_subsat_switch` with the static-stability gate
+`s_instab = 1 / (1 + (max(0, dθli_dz) / γ_crit)⁴)` when `γ_crit > 0` (`1`
+otherwise), which suppresses the switch across strong stratocumulus inversions
+(`dθli_dz ≫ γ_crit`).
+"""
+@inline function _env_subsat_cu_switch(
+    thermo_params, T_mean, ρ_env, q_cloud, rh_trans, dθli_dz, gamma_crit,
+)
+    FT = typeof(T_mean)
+    s_base = _env_subsat_switch(thermo_params, T_mean, ρ_env, q_cloud, rh_trans)
+    γ_c = FT(gamma_crit)
+    v = ifelse(γ_c > zero(FT), max(zero(FT), FT(dθli_dz)) / γ_c, zero(FT))
+    s_instab = one(FT) / (one(FT) + v^4)
+    return s_base * s_instab
+end
+
+"""
+    _materialize_subsat_cu_switch!(
+        ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
+    )
+
+Write the per-cell subsaturated-cumulus switch `_env_subsat_cu_switch` into
+`ᶜw_cu` and return it. When `gamma_crit > 0` and `p.precomputed` carries
+`ᶠ∂θli∂z`, the vertical potential-temperature gradient at each cell center is
+taken as the larger of its two bounding face gradients.
+"""
+function _materialize_subsat_cu_switch!(
+    ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
+)
+    FT = eltype(p.params)
+    if gamma_crit > zero(FT) && hasproperty(p.precomputed, :ᶠ∂θli∂z)
+        (; ᶠ∂θli∂z) = p.precomputed
+        nc = Spaces.nlevels(axes(ᶜw_cu))
+        ᶜθ_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+        )
+        ᶜθ_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+        )
+        @. ᶜw_cu = _env_subsat_cu_switch(
+            $(thermo_params), ᶜT_mean, ᶜρ_env, ᶜq_cloud, $(rh_trans),
+            max(ᶜθ_below(ᶠ∂θli∂z), ᶜθ_above(ᶠ∂θli∂z)), $(gamma_crit),
+        )
+    else
+        @. ᶜw_cu = _env_subsat_switch(
+            $(thermo_params), ᶜT_mean, ᶜρ_env, ᶜq_cloud, $(rh_trans),
+        )
+    end
+    return ᶜw_cu
+end
+
+"""
+    _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+
+Upper truncation quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))` of the subsaturated
+environment's saturation-excess PDF for tail probability
+`q_tail = clamp(w_eff c_tail max(a_up, 2e-3), 0, 0.49)`; returns `c` when
+`q_tail == 0`.
+"""
+@inline function _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+    FT = typeof(a_up)
+    a_eff = max(a_up, FT(2e-3))
+    q_tail = clamp(w_eff * FT(c_tail) * a_eff, zero(FT), FT(0.49))
+    q_tail_safe = clamp(q_tail, eps(FT), FT(0.49))
+    return ifelse(
+        q_tail > zero(FT),
+        min(FT(c), normal_cdf_inv(one(FT) - q_tail_safe)),
+        FT(c),
+    )
+end
+
+"""
     cloud_env_state(Y, p, thermo_params; materialize)
 
 State of the domain that carries the SGS cloud closure — the environment under
 `PrognosticEDMFX`, the grid mean otherwise — as
-`(; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip)` (see `_get_env_ρ_T_q`,
-`_get_condensate_means`, and `_get_precip_mean`).
+`(; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜc_hi)` (see
+`_get_env_ρ_T_q`, `_get_condensate_means`, and `_get_precip_mean`), where
+`ᶜc_hi` is the upper truncation of the saturation-excess distribution
+(`_materialize_env_tail_partition!`, written to `ᶜtemp_scalar_9` when the
+truncation is active and the state is materialized; the displacement truncation
+`c` otherwise).
 
 With `materialize`, the lazy fields are written to `ᶜtemp_scalar`,
 `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_7`; otherwise they stay lazy.
@@ -1887,7 +2054,15 @@ function cloud_env_state(Y, p, thermo_params; materialize)
         ᶜq_icl = _materialized(p.scratch.ᶜtemp_scalar_3, ᶜq_icl)
         ᶜq_precip = _materialized(p.scratch.ᶜtemp_scalar_7, ᶜq_precip)
     end
-    return (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip)
+    c = equilibrium_condensate_truncation(p)
+    ᶜc_hi =
+        materialize && _env_tail_partition_active(p) ?
+        _materialize_env_tail_partition!(
+            p.scratch.ᶜtemp_scalar_9, p.scratch.ᶜtemp_scalar_8, Y, p,
+            thermo_params, ᶜT_mean, ᶜρ_env,
+            (@. lazy(max(0, ᶜq_mean - ᶜq_precip))), c,
+        ) : (@. lazy(c + zero(ᶜq_mean)))
+    return (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜc_hi)
 end
 _materialized(dest, src::Union{Fields.Field, Number}) = src
 _materialized(dest, src) = (dest .= src)
@@ -1908,7 +2083,7 @@ until the current cloud fraction is read.
 function set_quadrature_cloud_fraction!(
     Y, p, env_state, c0, ::Val{aitken},
 ) where {aitken}
-    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
+    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜc_hi) = env_state
     (; ᶜcloud_fraction, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     (; turbconv_model, microphysics_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -1924,12 +2099,12 @@ function set_quadrature_cloud_fraction!(
     ᶜq_cloud = @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))
     DataLayouts.foreach_column(
         ᶜcloud_fraction, c0, Y.c, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
-        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, _edmf_weighting_fields(Y, p),
+        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜc_hi, _edmf_weighting_fields(Y, p),
     ) do ᶜcloud_fraction, c0, Yc, ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
-    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, drafts
+    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜc_hi, drafts
         ᶜcf = @. _compute_cloud_fraction(
             $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_cloud, ᶜq_lcl, ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c),
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(σ_abs), $(c), ᶜc_hi,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcf, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
@@ -1954,7 +2129,7 @@ compute `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (se
 EDMF updraft weighting (`_edmf_weight_cloud_fraction!`).
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
-    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
+    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜc_hi) = env_state
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
         p.precomputed
     (; turbconv_model, microphysics_model) = p.atmos
@@ -1974,15 +2149,15 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
     DataLayouts.foreach_column(
         ᶜsgs_moments, ᶜcloud_fraction, Y.c, ᶜρ_env, ᶜT_mean, ᶜq_mean,
         ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
-        _edmf_weighting_fields(Y, p),
+        ᶜc_hi, _edmf_weighting_fields(Y, p),
     ) do ᶜsgs_moments, ᶜcloud_fraction, Yc, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-    ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, drafts
+    ᶜq_lcl, ᶜq_icl, ᶜq_precip, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S, ᶜc_hi, drafts
         _sgs_moments_and_cloud_fraction_point!(
             ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
             (@inline @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))),
             ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
             (@inline @. lazy(_disp_lin(ᶜdisp_S))), (@inline @. lazy(_disp_curv(ᶜdisp_S))),
-            c, vthermo, thermo_params, sgs_quad, σ_abs,
+            c, ᶜc_hi, vthermo, thermo_params, sgs_quad, σ_abs,
         )
         _edmf_weight_cloud_fraction!(
             ᶜcloud_fraction, Yc, drafts, ᶜρ_env, turbconv_model, microphysics_model,
@@ -2048,27 +2223,28 @@ end
 """
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
-        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
+        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c, ᶜc_hi,
         vthermo, thermo_params, sgs_quad, σ_abs,
     )
 
 Part of the column loop of `set_sgs_moments_and_cloud_fraction!`: fill the SGS
 moments (`_compute_sgs_moments`) and the cloud fraction
 (`_compute_cloud_fraction`) of one column. `lin` and `curv` are the
-displacement coefficients, read from `ᶜdisp_S` or zero, and `c` the
-displacement truncation (`sgs_displacement_truncation`). `vthermo` carries the
+displacement coefficients, read from `ᶜdisp_S` or zero, `c` the displacement
+truncation (`sgs_displacement_truncation`), and `ᶜc_hi` the upper truncation
+(`_materialize_env_tail_partition!`). `vthermo` carries the
 thermodynamics parameters in its type, so they fold to literals in the quadrature
 kernel; `thermo_params` is the same parameters as a value, for the saturation
 calls beside it.
 """
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
-    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
+    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c, ᶜc_hi,
     vthermo, thermo_params, sgs_quad, σ_abs,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
         vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv, c,
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv, c, ᶜc_hi,
     )
     # The cloud fraction from `q_c` and `σ_S` with the augmented-width closure,
     # centred on the cloud-available water and with the curvature-aware
@@ -2086,6 +2262,7 @@ calls beside it.
         lin,
         curv,
         c,
+        ᶜc_hi,
     )
     return nothing
 end

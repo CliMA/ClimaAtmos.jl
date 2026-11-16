@@ -3,6 +3,25 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Subsaturated-environment upper-tail
+  truncation and convective environment autoconversion velocity for 1M
+  `PrognosticEDMFX` (provisional parameters
+  `sgs_env_updraft_tail_truncation_coeff`, `sgs_env_subsat_rh_transition`,
+  `sgs_env_subsat_gamma_crit`, `sgs_env_autoconversion_updraft_velocity_weight`,
+  and `sgs_env_autoconversion_detrained_velocity`; the defaults leave results
+  unchanged):
+  - `truncated_displacement_condensate(mu_S, sigma_S, c, c_hi)` integrates the
+    environment's saturation-excess PDF over `[−c, c_hi]`, where
+    `c_hi = min(c, Φ⁻¹(1 − q_tail))` truncates the upper tail
+    `q_tail = clamp(w_cu c_tail max(a_up, 2e-3), 0, 0.49)` occupied by
+    mass-flux updrafts, in the cloud fraction and the SGS moments. `w_cu`
+    (`_env_subsat_cu_switch`) combines a fourth-order relative-subsaturation
+    switch, a warm-cloud ramp, and a static-stability gate.
+  - The environment 1M microphysics sees the vertical velocity
+    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) (c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d))`
+    (`env_autoconversion_velocity!`), with `f_neq`
+    (`env_detrained_condensate_fraction`) the fraction of the environment
+    condensate in excess of its own equilibrium.
 - ![][badge-✨feature/enhancement] Clear-environment updraft buoyancy reference
   for 1M `PrognosticEDMFX` (provisional parameter
   `edmf_buoyancy_clear_env_weight`, default `0`): a fraction `c_b` of the
