@@ -1536,6 +1536,7 @@ if should_run(:figure4)
     a1_gfdl = FT(3.0)
     Fr_crit_gfdl = FT(0.7)
     α_smoothing_gfdl = FT(0.15)
+    a_tofd_gfdl = FT(0.0)
     topo_info_type_gfdl = Val(:gfdl_restart)
     topography_type_gfdl = Val(:Earth)
 
@@ -1554,6 +1555,7 @@ if should_run(:figure4)
         a1 = a1_gfdl,
         Fr_crit = Fr_crit_gfdl,
         α_smoothing = α_smoothing_gfdl,
+        a_tofd = a_tofd_gfdl,
         topo_info = topo_info_type_gfdl,
         topography = topography_type_gfdl,
     )

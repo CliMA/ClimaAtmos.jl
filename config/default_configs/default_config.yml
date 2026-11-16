@@ -240,6 +240,9 @@ dt_save_state_to_disk:
 microphysics_model:
   help: "Microphysics model [`dry` (default), `0M`, `1M`, `2M`, `2MP3`]"
   value: "dry"
+precipitation_evaporation_0m:
+  help: "Below-cloud evaporation of the precipitation flux for 0M microphysics [`Kessler`, ~ (default)]. Reads the `precipitation_evaporation_*` parameters (ClimaParams defaults unless set in the parameter TOML); `precipitation_evaporation_coefficient` must be positive."
+  value: ~
 divergence_damping_factor:
   help: "Divergence damping factor"
   value: 5.0
@@ -365,7 +368,7 @@ energy_humidity_upwinding:
   help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]. `first_order` gives positive first-order transport of `e_tot - Φ`, `q_tot`, and the sedimenting species with the leading diffusivity of backward-Euler upwind; `third_order` is linear and unlimited (not positive or monotone on sharp fronts); `none` skips their post-Newton dissipation and antidiffusion, leaving their vertical advection forward-Euler central under one Newton iteration with `ManualSparseJacobian` (amplifying oscillatory modes without vertical diffusion)."
   value: vanleer_limiter
 orographic_gravity_wave:
-  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization)]"
   value: ~
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"

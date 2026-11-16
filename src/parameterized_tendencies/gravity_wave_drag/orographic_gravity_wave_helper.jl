@@ -1124,3 +1124,229 @@ function load_preprocessed_topography(
     Base.close(reader)
     return computed_drag
 end
+
+"""
+    ifs_smoothing_weights(Δx, Δ, δ, J_max)
+
+Return the normalized weights of the IFS orography smoothing operator sampled at spacing `Δx`.
+
+The operator (IFS Documentation CY47R1, Part IV, Eq. 11.4) is a top hat of width `Δ` with
+cosine edges of width `δ`:
+
+    h(r) ∝ 1                                     for |r| < Δ/2 − δ,
+    h(r) ∝ ½ + ½·cos[π(|r| − Δ/2 + δ)/(2δ)]      for Δ/2 − δ ≤ |r| < Δ/2 + δ,
+    h(r) = 0                                     otherwise.
+
+The weights cover the offsets `−J:J`, with `J = min(⌈(Δ/2 + δ)/Δx⌉, J_max)`, and sum to one.
+When `Δx` exceeds the operator width only the center weight is nonzero (no smoothing).
+Used by `smooth_ifs_latlon`.
+"""
+function ifs_smoothing_weights(Δx, Δ, δ, J_max)
+    FT = typeof(Δx)
+    J = min(ceil(Int, (Δ / 2 + δ) / Δx), J_max)
+    # A plain loop rather than a closure over FT: a closure capturing FT is not
+    # inferred, which makes the returned weights, and every multiply-add over them in
+    # smooth_ifs_latlon, dynamically typed.
+    w = Vector{FT}(undef, 2J + 1)
+    for (n, j) in enumerate((-J):J)
+        r = abs(j * Δx)
+        w[n] =
+            r < Δ / 2 - δ ? FT(1) :
+            r < Δ / 2 + δ ? (1 + cos(FT(π) * (r - Δ / 2 + δ) / (2 * δ))) / 2 : FT(0)
+    end
+    return w ./ sum(w)
+end
+
+"""
+    smooth_ifs_latlon(elev, lon, lat, earth_radius, Δ, δ)
+
+Smooth a lat-lon field with the IFS operator of width `Δ` and edge width `δ` [m].
+
+Returns a new array shaped like `elev` (indexed `[lon, lat]`). The operator
+`ifs_smoothing_weights` is applied separably in physical distance: along longitude with the
+spacing `R·Δλ·cos φ` of each latitude row (periodic), then along latitude with the spacing
+`R·Δφ` (edge values repeated at the poles). The longitude half-width is capped at a quarter of
+the row (`nlon ÷ 8` points each side) near the poles, where a fixed physical width spans a
+large part of the latitude circle; those rows cover a negligible area.
+
+The two separable passes give a square footprint, whereas the IFS operator and Beljaars et
+al. (2004, Eq. A.1) are radially symmetric in `r`. The constants `I_H` and `k_flt` in
+`tofd_drag_coefficient!` were computed for the radially symmetric filter, so the effective
+band of this one can differ slightly.
+"""
+function smooth_ifs_latlon(elev, lon, lat, earth_radius, Δ, δ)
+    FT = eltype(elev)
+    nlon, nlat = size(elev)
+    Δλ = deg2rad(FT(lon[2] - lon[1]))
+    Δφ = deg2rad(FT(lat[2] - lat[1]))
+
+    # Longitude pass, row by row, on a periodically padded copy of the row.
+    smoothed_lon = similar(elev)
+    J_max = nlon ÷ 8
+    for j in 1:nlat
+        Δx = max(FT(earth_radius) * Δλ * cosd(FT(lat[j])), eps(FT))
+        w = ifs_smoothing_weights(Δx, FT(Δ), FT(δ), J_max)
+        J = (length(w) - 1) ÷ 2
+        row = [elev[mod1(i, nlon), j] for i in (1 - J):(nlon + J)]
+        for i in 1:nlon
+            acc = zero(FT)
+            @inbounds for k in eachindex(w)
+                acc += w[k] * row[i + k - 1]
+            end
+            smoothed_lon[i, j] = acc
+        end
+    end
+
+    # Latitude pass with a constant kernel.
+    w = ifs_smoothing_weights(FT(earth_radius) * Δφ, FT(Δ), FT(δ), nlat)
+    J = (length(w) - 1) ÷ 2
+    smoothed = similar(elev)
+    for j in 1:nlat, i in 1:nlon
+        acc = zero(FT)
+        @inbounds for k in eachindex(w)
+            acc += w[k] * smoothed_lon[i, clamp(j + k - 1 - J, 1, nlat)]
+        end
+        smoothed[i, j] = acc
+    end
+    return smoothed
+end
+
+"""
+    calc_filtered_orography_variance_latlon(elev, lon, lat, earth_radius;
+                                            Δ_small = 2000, Δ_large = 20000, δ = 1000)
+
+Return the squared band-pass-filtered orography `(S_small h − S_large h)²` [m²] on the
+lat-lon grid of `elev`.
+
+This is step (i) of the IFS definition of the standard deviation of filtered orography
+`σ_flt` used by the turbulent orographic form drag (IFS Documentation CY47R1, Part IV,
+Section 11.3.3): the orography (ocean bathymetry clipped to zero) is smoothed with
+`smooth_ifs_latlon` at `Δ_small = 2 km` and at `Δ_large = 20 km`, both with `δ = 1 km`, and
+the difference is squared. The band pass keeps horizontal scales of roughly 3 to 22 km
+(half wavelengths). Its integral `I_H` and representative wavenumber `k_flt` are the
+constants used in `tofd_drag_coefficient!`. Averaging the result over a model grid box
+gives `σ_flt²` there.
+
+The IFS and Beljaars et al. (2004) filter 30 arc-second (about 1 km) data, on which the 2 km
+pass removes the grid-scale aliasing tail. On 60 arc-second (about 1.85 km) input such as
+ETOPO 2022 the 2 km pass removes little, and the input grid itself sets the small-scale
+cutoff of the band.
+
+`elev` is indexed `[lon, lat]` and is not modified.
+"""
+function calc_filtered_orography_variance_latlon(
+    elev,
+    lon,
+    lat,
+    earth_radius;
+    Δ_small = 2000,
+    Δ_large = 20000,
+    δ = 1000,
+)
+    land_elev = max.(elev, zero(eltype(elev)))
+    smoothed_small = smooth_ifs_latlon(land_elev, lon, lat, earth_radius, Δ_small, δ)
+    smoothed_large = smooth_ifs_latlon(land_elev, lon, lat, earth_radius, Δ_large, δ)
+    @. smoothed_small = (smoothed_small - smoothed_large)^2
+    return smoothed_small
+end
+
+"""
+    block_average_latlon(field, lon, lat, n) -> (lon_coarse, lat_coarse, field_coarse)
+
+Average a lat-lon field over blocks of `n × n` points, weighting rows by `cos φ` (area).
+
+`field` is indexed `[lon, lat]` and both dimensions must be divisible by `n`. Returns the
+block-center coordinates and the block means.
+"""
+function block_average_latlon(field, lon, lat, n)
+    FT = eltype(field)
+    nlon, nlat = size(field)
+    @assert nlon % n == 0 && nlat % n == 0 "block size $n must divide the grid ($nlon × $nlat)"
+    mlon, mlat = nlon ÷ n, nlat ÷ n
+    field_coarse = zeros(FT, mlon, mlat)
+    for jb in 1:mlat
+        rows = ((jb - 1) * n + 1):(jb * n)
+        row_weights = [max(cosd(FT(lat[j])), zero(FT)) for j in rows]
+        weight_sum = sum(row_weights) * n
+        for ib in 1:mlon
+            cols = ((ib - 1) * n + 1):(ib * n)
+            acc = zero(FT)
+            for (jw, j) in enumerate(rows), i in cols
+                acc += row_weights[jw] * field[i, j]
+            end
+            field_coarse[ib, jb] = weight_sum > 0 ? acc / weight_sum : zero(FT)
+        end
+    end
+    lon_coarse = [mean(lon[((ib - 1) * n + 1):(ib * n)]) for ib in 1:mlon]
+    lat_coarse = [mean(lat[((jb - 1) * n + 1):(jb * n)]) for jb in 1:mlat]
+    return FT.(lon_coarse), FT.(lat_coarse), field_coarse
+end
+
+"""
+    compute_filtered_orography_variance(Y, elev_data, earth_radius)
+
+Return `σ_flt²` [m²], the variance of the filtered orography used by the turbulent
+orographic form drag, as a `Field` on the surface cell-center space of `Y`.
+
+Follows the IFS definition (IFS Documentation CY47R1, Part IV, Section 11.3.3):
+
+ 1. `calc_filtered_orography_variance_latlon` computes the squared band-pass-filtered
+    orography on the lat-lon grid of the elevation file `elev_data` (NetCDF with `lon`, `lat`
+    and elevation `z`).
+ 2. The result is averaged with `block_average_latlon` over blocks approximately the size of
+    the model's horizontal node spacing (step ii of the IFS definition, averaging over the
+    target grid box). Since the drag is linear in `σ_flt²`, the variance rather than its
+    square root is averaged.
+ 3. The block means are regridded onto the model surface with `SpaceVaryingInput`.
+
+Steps 1 and 2 run on the root process and are broadcast; step 3 runs on every process.
+"""
+function compute_filtered_orography_variance(Y, elev_data, earth_radius)
+    FT = Spaces.undertype(axes(Y.c))
+    ctx = ClimaComms.context(Y.c)
+    hspace = axes(Fields.level(Y.c.ρ, 1))
+    Δh_GCM = FT(
+        Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c))),
+    )
+
+    latlon_variance = if ClimaComms.iamroot(ctx)
+        (lon, lat, elev) = NCDataset(elev_data, "r") do ds
+            (FT.(ds["lon"][:]), FT.(ds["lat"][:]), FT.(ds["z"][:, :]))
+        end
+        @info "Computing the filtered-orography variance for TOFD" size(elev) Δh_GCM
+        variance = calc_filtered_orography_variance_latlon(
+            elev,
+            lon,
+            lat,
+            earth_radius,
+        )
+        # Largest block, no larger than the model node spacing, that divides both dimensions.
+        Δy = FT(earth_radius) * deg2rad(lat[2] - lat[1])
+        n_target = max(1, floor(Int, Δh_GCM / Δy))
+        n = maximum(
+            m -> (size(elev, 1) % m == 0 && size(elev, 2) % m == 0) ? m : 1,
+            1:n_target,
+        )
+        block_average_latlon(variance, lon, lat, n)
+    else
+        nothing
+    end
+    (lon, lat, variance) = ClimaComms.bcast(ctx, latlon_variance)
+
+    temp_nc_file = tempname() * ".nc"
+    NCDataset(temp_nc_file, "c") do nc
+        defDim(nc, "lon", length(lon))
+        defDim(nc, "lat", length(lat))
+        defVar(nc, "lon", FT, ("lon",))[:] = lon
+        defVar(nc, "lat", FT, ("lat",))[:] = lat
+        defVar(nc, "sigma2_flt", FT, ("lon", "lat"))[:, :] = variance
+    end
+    regridder_kwargs =
+        (; extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat()))
+    variance_input =
+        SpaceVaryingInput(temp_nc_file, "sigma2_flt", hspace; regridder_kwargs)
+    σ²_flt = Fields.zeros(FT, hspace)
+    @. σ²_flt = max(variance_input, zero(FT))
+    rm(temp_nc_file; force = true)
+    return σ²_flt
+end

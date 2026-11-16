@@ -105,6 +105,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
     @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
+    @safetestset "0M precipitation evaporation tests" begin @time include("parameterized_tendencies/microphysics/precipitation_evaporation.jl") end
     @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
@@ -130,6 +131,9 @@ if TEST_GROUP in ("parameterizations", "all")
     # standalone Buildkite steps.
     @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
     @safetestset "OGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_unit.jl") end
+    @safetestset "OGW blocked drag unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_blocked_drag.jl") end
+    @safetestset "OGW TOFD unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_tofd.jl") end
+    @safetestset "AD99 NOGW momentum budget" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_ad99_momentum_budget.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included

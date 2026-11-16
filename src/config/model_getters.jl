@@ -39,6 +39,26 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
+    get_precipitation_evaporation_0m(parsed_args)
+
+Return whether the below-cloud evaporation of the 0-moment precipitation flux is
+on, from the `precipitation_evaporation_0m` config key: `"Kessler"` (the
+Kessler-type evaporation of CloudMicrophysics `Evaporation0M`) → `true`, `~`
+(null, the default) → `false`. Parsed with `parse_option`, so an unknown string
+raises an error. The option is only valid with `microphysics_model: "0M"`, and
+needs a positive `precipitation_evaporation_coefficient` (the ClimaParams
+default is positive); both are checked in `microphysics_0m_parameters`.
+"""
+get_precipitation_evaporation_0m(parsed_args) =
+    !isnothing(
+        parse_option(
+            get(parsed_args, "precipitation_evaporation_0m", nothing),
+            Dict("Kessler" => :Kessler),
+            "precipitation_evaporation_0m",
+        ),
+    )
+
+"""
     get_microphysics_1m_options(parsed_args)
 
 Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword
@@ -559,7 +579,6 @@ key.
     `params.orographic_gravity_wave_params`. `"raw_topo"` loads a preprocessed
     HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
     initialization, and `"gfdl_restart"` regrids the GFDL restart file.
-  - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
 """
@@ -569,7 +588,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     return if ogw_name == "raw_topo" ||
               ogw_name == "raw_topo_online" ||
               ogw_name == "gfdl_restart"
-        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing) =
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd) =
             params.orographic_gravity_wave_params
         topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
         topography = Val(Symbol(parsed_args["topography"]))
@@ -584,12 +603,13 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             a1,
             Fr_crit,
             α_smoothing,
+            a_tofd,
             topo_info,
             topography,
         )
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", "raw_topo_online", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "raw_topo_online".""",
         )
     end
 end
