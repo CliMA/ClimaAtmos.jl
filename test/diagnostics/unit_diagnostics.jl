@@ -264,6 +264,21 @@ let c = p_nogw_beres.non_orographic_gravity_wave
     c.gw_Q_conv .= 0
     c.gw_Q_conv_ic .= 0
 end
+# The five-way nogw_b5_* maps are computed once per cache and output time and shared
+# by all those diagnostics; a second cache at the same time gets its own maps.
+@testset "Five-way maps are memoized per cache and time" begin
+    nogw = p_nogw_beres.non_orographic_gravity_wave
+    p_other = (;
+        non_orographic_gravity_wave = merge(
+            nogw,
+            (; gw_beres_active = copy(nogw.gw_beres_active)),
+        )
+    )
+    maps = CA._compute_beres_fiveway!(p_nogw_beres, FT(0))
+    @test CA._compute_beres_fiveway!(p_nogw_beres, FT(0)) === maps
+    @test CA._compute_beres_fiveway!(p_other, FT(0)) !== maps
+    @test CA._compute_beres_fiveway!(p_nogw_beres, FT(1)) !== maps
+end
 
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)
 model_0m_slab = (;

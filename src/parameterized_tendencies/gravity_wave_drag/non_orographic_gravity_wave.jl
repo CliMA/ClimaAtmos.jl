@@ -3816,17 +3816,19 @@ function _beres_banded_spectrum(
     return sums
 end
 
-# Memoized per-time computation of all five-way maps (CPU). Fills
-# gw_fiveway_maps[] with a Dict short_name => Array shaped like parent(gw_Q0).
-# Memo via module globals, NOT cache Refs: Refs in the cache change its type
-# (forcing kernel recompiles), and per-simulation state is fine as globals for
-# one-simulation-per-process drivers.
-const _B5_MEMO_T = Ref{Any}(nothing)
+# Memoized computation of all five-way maps (CPU), one per cache and time: every
+# nogw_b5_* diagnostic of one output time reads the same Dict short_name => Array
+# shaped like parent(gw_Q0). The memo is a module global, not a cache Ref (a Ref in
+# the cache changes its type and recompiles the forcing kernel), so it is keyed on
+# the identity of the cache's gw_beres_active array as well as the time: two
+# simulations in one process never share maps.
+const _B5_MEMO_KEY = Ref{Any}(nothing)
 const _B5_MEMO_MAPS = Ref{Any}(nothing)
 
 function _compute_beres_fiveway!(p, time)
     nogw = p.non_orographic_gravity_wave
-    _B5_MEMO_T[] == time && return _B5_MEMO_MAPS[]
+    memo_key = (objectid(parent(nogw.gw_beres_active)), time)
+    _B5_MEMO_KEY[] == memo_key && return _B5_MEMO_MAPS[]
 
     (; gw_beres_source, gw_c) = nogw
     beres = gw_beres_source
@@ -3919,6 +3921,6 @@ function _compute_beres_fiveway!(p, time)
     end
 
     _B5_MEMO_MAPS[] = maps
-    _B5_MEMO_T[] = time
+    _B5_MEMO_KEY[] = memo_key
     return maps
 end
