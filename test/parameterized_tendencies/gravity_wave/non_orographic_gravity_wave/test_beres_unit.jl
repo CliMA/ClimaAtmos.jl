@@ -1943,6 +1943,84 @@ end
     end
 end
 
+@testset "Beres launch builders: no unresolved call in any shape or filter path" begin
+    # `_beres_transient_bin` and `_beres_spectrum_single_h` are `@noinline` and take
+    # `use_VG` as a runtime `Bool`, so both shape branches are compiled for every
+    # caller, also the branch a caller never takes. A call in that branch with no
+    # matching method (e.g. a knot form of a `nothing` profile) never runs on the CPU but
+    # is a `MethodError` the GPU cannot compile. Infer each builder with the argument
+    # types of the model's broadcasts, Float32 and Float64, half-sine and Beres-G, every
+    # launch filter, and require no `MethodError` in the optimized code.
+    unresolved(f, types) =
+        occursin(
+            r"throw_methoderror|MethodError",
+            string(Base.code_typed(f, types; optimize = true)),
+        )
+    for FT in (Float32, Float64), shape_general in (false, true),
+        mode in (
+            CA.BERES_LAUNCH_FILTER_NONE,
+            CA.BERES_LAUNCH_FILTER_BERES2004,
+            CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED,
+        ),
+        steady in (false, true)
+
+        ng = CA.N_BERES_PROFILE
+        beres = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0),
+            beres_scale_factor = FT(2e-6),
+            σ_x = FT(4000),
+            ν_min = FT(8.727e-4),
+            ν_max = FT(1.047e-2),
+            n_ν = 9,
+            beres_shape_general = shape_general,
+            beres_steady_source = steady,
+            launch_filter = mode,
+        )
+        nc = 101
+        c = ntuple(n -> FT((n - 1) * FT(0.8) - FT(40)), Val(nc))
+        gprofile =
+            shape_general ? ntuple(i -> FT(sin(π * (i - 1) / (ng - 1))), Val(ng)) : nothing
+        wind_range = ntuple(i -> FT(i), Val(6))
+        wind_profile = shape_general ? ntuple(i -> FT(i), Val(ng)) : nothing
+        for filter in
+            (nothing, CA._beres_launch_filter(beres, wind_range, wind_profile, Val(1)))
+            setup = CA._beres_launch_setup(
+                CA._beres_bin_grid(c, Val(nc)), FT(-4), FT(5e-5), FT(9000), FT(0.012),
+                FT(2000), FT(10000), gprofile, FT(0), beres, Val(shape_general);
+                dz_level = FT(600), launch_filter = filter,
+            )
+            args = (
+                FT(1), setup.dc, setup.u_heat, setup.h, setup.N2, setup.N_source,
+                setup.Q0_sq, setup.σ_x_sq, setup.ν_min, setup.dν, setup.n_groups,
+                setup.boole_w, setup.use_VG, setup.gprofile, setup.z_bot, setup.span,
+                setup.m_max, setup.n_h_avg, setup.Δh_frac, setup.scale_factor,
+                setup.launch_filter, setup.n_bin_samples,
+            )
+            label = "FT = $FT, shape_general = $shape_general, filter mode $mode, steady = $steady, filter $(typeof(filter))"
+            @test !unresolved(CA._beres_transient_bin, typeof(args)) || (@info label; false)
+            single_h_args = (
+                FT(1), FT(5), setup.h, setup.u_heat, setup.N2, setup.N_source,
+                setup.Q0_sq, setup.σ_x_sq, setup.ν_min, setup.dν, setup.n_groups,
+                setup.boole_w, setup.use_VG,
+                CA._beres_filter_knots(
+                    filter,
+                    CA._beres_sine_knots(gprofile, FT(2000), FT(10000)),
+                    FT(1),
+                ),
+                setup.z_bot, setup.span, setup.m_max,
+            )
+            @test !unresolved(CA._beres_spectrum_single_h, typeof(single_h_args))
+            @test !unresolved(CA._beres_steady_total, typeof((setup,)))
+            # and both run, including the Beres-G branch with no profile
+            @test isfinite(CA._beres_transient_bin(args...))
+            if !shape_general
+                bad = Base.setindex(args, true, 13)    # use_VG = true, gprofile = nothing
+                @test isfinite(CA._beres_transient_bin(bad...))
+            end
+        end
+    end
+end
+
 @testset "Beres launch flux does not depend on the bin width" begin
     FT = Float64
     beres = BeresSourceParams{FT}(;

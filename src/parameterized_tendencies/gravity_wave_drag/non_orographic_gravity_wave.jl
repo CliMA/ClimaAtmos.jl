@@ -2725,6 +2725,10 @@ end
 Return the `BeresSineKnots` of the gathered profile `gprofile` on `[z_bot, z_bot + span]`.
 A window of zero width gives zero slopes.
 """
+# No profile (the half-sine path): no knots. `_beres_transient_bin` takes `use_VG` as a
+# runtime `Bool`, so its Beres-G branch is compiled for the half-sine path too, where it
+# must not reach a missing method (a `MethodError` does not compile on the GPU).
+@inline _beres_sine_knots(::Nothing, z_bot, span) = nothing
 @inline function _beres_sine_knots(gprofile::NTuple{ng, FT}, z_bot, span) where {ng, FT}
     dz = span / FT(ng - 1)
     inv_dz = ifelse(dz > zero(dz), one(dz) / dz, zero(dz))
@@ -3411,11 +3415,10 @@ end
 # The knot form of the profile the phase speed `c` sees through the launch filter
 # (`_beres_filter_profile`): unchanged unless the filter masks the profile.
 @inline _beres_filter_knots(::Nothing, knots, c) = knots
-@inline _beres_filter_knots(
-    ::BeresLaunchFilter{FT, Nothing},
-    knots::BeresSineKnots,
-    c,
-) where {FT} = knots
+@inline _beres_filter_knots(::BeresLaunchFilter{FT, Nothing}, knots, c) where {FT} =
+    knots
+@inline _beres_filter_knots(::BeresLaunchFilter{FT, <:NTuple}, ::Nothing, c) where {FT} =
+    nothing
 @inline function _beres_filter_knots(
     f::BeresLaunchFilter{FT, <:NTuple},
     knots::BeresSineKnots,
