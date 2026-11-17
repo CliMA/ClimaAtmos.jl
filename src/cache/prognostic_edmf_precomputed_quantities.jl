@@ -281,7 +281,7 @@ after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
 computes the same thermodynamics (`set_draft_thermo_column!`) in its fused
 column loop.
 """
-function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
