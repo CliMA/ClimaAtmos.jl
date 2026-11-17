@@ -775,8 +775,8 @@ end
 #   Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl + dq_rai) + L_s·(dq_icl + dq_sno) ]
 # i.e. CA._beres_latent_heating, built from the CloudMicrophysics 1-moment
 # *aggregated* phase-change tendencies (the tested `_aggregate_tendencies`). In the
-# model those are the tendencies it applies to the draft: the bulk set averaged over
-# the step and the implicit set at its instantaneous rate. Here both come from
+# model those are its stored rates of the draft: the bulk set as the step-averaged
+# forecast and the implicit set at its instantaneous rate. Here both come from
 # instantaneous rates of the same state (`shipped_latent`), so the oracle below,
 # built from the instantaneous per-process terms, must match.
 #

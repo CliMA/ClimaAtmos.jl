@@ -1345,9 +1345,9 @@ end
     ᶜN_l = p_l.non_orographic_gravity_wave.ᶜbuoyancy_frequency
     fill!(ᶜN_l, FT_l(0.012))
 
-    # The Beres latent heating reads the 1M tendencies the model applies to the
-    # draft, which `set_precomputed_quantities!` keeps current; refresh them for
-    # the draft state just set, as it would.
+    # The Beres latent heating reads the model's stored 1M rates of the draft,
+    # which `set_precomputed_quantities!` keeps current; refresh them for the
+    # draft state just set, as it would.
     mp_model = p_l.atmos.microphysics_model
     tc_model = p_l.atmos.turbconv_model
     CA.set_microphysics_tendency_cache!(Y_l, p_l, mp_model, tc_model)

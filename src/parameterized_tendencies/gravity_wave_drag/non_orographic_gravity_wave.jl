@@ -31,12 +31,16 @@ transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`, so
     Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
 
 with reference-`T₀` constants `L_v` and `L_s`. The species tendencies are the sum of the
-two 1M tendencies the model applies to the updraft: `tendency_bulk`, the bulk processes
-(autoconversion, accretion, freezing, melting, and any phase change not assigned to the
-implicit set) averaged over the step (`p.precomputed.ᶜmp_tendencyʲs`), and
-`tendency_implicit`, the implicit set (cloud liquid and ice formation, rain evaporation, and
-snow deposition and sublimation when `implicit_microphysics` is on, zero otherwise) at its
-instantaneous rate (`p.precomputed.ᶜmp_tendency_implicitʲs`). Condensate inputs are floored
+model's two stored 1M rates of the updraft at the current (end-of-step) state:
+`tendency_bulk`, the bulk processes (autoconversion, accretion, freezing, melting, and any
+phase change not assigned to the implicit set) as the step-averaged forecast
+(`p.precomputed.ᶜmp_tendencyʲs`), and `tendency_implicit`, the implicit set (cloud liquid
+and ice formation, rain evaporation, and snow deposition and sublimation when
+`implicit_microphysics` is on, zero otherwise) at its instantaneous rate
+(`p.precomputed.ᶜmp_tendency_implicitʲs`). These are rates of the current state, not the
+increments the solver applied over the last step: with one Newton iteration the applied
+implicit increment, the change of the state over the stage divided by `dtγ`, differs from
+the instantaneous rate. Condensate inputs are floored
 at zero and `q_tot` at the condensate sum before evaluating `cp_m`. Called from
 `compute_beres_convective_heating!` when `heating_latent` is enabled.
 """
@@ -897,9 +901,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # whose Q0_threshold is calibrated to grid-mean magnitudes of the flux convergence.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        # The 1M tendencies the model applies to each updraft, as the model last
-        # computed them: the bulk processes averaged over the step and the implicit
-        # set (cloud liquid and ice formation, rain evaporation, snow deposition and
+        # The model's stored 1M rates of each updraft at the current (end-of-step)
+        # state: the bulk processes as the step-averaged forecast and the implicit set
+        # (cloud liquid and ice formation, rain evaporation, snow deposition and
         # sublimation) at its instantaneous rate. The two sets are process-disjoint,
         # so their sum is the full latent heating, whichever stage integrates each
         # process. `set_precomputed_quantities!` refreshes both before any callback.
