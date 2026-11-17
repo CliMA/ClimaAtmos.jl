@@ -224,8 +224,44 @@ _halfsine_profile(::Val{ng}, FT) where {ng} =
         println("  Peak phase speed: $(peak_c) m/s (paper: ~15 m/s)")
         println("  Peak value: $(max_val)")
 
-        @test 5.0 < peak_c < 40.0
-        @test max_val > 0
+        @test 12 <= peak_c <= 18
+
+        # The bin at c = 14 m/s against an independent quadrature of Beres et al.
+        # (2004) Eqs. 23 and 30, written from the paper rather than from the code:
+        #   B_kν = (k²/ν̂²)·G_k·Q0·Q_t·(π/(m h))·sin(m h)/(m² − π²/h²),
+        #   F_kν = (1/√(2π))·(ρ0/(L τ))·sgn(ĉ)·√(N²/ν̂² − 1)·|B_kν|²,
+        # with G_k² = (σ_x²/2)·exp(−k²σ_x²/2) the transform of the Gaussian cell,
+        # m = |k|·√(N²/ν̂² − 1), k = ν/c, Q_t = 1 and ρ0/(Lτ) = 1 (both carried by
+        # the scale factor, here 1). The bin holds dc·∫ F_kν·(ν/c²) dν over the
+        # frequency band, taken here by the trapezoid rule on 4001 points.
+        function beres2004_bin(c, ν_lo, ν_hi; N, h, σ_x, Q0, U, dc, n = 4001)
+            integral = zero(c)
+            for i in 1:n
+                ν = ν_lo + (ν_hi - ν_lo) * (i - 1) / (n - 1)
+                weight = (i == 1 || i == n ? 1 / 2 : 1) * (ν_hi - ν_lo) / (n - 1)
+                k = ν / c
+                ν̂ = ν - k * U
+                0 < abs(ν̂) < N || continue
+                m = abs(k) * sqrt(N^2 / ν̂^2 - 1)
+                G_k = sqrt(σ_x^2 / 2 * exp(-k^2 * σ_x^2 / 2))
+                B = (k^2 / ν̂^2) * G_k * Q0 * (π / (m * h)) * sin(m * h) /
+                    (m^2 - π^2 / h^2)
+                F = 1 / sqrt(2π) * sqrt(N^2 / ν̂^2 - 1) * abs(B)^2
+                integral += weight * F * ν / c^2
+            end
+            return sign(c - U) * dc * integral
+        end
+        n14 = findfirst(==(FT(14)), c_fine)
+        B14_reference = beres2004_bin(
+            FT(14), ν_single - Δν_narrow, ν_single + Δν_narrow;
+            N = N_fig1, h = h_fig1, σ_x = FT(2500), Q0 = Q0_fig1, U = u_heat_fig1,
+            dc = dc_fine,
+        )
+        println("  B0(c = 14 m/s): $(B_fig1[n14]) (independent quadrature: $B14_reference)")
+        # The quadrature itself, as computed when this test was written.
+        @test B14_reference ≈ 10.4367 rtol = 1e-4
+        @test B_fig1[n14] ≈ B14_reference rtol = 1e-6
+        @test max_val == B_fig1[n14]
     end
 
     @testset "Magnitude comparison with AD spectrum" begin
@@ -268,6 +304,32 @@ _halfsine_profile(::Val{ng}, FT) where {ng} =
         if diff_5_9 > 1e-40
             @test diff_9_13 < diff_5_9
         end
+    end
+
+    @testset "Depth averaging (n_h_avg > 1) of the transient half-sine bins" begin
+        # With n_h_avg = 3 and Δh_frac = 0.1 every transient bin is the mean of the
+        # bins for the depths 0.9h, h and 1.1h. The steady bin is switched off, so
+        # only the transient path is compared.
+        Q0 = FT(10.0 / 86400.0)
+        h = FT(8000.0)
+        u_heat = FT(3.0)
+        params_with(; kw...) = BeresSourceParams{FT}(;
+            (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+            beres_steady_source = false,
+            kw...,
+        )
+        averaged = wave_source(
+            c, u_heat, Q0, h, N_source, params_with(; n_h_avg = 3, Δh_frac = FT(0.1)),
+            Val(nc),
+        )
+        single(h_i) = wave_source(c, u_heat, Q0, h_i, N_source, params_with(), Val(nc))
+        mean_of_three =
+            (
+                collect(single(FT(0.9) * h)) .+ collect(single(h)) .+
+                collect(single(FT(1.1) * h))
+            ) ./ 3
+        @test collect(averaged) ≈ mean_of_three rtol = 1e-10
+        @test !(collect(averaged) ≈ collect(single(h)))   # the averaging matters
     end
 
     @testset "Invalid n_ν rejected" begin
@@ -734,7 +796,10 @@ end
 # and the COMPLETE latent-heat-releasing selection (audited against
 # CloudMicrophysics `_aggregate_tendencies`). L_f is derived as L_s − L_v so the
 # two forms share identical constants and must agree to round-off.
-function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+function Q_lat_explicit(
+    mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno;
+    w = zero(ρ),
+)
     FT = typeof(ρ)
     src = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
@@ -743,7 +808,7 @@ function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
         thp,
         ρ,
         T,
-        FT(0),
+        w,
         q_tot,
         q_lcl,
         q_icl,
@@ -896,6 +961,73 @@ const FREEZE_MELT_TERMS = (
     end
 end
 
+# The model splits the 1M processes between two parameter sets: the implicit set
+# carries condensation and deposition (cloud liquid and ice formation, rain
+# evaporation, snow deposition and sublimation), the bulk set everything else, and
+# `_beres_latent_heating` sums the two. The oracle above nulls the implicit set, so
+# it never checks that sum; here both sets are live, as in the model, the updraft
+# rises (w > 0), and the sum must match the explicit oracle on the full set.
+const CONDENSATION_PROCESSES = (
+    :cloud_liquid_formation,
+    :cloud_ice_formation,
+    :rain_condensation_evaporation,
+    :snow_deposition_sublimation,
+)
+const OTHER_1M_PROCESSES = (
+    :cloud_ice_melt,
+    :cloud_liquid_freezing,
+    :rain_autoconversion,
+    :snow_autoconversion,
+    :snow_melt,
+    :cloud_liquid_rain_accretion,
+    :cloud_liquid_snow_accretion,
+    :cloud_ice_rain_accretion,
+    :cloud_ice_snow_accretion,
+    :rain_snow_accretion,
+)
+
+@testset "Beres canonical latent heating: live implicit set, rising updraft" begin
+    for FT in (Float32, Float64)
+        toml_dict = CP.create_toml_dict(FT)
+        autoconversion = CMP.PrescribedNd(toml_dict)
+        mp_full = CMP.Microphysics1MParams(toml_dict; rain_autoconversion = autoconversion)
+        mp_bulk = CMP.Microphysics1MParams(
+            toml_dict;
+            rain_autoconversion = autoconversion,
+            (p => nothing for p in CONDENSATION_PROCESSES)...,
+        )
+        mp_imp = CMP.Microphysics1MParams(
+            toml_dict;
+            (p => nothing for p in OTHER_1M_PROCESSES)...,
+        )
+        mp_none = CMP.Microphysics1MParams(
+            toml_dict;
+            (p => nothing for p in (CONDENSATION_PROCESSES..., OTHER_1M_PROCESSES...))...,
+        )
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        ρ = FT(0.7)
+        rtol = FT === Float32 ? FT(2e-4) : FT(1e-6)
+        atol = FT === Float32 ? FT(1e-9) : FT(1e-10)
+        implicit_share = zero(FT)
+        for w in FT.((0.5, 3)),
+            T in FT.((258, 271, 275, 290)),
+            q_tot_over_sat in FT.((0.9, 1.05))
+
+            q_sat = TD.q_vap_saturation(thp, T, ρ)
+            q = (FT(1e-3), FT(2e-4), FT(5e-4), FT(3e-4))   # q_lcl, q_icl, q_rai, q_sno
+            q_tot = q_tot_over_sat * q_sat + sum(q)
+            shipped = CA._beres_latent_heating(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q...)
+            oracle = Q_lat_explicit(mp_full, thp, ρ, T, q_tot, q...; w)
+            @test isapprox(shipped, oracle; rtol, atol)
+            bulk_only =
+                CA._beres_latent_heating(mp_bulk, mp_none, thp, ρ, T, w, q_tot, q...)
+            implicit_share = max(implicit_share, abs(shipped - bulk_only))
+        end
+        # Setup: the implicit set carries a real part of the heating.
+        @test implicit_share > 1000 * atol
+    end
+end
+
 @testset "Beres canonical latent heating: physical sign sanity" begin
     FT = Float64
     toml_dict = CP.create_toml_dict(FT)
@@ -980,8 +1112,8 @@ end
         Float64,
     )
 
-    # diagnostic_edmfx → reject (no per-draft prognostic condensate state).
-    args_diag = merge(base, Dict("turbconv" => "diagnostic_edmfx"))
+    # edonly_edmfx → reject (no per-draft prognostic condensate state).
+    args_diag = merge(base, Dict("turbconv" => "edonly_edmfx"))
     @test_throws ErrorException CA.get_non_orographic_gravity_wave_model(
         args_diag,
         nothing,
@@ -998,7 +1130,6 @@ end
     )
     for bad in (
         Dict("turbconv" => "edmfx"),
-        Dict("turbconv" => "diagnostic_edmfx"),
         Dict("turbconv" => "edonly_edmfx"),
         Dict("turbconv" => nothing),
         Dict("updraft_number" => 0),
