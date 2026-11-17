@@ -4,6 +4,7 @@
 
 import ClimaCore
 import ClimaCore: Fields, Spaces
+import NVTX
 
 """
     has_precip_stage_accumulator(p)
