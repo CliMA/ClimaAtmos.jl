@@ -623,8 +623,9 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
     # breaking → momentum deposition) on a single column with analytic wind shear.
     # Uses the Beres (2004) §4 squall-line parameters.
     #
-    # Tests: nonzero drag, max drag location (stratospheric), bounded magnitude,
-    # v-forcing near zero (no meridional wind), ā-linearity, steady (ν=0) component.
+    # Tests on the Beres drag alone (the full drag minus the AD99 drag): nonzero,
+    # none below the Beres launch level, bounded magnitude, v-forcing near zero (no
+    # meridional wind); then ā-linearity and the steady (ν=0) component.
     # σ_x = 2500 m (Beres 2004 §4 squall-line case) comes from the config's
     # toml/nogw_beres_test.toml override.
     # ============================================================================
@@ -764,10 +765,24 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
         end
         uf_data, vf_data = call_forcing!()
 
+        # The Beres drag alone: the full drag minus the AD99 drag of the same column
+        # (a_cover = 0 switches the Beres deposit off and leaves the AD99 drag as it
+        # is, bit for bit). The checks below are on this drag, against the Beres
+        # launch level, the first level at or above gw_ztop.
+        fill!(gw_a_cover, FT(0))
+        uf_ad99_only, vf_ad99_only = call_forcing!()
+        fill!(gw_a_cover, FT(1))
+        uf_beres = uf_data .- uf_ad99_only
+        vf_beres = vf_data .- vf_ad99_only
+        beres_launch_level = Int(parent(beres_source_ρ_z_u_v_level.:5)[1])
+
         println("Column drag test:")
         println("  max |uforcing| = $(maximum(abs, uf_data)) m/s²")
-        println("  max |vforcing| = $(maximum(abs, vf_data)) m/s²")
-        println("  source_level = $source_level (z = $(center_z[source_level]) m)")
+        println("  max |Beres uforcing| = $(maximum(abs, uf_beres)) m/s²")
+        println("  max |Beres vforcing| = $(maximum(abs, vf_beres)) m/s²")
+        println(
+            "  Beres launch level = $beres_launch_level (z = $(center_z[beres_launch_level]) m)",
+        )
 
         # ------------------------------------------------------------------
         # Assertions
@@ -777,40 +792,38 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test all(isfinite, vf_data)
         end
 
-        @testset "Nonzero drag" begin
-            max_uf = maximum(abs, uf_data)
-            @test max_uf > 0
+        @testset "Setup: the Beres launch level is the first level above gw_ztop" begin
+            @test beres_launch_level == findfirst(>=(FT(7000)), center_z)
+            @test beres_launch_level != source_level   # differs from the AD99 level
+        end
+
+        @testset "Nonzero Beres drag" begin
             # Beres forcing with these parameters should produce measurable drag
-            @test max_uf > 1e-8
+            @test maximum(abs, uf_beres) > 1e-8
         end
 
-        @testset "Max drag above source level (stratospheric)" begin
-            # Wave breaking and momentum deposition should occur above the
-            # source level, typically in the stratosphere (15–30 km for
-            # squall-line inputs with this wind profile).
-            peak_idx = argmax(abs.(uf_data))
-            peak_z = center_z[peak_idx]
-            source_z = center_z[source_level]
-            println("  Peak drag at z = $(peak_z) m (level $peak_idx)")
-            @test peak_z > source_z
+        @testset "Beres drag only at and above its launch level" begin
+            # The first layer above the launch level puts half its drag in the
+            # launch cell, so the cells below the launch cell get none, and the
+            # largest drag is at or above the launch cell.
+            @test all(iszero, uf_beres[1:(beres_launch_level - 1)])
+            @test all(iszero, vf_beres[1:(beres_launch_level - 1)])
+            peak_idx = argmax(abs.(uf_beres))
+            println("  Peak Beres drag at z = $(center_z[peak_idx]) m (level $peak_idx)")
+            @test peak_idx >= beres_launch_level
         end
 
-        @testset "Drag magnitude bounded" begin
-            max_uf = maximum(abs, uf_data)
+        @testset "Beres drag magnitude bounded" begin
             # 3e-3 m/s² ≈ 260 m/s/day — the forcing clamp in the tendency
             # function. Physical drag should be well below this.
-            @test max_uf < 3e-3
+            @test maximum(abs, uf_beres) < 3e-3
         end
 
-        @testset "V-forcing near zero" begin
+        @testset "Beres v-forcing near zero" begin
             # With v_heat = 0 and v = 0 everywhere, the meridional spectrum
             # is symmetric and the net v-forcing should be negligible compared
             # to the u-forcing.
-            max_vf = maximum(abs, vf_data)
-            max_uf = maximum(abs, uf_data)
-            if max_uf > 1e-10
-                @test max_vf < 0.01 * max_uf
-            end
+            @test maximum(abs, vf_beres) < 0.01 * maximum(abs, uf_beres)
         end
 
         @testset "Deposition scales linearly with coverage ā" begin
@@ -819,12 +832,10 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             # while the deposited drag is exactly linear in it. Difference out
             # the (ā-independent) AD99 background and check linearity.
             a_frac = FT(0.05)
-            fill!(gw_a_cover, FT(0.0))
-            uf_ad99, _ = call_forcing!()
             fill!(gw_a_cover, a_frac)
             uf_frac, _ = call_forcing!()
-            beres_full = uf_data .- uf_ad99   # ā = 1 Beres contribution
-            beres_frac = uf_frac .- uf_ad99   # ā = 0.05 Beres contribution
+            beres_full = uf_beres                  # ā = 1 Beres contribution
+            beres_frac = uf_frac .- uf_ad99_only   # ā = 0.05 Beres contribution
             @test maximum(abs, beres_full) > 0
             @test isapprox(
                 beres_frac,
