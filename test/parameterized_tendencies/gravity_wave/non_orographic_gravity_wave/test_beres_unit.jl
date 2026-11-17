@@ -14,6 +14,7 @@
 # ============================================================================
 
 using Test
+import InteractiveUtils
 import ClimaAtmos as CA
 import ClimaParams as CP
 # Reach Thermodynamics / CloudMicrophysics through ClimaAtmos's own bindings
@@ -1950,11 +1951,34 @@ end
     # matching method (e.g. a knot form of a `nothing` profile) never runs on the CPU but
     # is a `MethodError` the GPU cannot compile. Infer each builder with the argument
     # types of the model's broadcasts, Float32 and Float64, half-sine and Beres-G, every
-    # launch filter, and require no `MethodError` in the optimized code.
+    # launch filter, and require no `MethodError` in the optimized code, and no dynamic
+    # dispatch or heap allocation (neither compiles on the GPU) in the optimized LLVM
+    # of every kernel entry point and of the `@noinline` builders they call.
     unresolved(f, types) =
         occursin(
             r"throw_methoderror|MethodError",
             string(Base.code_typed(f, types; optimize = true)),
+        ) || occursin(
+            r"jl_apply_generic|gc_pool_alloc|gc_small_alloc|gc_alloc_obj|jl_box",
+            sprint(
+                io -> InteractiveUtils.code_llvm(
+                    io, f, types; optimize = true, debuginfo = :none,
+                ),
+            ),
+        )
+    # The check itself finds a heap allocation and a dynamic call.
+    @test unresolved(x -> Any[x][1], Tuple{Int})
+    @test unresolved(x -> sum(Any[x, x]), Tuple{Int})
+    # The keyword entry points, as the broadcasts call them.
+    spectrum_or_zero(active, c, u, Q0, h, N, z_bot, span, g, w, beres, ncv, sg, dz, lf) =
+        CA._beres_launch_spectrum_or_zero(
+            active, c, u, Q0, h, N, z_bot, span, g, w, beres, ncv, sg;
+            dz_level = dz, launch_filter = lf,
+        )
+    launch_setup(grid, u, Q0, h, N, z_bot, span, g, w, beres, sg, dz, lf) =
+        CA._beres_launch_setup(
+            grid, u, Q0, h, N, z_bot, span, g, w, beres, sg;
+            dz_level = dz, launch_filter = lf,
         )
     for FT in (Float32, Float64), shape_general in (false, true),
         mode in (
@@ -2011,6 +2035,18 @@ end
             )
             @test !unresolved(CA._beres_spectrum_single_h, typeof(single_h_args))
             @test !unresolved(CA._beres_steady_total, typeof((setup,)))
+            @test !unresolved(CA._beres_launch_bin, typeof((setup, FT(1), 1)))
+            setup_args = (
+                CA._beres_bin_grid(c, Val(nc)), FT(-4), FT(5e-5), FT(9000), FT(0.012),
+                FT(2000), FT(10000), gprofile, FT(0), beres, Val(shape_general),
+                FT(600), filter,
+            )
+            @test !unresolved(launch_setup, typeof(setup_args))
+            sz_args = (
+                FT(1), c, FT(-4), FT(5e-5), FT(9000), FT(0.012), FT(2000), FT(10000),
+                gprofile, FT(0), beres, Val(nc), Val(shape_general), FT(600), filter,
+            )
+            @test !unresolved(spectrum_or_zero, typeof(sz_args))
             # and both run, including the Beres-G branch with no profile
             @test isfinite(CA._beres_transient_bin(args...))
             if !shape_general
