@@ -1554,71 +1554,30 @@ function _beres_precompute_launch_spectra!(nogw)
         gw_N_source,
         gw_zbot,
         gw_ztop,
-        gw_beres_gprofile,
-        gw_beres_dz_level,
         gw_beres_wind_range,
-        gw_beres_u_profile,
-        gw_beres_v_profile,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
     ) = nogw
     # Zeros for non-convecting columns; half-sine or Beres-G transient bins per the shape
-    # mode, plus the steady c≈0 bin (β_therm + β_mech). The phase-speed grid
-    # `cgrid`, `ncv`, and `beres` are CAPTURED in the closure (plain tuples/Val
-    # would be iterated if passed as broadcast args); only fields are broadcast.
-    # The Beres-G transform runs over the window the gather sampled,
-    # [_beres_gather_bottom(z_bot, z_top, z_bot_floor), z_top], with
-    # `span = z_top - bottom` (NOT gw_h_heat, the unclamped moment depth, which
-    # differs from the gather grid when the envelope reaches below the floor or is
-    # capped at the column top — that mismatch would evaluate V_G at the wrong
-    # altitudes). gw_h_heat stays the half-sine depth (V_hs / Q0 / activation).
-    # GPU note: the shape mode is decided HERE, on the CPU, not inside the
-    # kernel, and is threaded into the launch-spectrum builder as a COMPILE-TIME
-    # `Val` (`Val(true)` for the transform branch, `Val(false)` for half-sine),
-    # NOT read from the runtime `beres.beres_shape_general` field inside the
-    # kernel. That keeps `use_VG` a compile-time constant, so each broadcast
-    # compiles exactly ONE shape path: half-sine passes `nothing` and strips the
-    # sine-transform code (`_beres_gs`), while the transform branch keeps a
+    # mode, plus the steady c≈0 bin (β_therm + β_mech).
+    # Beres-G: one thread per (column, bin), `_beres_launch_spectra_per_bin!`.
+    # Half-sine: a broadcast with one thread per column. The phase-speed grid `cgrid`,
+    # `ncv`, and `beres` are CAPTURED in its closure (plain tuples/Val would be
+    # iterated if passed as broadcast args); only fields are broadcast.
+    # GPU note: the shape mode is decided HERE, on the CPU, not inside the kernel, so
+    # each kernel compiles exactly ONE shape path: half-sine passes `nothing` and
+    # strips the sine-transform code (`_beres_gs`), while the transform path keeps a
     # concrete `NTuple` profile so `_beres_gs` stays statically dispatched. A
-    # runtime-Bool switch instead forces BOTH branches into the kernel and widens
-    # the profile to `Union{Nothing,NTuple}` -> dynamic dispatch / GC allocation
-    # (the InvalidIRError the transform path used to fail with).
-    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval,
-        z_floor = gw_beres_source.z_bot_floor
+    # runtime-Bool switch instead forces BOTH branches into the kernel and widens the
+    # profile to `Union{Nothing,NTuple}` -> dynamic dispatch / GC allocation.
+    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval
 
         # One builder per azimuth (`Val(1)` for u, `Val(2)` for v), which selects
         # that azimuth's winds for the launch filter.
         if beres.beres_shape_general
-            b0g(azimuth) = function (
-                active, u, Q0, h, N, zbot, ztop, gprof, dz_level, w, wind_range,
-                wind_profile,
-            )
-                z_gather = _beres_gather_bottom(zbot, ztop, z_floor)
-                taper_points =
-                    dz_level / max((ztop - z_gather) / (N_BERES_PROFILE - 1), eps(dz_level))
-                launch_filter = _beres_launch_filter(
-                    beres, wind_range, wind_profile, azimuth, taper_points,
-                )
-                return BeresB0(
-                    _beres_launch_spectrum_or_zero(
-                        active, cgrid, u, Q0, h, N, z_gather, ztop - z_gather,
-                        gprof, w, beres, ncv, Val(true); dz_level, launch_filter,
-                    ),
-                )
-            end
-            b0g_u = b0g(Val(1))
-            b0g_v = b0g(Val(2))
-            @. gw_beres_B0_u = b0g_u(
-                gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
-                gw_w_obstacle, gw_beres_wind_range, gw_beres_u_profile,
-            )
-            @. gw_beres_B0_v = b0g_v(
-                gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
-                gw_zbot, gw_ztop, gw_beres_gprofile, gw_beres_dz_level,
-                gw_w_obstacle, gw_beres_wind_range, gw_beres_v_profile,
-            )
+            _beres_launch_spectra_per_bin!(nogw, Val(1))
+            _beres_launch_spectra_per_bin!(nogw, Val(2))
         else
             b0hs(azimuth) =
                 (active, u, Q0, h, N, zbot, ztop, w, wind_range) -> BeresB0(
@@ -1644,6 +1603,104 @@ function _beres_precompute_launch_spectra!(nogw)
     end
     return nothing
 end
+
+"""
+    _beres_launch_spectra_per_bin!(nogw, Val(azimuth))
+
+Build the Beres-G launch spectrum `gw_beres_B0_u` (`Val(1)`) or `gw_beres_B0_v`
+(`Val(2)`) with one thread per (column, phase-speed bin), bins fastest, so the threads of
+a GPU warp work on the bins of one column. The warps of inactive columns finish at once,
+and the `nc` times more threads than columns hide the latency of each one. Each bin is
+`_beres_launch_bin` of the column's `_beres_launch_setup`, the same values (to rounding)
+as `_beres_launch_spectrum`.
+
+The Beres-G transform runs over the window the gather sampled,
+`[_beres_gather_bottom(z_bot, z_top, z_bot_floor), z_top]`, with `span = z_top - bottom`
+(not `gw_h_heat`, the unclamped moment depth, which differs from the gather grid when the
+envelope reaches below the floor or is capped at the column top). `gw_h_heat` stays the
+half-sine depth.
+
+The kernel captures the grid as scalars (spacing, `c_min`, the c = 0 bin), not the
+`nc`-tuple `gw_c`, which would take most of the GPU's 4 KiB of kernel parameters.
+"""
+function _beres_launch_spectra_per_bin!(nogw, ::Val{azimuth}) where {azimuth}
+    (;
+        gw_beres_source, gw_c, gw_ncval, gw_dc, gw_cmax, gw_beres_active,
+        gw_u_heat, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source, gw_zbot, gw_ztop,
+        gw_beres_gprofile, gw_beres_dz_level, gw_beres_wind_range,
+        gw_beres_u_profile, gw_beres_v_profile, gw_w_obstacle,
+    ) = nogw
+    beres = gw_beres_source
+    nc = length(gw_c)
+    grid = _beres_bin_grid(gw_c, gw_ncval)
+    # The bin centres as the cache builds `gw_c`, computed in the kernel rather than
+    # read from the tuple (a runtime index into a tuple does not compile on the GPU).
+    c_dc = eltype(gw_c)(gw_dc)
+    c_max = eltype(gw_c)(gw_cmax)
+    z_floor = beres.z_bot_floor
+    B0 = azimuth == 1 ? nogw.gw_beres_B0_u : nogw.gw_beres_B0_v
+    out = Fields.field_values(B0)
+    (Ni, Nj, Nh) = _beres_column_extents(out)
+    vals(f) = Fields.field_values(f)
+    active_d = vals(gw_beres_active)
+    u_d = vals(azimuth == 1 ? gw_u_heat : gw_v_heat)
+    Q0_d = vals(gw_Q0)
+    h_d = vals(gw_h_heat)
+    N_d = vals(gw_N_source)
+    zbot_d = vals(gw_zbot)
+    ztop_d = vals(gw_ztop)
+    gprof_d = vals(gw_beres_gprofile)
+    dzl_d = vals(gw_beres_dz_level)
+    wr_d = vals(gw_beres_wind_range)
+    wp_d = vals(azimuth == 1 ? gw_beres_u_profile : gw_beres_v_profile)
+    w_d = vals(gw_w_obstacle)
+    ClimaComms.@threaded ClimaComms.device(B0) for h in 1:Nh,
+        j in 1:Nj,
+        i in 1:Ni,
+        n in 1:nc
+        # (`FT` is not captured: a type in a kernel closure is not a bitstype)
+        FT = typeof(c_dc)
+        val = if point(active_d, 1, i, j, h)[] > FT(0.5)
+            zbot = point(zbot_d, 1, i, j, h)[]
+            ztop = point(ztop_d, 1, i, j, h)[]
+            dz_level = point(dzl_d, 1, i, j, h)[]
+            z_gather = _beres_gather_bottom(zbot, ztop, z_floor)
+            taper_points =
+                dz_level /
+                max((ztop - z_gather) / (N_BERES_PROFILE - 1), eps(dz_level))
+            launch_filter = _beres_launch_filter(
+                beres, point(wr_d, 1, i, j, h)[], point(wp_d, 1, i, j, h)[],
+                Val(azimuth), taper_points,
+            )
+            setup = _beres_launch_setup(
+                grid, point(u_d, 1, i, j, h)[], point(Q0_d, 1, i, j, h)[],
+                point(h_d, 1, i, j, h)[], point(N_d, 1, i, j, h)[], z_gather,
+                ztop - z_gather, point(gprof_d, 1, i, j, h)[],
+                point(w_d, 1, i, j, h)[], beres, Val(true);
+                dz_level, launch_filter,
+            )
+            _beres_launch_bin(setup, FT((n - 1) * c_dc - c_max), n)
+        else
+            FT(0)
+        end
+        @inbounds _beres_bin_parent(out)[_beres_bin_index(out, i, j, h, n)...] = val
+    end
+    return nothing
+end
+
+# The columns (Ni, Nj, Nh) of a surface field's data, and the parent-array index of
+# component `n` of the value in column (i, j, h): a single column (`DataF`, whose
+# parent holds the components of its one value) or a VIJ(F)H layout with one level.
+@inline _beres_column_extents(::DataLayouts.DataF) = (1, 1, 1)
+@inline function _beres_column_extents(data::DataLayouts.VIJHWithF)
+    (_, Ni, Nj, Nh) =
+        DataLayouts.drop_f_dim(size(parent(data)), Val(DataLayouts.f_dim(data)))
+    return (Ni, Nj, Nh)
+end
+@inline _beres_bin_parent(data) = parent(data)
+@inline _beres_bin_index(::DataLayouts.DataF, i, j, h, n) = (n,)
+@inline _beres_bin_index(data::DataLayouts.VIJHWithF, i, j, h, n) =
+    DataLayouts.add_f_dim((1, i, j, h), n, Val(DataLayouts.f_dim(data)))
 
 """
     non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing)
@@ -2641,6 +2698,157 @@ left-to-right, matching the accumulation order of the rule it replaced.
 end
 
 """
+    BeresSineKnots(profile, coef, z_first, z_last)
+
+The gathered heating `profile` (`NTuple{ng}` [K/s] on `ng` equally spaced points from
+`z_first` to `z_last`) in the form `_beres_gs` evaluates fastest. Integrating the
+piecewise-linear profile against `sin(m z)` by parts twice gives, exactly,
+
+    gs(m) = (g_1 cos(m z_1) - g_ng cos(m z_ng))/m + Σ_i coef_i sin(m z_i)/m²,
+
+where `coef_i` is the jump in the slope of the profile at point `i` (`-s_1` at the
+bottom, `s_{i-1} - s_i` inside, `s_{ng-1}` at the top, with `s_i` the slope on segment
+`i`). The sum then needs one short recurrence per `m` (`_beres_gs`), instead of a
+per-segment rule. `profile` is kept for the height-resolved launch filter, which masks
+it per phase speed.
+"""
+struct BeresSineKnots{FT, ng}
+    profile::NTuple{ng, FT}
+    coef::NTuple{ng, FT}
+    z_first::FT
+    z_last::FT
+end
+
+"""
+    _beres_sine_knots(gprofile, z_bot, span)
+
+Return the `BeresSineKnots` of the gathered profile `gprofile` on `[z_bot, z_bot + span]`.
+A window of zero width gives zero slopes.
+"""
+@inline function _beres_sine_knots(gprofile::NTuple{ng, FT}, z_bot, span) where {ng, FT}
+    dz = span / FT(ng - 1)
+    inv_dz = ifelse(dz > zero(dz), one(dz) / dz, zero(dz))
+    # Literal tuple indices only (ntuple): a runtime index into an NTuple does not
+    # compile on the GPU.
+    slope(i) = (gprofile[min(i + 1, ng)] - gprofile[i]) * inv_dz
+    coef = ntuple(Val(ng)) do i
+        lower = i > 1 ? slope(max(i - 1, 1)) : zero(FT)
+        upper = i < ng ? slope(i) : zero(FT)
+        lower - upper
+    end
+    return BeresSineKnots(gprofile, coef, FT(z_bot), FT(z_bot + span))
+end
+
+"""
+    _beres_gs(knots::BeresSineKnots, m)
+
+The finite sine transform `gs(m)` of the profile in `knots`, the same (to rounding) as
+`_beres_gs(profile, z_bot, span, m)`. The sum `Σ_i coef_i sin(m z_i)` with
+`z_i = z_1 + (i-1)·dz` is `sin(m z_1)·C + cos(m z_1)·S` with `C = Σ coef_i cos((i-1)x)`,
+`S = Σ coef_i sin((i-1)x)` and `x = m·dz`, summed by Reinsch's form of the Goertzel
+recurrence (Stoer and Bulirsch, Introduction to Numerical Analysis, Sec. 2.3.3), which
+stays accurate for small `x`, where plain Goertzel loses digits: three
+multiply-adds per point and three `sincos` per call. The sum is split into
+`N_BERES_GS_CHAINS` interleaved recurrences. The unroll is generated with literal tuple
+indices, as for the profile form.
+
+At small `m·span` the terms of size `1/m` in the closed form cancel to a result of size
+`m`, which loses about `2·log10(1/(m·span))` digits; below `_beres_gs_min_m_span(FT)` the
+per-segment rule `_beres_gs(profile, z_bot, span, m)` is used instead.
+"""
+@inline function _beres_gs(knots::BeresSineKnots{FT}, m) where {FT}
+    span = knots.z_last - knots.z_first
+    m * span < _beres_gs_min_m_span(FT) &&
+        return _beres_gs(knots.profile, knots.z_first, span, m)
+    return _beres_gs(knots, m, Val(N_BERES_GS_CHAINS))
+end
+
+# The `m·span` below which `_beres_gs(::BeresSineKnots, m)` uses the per-segment rule.
+# Error of the closed form against a 256-bit evaluation (64-point profiles, windows
+# 1-12 km), relative to the value: Float32 up to 1e-4 at m·span = 0.1 and 3e-6 at 1 (the
+# per-segment rule: 1e-7); Float64 up to 1e-13 at 0.1 and 1e-9 at 0.001. Relative to the
+# largest value of the transform, a profile cut by the launch filter reaches 2e-4 in
+# Float32 at 0.1. In production about 2.5% of the calls have m·span below 0.1; a higher
+# threshold sends more GPU warps through both rules (A100, 1M aquaplanet: 0.021 s per u+v
+# build with a threshold of 1, 0.018-0.020 s with 0.1).
+@inline _beres_gs_min_m_span(::Type{FT}) where {FT} = FT(0.1)
+@generated function _beres_gs(
+    knots::BeresSineKnots{FT, ng},
+    m,
+    ::Val{P},
+) where {FT, ng, P}
+    @assert ispow2(P) && P <= ng
+    body = quote
+        coef = knots.coef
+        dz = (knots.z_last - knots.z_first) / $FT($ng - 1)
+        x = m * dz
+        sh, ch = sincos(x / $FT(2))
+        # sin and cos of x (for the chain phases) and of P·x/2 (for the chain step
+        # P·x), by doubling the half angle, which keeps sin relatively accurate.
+        s_x = $FT(2) * sh * ch
+        c_x = $FT(1) - $FT(2) * sh * sh
+        sH, cH = sh, ch
+    end
+    for _ in 1:Int(log2(P))
+        push!(body.args, :((sH, cH) = ($FT(2) * sH * cH, $FT(1) - $FT(2) * sH * sH)))
+    end
+    push!(body.args, quote
+        # σ = +1 where cos(P x) > 0 (recurrence on b_k - b_{k+1}), -1 otherwise (on
+        # b_k + b_{k+1}); λ = 2 cos(P x) - 2σ, written without cancellation.
+        pos = cH * cH >= sH * sH
+        σ = ifelse(pos, $FT(1), $FT(-1))
+        λ = ifelse(pos, $FT(-4) * sH * sH, $FT(4) * cH * cH)
+        s_X = $FT(2) * sH * cH
+    end)
+    # chain r (0-based) sums the points i = r+1, r+1+P, ...
+    for r in 0:(P - 1)
+        push!(body.args, :($(Symbol(:b_, r)) = $FT(0)))
+        push!(body.args, :($(Symbol(:d_, r)) = $FT(0)))
+    end
+    # round-robin over the chains, from the top point down, so the P independent
+    # recurrences interleave (they are latency bound one at a time)
+    maxlen = maximum(fld(ng - 1 - r, P) for r in 0:(P - 1))
+    for j in maxlen:-1:1, r in 0:(P - 1)
+        i = r + 1 + P * j
+        i <= ng || continue
+        b, d = Symbol(:b_, r), Symbol(:d_, r)
+        push!(body.args, quote
+            $d = (coef[$i] + λ * $b) + σ * $d
+            $b = $d + σ * $b
+        end)
+    end
+    push!(body.args, quote
+        s1, c1 = sincos(m * knots.z_first)
+        sr, cr = s1, c1
+        acc = $FT(0)
+    end)
+    for r in 0:(P - 1)
+        b, d = Symbol(:b_, r), Symbol(:d_, r)
+        push!(body.args, quote
+            $d = (coef[$(r + 1)] + λ * $b) + σ * $d
+            acc += sr * ($d - λ / $FT(2) * $b) + cr * (s_X * $b)
+        end)
+        r < P - 1 && push!(body.args,
+            :((sr, cr) = (sr * c_x + cr * s_x, cr * c_x - sr * s_x)))
+    end
+    push!(
+        body.args,
+        quote
+            cN = cos(m * knots.z_last)
+            inv_m = $FT(1) / m
+            return (knots.profile[1] * c1 - knots.profile[$ng] * cN) * inv_m +
+                   acc * inv_m * inv_m
+        end,
+    )
+    return body
+end
+
+# Number of interleaved recurrences `_beres_gs(::BeresSineKnots, m)` splits its sum into
+# (a power of 2). One recurrence is a chain of dependent multiply-adds, so a single chain
+# leaves the arithmetic units mostly idle; independent chains fill them.
+const N_BERES_GS_CHAINS = 8
+
+"""
     _beres_shape_factor_sq(shape_general, gprofile, z_bot, h, span, m, m_max)
 
 The squared vertical shape factor entering `R² = (·)·m²/(N²−ν̂²)²`, dispatching
@@ -2665,6 +2873,18 @@ factor fixed is the `1/m²`-parity pinned by gate 1. The Beres-G factor is zero 
 )
     shape_general || return V_hs_sq(m, h)
     return m > m_max ? zero(m) : _beres_gs(gprofile, z_bot, span, m)^2
+end
+@inline function _beres_shape_factor_sq(
+    shape_general::Bool,
+    knots::BeresSineKnots,
+    z_bot,
+    h,
+    span,
+    m,
+    m_max,
+)
+    shape_general || return V_hs_sq(m, h)
+    return m > m_max ? zero(m) : _beres_gs(knots, m)^2
 end
 
 """
@@ -2929,7 +3149,7 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
         # It is also zero beyond the wavenumber `m_max` of the model levels.
         dz_gather = span / FT(length(gprofile) - 1)
         (m0 * dz_gather > FT(π)) | (m0 > m_max) ? FT(0) :
-        _beres_gs(gprofile, z_bot, span, m0)^2
+        _beres_gs(_beres_sine_knots(gprofile, z_bot, span), m0)^2
     elseif n_h_avg <= 1
         V_hs_sq(m0, h)
     else
@@ -3188,17 +3408,77 @@ Otherwise the profile is returned unchanged.
     end
 end
 
+# The knot form of the profile the phase speed `c` sees through the launch filter
+# (`_beres_filter_profile`): unchanged unless the filter masks the profile.
+@inline _beres_filter_knots(::Nothing, knots, c) = knots
+@inline _beres_filter_knots(
+    ::BeresLaunchFilter{FT, Nothing},
+    knots::BeresSineKnots,
+    c,
+) where {FT} = knots
+@inline function _beres_filter_knots(
+    f::BeresLaunchFilter{FT, <:NTuple},
+    knots::BeresSineKnots,
+    c,
+) where {FT}
+    f.mode == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED || return knots
+    span = knots.z_last - knots.z_first
+    return _beres_sine_knots(
+        _beres_filter_profile(f, knots.profile, c), knots.z_first, span,
+    )
+end
+
+"""
+    _beres_bin_sample_count(c_hat, dc, N, z_bot, z_top, Val(n_max))
+
+Number of sub-samples a Beres-G bin of width `dc` with centre intrinsic phase speed
+`c_hat` averages over, at most `n_max`. Squared, the sine transform of a heating on
+`[z_bot, z_top]` measured from the ground oscillates in the vertical wavenumber `m` with
+a phase of about `m·(z_bot + z_top)`, twice the window centre. Across the bin
+`m ≈ N/|ĉ|` changes by about `N·dc/ĉ²`, so that phase turns by
+`Δφ = (z_bot + z_top)·N·dc/ĉ²`, with `|ĉ|` at the bin edge nearer `u_heat`. The midpoint
+rule over `n` samples resolves the bin when `Δφ/n` is at most `BERES_BIN_PHASE_TOL`.
+`Δφ` falls like `1/ĉ²`, so only the bins near `u_heat` need more than one sample.
+"""
+@inline function _beres_bin_sample_count(
+    c_hat,
+    dc,
+    N,
+    z_bot,
+    z_top,
+    ::Val{n_max},
+) where {n_max}
+    FT = typeof(c_hat)
+    ĉ_edge = max(abs(c_hat) - dc / 2, FT(1e-6))
+    Δφ = (z_bot + z_top) * N * dc / ĉ_edge^2
+    n = ceil(min(Δφ / _beres_bin_phase_tol(FT), FT(n_max)))
+    return clamp(unsafe_trunc(Int, n), 1, n_max)
+end
+@inline _beres_bin_phase_tol(::Type{FT}) where {FT} = FT(BERES_BIN_PHASE_TOL)
+
+"""
+    BERES_BIN_PHASE_TOL
+
+The largest turn [rad] of the phase of the squared Beres-G sine transform between two
+sub-samples of a bin (`_beres_bin_sample_count`). Chosen on a frozen 1M state (3274
+active columns): with `N_BERES_BIN_SAMPLES = 16` it averages 2.0 samples per bin, and
+against a 32-sample average its bins differ by 0.26% (summed over bins and columns, 8
+equally spaced samples: 0.37%), its column totals by 0.08% at the median and 11% at
+most (8 samples: 0.12% and 39%).
+"""
+const BERES_BIN_PHASE_TOL = 0.4
+
 """
     N_BERES_BIN_SAMPLES
 
-Number of equally spaced phase speeds across each bin `[c - dc/2, c + dc/2]` over which a
-transient Beres-G bin averages the spectral density [-]. Chosen from a convergence check
-on a frozen 1M state (400 active columns, 63-level grid, 0.8 m/s bins): going from 8 to 16
-samples changes the bin values by 0.3% (summed absolute change over all bins and
-columns), the median column-total flux by 0.1%, and the area-weighted total by 0.01%;
-going from 4 to 8 changes the bin values by 1.9%.
+The largest number of equally spaced phase speeds across a bin `[c - dc/2, c + dc/2]`
+over which a transient Beres-G bin averages the spectral density [-]. Each bin takes as
+many as it needs, `_beres_bin_sample_count`: the bins next to `u_heat` take all 16, most
+others one. On a frozen 1M state (3274 active columns, 63-level grid, 0.8 m/s bins) this
+averages about two samples per bin and is closer to a 32-sample average than 8 equally
+spaced samples in every bin are.
 """
-const N_BERES_BIN_SAMPLES = 8
+const N_BERES_BIN_SAMPLES = 16
 
 """
     _beres_transient_bin(c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
@@ -3211,12 +3491,12 @@ Return the signed transient momentum flux carried by the phase-speed bin centred
 intrinsic phase speed `ĉ = c - u_heat`, times `dc`. The `c = 0` bin carries no transient
 flux (it holds the steady term).
 
-With the gathered profile (`use_VG`), the signed density is averaged over
-`n_bin_samples` equally spaced phase speeds across the bin, `c_n + dc·((k - 1/2)/n - 1/2)`,
-instead of taken at its centre. The Beres-G density varies on scales finer than a bin near
-`u_heat` (the sine transform measured from the ground oscillates in the vertical
-wavenumber `m ≈ N/|ĉ|`), so a value at the bin centre swings from bin to bin as `u_heat`
-moves; the bin average does not. Sub-samples with `|ĉ|` or `|c|` below `1e-6` m/s
+With the gathered profile (`use_VG`), the signed density is averaged over `n` equally
+spaced phase speeds across the bin, `c_n + dc·((k - 1/2)/n - 1/2)`, instead of taken at
+its centre, with `n = _beres_bin_sample_count(...)` at most `n_bin_samples`. The
+Beres-G density varies on scales finer than a bin near `u_heat` (the sine transform
+measured from the ground oscillates in the vertical wavenumber `m ≈ N/|ĉ|`), so a value
+at the bin centre swings from bin to bin as `u_heat` moves; the bin average does not. Sub-samples with `|ĉ|` or `|c|` below `1e-6` m/s
 contribute zero. The half-sine path takes the centre value, averaged over `n_h_avg`
 heating depths in `h ± Δh_frac·h` when `n_h_avg > 1`.
 
@@ -3258,9 +3538,15 @@ hours to compile.
     FT = typeof(c_n)
     abs(c_n) < FT(1e-6) && return FT(0)
     if use_VG
+        # The knot form of the profile, built once per bin; the height-resolved
+        # launch filter rebuilds it from the profile it masks.
+        knots = _beres_sine_knots(gprofile, z_bot, span)
+        n_s = _beres_bin_sample_count(
+            c_n - u_heat, dc, N_source, z_bot, z_bot + span, Val(n_bin_samples),
+        )
         acc = FT(0)
-        for k in 1:n_bin_samples
-            c_k = c_n + dc * ((FT(k) - FT(0.5)) / FT(n_bin_samples) - FT(0.5))
+        for k in 1:n_s
+            c_k = c_n + dc * ((FT(k) - FT(0.5)) / FT(n_s) - FT(0.5))
             ĉ_k = c_k - u_heat
             usable =
                 (abs(ĉ_k) >= FT(1e-6)) & (abs(c_k) >= FT(1e-6)) &
@@ -3270,13 +3556,13 @@ hours to compile.
                 sign(ĉ_k) * _beres_spectrum_single_h(
                     c_k, ĉ_k, h, u_heat, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
                     n_groups, boole_w, use_VG,
-                    _beres_filter_profile(launch_filter, gprofile, c_k), z_bot,
+                    _beres_filter_knots(launch_filter, knots, c_k), z_bot,
                     span, m_max,
                 ) : FT(0)
         end
         # The integral is a flux per unit phase speed; times the bin width it is the
         # flux the bin carries.
-        return scale_factor * (acc / FT(n_bin_samples)) * dc
+        return scale_factor * (acc / FT(n_s)) * dc
     end
     c_hat = c_n - u_heat
     ((abs(c_hat) < FT(1e-6)) | _beres_filter_removes(launch_filter, c_n)) &&
@@ -3349,11 +3635,50 @@ function _beres_launch_spectrum(
     w_obstacle,
     beres::BeresSourceParams,
     gw_ncval::Val{nc},
+    shape_mode::Val = Val(beres.beres_shape_general);
+    kwargs...,
+) where {nc}
+    setup = _beres_launch_setup(
+        _beres_bin_grid(c, gw_ncval), u_heat, Q0, h, N_source, z_bot, span, gprofile,
+        w_obstacle, beres, shape_mode; kwargs...,
+    )
+    # The steady flux is computed once here, not inside each of the nc unrolled bins
+    # (inlined nc times, it makes a kernel LLVM takes hours to compile).
+    steady_flux = _beres_steady_total(setup)
+    FT = typeof(u_heat)
+    return ntuple(Val(nc)) do n
+        _beres_launch_transient(setup, c[n]) + steady_flux * FT(n == setup.n_zero)
+    end
+end
+
+# The phase-speed grid quantities the bins need: the spacing `dc`, the index `n_zero` of
+# the bin nearest c = 0, and whether that bin is exactly c = 0 (the steady flux lands
+# there only then).
+@inline function _beres_bin_grid(c, ::Val{nc}) where {nc}
+    FT = eltype(c)
+    dc = c[2] - c[1]
+    n_zero = clamp(round(Int, -c[1] / dc) + 1, 1, nc)
+    return (; dc, n_zero, has_c0_bin = abs(c[n_zero]) < FT(1e-6))
+end
+
+# The per-column quantities every bin of the launch spectrum needs, given the grid
+# quantities of `_beres_bin_grid`.
+function _beres_launch_setup(
+    grid,
+    u_heat,
+    Q0,
+    h,
+    N_source,
+    z_bot,
+    span,
+    gprofile,
+    w_obstacle,
+    beres::BeresSourceParams,
     shape_mode::Val{SG} = Val(beres.beres_shape_general);
     dz_level = zero(u_heat),
     n_bin_samples::Val = Val(N_BERES_BIN_SAMPLES),
     launch_filter = nothing,
-) where {nc, SG}
+) where {SG}
     (;
         σ_x,
         ν_min,
@@ -3401,66 +3726,59 @@ function _beres_launch_spectrum(
     # the transient spectrum, so no double-counting). Deposits only with an exact
     # c=0 bin (else `clamp` would corrupt a nonzero bin → zero it). β_tot =
     # β_therm + β_mech (Ext 3); each is independently flag-gated.
-    dc = c[2] - c[1]
-    cmax = -c[1]
-    n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
-    has_c0_bin = abs(c[n_zero]) < FT(1e-6)
-    # The launch filter treats the c = 0 bin as any other: removed when c = 0 lies in
-    # the filter band, or, height-resolved, built from the heating above the highest
-    # point where the wind between it and the launch level changes sign.
+    (; dc, n_zero, has_c0_bin) = grid
+    setup = (;
+        dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+        use_VG, gprofile, z_bot, span, m_max, n_h_avg, Δh_frac, scale_factor,
+        launch_filter, n_bin_samples, n_zero, has_c0_bin, Q0_eff, σ_x, L_system,
+        w_obstacle, beres_steady_source, beres_mechanical_source,
+        dc_frac = FT(beres_steady_dc_frac), mech_weight = FT(beres_mech_weight),
+    )
+    return setup
+end
+
+# The steady (ν = 0) flux of the c = 0 bin from the per-column `setup`: the thermal
+# term plus, when enabled, the mechanical term. The launch filter treats the c = 0 bin
+# as any other: removed when c = 0 lies in the filter band, or, height-resolved, built
+# from the heating above the highest point where the wind between it and the launch
+# level changes sign.
+@inline function _beres_steady_total(s)
+    FT = typeof(s.u_heat)
     steady_therm =
         (
-            beres_steady_source && has_c0_bin &&
-            !_beres_filter_removes(launch_filter, zero(FT))
+            s.beres_steady_source && s.has_c0_bin &&
+            !_beres_filter_removes(s.launch_filter, zero(FT))
         ) ?
         _beres_steady_flux(
-            u_heat,
-            N_source,
-            h,
-            Q0_eff,
-            scale_factor,
-            n_h_avg,
-            Δh_frac,
-            σ_x,
-            L_system,
-            FT(beres_steady_dc_frac),
-            ν_min,
-            use_VG,
-            _beres_filter_profile(launch_filter, gprofile, zero(FT)),
-            z_bot,
-            span,
-            m_max,
+            s.u_heat, s.N_source, s.h, s.Q0_eff, s.scale_factor, s.n_h_avg,
+            s.Δh_frac, s.σ_x, s.L_system, s.dc_frac, s.ν_min, s.use_VG,
+            _beres_filter_profile(s.launch_filter, s.gprofile, zero(FT)), s.z_bot,
+            s.span, s.m_max,
         ) : FT(0)
     steady_mech =
         (
-            beres_mechanical_source && has_c0_bin &&
-            !_beres_filter_band(launch_filter, zero(FT))
+            s.beres_mechanical_source && s.has_c0_bin &&
+            !_beres_filter_band(s.launch_filter, zero(FT))
         ) ?
         _beres_mech_flux(
-            u_heat,
-            N_source,
-            w_obstacle,
-            scale_factor,
-            FT(beres_mech_weight),
-            σ_x,
-            L_system,
+            s.u_heat, s.N_source, s.w_obstacle, s.scale_factor, s.mech_weight,
+            s.σ_x, s.L_system,
         ) : FT(0)
-    steady_flux = steady_therm + steady_mech
+    return steady_therm + steady_mech
+end
 
-    ntuple(
-        n -> begin
-            c_n = c[n]
-            val = _beres_transient_bin(
-                c_n, dc, u_heat, h, N2, N_source, Q0_sq, σ_x_sq, ν_min, dν,
-                n_groups, boole_w, use_VG, gprofile, z_bot, span, m_max,
-                n_h_avg, Δh_frac, scale_factor, launch_filter, n_bin_samples,
-            )
+# The transient flux of the bin centred at `c_n`, from the per-column `setup`.
+@inline _beres_launch_transient(s, c_n) = _beres_transient_bin(
+    c_n, s.dc, s.u_heat, s.h, s.N2, s.N_source, s.Q0_sq, s.σ_x_sq, s.ν_min, s.dν,
+    s.n_groups, s.boole_w, s.use_VG, s.gprofile, s.z_bot, s.span, s.m_max,
+    s.n_h_avg, s.Δh_frac, s.scale_factor, s.launch_filter, s.n_bin_samples,
+)
 
-            # Deposit the steady (ν=0) flux into the c≈0 bin only.
-            val + steady_flux * FT(n == n_zero)
-        end,
-        Val(nc),
-    )
+# One bin of the launch spectrum, from the per-column `setup`, for the per-bin kernel:
+# only the c = 0 bin computes the steady flux.
+@inline function _beres_launch_bin(s, c_n, n)
+    val = _beres_launch_transient(s, c_n)
+    return n == s.n_zero ? val + _beres_steady_total(s) : val
 end
 
 # When an `NTuple`-valued field (here `gw_beres_gprofile`) is read inside a

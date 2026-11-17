@@ -1820,6 +1820,129 @@ end
     end
 end
 
+@testset "Beres-G closed-form sine transform and adaptive bins" begin
+    FT = Float64
+    ng = CA.N_BERES_PROFILE
+    ζ = range(0, 1; length = ng)
+    halfsine = _halfsine_profile(Val(ng), FT)
+    ends_nonzero = ntuple(i -> 1 - FT(0.6) * ζ[i], Val(ng))   # g ≠ 0 at both ends
+    # The profile the height-resolved launch filter leaves: zero up to a cut, then a
+    # raised-cosine rise over four gather spacings.
+    masked = ntuple(Val(ng)) do i
+        d = i - 20
+        d <= 0 ? zero(FT) : halfsine[i] * (d < 4 ? (1 - cos(π * d / 4)) / 2 : one(FT))
+    end
+    windows = ((FT(2000), FT(12000)), (FT(8000), FT(4000)), (FT(500), FT(1500)))
+
+    @testset "matches the per-segment rule ($name)" for (name, g) in
+                                                        (("half-sine", halfsine),
+        ("nonzero ends", ends_nonzero), ("masked", masked))
+        for (z_bot, span) in windows
+            knots = CA._beres_sine_knots(g, z_bot, span)
+            # From well below to above the closed form's lower limit in m·span, up to
+            # twice the shortest resolved wavenumber π/dz of the gather grid.
+            ms = exp.(range(log(1e-3 / span), log(2π * (ng - 1) / span); length = 400))
+            new = [_beres_gs(knots, m) for m in ms]
+            old = [_beres_gs(g, z_bot, span, m) for m in ms]
+            @test maximum(abs.(new .- old)) <= 1e-12 * maximum(abs, old)
+            # Below the limit the per-segment rule is used as it is.
+            small = ms .* span .< CA._beres_gs_min_m_span(FT)
+            @test any(small) && new[small] == old[small]
+            # Float32: above its limit, within 5e-4 of the largest value of the Float64
+            # transform (the cut profile reaches 2.3e-4 next to the limit); below it, the
+            # per-segment rule.
+            g32 = Float32.(g)
+            knots32 = CA._beres_sine_knots(g32, Float32(z_bot), Float32(span))
+            new32 = [Float64(_beres_gs(knots32, Float32(m))) for m in ms]
+            @test maximum(abs.(new32 .- old)) <= 5e-4 * maximum(abs, old)
+            small32 = Float32.(ms) .* Float32(span) .< CA._beres_gs_min_m_span(Float32)
+            @test any(small32) &&
+                  new32[small32] == [
+                Float64(_beres_gs(g32, Float32(z_bot), Float32(span), Float32(m))) for
+                m in ms[small32]
+            ]
+        end
+    end
+
+    @testset "zero m" begin
+        @test _beres_gs(CA._beres_sine_knots(halfsine, FT(3000), FT(5000)), FT(0)) == 0
+    end
+
+    @testset "knots of the height-resolved filter" begin
+        z_bot, span = FT(2000), FT(12000)
+        z_points = z_bot .+ (0:(ng - 1)) .* (span / (ng - 1))
+        wind_profile = ntuple(i -> FT(-15) + FT(20) * (z_points[i] - z_bot) / span, Val(ng))
+        beres = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0),
+            beres_scale_factor = FT(2e-6),
+            σ_x = FT(4000),
+            ν_min = FT(8.727e-4),
+            ν_max = FT(1.047e-2),
+            n_ν = 9,
+            beres_shape_general = true,
+            launch_filter = CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED,
+        )
+        filter = CA._beres_launch_filter(
+            beres, (FT(-15), FT(5), FT(0), FT(0), FT(5), FT(0)), wind_profile, Val(1), 2,
+        )
+        knots = CA._beres_sine_knots(halfsine, z_bot, span)
+        for c in (FT(-10), FT(0), FT(3))
+            masked_c = CA._beres_filter_profile(filter, halfsine, c)
+            @test masked_c != halfsine                 # setup: the filter masks
+            @test CA._beres_filter_knots(filter, knots, c).profile == masked_c
+            m = FT(2e-3)
+            @test _beres_gs(CA._beres_filter_knots(filter, knots, c), m) ≈
+                  _beres_gs(masked_c, z_bot, span, m) rtol = 1e-12
+        end
+        @test CA._beres_filter_knots(nothing, knots, FT(1)) === knots
+    end
+
+    @testset "sample count per bin" begin
+        dc, N, z_bot, z_top = FT(0.8), FT(0.012), FT(2000), FT(14000)
+        n_max = CA.N_BERES_BIN_SAMPLES
+        samples(ĉ) = CA._beres_bin_sample_count(ĉ, dc, N, z_bot, z_top, Val(n_max))
+        @test samples(FT(0)) == n_max                  # the bin holding u_heat
+        @test samples(FT(1.2)) == n_max
+        @test samples(FT(60)) == 1                     # far from u_heat
+        @test samples(FT(-60)) == 1
+        counts = [samples(ĉ) for ĉ in FT(0):FT(0.8):FT(60)]
+        @test issorted(counts; rev = true)           # never more samples farther out
+        # Δφ/n is within the tolerance wherever n is below the cap.
+        for ĉ in FT(2):FT(0.8):FT(40)
+            n = samples(ĉ)
+            Δφ = (z_bot + z_top) * N * dc / (abs(ĉ) - dc / 2)^2
+            n < n_max && @test Δφ / n <= CA.BERES_BIN_PHASE_TOL * (1 + 1e-12)
+            n > 1 && @test Δφ / (n - 1) > CA.BERES_BIN_PHASE_TOL
+        end
+        @test CA._beres_bin_sample_count(FT(0), dc, N, z_bot, z_top, Val(1)) == 1
+    end
+
+    @testset "per-bin build equals the per-column spectrum" begin
+        beres = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0),
+            beres_scale_factor = FT(2e-6),
+            σ_x = FT(4000),
+            ν_min = FT(8.727e-4),
+            ν_max = FT(1.047e-2),
+            n_ν = 9,
+            beres_shape_general = true,
+            beres_steady_source = true,
+        )
+        dc, cmax = FT(0.8), FT(40)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        z_bot, span, u_heat = FT(2000), FT(12000), FT(-4.3)
+        args = (u_heat, FT(5e-5), span, FT(0.012), z_bot, span, halfsine, FT(0), beres)
+        B = _beres_launch_spectrum(c, args..., Val(nc); dz_level = FT(600))
+        setup = CA._beres_launch_setup(
+            CA._beres_bin_grid(c, Val(nc)), args...; dz_level = FT(600),
+        )
+        per_bin = [CA._beres_launch_bin(setup, FT((n - 1) * dc - cmax), n) for n in 1:nc]
+        @test collect(B) == per_bin
+        @test B[findfirst(iszero, c)] != 0            # setup: the steady bin is there
+    end
+end
+
 @testset "Beres launch flux does not depend on the bin width" begin
     FT = Float64
     beres = BeresSourceParams{FT}(;

@@ -3,6 +3,24 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] ![][badge-🚀performance] The Beres-G launch spectrum builds
+  about 8 times faster on GPU, and by default its bins average over as many sub-samples
+  as they need instead of 8, which changes Beres-G output: bin values by about 0.45%
+  (summed over bins) and the global launched flux by -0.01%. The adaptive bins are closer
+  to a 32-sample average than the 8 samples were (bins 0.26% vs 0.37%, column totals 0.08%
+  vs 0.12% at the median). Measured on an A100 (1M aquaplanet, h_elem 16, Float32):
+  0.146 → 0.018 s per u+v build; at `dt_nogw = 400 s` the whole model went from 1.194 to
+  1.394 simulated years per day and the build from about 16% to about 2% of the model
+  time (about 0.5% at 1800 s); setup and compile time unchanged. Three changes:
+  - the sine transform is evaluated in a closed form (integration by parts twice gives
+    one sum over the slope changes of the profile, summed by Reinsch's recurrence in eight
+    interleaved chains), the same values to rounding; below `m·span = 0.1`, where the
+    closed form loses digits, the per-segment rule is kept;
+  - the spectrum is built with one thread per (column, bin) instead of one per column,
+    the same values to rounding;
+  - each bin averages over as many sub-samples as the phase of the squared transform
+    turns across it (`BERES_BIN_PHASE_TOL = 0.4` rad, at most `N_BERES_BIN_SAMPLES = 16`),
+    2.0 per bin on average.
 - ![][badge-🐛bugfix] The Beres latent in-cloud heating (`nogw_beres_heating_latent`)
   uses the model's stored 1M rates of the updraft at the current (end-of-step) state:
   the bulk processes as the step-averaged forecast and the implicit set (cloud liquid
