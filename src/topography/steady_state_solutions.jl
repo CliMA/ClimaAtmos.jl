@@ -35,19 +35,18 @@ function background_p_and_T(params, η)
 
     β = N^2 / g
     a = g / (cp_d * T_sfc * β)
-    p = p_sfc * (1 - a + a * exp(-β * η))^(cp_d / R_d)
-    T = T_sfc * ((1 - a) * exp(β * η) + a)
 
     # Replace the constant-N profile with an isothermal profile above T = T_iso
-    # to avoid unreasonably small or large values of T.
+    # to avoid unreasonably small or large values of T. The constant-N pressure is
+    # evaluated only below that level: above it, its base turns negative.
     T_iso = a > 1 ? T_min : T_max
     η_iso = log((T_iso / T_sfc - a) / (1 - a)) / β
-    p_iso = p_sfc * ((1 - a) / (1 - a * T_sfc / T_iso))^(cp_d / R_d)
     if η > η_iso
-        p = p_iso * exp(-g / (R_d * T_iso) * (η - η_iso))
-        T = T_iso
+        p_iso = p_sfc * ((1 - a) / (1 - a * T_sfc / T_iso))^(cp_d / R_d)
+        return (p_iso * exp(-g / (R_d * T_iso) * (η - η_iso)), T_iso)
     end
-
+    p = p_sfc * (1 - a + a * exp(-β * η))^(cp_d / R_d)
+    T = T_sfc * ((1 - a) * exp(β * η) + a)
     return (p, T)
 end
 

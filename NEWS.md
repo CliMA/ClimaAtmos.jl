@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The constant-N background of `ConstantBuoyancyFrequencyProfile`,
+  shared with the steady-state solutions, evaluates the constant-N pressure only below
+  the isothermal cap; above it the base of the power turned negative, which threw a
+  `DomainError` for domains reaching above the cap.
 - ![][badge-🔥behavioralΔ] The Beres latent in-cloud heating (`nogw_beres_heating_latent`)
   is the heating the time stepper applied, averaged over the time since the last NOGW
   call, instead of the stored rates of the end-of-step state. Each implicit stage records
