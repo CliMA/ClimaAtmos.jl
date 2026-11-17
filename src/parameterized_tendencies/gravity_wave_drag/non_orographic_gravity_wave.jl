@@ -70,6 +70,285 @@ at zero and `q_tot` at the condensate sum before evaluating `cp_m`. Called from
     return (Lv * (dq_lcl_dt + dq_rai_dt) + Ls * (dq_icl_dt + dq_sno_dt)) / cpʲ
 end
 
+"""
+    _beres_latent_heating_snapshot!(ᶜQ_ic, Y, p, a_min)
+
+Set `ᶜQ_ic` to the ρaʲ-weighted in-cloud mean of `_beres_latent_heating`, the latent
+heating of each updraft from the model's stored 1M rates at the current state (the bulk
+processes as the step-averaged forecast, the implicit set at its instantaneous rate), on
+levels whose total draft area is at least `a_min`, zero elsewhere. These are rates of the
+state, not what the solver applied; `compute_beres_convective_heating!` uses them only
+when no applied heating has been accumulated since the last NOGW call.
+"""
+function _beres_latent_heating_snapshot!(ᶜQ_ic, Y, p, a_min)
+    FT = eltype(Y)
+    ϵ = eps(FT)
+    n_updrafts = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; ᶜρʲs) = p.precomputed
+    gw_Q_conv_ic = ᶜQ_ic
+    thp = CAP.thermodynamics_params(p.params)
+    (; ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
+    gw_Q_conv_ic .= FT(0)
+    for j in 1:n_updrafts
+        # Bound outside the broadcast, which would otherwise read `.:(j)` as a
+        # field named `j`.
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
+        ᶜρaʲ = ᶜsgsʲ.ρa
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
+        ᶜq_lclʲ = ᶜsgsʲ.q_lcl
+        ᶜq_iclʲ = ᶜsgsʲ.q_icl
+        ᶜq_raiʲ = ᶜsgsʲ.q_rai
+        ᶜq_snoʲ = ᶜsgsʲ.q_sno
+        ᶜtendencyʲ = ᶜmp_tendencyʲs.:($j)
+        ᶜtendency_implicitʲ = ᶜmp_tendency_implicitʲs.:($j)
+        @. gw_Q_conv_ic += ifelse(
+            ᶜρʲ > eps(FT),
+            max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
+                thp,
+                ᶜq_totʲ,
+                ᶜq_lclʲ,
+                ᶜq_iclʲ,
+                ᶜq_raiʲ,
+                ᶜq_snoʲ,
+                ᶜtendencyʲ,
+                ᶜtendency_implicitʲ,
+            ),
+            FT(0),
+        )
+    end
+    # The draft weights of the in-cloud heating are the non-negative draft
+    # densities max(ρaʲ, 0) [kg/m³].
+    positive_draft_mass = sgsʲ -> max(sgsʲ.ρa, zero(sgsʲ.ρa))
+    ᶜdraft_mass = @. lazy(draft_sum(positive_draft_mass, Y.c.sgsʲs))
+    # Total draft area Σⱼ max(ρaʲ, 0)/ρʲ, as in the DSE path above.
+    positive_draft_area =
+        (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
+    ᶜdraft_area =
+        @. lazy(mapreduce_with_init(positive_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    @. gw_Q_conv_ic = ifelse(
+        (ᶜdraft_area >= a_min) & (ᶜdraft_mass > FT(0)),
+        gw_Q_conv_ic / ᶜdraft_mass,
+        FT(0),
+    )
+    return nothing
+end
+
+"""
+    _beres_latent_accumulator_fields(Y)
+
+The cache fields of the applied latent heating of the updrafts (`heating_latent`):
+
+  - `gw_latent_lin`: per updraft, the linearization of its latent heating at the Newton
+    state of the current implicit stage, `(H0, c_lcl, c_icl, c_rai, c_sno)`, so that the
+    heating the stage applies is `H0 + Σ_x c_x·q_x*` at the solved updraft condensates
+    `q_x*` (`_beres_latent_linearization`);
+  - `gw_latent_heat_acc`, `gw_latent_mass_acc`, `gw_latent_area_acc`: the integrals over
+    the time since the last NOGW call of `Σⱼ max(ρaʲ, 0)·Qʲ` [K/s·kg/m³·s], `Σⱼ max(ρaʲ, 0)`
+    [kg/m³·s] and the total draft area `Σⱼ max(ρaʲ, 0)/ρʲ` [s], each implicit stage
+    weighted by `b_imp·dt`;
+  - `gw_latent_time_acc`: the time those integrals cover [s].
+
+The accumulators live in the cache, not in the state, so a restart starts them at zero.
+"""
+function _beres_latent_accumulator_fields(Y)
+    FT = Spaces.undertype(axes(Y.c))
+    n_updrafts = fieldcount(eltype(Y.c.sgsʲs))
+    lin_type = NamedTuple{(:H0, :c_lcl, :c_icl, :c_rai, :c_sno), NTuple{5, FT}}
+    return (;
+        gw_latent_lin = ntuple(_ -> similar(Y.c.ρ, lin_type), n_updrafts),
+        gw_latent_heat_acc = zero(Y.c.ρ),
+        gw_latent_mass_acc = zero(Y.c.ρ),
+        gw_latent_area_acc = zero(Y.c.ρ),
+        gw_latent_time_acc = Ref(zero(FT)),
+    )
+end
+
+"""
+    _beres_latent_linearization(thp, mp_i, has_cond, has_subl, has_evap, has_subl_sno,
+                                ρʲ, Tʲ, q_totʲ, q_lcl, q_icl, q_rai, q_sno,
+                                tendency_bulk, tendency_implicit)
+
+The latent heating of one updraft that an implicit stage applies, as a linear function of
+the updraft condensates the stage solves for: `(H0, c_lcl, c_icl, c_rai, c_sno)` with
+
+    Q = H0 + c_lcl q_lcl* + c_icl q_icl* + c_rai q_rai* + c_sno q_sno*    [K/s]
+
+The Newton step of the stage integrates each condensate tendency as its value at the
+Newton state, `R_x = bulk_x + implicit_x`, plus the Jacobian's rate `r_x` times the change
+`q_x* − q_x`: `r_x = −1/τ` for cloud liquid and ice formation and the linearized rain
+evaporation and snow deposition and sublimation rates, exactly as in
+`update_implicit_microphysics_jacobian!` (zero for a process outside the implicit set,
+and for the bulk processes, which the Jacobian holds fixed). Weighted by `L_v` (liquid,
+rain) and `L_s` (ice, snow) over the updraft's `cp_m`, as `_beres_latent_heating`:
+`H0 = Σ_x L_x (R_x − r_x q_x)/cp`, `c_x = L_x r_x/cp`. The inputs are those of the Newton
+state.
+"""
+@inline function _beres_latent_linearization(
+    thp,
+    mp_i,
+    has_cond,
+    has_subl,
+    has_evap,
+    has_subl_sno,
+    ρʲ,
+    Tʲ,
+    q_totʲ,
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+    tendency_bulk,
+    tendency_implicit,
+)
+    FT = typeof(q_totʲ)
+    z = zero(FT)
+    r_lcl =
+        has_cond ?
+        -inv(_implicit_mp_τ_lcl(mp_i, thp, ρʲ, Tʲ, q_totʲ, q_lcl, q_icl, q_rai, q_sno)) :
+        z
+    r_icl =
+        has_subl ?
+        -inv(
+            _implicit_mp_τ_icl(
+                mp_i, thp, ρʲ, Tʲ, q_totʲ, q_lcl, q_icl, q_rai, q_sno,
+                tendency_implicit.dq_icl_dt,
+            ),
+        ) : z
+    r_rai =
+        has_evap ?
+        _implicit_mp_evap_cond_rai(
+            mp_i, tendency_implicit.dq_rai_dt, q_rai, thp, ρʲ, Tʲ,
+        ) : z
+    r_sno =
+        has_subl_sno ?
+        _implicit_mp_subl_dep_sno(
+            mp_i, tendency_implicit.dq_sno_dt, q_sno, thp, ρʲ, Tʲ,
+        ) : z
+    q_lcl⁺ = max(z, q_lcl)
+    q_icl⁺ = max(z, q_icl)
+    q_rai⁺ = max(z, q_rai)
+    q_sno⁺ = max(z, q_sno)
+    q_tot⁺ = max(z, q_totʲ, q_lcl⁺ + q_icl⁺ + q_rai⁺ + q_sno⁺)
+    cpʲ = TD.cp_m(thp, q_tot⁺, q_lcl⁺, q_icl⁺)
+    Lv = TD.Parameters.LH_v0(thp) / cpʲ
+    Ls = TD.Parameters.LH_s0(thp) / cpʲ
+    R_lcl = tendency_bulk.dq_lcl_dt + tendency_implicit.dq_lcl_dt
+    R_icl = tendency_bulk.dq_icl_dt + tendency_implicit.dq_icl_dt
+    R_rai = tendency_bulk.dq_rai_dt + tendency_implicit.dq_rai_dt
+    R_sno = tendency_bulk.dq_sno_dt + tendency_implicit.dq_sno_dt
+    H0 =
+        Lv * ((R_lcl - r_lcl * q_lcl) + (R_rai - r_rai * q_rai)) +
+        Ls * ((R_icl - r_icl * q_icl) + (R_sno - r_sno * q_sno))
+    return (;
+        H0,
+        c_lcl = Lv * r_lcl,
+        c_icl = Ls * r_icl,
+        c_rai = Lv * r_rai,
+        c_sno = Ls * r_sno,
+    )
+end
+
+"""
+    record_beres_latent_linearization!(Y, p)
+
+At the Newton state `Y` of an implicit stage, store in `gw_latent_lin` the linearization
+of each updraft's latent heating (`_beres_latent_linearization`), which
+`accumulate_beres_latent_heating!` evaluates at the solved state. Called from
+`implicit_tendency!` after the microphysics tendencies, whose inputs
+(`ᶜmp_tendencyʲs`, `ᶜmp_tendency_implicitʲs`, `ᶜTʲs`, `ᶜρʲs`) are set at this state; a
+no-op unless the Beres latent heating is on.
+"""
+record_beres_latent_linearization!(Y, p) = _record_beres_latent_linearization!(
+    Y,
+    p,
+    get(p.non_orographic_gravity_wave, :gw_latent_lin, nothing),
+)
+_record_beres_latent_linearization!(Y, p, ::Nothing) = nothing
+function _record_beres_latent_linearization!(Y, p, gw_latent_lin)
+    eltype(Y) === eltype(p.params) || return nothing
+    thp = CAP.thermodynamics_params(p.params)
+    mp_i = CAP.microphysics_1m_implicit_params(p.params)
+    procs = mp_i.processes
+    has_cond = !isnothing(procs.cloud_liquid_formation)
+    has_subl = !isnothing(procs.cloud_ice_formation)
+    has_evap = !isnothing(procs.rain_condensation_evaporation)
+    has_subl_sno = !isnothing(procs.snow_deposition_sublimation)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs) =
+        p.precomputed
+    for j in 1:length(gw_latent_lin)
+        # Bound outside the broadcast, which would otherwise read `.:(j)` as a field
+        # named `j`.
+        ᶜlinʲ = gw_latent_lin[j]
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
+        ᶜtendencyʲ = ᶜmp_tendencyʲs.:($j)
+        ᶜtendency_implicitʲ = ᶜmp_tendency_implicitʲs.:($j)
+        @. ᶜlinʲ = _beres_latent_linearization(
+            thp, mp_i, has_cond, has_subl, has_evap, has_subl_sno, ᶜρʲ, ᶜTʲ,
+            ᶜq_totʲ, ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl, ᶜsgsʲ.q_rai, ᶜsgsʲ.q_sno,
+            ᶜtendencyʲ, ᶜtendency_implicitʲ,
+        )
+    end
+    return nothing
+end
+
+"""
+    accumulate_beres_latent_heating!(Y, p)
+
+At the solved state `Y = U*` of an implicit stage, add the stage's applied updraft latent
+heating to the Beres accumulators, weighted by the stage's share of the step,
+`b_imp[k]·dt`: `Σⱼ max(ρaʲ, 0)·Qʲ` with `Qʲ = H0 + Σ_x c_x·q_xʲ*` from `gw_latent_lin`,
+`Σⱼ max(ρaʲ, 0)`, and the total draft area. Over a step the weights sum to `dt`, so the
+accumulators divided by `gw_latent_time_acc` are time means over the steps since the
+last NOGW call. Called from `post_newton_stage_update!` after
+`accumulate_stage_precipitation_surface_fluxes!`, which advances the stage index; a no-op
+unless the Beres latent heating is on and the stage-weighted accumulator of the solver is
+active (`has_precip_stage_accumulator`).
+"""
+accumulate_beres_latent_heating!(Y, p) = _accumulate_beres_latent_heating!(
+    Y,
+    p,
+    get(p.non_orographic_gravity_wave, :gw_latent_lin, nothing),
+)
+_accumulate_beres_latent_heating!(Y, p, ::Nothing) = nothing
+function _accumulate_beres_latent_heating!(Y, p, gw_latent_lin)
+    (eltype(Y) === eltype(p.params) && has_precip_stage_accumulator(p)) ||
+        return nothing
+    (;
+        gw_latent_heat_acc,
+        gw_latent_mass_acc,
+        gw_latent_area_acc,
+        gw_latent_time_acc,
+    ) = p.non_orographic_gravity_wave
+    (; ᶜρʲs) = p.precomputed
+    FT = eltype(Y)
+    k = p.scratch.precip_stage_idx[]
+    w = FT(p.scratch.b_imp_stages[k]) * FT(p.dt)
+    ϵ = eps(FT)
+    z = zero(FT)
+    for j in 1:length(gw_latent_lin)
+        ᶜlinʲ = gw_latent_lin[j]
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
+        ᶜρʲ = ᶜρʲs.:($j)
+        @. gw_latent_heat_acc += ifelse(
+            ᶜρʲ > ϵ,
+            w * max(ᶜsgsʲ.ρa, z) *
+            (
+                ᶜlinʲ.H0 + ᶜlinʲ.c_lcl * ᶜsgsʲ.q_lcl + ᶜlinʲ.c_icl * ᶜsgsʲ.q_icl +
+                ᶜlinʲ.c_rai * ᶜsgsʲ.q_rai + ᶜlinʲ.c_sno * ᶜsgsʲ.q_sno
+            ),
+            z,
+        )
+        @. gw_latent_mass_acc += ifelse(ᶜρʲ > ϵ, w * max(ᶜsgsʲ.ρa, z), z)
+        @. gw_latent_area_acc += ifelse(ᶜρʲ > ϵ, w * max(ᶜsgsʲ.ρa, z) / ᶜρʲ, z)
+    end
+    gw_latent_time_acc[] += w
+    return nothing
+end
+
 # Per-column precomputed Beres launch spectrum, stored in the gravity-wave
 # cache. The spectrum is deliberately wrapped in a struct rather than stored as
 # a bare NTuple{nc, FT} field: with the bare tuple, the eltype of the 16-slot
@@ -163,9 +442,11 @@ function _surface_height(Y)
     Fields.field_values(z_surface) .= Fields.field_values(Fields.level(ᶠz, half))
     return z_surface
 end
-function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
+function _beres_cache_fields(Y, beres::BeresSourceParams, ::Val{nc}) where {nc}
     FT = Spaces.undertype(axes(Y.c))
+    latent = beres.heating_latent ? _beres_latent_accumulator_fields(Y) : (;)
     return (;
+        latent...,
         gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
         gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
         gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
@@ -901,57 +1182,36 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # whose Q0_threshold is calibrated to grid-mean magnitudes of the flux convergence.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        # The model's stored 1M rates of each updraft at the current (end-of-step)
-        # state: the bulk processes as the step-averaged forecast and the implicit set
-        # (cloud liquid and ice formation, rain evaporation, snow deposition and
-        # sublimation) at its instantaneous rate. The two sets are process-disjoint,
-        # so their sum is the full latent heating, whichever stage integrates each
-        # process. `set_precomputed_quantities!` refreshes both before any callback.
-        thp = CAP.thermodynamics_params(p.params)
-        (; ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
-        gw_Q_conv_ic .= FT(0)
-        for j in 1:n_updrafts
-            # Bound outside the broadcast, which would otherwise read `.:(j)` as a
-            # field named `j`.
-            ᶜsgsʲ = Y.c.sgsʲs.:($j)
-            ᶜρaʲ = ᶜsgsʲ.ρa
-            ᶜρʲ = ᶜρʲs.:($j)
-            ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
-            ᶜq_lclʲ = ᶜsgsʲ.q_lcl
-            ᶜq_iclʲ = ᶜsgsʲ.q_icl
-            ᶜq_raiʲ = ᶜsgsʲ.q_rai
-            ᶜq_snoʲ = ᶜsgsʲ.q_sno
-            ᶜtendencyʲ = ᶜmp_tendencyʲs.:($j)
-            ᶜtendency_implicitʲ = ᶜmp_tendency_implicitʲs.:($j)
-            @. gw_Q_conv_ic += ifelse(
-                ᶜρʲ > eps(FT),
-                max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
-                    thp,
-                    ᶜq_totʲ,
-                    ᶜq_lclʲ,
-                    ᶜq_iclʲ,
-                    ᶜq_raiʲ,
-                    ᶜq_snoʲ,
-                    ᶜtendencyʲ,
-                    ᶜtendency_implicitʲ,
-                ),
+        (;
+            gw_latent_heat_acc,
+            gw_latent_mass_acc,
+            gw_latent_area_acc,
+            gw_latent_time_acc,
+        ) = p.non_orographic_gravity_wave
+        T_acc = gw_latent_time_acc[]
+        if T_acc > 0 && !p.atmos.numerics.reproducible_restart
+            # The heating the implicit stages applied since the last NOGW call
+            # (`accumulate_beres_latent_heating!`): the time means of Σⱼ max(ρaʲ, 0)·Qʲ
+            # over Σⱼ max(ρaʲ, 0), on levels whose time-mean draft area is at least
+            # a_min.
+            @. gw_Q_conv_ic = ifelse(
+                (gw_latent_area_acc >= a_min * T_acc) & (gw_latent_mass_acc > FT(0)),
+                gw_latent_heat_acc / gw_latent_mass_acc,
                 FT(0),
             )
+        else
+            # No applied heating to average: the first call of a run or after a
+            # restart (the accumulators are not in the restart file), with a solver
+            # that has no stage accumulator, or with `reproducible_restart`, where a
+            # restart must give the same result as a continuous run. Use the stored
+            # rates of the current state (`_beres_latent_heating_snapshot!`).
+            _beres_latent_heating_snapshot!(gw_Q_conv_ic, Y, p, a_min)
         end
-        # The draft weights of the in-cloud heating are the non-negative draft
-        # densities max(ρaʲ, 0) [kg/m³].
-        positive_draft_mass = sgsʲ -> max(sgsʲ.ρa, zero(sgsʲ.ρa))
-        ᶜdraft_mass = @. lazy(draft_sum(positive_draft_mass, Y.c.sgsʲs))
-        # Total draft area Σⱼ max(ρaʲ, 0)/ρʲ, as in the DSE path above.
-        positive_draft_area =
-            (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
-        ᶜdraft_area =
-            @. lazy(mapreduce_with_init(positive_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
-        @. gw_Q_conv_ic = ifelse(
-            (ᶜdraft_area >= a_min) & (ᶜdraft_mass > FT(0)),
-            gw_Q_conv_ic / ᶜdraft_mass,
-            FT(0),
-        )
+        # The next window starts here.
+        fill!(gw_latent_heat_acc, FT(0))
+        fill!(gw_latent_mass_acc, FT(0))
+        fill!(gw_latent_area_acc, FT(0))
+        gw_latent_time_acc[] = FT(0)
     end
 
     # `ᶜuv_temp` holds UVVector(uₕ), which `non_orographic_gravity_wave_compute_tendency!`

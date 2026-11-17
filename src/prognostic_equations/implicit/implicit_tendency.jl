@@ -59,6 +59,9 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
+    # The linearization of the updrafts' latent heating at this Newton state, which
+    # `post_newton_stage_update!` evaluates at the solved state (Beres latent heating).
+    record_beres_latent_linearization!(Y, p)
     surface_precipitation_tendency!(
         Yₜ,
         Y,
@@ -560,7 +563,8 @@ end
 """
     post_newton_stage_update!(Yₜ, Y, p, t)
 
-Accumulate stage-weighted surface precipitation fluxes, write the post-Newton
+Accumulate stage-weighted surface precipitation fluxes and the Beres applied latent
+heating (`accumulate_beres_latent_heating!`), write the post-Newton
 vertical advection correction into `Yₜ` at `Y = U*`, and apply the linearized
 surface precipitation increment to a prognostic slab ocean when active.
 
@@ -583,6 +587,7 @@ function post_newton_stage_update!(Yₜ, Y, p, t)
         p,
         p.atmos.microphysics_model,
     )
+    accumulate_beres_latent_heating!(Y, p)
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     add_post_newton_surface_precipitation_tendency!(
         Yₜ,

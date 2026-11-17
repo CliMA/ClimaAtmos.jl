@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The Beres latent in-cloud heating (`nogw_beres_heating_latent`)
+  is the heating the time stepper applied, averaged over the time since the last NOGW
+  call, instead of the stored rates of the end-of-step state. Each implicit stage records
+  the linearization the Newton step uses for the updraft condensates (the rates at the
+  Newton state plus the Jacobian's `−1/τ` and linearized evaporation and deposition rates
+  times the change of the condensate) and adds the heating at the solved state, weighted
+  by `b_imp·dt`. The first NOGW call of a run or after a restart (the accumulators are not
+  in the restart file), a solver without the stage accumulator, and
+  `reproducible_restart` use the stored rates.
 - New config key `z_faces`: explicit vertical face heights, or the preset
   `hybrid_0p5km` (the 63-level grid up to 8.1 km, shrinking to 500 m at 10.6 km, uniform
   500 m to 34.6 km, then growing by about 11% per level to 3 km at 60 km; 106 levels).
