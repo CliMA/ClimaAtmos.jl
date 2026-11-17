@@ -874,6 +874,16 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
         CA.set_beres_launch_state!(
             beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
         )
+        @testset "Beres launch state: the first level at or above gw_ztop" begin
+            launch_value(f) = only(Array(parent(f)))
+            k_launch = findfirst(>=(only(Array(parent(gw_ztop)))), center_z)
+            @test launch_value(beres_source_ρ_z_u_v_level.:5) == k_launch
+            @test launch_value(beres_source_ρ_z_u_v_level.:2) == center_z[k_launch]
+            @test launch_value(beres_source_ρ_z_u_v_level.:1) ==
+                  Array(Fields.field2array(ᶜρ))[k_launch, 1]
+            @test launch_value(beres_source_ρ_z_u_v_level.:3) ==
+                  Array(Fields.field2array(ᶜu))[k_launch, 1]
+        end
 
         # ------------------------------------------------------------------
         # Call forcing
@@ -1439,6 +1449,22 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                 @test prof_w[2] > 0
             end
         end
+    end
+
+    # The launch and damping levels `compute_tendency!` itself picks in column mode:
+    # the level closest to the source height (the upper of two equally close levels),
+    # and a damping layer of the top `NOGW_MIN_DAMP_CELLS` cells.
+    @testset "Column launch and damp levels from compute_tendency!" begin
+        nogw = p.non_orographic_gravity_wave
+        CA.non_orographic_gravity_wave_compute_tendency!(
+            Y, p, p.atmos.non_orographic_gravity_wave,
+        )
+        nlev = Spaces.nlevels(axes(Y.c))
+        @test only(Array(parent(nogw.damp_level))) ==
+              nlev - CA.NOGW_MIN_DAMP_CELLS + 1
+        source_distance = abs.(center_z .- nogw.gw_source_height)
+        @test only(Array(parent(nogw.source_ρ_z_u_v_level.:5))) ==
+              findlast(==(minimum(source_distance)), source_distance)
     end
 end
 
