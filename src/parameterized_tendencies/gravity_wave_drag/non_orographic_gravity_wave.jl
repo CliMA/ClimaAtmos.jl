@@ -3729,15 +3729,19 @@ end
 # nogw_b5_* diagnostic of one output time reads the same Dict short_name => Array
 # shaped like parent(gw_Q0). The memo is a module global, not a cache Ref (a Ref in
 # the cache changes its type and recompiles the forcing kernel), so it is keyed on
-# the identity of the cache's gw_beres_active array as well as the time: two
-# simulations in one process never share maps.
+# the cache's gw_beres_active array itself (compared with ===) as well as the time:
+# two simulations in one process never share maps. Keeping the array in the key holds
+# a reference to it, so its identity cannot be reused by another array.
 const _B5_MEMO_KEY = Ref{Any}(nothing)
 const _B5_MEMO_MAPS = Ref{Any}(nothing)
 
 function _compute_beres_fiveway!(p, time)
     nogw = p.non_orographic_gravity_wave
-    memo_key = (objectid(parent(nogw.gw_beres_active)), time)
-    _B5_MEMO_KEY[] == memo_key && return _B5_MEMO_MAPS[]
+    memo_key = (parent(nogw.gw_beres_active), time)
+    key = _B5_MEMO_KEY[]
+    if !isnothing(key) && key[1] === memo_key[1] && key[2] == memo_key[2]
+        return _B5_MEMO_MAPS[]
+    end
 
     (; gw_beres_source, gw_c) = nogw
     beres = gw_beres_source
