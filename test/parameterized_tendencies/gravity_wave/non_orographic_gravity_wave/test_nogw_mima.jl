@@ -4,6 +4,7 @@ ClimaComms.@import_required_backends
 using NCDatasets
 using Dates
 using Statistics
+using Test
 
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
@@ -16,6 +17,14 @@ import ClimaCore: to_cpu
 include("../gw_plotutils.jl")
 
 const FT = Float64
+
+# Limits of the numeric gate at the end of this file (see `mima_agreement`). The
+# reference run (rc/beres-bugfix, 2026-11-16) gave, over the 13 months, zonal
+# correlations 0.963-0.976, meridional correlations 0.50-0.64, and zonal RMS ratios
+# 2.12-2.28 (ClimaAtmos drag about twice MiMA's).
+const MIMA_MIN_CORR_U = 0.93
+const MIMA_MIN_CORR_V = 0.4
+const MIMA_RATIO_RANGE_U = (1.8, 2.6)
 
 # Set up ClimaAtmos infrastructure
 comms_ctx = ClimaComms.SingletonCommsContext()
@@ -272,6 +281,26 @@ vforcing_zonalave = dropdims(mean(vforcing, dims = 1), dims = 1)
 gwfu_zonalave = dropdims(mean(gwfu_cgwd, dims = 1), dims = 1)
 gwfv_zonalave = dropdims(mean(gwfv_cgwd, dims = 1), dims = 1)
 
+# Numeric gate against MiMA: for each month, the pattern correlation over latitude and
+# pressure of the zonal-mean drag, and the ratio of its root-mean-square values
+# (ClimaAtmos over MiMA). ClimaAtmos levels run bottom to top, MiMA's top to bottom.
+# The limits leave a margin around the values of the reference run named below; a
+# change to the AD99 kernel that moves the drag shows up as a drop in correlation or a
+# shift of the ratio.
+function mima_agreement(clima_zonalave, mima_zonalave)
+    clima = clima_zonalave[:, end:-1:1, :]
+    mima = convert(Array{FT}, mima_zonalave)
+    corr = [cor(vec(clima[:, :, it]), vec(mima[:, :, it])) for it in axes(mima, 3)]
+    rms(x) = sqrt(mean(abs2, x))
+    ratio = [rms(clima[:, :, it]) / rms(mima[:, :, it]) for it in axes(mima, 3)]
+    return (; corr, ratio)
+end
+agreement_u = mima_agreement(uforcing_zonalave, gwfu_zonalave)
+agreement_v = mima_agreement(vforcing_zonalave, gwfv_zonalave)
+@info "Agreement with MiMA (minimum and maximum over the months)" extrema(
+    agreement_u.corr,
+) extrema(agreement_u.ratio) extrema(agreement_v.corr) extrema(agreement_v.ratio)
+
 ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_mima"
 mkpath(output_dir)
@@ -381,4 +410,11 @@ for it in 1:length(time)
 
     # Save to disk
     CairoMakie.save(joinpath(output_dir, "$it.png"), fig)
+end
+
+# The gate runs after the plots, so a failure still leaves them for inspection.
+@testset "AD99 drag agrees with MiMA" begin
+    @test all(>(MIMA_MIN_CORR_U), agreement_u.corr)
+    @test all(>(MIMA_MIN_CORR_V), agreement_v.corr)
+    @test all(r -> MIMA_RATIO_RANGE_U[1] < r < MIMA_RATIO_RANGE_U[2], agreement_u.ratio)
 end
