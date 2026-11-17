@@ -1,4 +1,4 @@
-472
+473
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+473
+- `prognostic_edmfx_1M.toml` matches ClimaCoupler's `amip_progedmf_1m.toml`:
+  Changes the output of every job that uses this parameter file.
+
 472
 - Tail entrainment on by default for the prognostic EDMF updraft
   (`edmf_tail_entr_fraction = 0.5`). Changes the output of every

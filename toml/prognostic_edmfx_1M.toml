@@ -4,6 +4,9 @@ value = 40000.0
 [zd_viscous]
 value = 40000.0
 
+[ogw_smoothing_scale_fraction]
+value = 1.0
+
 [alpha_rayleigh_tracer]
 value = 0.001
 
@@ -23,13 +26,19 @@ value = [0.007, 400.0]
 value = 0
 
 [entr_coeff]
-value = 0.1
+value = 0.3
 
 [min_area_limiter_scale]
 value = 0.001
 
 [min_area_limiter_power]
 value = 1
+
+[entr_detr_limit_inv_tau]
+value = 0
+
+[detr_inv_tau]
+value = 0
 
 [detr_coeff]
 value = 0
@@ -49,14 +58,47 @@ value = 0.001
 [max_area_limiter_power]
 value = 1
 
-[pressure_normalmode_drag_coeff]
-value = 8.0
+[mixing_length_Prandtl_maximum]
+value = 100
+
+[sgs_ice_uniform_fraction]
+value = 0.0
+
+[sgs_liquid_uniform_fraction]
+value = 0.0
 
 [condensation_evaporation_timescale]
-value = 100
+value = 10
 
 [sublimation_deposition_timescale]
-value = 100
+value = 3600
+
+[rain_autoconversion_timescale]
+value = 1200
+
+[snow_autoconversion_timescale]
+value = 1360
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 1.25e-4
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform_scale]
+value = 2.0
+
+[rain_autoconversion_velocity_scale]
+value = 0.05
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+value = 5e-6
+
+[cloud_ice_number_max]
+value = 1.0e5
+
+[cloud_ice_number_temperature_fit_prefactor]
+value = 3000.0
+
+[cloud_fraction_steepness_scale]
+value = 1.2
 
 [snow_apparent_density]
 value = 200.0
