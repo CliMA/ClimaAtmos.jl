@@ -42,14 +42,24 @@ include("restart_utils.jl")
 
 
 """
-    test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
+    test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[],
+                 last_checkpoint = "day0.3.hdf5", restart_checkpoint = "day0.2.hdf5")
 
 Test if the restarts are consistent for a simulation defined by the `test_dict` config.
 
 `more_ignore` is a Vector of Symbols that identifies config-specific keys that
-have to be ignored when reading a simulation.
+have to be ignored when reading a simulation. `last_checkpoint` is the checkpoint written
+at `t_end`, which is read back; `restart_checkpoint` is an earlier one, from which the
+simulation is run again to `t_end`.
 """
-function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
+function test_restart(
+    test_dict;
+    job_id,
+    comms_ctx,
+    more_ignore = Symbol[],
+    last_checkpoint = "day0.3.hdf5",
+    restart_checkpoint = "day0.2.hdf5",
+)
     ClimaComms.iamroot(comms_ctx) && println("job_id = $(job_id)")
 
     local_success = true
@@ -59,7 +69,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     # Check re-importing the same state
     restart_dir = simulation.output_dir
-    @test isfile(joinpath(restart_dir), "day0.3.hdf5")
+    @test isfile(joinpath(restart_dir, last_checkpoint))
 
     # Reset random seed for RRTMGP
     Random.seed!(1234)
@@ -136,8 +146,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     # Reset random seed for RRTMGP
     Random.seed!(1234)
 
-    restart_file = joinpath(simulation.output_dir, "day0.2.hdf5")
-    @test isfile(joinpath(restart_dir), "day0.2.hdf5")
+    restart_file = joinpath(simulation.output_dir, restart_checkpoint)
+    @test isfile(restart_file)
     # Restart from specific file
     config2 = CA.AtmosConfig(
         merge(test_dict, Dict("restart_file" => restart_file));
@@ -295,7 +305,12 @@ if MANYTESTS
                     )
                     push!(
                         TESTING,
-                        (; test_dict, job_id, more_ignore = Symbol[]),
+                        (;
+                            test_dict,
+                            job_id,
+                            more_ignore = Symbol[],
+                            checkpoints = (;),
+                        ),
                     )
                 end
             end
@@ -333,10 +348,13 @@ else
             "reproducible_restart" => true,
             "check_nan_every" => 3,
             "log_progress" => false,
+            # The gravity-wave drag is computed every 3 steps and held in the
+            # cache in between, so the restart must bring back the held drag:
+            # the run is restarted from 6 s and run on to 12 s.
             "dt" => "1secs",
-            "dt_rad" => "1secs", "t_end" => "3secs",
-            "dt_nogw" => "1secs",
-            "dt_save_state_to_disk" => "1secs",
+            "dt_rad" => "1secs", "t_end" => "12secs",
+            "dt_nogw" => "3secs",
+            "dt_save_state_to_disk" => "6secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "rad" => "allskywithclear",
             "radiation_reset_rng_seed" => true,
@@ -354,11 +372,21 @@ else
             test_dict = amip_test_dict,
             job_id = amip_job_id,
             more_ignore = Symbol[],
+            checkpoints = (;
+                last_checkpoint = "day0.12.hdf5",
+                restart_checkpoint = "day0.6.hdf5",
+            ),
         ),
     )
 end
 
 @test all(
-    @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore)[1] for
+    @time test_restart(
+        t.test_dict;
+        comms_ctx,
+        t.job_id,
+        t.more_ignore,
+        t.checkpoints...,
+    )[1] for
     t in TESTING
 )
