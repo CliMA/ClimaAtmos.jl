@@ -284,10 +284,23 @@ import ClimaCore.Geometry as Geometry
         @test max_inactive <= 1e-6 * max_active
     end
 
-    @testset "Tendency application deposits the clamped forcing into Yₜ" begin
+    @testset "Tendency application adds the clamped forcing to Yₜ" begin
         # uforcing currently holds the full-Beres result, which the compute step
-        # clamped to ±3e-3 m/s². apply_tendency adds it to Yₜ.c.uₕ.
+        # clamped to ±3e-3 m/s². apply_tendency adds it to Yₜ.c.uₕ, so it starts
+        # from a nonzero tendency that varies with height and between columns, of
+        # the same size as the forcing: an assignment in place of the addition, or
+        # swapped components, would then miss by far more than round-off.
+        (; uforcing, vforcing) = p.non_orographic_gravity_wave
+        uf_clamped = Array(Fields.field2array(uforcing))
+        @test all(isfinite, uf_clamped)
+        @test maximum(abs, uf_clamped) <= 3e-3 + sqrt(eps(FT))
+        @test maximum(abs, uf_clamped) > 0
+        ᶜz = Fields.coordinate_field(Y.c).z
+        ᶜlat = Fields.coordinate_field(Y.c).lat
+        ᶜu_start = @. FT(1e-3) * (1 + ᶜz / 45000) * cosd(ᶜlat)
+        ᶜv_start = @. FT(-2e-3) * (1 + sind(ᶜlat))
         Yₜ = zero(Y)
+        @. Yₜ.c.uₕ = Geometry.Covariant12Vector(Geometry.UVVector(ᶜu_start, ᶜv_start))
         CA.non_orographic_gravity_wave_apply_tendency!(
             Yₜ,
             Y,
@@ -295,16 +308,17 @@ import ClimaCore.Geometry as Geometry
             simulation.integrator.t,
             p.atmos.non_orographic_gravity_wave,
         )
-        uf_clamped =
-            Array(Fields.field2array(p.non_orographic_gravity_wave.uforcing))
-        @test all(isfinite, uf_clamped)
-        @test maximum(abs, uf_clamped) <= 3e-3 + sqrt(eps(FT))
-        # Yₜ.c.uₕ is a 2-component Covariant12 vector; field2array can't represent
-        # it directly, so extract the zonal (UVVector) component as a scalar field.
-        du = Geometry.UVVector.(Yₜ.c.uₕ).components.data.:1
-        du_arr = Array(Fields.field2array(du))
-        @test all(isfinite, du_arr)
-        @test maximum(abs, du_arr) > 0
+        expected = @. Geometry.Covariant12Vector(
+            Geometry.UVVector(ᶜu_start + uforcing, ᶜv_start + vforcing),
+        )
+        actual = Array(parent(Yₜ.c.uₕ))
+        target = Array(parent(expected))
+        @test all(isfinite, actual)
+        scale = maximum(abs, target)
+        @test maximum(abs, actual .- target) <= 100 * eps(FT) * scale
+        # The forcing changes the tendency by more than round-off.
+        start = @. Geometry.Covariant12Vector(Geometry.UVVector(ᶜu_start, ᶜv_start))
+        @test maximum(abs, actual .- Array(parent(start))) > 1000 * eps(FT) * scale
     end
 
     # N in the bottom and top cells uses the one-sided dT/dz across the face between
