@@ -1041,7 +1041,7 @@ terms, which keeps its relative precision where the terms of the expanded form
 cancel: where the fluctuations follow the saturation curve, `q′ ≈ γ T′`
 (`σ_q ≈ γ σ_T`, `corr_Tq ≈ 1`).
 """
-@inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+@approx_ops @inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
     FT = typeof(ρ)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))

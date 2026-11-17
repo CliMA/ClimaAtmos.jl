@@ -446,7 +446,7 @@ the rest stays uniform,
 so that the node mean of `φ` is 1 and the cell mean is conserved. `β = 0`
 returns exactly 1; `shaft_frac = 0` falls back to uniform.
 """
-@inline function sgs_placement_factor(β, flag, shaft_frac)
+@approx_ops @inline function sgs_placement_factor(β, flag, shaft_frac)
     FT = typeof(β)
     φ_in = ifelse(
         shaft_frac > zero(FT), flag / max(shaft_frac, eps(FT)), one(FT),
@@ -776,7 +776,7 @@ caller's evaluator with the scaled parameters, and returns the sum via
 `sum_over_conditional_nodes`. Used by `_sum_1m_over_sgs` (the CM BMT bulk
 tendency SGS integration).
 """
-@inline function _sum_over_conditional_sgs(
+@approx_ops @inline function _sum_over_conditional_sgs(
     make_evaluator,
     thp, ρ, T, mu_S, σ_S,
     λ_lagrange, λ_eq, α, q_c,
@@ -825,7 +825,7 @@ exactly for any `a_p` (bounded below by `precip_frac_floor`). `mode` picks
 the BMT variant at each node (`LinearizedAverage` for the explicit
 substep-averaged tendency, `Instantaneous` for the implicit path).
 """
-@inline function _sum_1m_over_sgs(
+@approx_ops @inline function _sum_1m_over_sgs(
     mode, scheme, sgs_quad, cmp, thp, ρ, T, w,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
