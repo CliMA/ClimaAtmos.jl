@@ -21,7 +21,10 @@ const FT = Float64
 # Limits of the numeric gate at the end of this file (see `mima_agreement`). The
 # reference run (rc/beres-bugfix, 2026-11-16) gave, over the 13 months, zonal
 # correlations 0.963-0.976, meridional correlations 0.50-0.64, and zonal RMS ratios
-# 2.12-2.28 (ClimaAtmos drag about twice MiMA's).
+# 2.12-2.28. The correlation limits check the pattern. The RMS-ratio window is only a
+# regression guard, set from that one run: the ClimaAtmos drag is about 2.2 times
+# MiMA's for a reason not yet known, and the window is not a physical bound.
+# TODO: explain the ~2.2x AD99-vs-MiMA amplitude gap, then tighten the window.
 const MIMA_MIN_CORR_U = 0.93
 const MIMA_MIN_CORR_V = 0.4
 const MIMA_RATIO_RANGE_U = (1.8, 2.6)

@@ -14,6 +14,9 @@ main
   `max_newton_iters_ode = 1` the applied implicit increment, (U − temp)/dtγ, differs
   from the instantaneous rate, so whether the Beres heating should follow the applied
   increments remains open.
+- The AD99 drag in `test_nogw_mima.jl` is about 2.2 times MiMA's (RMS of the zonal-mean
+  drag) while its pattern correlates at 0.96-0.98; the cause of this gap is not known.
+  The test's RMS-ratio window is a regression guard on it, not a physical bound.
 - ![][badge-🔥behavioralΔ] The Julia-API default gravity-wave cadences (`dt_nogw`,
   `dt_ogw` in the `callback_kwargs` of `AtmosSimulation`) are 1800 s, the same as the
   `default_config.yml` defaults; they were 3 hours. Runs set up from a config file are
