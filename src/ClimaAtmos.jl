@@ -50,6 +50,7 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
+include(joinpath("utils", "approx_ops.jl"))
 include(joinpath("atmospheric_profiles_library", "AtmosphericProfilesLibrary.jl"))
 import .AtmosphericProfilesLibrary as APL
 include(joinpath("column_datasets", "ColumnDatasets.jl"))

@@ -397,7 +397,7 @@ by the transform functor.
 
 Tuple `(σ_q, σ_T, corr)` [kg/kg, K, -].
 """
-@inline function sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+@approx_ops @inline function sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     FT = typeof(corr_Tq)
     σ_q = sqrt(max(FT(0), q′q′))
     σ_T = sqrt(max(FT(0), T′T′))

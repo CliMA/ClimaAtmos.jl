@@ -39,7 +39,7 @@ Inner convergents `(d, e)` of Laplace's continued fraction
 `e = 3 / (x + 4 / (x + ⋯))` for the inverse Mills ratio of the standard
 normal tail at `x > 0`, evaluated to 32 levels.
 """
-@inline function _mills_continued_fraction(x)
+@approx_ops @inline function _mills_continued_fraction(x)
     FT = typeof(x)
     e = zero(FT)
     for k in 32:-1:3
@@ -61,7 +61,7 @@ below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
 differences of such probabilities, which the absolute accuracy of `normal_cdf`
 alone does not resolve beyond `z ≈ 2`.
 """
-@inline function normal_tail_prob(z)
+@approx_ops @inline function normal_tail_prob(z)
     FT = typeof(z)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     z_cf = max(z, FT(2))
@@ -86,7 +86,7 @@ across it, from the upper tail probabilities `Qa = Q(|a|)`, `Qb = Q(|b|)`
 @inline _gaussian_interval_moments4(a, b) = _gaussian_interval_moments4(
     a, b, normal_tail_prob(abs(a)), normal_tail_prob(abs(b)),
 )
-@inline function _gaussian_interval_moments4(a, b, Qa, Qb)
+@approx_ops @inline function _gaussian_interval_moments4(a, b, Qa, Qb)
     FT = typeof(a)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     φa = ifelse(isfinite(a), exp(-a^2 / 2) * inv_sqrt2π, zero(FT))
@@ -124,7 +124,7 @@ mean with `p₁ = p₂ = ½`. `Qa`, `Qb` are the edge tail probabilities of
 @inline _truncated_normal_gauss2(a, b) = _truncated_normal_gauss2(
     a, b, normal_tail_prob(abs(a)), normal_tail_prob(abs(b)),
 )
-@inline function _truncated_normal_gauss2(a, b, Qa, Qb)
+@approx_ops @inline function _truncated_normal_gauss2(a, b, Qa, Qb)
     FT = typeof(a)
     (I₀, I₁, I₂, I₃) = _gaussian_interval_moments4(a, b, Qa, Qb)
     empty = I₀ <= zero(FT)
@@ -186,7 +186,7 @@ correlation of `T′` and `S′`. The correlation is clamped to `[−1, 1]`, so 
 regressed temperature spread `|β_T| σ_S` stays within `σ_T` (Cauchy–Schwarz)
 where rounding or the floor on `σ_S` puts the quotient outside that range.
 """
-@inline function sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
+@approx_ops @inline function sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     FT = typeof(σ_S)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
@@ -216,7 +216,7 @@ edges: the two-point Gauss rule where the interval carries actual cloud
 and a second node of zero weight. The node temperature is the regression
 `T + β_T S′` floored at `T_min`.
 """
-@inline function _conditional_interval_nodes(
+@approx_ops @inline function _conditional_interval_nodes(
     T, σ_S, β_T, lo, hi, Qlo, Qhi, cloudy, shaft, T_min,
 )
     FT = typeof(σ_S)
@@ -265,7 +265,7 @@ The thresholds, sorted, bound four intervals; each gets the nodes of
 one node at its conditional mean otherwise, for eight node slots in all. The
 weights sum to one; an interval of zero width contributes zero weight.
 """
-@inline function conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, T_min)
+@approx_ops @inline function conditional_rule(T, σ_S, β_T, t_a, t_e, t_p, T_min)
     FT = typeof(σ_S)
     # A sliver interval between nearly coincident actual and equilibrium
     # cloud edges, |t_e − t_a| < 10⁻³ σ_S, collapses onto the actual edge. Its
@@ -314,7 +314,7 @@ Standard deviation `σ⊥ = √(Var(T′) − β_T² σ_S²)` [K] of the tempera
 fixed centred saturation excess: the part of the temperature spread the
 regression on `S′` (`sgs_temperature_regression`) does not carry.
 """
-@inline function sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S)
+@approx_ops @inline function sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S)
     FT = typeof(σ_S)
     return sqrt(max(FT(T′T′) - (β_T * σ_S)^2, zero(FT)))
 end
@@ -349,7 +349,7 @@ conditional means `t₁ = −φ(t★)/p₁`, `t₂ = φ(t★)/p₂` of the half-
 units of `σ⊥`; otherwise a single point, `(1, 0, 0, 0)`. Both forms keep the
 mean temperature.
 """
-@inline function _freezing_split(T_node, σ⊥, T_freeze)
+@approx_ops @inline function _freezing_split(T_node, σ⊥, T_freeze)
     FT = typeof(T_node)
     t★ = (T_freeze - T_node) / max(σ⊥, ϵ_numerics(FT))
     p₁ = normal_cdf(t★)
@@ -494,7 +494,7 @@ by two further Newton steps, which bring the residual of the seed (up to a few
 percent of `q_c` at small `q_c / σ`) to `≲ 1e-8 σ`, a few `1e-6` of `q_c` in the
 deep tail.
 """
-@inline function _continuous_lagrange(q_c, σ)
+@approx_ops @inline function _continuous_lagrange(q_c, σ)
     FT = typeof(q_c)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     C = q_c / σ
