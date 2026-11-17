@@ -348,9 +348,13 @@ else
             "reproducible_restart" => true,
             "check_nan_every" => 3,
             "log_progress" => false,
-            # The gravity-wave drag is computed every 3 steps and held in the
-            # cache in between, so the restart must bring back the held drag:
-            # the run is restarted from 6 s and run on to 12 s.
+            # The gravity-wave drag is computed every 3 steps (at 0, 3, 6, 9, 12 s)
+            # and held in the cache in between. The restart at 6 s falls on an
+            # update time, so the drag is recomputed there as in the uninterrupted
+            # run; this checks a restart at a drag cadence longer than the step,
+            # not the restoring of a held drag. A restart between updates (e.g.
+            # dt_nogw = 4 s) does not reproduce the run; the code warns when the
+            # drag cadence does not divide the checkpoint period.
             "dt" => "1secs",
             "dt_rad" => "1secs", "t_end" => "12secs",
             "dt_nogw" => "3secs",
