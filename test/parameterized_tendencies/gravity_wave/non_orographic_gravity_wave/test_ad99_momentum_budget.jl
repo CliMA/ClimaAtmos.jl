@@ -59,6 +59,13 @@
 #    intermittency; its budget is a_cover times its launched flux, and the
 #    full drag with both sources must be the sum of the two alone.
 #
+# The budget closes wherever the waves deposit, so tests 6-8 check where and
+# whether they do: 6, the height where each wave breaks against the analytic
+# height; 7, total internal reflection; 8, the AD99 source amplitude, frame and
+# spectrum by latitude. Test 2 also passes `damp_level` as one level index, the
+# form single-column callers use, and test 4 checks that every wave reaches its
+# exact critical level before anything else removes it.
+#
 # Each of tests 1-4 runs twice: on a single column, and on a cubed sphere where
 # `damp_level` differs from column to column. Only test 2 sends momentum through
 # `damp_level` and `M_R`, so only there does the sphere check the per-column
@@ -423,7 +430,7 @@ end
 #   check each test took the intended path — ≈0 in tests 1/3, ≈all in test 2.
 #   Recovered from the ghost layer's stored acceleration by multiplying with
 #   the ghost-layer mass (needs `nk == 1`, asserted below).
-function run_case!(st; Bw, wind::Symbol, damp_spec)
+function run_case!(st; Bw, wind::Symbol, damp_spec, damp_index = false)
     (; gwc, p, ᶜz, ᶜρ_t, ᶜu_t, ᶜv_t, ᶜbf_t, ᶜmom, deposited_field) = st
     @assert gwc.gw_nk == 1 "the `escaped` diagnostic assumes a single wave band"
 
@@ -467,6 +474,8 @@ function run_case!(st; Bw, wind::Symbol, damp_spec)
     fill!(gwc.uforcing, FT(0))
     fill!(gwc.vforcing, FT(0))
 
+    # `damp_index` passes `damp_level` as one level index instead of a level field.
+    damp_level = damp_index ? damp_spec::Int : gwc.damp_level
     CA.non_orographic_gravity_wave_forcing(
         ᶜu_t,
         ᶜv_t,
@@ -475,7 +484,7 @@ function run_case!(st; Bw, wind::Symbol, damp_spec)
         ᶜz,
         gwc.ᶜlevel,
         st.source_level,
-        gwc.damp_level,
+        damp_level,
         st.ρ_source,
         st.u_source,
         st.v_source,
@@ -641,6 +650,17 @@ end
 
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
+
+    # Single-column callers pass `damp_level` as one level index, not a level
+    # field; that path must deposit exactly as the field does.
+    for damp_spec in (NLEV, NLEV - 3)
+        res_field = run_case!(COLUMN_STATE; Bw, wind = :constant, damp_spec)
+        res_index =
+            run_case!(COLUMN_STATE; Bw, wind = :constant, damp_spec, damp_index = true)
+        @test res_index.forcing_u == res_field.forcing_u
+        @test res_index.forcing_v == res_field.forcing_v
+        @test all(isapprox.(res_index.deposited_u ./ lf.F_launch, 1; rtol = RTOL_CLOSURE))
+    end
 end
 
 # ============================================================================
@@ -706,6 +726,27 @@ end
 # ratio far below 1; the deposit must close exactly, as in test 1. Uniform grids
 # only, because the on-bin wind is indexed on the uniform levels.
 # ============================================================================
+# Whether bin `n` of the AD99 spectrum (launched in the on-bin wind with amplitude
+# `Bw`) passes every level between the launch level and its exact critical level
+# without breaking or meeting a sign change, as the kernel tests them: at level `k`
+# it tests the values at `k + 1`, breaking when B0/ĉ³ ≥ ½·(ρ_{k+1}/ρ_source)·k/N.
+# Bins without flux deposit nothing either way.
+function reaches_exact_critical_level(st, n, Bw)
+    B0 = spectrum(U_SOURCE, Bw)[n]
+    B0 == 0 && return true
+    kwv = 2 * FT(π) / (FT(30) * 10 * FT(1000))
+    c = GW_C[n]
+    c_hat0 = c - U_SOURCE
+    for kp1 in (SOURCE_LEVEL + 1):(st.nlev)
+        c_hat = c - on_bin_wind(st.center_z[kp1])
+        c_hat == 0 && return true
+        c_hat0 * c_hat < 0 && return false
+        fac = FT(0.5) * (st.ρ_profile[kp1] / st.ρ_profile[SOURCE_LEVEL]) * kwv / N_const
+        B0 / c_hat^3 >= fac && return false
+    end
+    return false
+end
+
 @testset "AD99 column momentum budget — exact critical levels (c = u)" begin
     Bw = FT(1e-4)
     lf = launched_flux(U_SOURCE, Bw)
@@ -718,6 +759,11 @@ end
         # Setup guard: every bin is hit exactly by some wind above the source.
         u_above = winds_above_source(st; wind = :on_bins)
         @test all(c -> any(==(c), u_above), GW_C)
+        # Setup guard: every bin with flux reaches the level where the wind equals
+        # its phase speed, so it is absorbed there through the `c_hat == 0` branch,
+        # not earlier by breaking (with the real density ratio ρ(z)/ρ_source of each
+        # level) or by a sign change of c - u.
+        @test all(n -> reaches_exact_critical_level(st, n, Bw), eachindex(GW_C))
 
         res = run_case!(st; Bw, wind = :on_bins, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
@@ -808,7 +854,15 @@ end
 
 # Run AD99 and Beres together with the given AD99 source amplitude and Beres
 # coverage, and return the column-integrated drag and the drag profiles.
-function run_beres_case!(st; source_ampl, a_cover, damp_spec)
+function run_beres_case!(
+    st;
+    source_ampl,
+    a_cover,
+    damp_spec,
+    wind = :reversing,
+    B0_u = BERES_B0_U,
+    B0_v = BERES_B0_V,
+)
     (; gwc, p, ᶜz, ᶜρ_t, ᶜu_t, ᶜv_t, ᶜbf_t, ᶜmom, deposited_field) = st
     @assert gwc.gw_nk == 2
 
@@ -822,7 +876,13 @@ function run_beres_case!(st; source_ampl, a_cover, damp_spec)
     z_src = st.center_z[SOURCE_LEVEL]
     z_top = st.center_z[end]
     @. ᶜρ_t = ρ0 * exp(-(ᶜz / H_ρ))
-    @. ᶜu_t = reversing_wind(ᶜz, z_src, z_top)
+    if wind == :reversing
+        @. ᶜu_t = reversing_wind(ᶜz, z_src, z_top)
+    elseif wind == :constant
+        fill!(ᶜu_t, U_SOURCE)
+    else
+        error("unknown wind $wind")
+    end
     fill!(ᶜv_t, FT(0))
     fill!(ᶜbf_t, N_const)
 
@@ -837,8 +897,8 @@ function run_beres_case!(st; source_ampl, a_cover, damp_spec)
     # The Beres source: hand-set spectra and coverage, the launch state as
     # production sets it. The scalar source fields are carried by the kernel's
     # input tuple but not read; they are set so they hold finite values.
-    fill!(gwc.gw_beres_B0_u, CA.BeresB0(BERES_B0_U))
-    fill!(gwc.gw_beres_B0_v, CA.BeresB0(BERES_B0_V))
+    fill!(gwc.gw_beres_B0_u, CA.BeresB0(B0_u))
+    fill!(gwc.gw_beres_B0_v, CA.BeresB0(B0_v))
     fill!(gwc.gw_a_cover, a_cover)
     for f in (gwc.gw_Q0, gwc.gw_h_heat, gwc.gw_u_heat, gwc.gw_v_heat)
         fill!(f, FT(0))
@@ -937,4 +997,200 @@ const BERES_CASES = (
             both.forcing_v .- (ad99_only.forcing_v .+ beres_only.forcing_v),
         ) < 1e-12 * maximum(abs, both.forcing_v)
     end
+end
+
+# ============================================================================
+# Test 6 — where each wave breaks, against the analytic breaking height
+#
+# In a constant wind with constant N and ρ = ρ0·exp(-z/H), a wave of flux B0
+# and intrinsic phase speed ĉ saturates where B0/ĉ³ first reaches the breaking
+# limit ½·(ρ(z)/ρ_ref)·k/N, with ρ_ref = ρ_source for the AD99 flux per unit
+# mass and ρ_ref = 1 for the Beres stress. So it breaks at
+#
+#     z* = H·ln(ρ0·k/(2·N·ρ_ref·B0/ĉ³)).
+#
+# The kernel tests the level above each level, so the wave deposits in the
+# layer between the first centre at or above z* (and above the launch level)
+# and the centre below it, half in each of those two cells; a wave still
+# unbroken at the top goes to the damping layer. The cells that receive drag
+# must be exactly the union of these cells over all waves and wavenumber bands.
+# A factor of 2 in the limit moves each z* by H·ln 2 ≈ 4.9 km, five layers.
+# ============================================================================
+
+# The set of cells that receive drag from the waves `B0` (intrinsic phase speeds
+# `c_hat`) launched at `launch_level`, for `nk` wavenumber bands, with the
+# reference density `ρ_ref` of the breaking limit. Every z* must lie more than
+# 1 m from a cell centre, so rounding cannot move a wave to another layer.
+function predicted_drag_cells(st, B0, c_hat, launch_level, ρ_ref; nk, damp_level)
+    cells = Set{Int}()
+    for ink in 1:nk, n in eachindex(B0)
+        B0[n] == 0 && continue
+        kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000)
+        ratio = B0[n] / c_hat[n]^3
+        @assert ratio > 0 "B0 must carry the sign of the intrinsic phase speed"
+        z_star = H_ρ * log(ρ0 * kwv / (2 * N_const * ρ_ref * ratio))
+        @assert minimum(abs, st.center_z .- z_star) > 1 "z* = $z_star m is on a centre"
+        kp1 = findfirst(
+            k -> k > launch_level && st.center_z[k] >= z_star,
+            1:(st.nlev),
+        )
+        isnothing(kp1) ? union!(cells, damp_level:(st.nlev)) : union!(cells, (kp1 - 1, kp1))
+    end
+    return cells
+end
+
+drag_cells(forcing_column) = Set(findall(!iszero, forcing_column))
+
+@testset "Breaking heights match the analytic saturation height" begin
+    # AD99: the ClimaParams spectrum at 50 times the production amplitude, so the
+    # waves break from the first layer above the launch level up to about 31 km.
+    Bw = FT(20)
+    B0 = spectrum(U_SOURCE, Bw)
+    c_hat = GW_C .- U_SOURCE
+    ρ_source = COLUMN_STATE.ρ_profile[SOURCE_LEVEL]
+    expected = predicted_drag_cells(
+        COLUMN_STATE, B0, c_hat, SOURCE_LEVEL, ρ_source; nk = 1, damp_level = NLEV,
+    )
+    @test length(expected) >= 8                    # the waves break at many heights
+    @test maximum(expected) < NLEV - 5             # and none reaches the top
+    res = run_case!(COLUMN_STATE; Bw, wind = :constant, damp_spec = NLEV)
+    @test drag_cells(res.forcing_u[:, 1]) == expected
+
+    # Beres: two bins, launched at the first level above 8 km, each breaking at two
+    # heights, one per wavenumber band: the second band's k is 10 times smaller, so
+    # its breaking limit is too, and it breaks H·ln 10 ≈ 16 km lower (here at 9.7
+    # and 15.1 km, the first band at 25.8 and 31.2 km).
+    (_, st, _) = BERES_CASES[1]
+    n_east = findfirst(==(FT(40)), GW_C)           # ĉ = 16 m/s
+    n_west = findfirst(==(FT(0)), GW_C)            # ĉ = -24 m/s
+    B0_u = ntuple(
+        n -> n == n_east ? FT(0.043) : n == n_west ? FT(-0.067) : FT(0),
+        length(GW_C),
+    )
+    zero_B0 = ntuple(_ -> FT(0), length(GW_C))
+    res_beres = run_beres_case!(
+        st;
+        source_ampl = FT(0),
+        a_cover = FT(1),
+        damp_spec = NLEV,
+        wind = :constant,
+        B0_u,
+        B0_v = zero_B0,
+    )
+    launch_level = round(Int, res_beres.launch_level[1])
+    expected_beres = predicted_drag_cells(
+        st, B0_u, GW_C .- U_SOURCE, launch_level, FT(1); nk = 2, damp_level = NLEV,
+    )
+    @test length(expected_beres) == 8              # four separate layers
+    @test drag_cells(res_beres.forcing_u[:, 1]) == expected_beres
+    @test all(iszero, res_beres.forcing_v)
+end
+
+# ============================================================================
+# Test 7 — total internal reflection
+#
+# A wave whose intrinsic horizontal phase speed exceeds ω_r/k, with
+# ω_r = √(N²k²/(k² + 1/(4H_b²))) and H_b the density scale height of the layer, is
+# reflected: the kernel removes it from the spectrum and deposits nothing. Just
+# below that speed it keeps propagating, and at the model top it is deposited.
+# One step of the kernel, `waveforcing_accumulate_step`, is called directly with
+# one phase-speed bin, a weak wave (far from breaking) and the AD99 layout of
+# its inputs.
+# ============================================================================
+@testset "AD99 kernel: waves faster than the reflection speed are removed" begin
+    N = FT(0.01)
+    kwv = 2 * FT(π) / (FT(30) * 10 * FT(1000))
+    (z_k, z_kp1) = (FT(20000), FT(21000))
+    (ρ_k, ρ_kp1) = (ρ0 * exp(-z_k / H_ρ), ρ0 * exp(-z_kp1 / H_ρ))
+    H_b = (z_kp1 - z_k) / log(ρ_k / ρ_kp1)
+    ω_r = sqrt(N^2 * kwv^2 / (kwv^2 + 1 / (4 * H_b^2)))
+    c_reflect = ω_r / kwv
+    level_end = 50
+    BitVector1 = CA.UnrolledUtilities.StaticBitVector{1}
+    # One kernel step at `level` for a wave of intrinsic phase speed `c_hat`
+    # (u = 0, so c = c_hat) launched at level 2 with a weak eastward flux.
+    function step(c_hat, level)
+        c = (c_hat,)
+        B0 = (FT(1e-12),)
+        state = (FT(0), BitVector1(_ -> true), sum(abs, B0), B0)
+        inp = (
+            FT(0), N, ρ_k, ρ_kp1, z_kp1, z_k, level,          # shared slots 1-7
+            FT(0), ρ_k, 2, FT(0.4), FT(0), FT(35), FT(2), FT(1), FT(0.0043), # AD99 8-16
+        )
+        (wave_forcing, mask, _, _) = CA.waveforcing_accumulate_step(
+            state, inp, c, FT(0), 1, kwv, level_end, Val(1), Val(:ad99),
+        )
+        return (; wave_forcing, kept = mask[1])
+    end
+    above = step(FT(1.01) * c_reflect, 10)
+    below = step(FT(0.99) * c_reflect, 10)
+    @test !above.kept
+    @test above.wave_forcing == 0
+    @test below.kept
+    @test below.wave_forcing == 0
+    # At the model top an unreflected wave is deposited, a reflected one is not.
+    @test step(FT(0.99) * c_reflect, level_end).wave_forcing > 0
+    @test step(FT(1.01) * c_reflect, level_end).wave_forcing == 0
+end
+
+# ============================================================================
+# Test 8 — the AD99 source by latitude, and the frame of the tropical spectrum
+#
+# On the sphere the AD99 source amplitude follows the MiMA rule: `Bt_eq` within
+# |lat| ≤ |dϕ| (10°), a linear ramp to `Bt_0` at |lat| = |ϕ0| (15°), and beyond
+# that `Bt_0` plus hemispheric tanh enhancements. Inside the tropical band the
+# spectrum is centred on the launch wind (flag 0, no narrow component, the
+# tropical width); outside it is centred on c0 in the ground frame (flag 1).
+# The ClimaParams defaults make the amplitude the same everywhere, so this test
+# sets distinct values.
+# ============================================================================
+@testset "AD99 source amplitude, frame and width by latitude" begin
+    (Bt_0, Bt_eq, Bt_n, Bt_s) = (FT(0.004), FT(0.006), FT(0.002), FT(0.001))
+    (Bn, cw, cw_tropics) = (FT(0.1), FT(35), FT(25))
+    gw_params = CA.NonOrographicGravityWaveParameters(
+        FT,
+        (; dc = FT(4), cmax = FT(40), Bt_0, Bt_eq, Bt_n, Bt_s, Bn, cw, cw_tropics),
+    )
+    P = typeof(gw_params)
+    gw = CA.NonOrographicGravityWave{FT, Nothing}(;
+        NamedTuple{fieldnames(P)}(ntuple(i -> getfield(gw_params, i), fieldcount(P)))...,
+        beres_source = nothing,
+    )
+    (; ϕ0_n, ϕ0_s, dϕ_n, dϕ_s) = gw
+    @test (ϕ0_n, ϕ0_s, dϕ_n, dϕ_s) == (15, -15, 10, -10)
+    gwc = build_state(:sphere; gw).gwc
+    lat = per_column(Fields.local_geometry_field(gwc.gw_source_ampl).coordinates.lat)
+    ampl = per_column(gwc.gw_source_ampl)
+    flag = per_column(gwc.gw_flag)
+    gw_Bn = per_column(gwc.gw_Bn)
+    gw_cw = per_column(gwc.gw_cw)
+    tropics = abs.(lat) .<= 10
+    ramp = 10 .< abs.(lat) .<= 15
+    extratropics = abs.(lat) .> 15
+    # Setup: the grid has columns in all three regions.
+    @test any(tropics) && any(ramp) && any(extratropics)
+
+    expected_ampl = map(lat) do ϕ
+        if abs(ϕ) <= 10
+            Bt_eq
+        elseif abs(ϕ) <= 15
+            Bt_eq + (Bt_0 - Bt_eq) * (abs(ϕ) - 10) / 5
+        else
+            Bt_0 + Bt_n * (1 + tanh((ϕ - 15) / 10)) / 2 +
+            Bt_s * (1 + tanh((ϕ + 15) / -10)) / 2
+        end
+    end
+    @test ampl ≈ expected_ampl rtol = 1e-12
+    @test all(flag[tropics] .== 0) && all(flag[.!tropics] .== 1)
+    @test all(gw_Bn[tropics] .== 0) && all(gw_Bn[.!tropics] .== Bn)
+    @test all(gw_cw[tropics] .== cw_tropics) && all(gw_cw[.!tropics] .== cw)
+
+    # The tropical spectrum (flag 0) is the ground-frame one (flag 1, u = 0)
+    # shifted by the launch wind: for u = 8 m/s, two bins.
+    u = FT(8)
+    ground = CA.wave_source(GW_C, FT(0), FT(0.4), FT(0), cw, GW.cn, FT(0), FT(1), GW_NCVAL)
+    moving = CA.wave_source(GW_C, u, FT(0.4), FT(0), cw, GW.cn, FT(0), FT(0), GW_NCVAL)
+    @test collect(moving[3:end]) == collect(ground[1:(end - 2)])
+    @test moving !=
+          CA.wave_source(GW_C, u, FT(0.4), FT(0), cw, GW.cn, FT(0), FT(1), GW_NCVAL)
 end
