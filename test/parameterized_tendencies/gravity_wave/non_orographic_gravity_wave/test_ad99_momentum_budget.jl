@@ -171,24 +171,23 @@ function build_state(
     z_stretch = false,
     deep_atmosphere = false,
     gw = build_gw(),
+    z_faces = nothing,
 )
-    grid = if kind == :column
-        CA.ColumnGrid(
-            FT;
-            context = comms_ctx,
-            z_elem = Z_ELEM,
-            z_max = Z_MAX,
-            z_stretch,
-            STRETCH...,
+    # Explicit face heights (the `z_faces` config key) replace the 50-level grid.
+    vertical =
+        isnothing(z_faces) ? (; z_elem = Z_ELEM, z_max = Z_MAX, z_stretch, STRETCH...) :
+        (;
+            z_elem = length(z_faces) - 1,
+            z_max = FT(z_faces[end]),
+            z_mesh = CA.z_faces_mesh(FT, z_faces, z_faces[end]),
         )
+    grid = if kind == :column
+        CA.ColumnGrid(FT; context = comms_ctx, vertical...)
     elseif kind == :sphere
         CA.SphereGrid(
             FT;
             context = comms_ctx,
-            z_elem = Z_ELEM,
-            z_max = Z_MAX,
-            z_stretch,
-            STRETCH...,
+            vertical...,
             h_elem = 2,
             deep_atmosphere,
         )
@@ -234,9 +233,13 @@ function build_state(
     nlev = Spaces.nlevels(center_space)
     @assert length(center_z) == nlev
     @assert length(face_z) == nlev + 1
+    # The launch level: SOURCE_LEVEL on the 50-level grids, the level nearest
+    # 14.5 km (as SOURCE_LEVEL is on the uniform grid) on explicit faces.
+    src = isnothing(z_faces) ? SOURCE_LEVEL : argmin(abs.(center_z .- FT(14500)))
 
     return (;
         kind,
+        src,
         center_space,
         gwc,
         p,
@@ -382,13 +385,13 @@ end
 # extrapolates above the model top. An exact coincidence with a phase-speed bin
 # sends that bin down the `c_hat == 0` branch.
 function winds_above_source(st; wind = :reversing)
-    z_src = st.center_z[SOURCE_LEVEL]
+    z_src = st.center_z[st.src]
     z_top = st.center_z[end]
     u = map(
         z -> wind == :reversing ? reversing_wind(z, z_src, z_top) : on_bin_wind(z),
         st.center_z,
     )
-    return vcat(u[(SOURCE_LEVEL + 1):end], 2 * u[end] - u[end - 1])
+    return vcat(u[(st.src + 1):end], 2 * u[end] - u[end - 1])
 end
 
 # ----------------------------------------------------------------------------
@@ -446,7 +449,7 @@ function run_case!(st; Bw, wind::Symbol, damp_spec, damp_index = false)
     fill!(gwc.gw_flag, FT(1))
     fill!(gwc.gw_source_ampl, GW.Bt_0)
 
-    z_src = st.center_z[SOURCE_LEVEL]
+    z_src = st.center_z[st.src]
     z_top = st.center_z[end]
     @. ᶜρ_t = ρ0 * exp(-(ᶜz / H_ρ))
     if wind == :reversing
@@ -463,11 +466,11 @@ function run_case!(st; Bw, wind::Symbol, damp_spec, damp_index = false)
 
     # Launch-level state as level fields, matching what `compute_tendency!`
     # hands the forcing on the sphere.
-    fill!(st.source_level, FT(SOURCE_LEVEL))
+    fill!(st.source_level, FT(st.src))
     for (dst, src) in
         ((st.ρ_source, ᶜρ_t), (st.u_source, ᶜu_t), (st.v_source, ᶜv_t))
         Fields.field_values(dst) .=
-            Fields.field_values(Fields.level(src, SOURCE_LEVEL))
+            Fields.field_values(Fields.level(src, st.src))
     end
     set_damp_level!(st, damp_spec)
 
@@ -530,6 +533,12 @@ const SPHERE_STATE = build_state(:sphere)
 const STRETCHED_COLUMN_STATE = build_state(:column; z_stretch = true)
 const DEEP_SPHERE_STATE = build_state(:sphere; deep_atmosphere = true)
 const NLEV = COLUMN_STATE.nlev
+# The hybrid 0.5 km grid of the `z_faces` preset (106 levels to 60 km, a spacing that
+# shrinks from 745 m to 500 m near 10 km and grows by 11% per level above 35 km).
+const HYBRID_FACES = CA.z_faces_from_config("hybrid_0p5km", 60000.0)
+const HYBRID_COLUMN_STATE = build_state(:column; z_faces = HYBRID_FACES)
+const HYBRID_SPHERE_STATE = build_state(:sphere; z_faces = HYBRID_FACES)
+const HYBRID_NLEV = HYBRID_COLUMN_STATE.nlev
 
 # The budget closes to round-off on every grid.
 const RTOL_CLOSURE = 1e-10
@@ -547,6 +556,8 @@ const INTERIOR_CASES = (
     ("stretched column", STRETCHED_COLUMN_STATE, NLEV),
     ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
     ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
+    ("hybrid 0.5 km column", HYBRID_COLUMN_STATE, HYBRID_NLEV),
+    ("hybrid 0.5 km sphere, per-column damp_level", HYBRID_SPHERE_STATE, Val(:varying)),
 )
 
 # ============================================================================
@@ -621,12 +632,23 @@ end
         ("stretched column, damp_level = $(NLEV - 3)", STRETCHED_COLUMN_STATE, NLEV - 3),
         ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
         ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
+        (
+            "hybrid 0.5 km column, damp_level = $HYBRID_NLEV",
+            HYBRID_COLUMN_STATE,
+            HYBRID_NLEV,
+        ),
+        (
+            "hybrid 0.5 km column, damp_level = $(HYBRID_NLEV - 3)",
+            HYBRID_COLUMN_STATE,
+            HYBRID_NLEV - 3,
+        ),
+        ("hybrid 0.5 km sphere, per-column damp_level", HYBRID_SPHERE_STATE, Val(:varying)),
     )
         res = run_case!(st; Bw, wind = :constant, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
         escaped_frac = minimum(abs, res.escaped ./ lf.F_launch)
 
-        @info "Test 2 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), escaped fraction = $(round(escaped_frac; digits = 4)), receiving levels = $(sort(unique(NLEV .- res.damp_level .+ 1)))"
+        @info "Test 2 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), escaped fraction = $(round(escaped_frac; digits = 4)), receiving levels = $(sort(unique(st.nlev .- res.damp_level .+ 1)))"
 
         # Setup guard: only meaningful if essentially all of the launched flux
         # really did reach the model top.
@@ -646,7 +668,7 @@ end
 
         # The sphere case checks the per-column hand-back only if the receiving
         # layer really differs between columns.
-        startswith(name, "sphere") && @test length(unique(res.damp_level)) > 1
+        occursin("sphere", name) && @test length(unique(res.damp_level)) > 1
 
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
@@ -709,8 +731,8 @@ end
         # level, so no drag lands below it. Moving the loop start back to
         # `source_level - 1` without the old code's guards would deposit them
         # below the launch level and still close the budget; this catches that.
-        @test all(iszero, res.forcing_u[1:(SOURCE_LEVEL - 1), :])
-        @test all(iszero, res.forcing_v[1:(SOURCE_LEVEL - 1), :])
+        @test all(iszero, res.forcing_u[1:(st.src - 1), :])
+        @test all(iszero, res.forcing_v[1:(st.src - 1), :])
 
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
@@ -873,7 +895,7 @@ function run_beres_case!(
     fill!(gwc.gw_flag, FT(1))
     fill!(gwc.gw_source_ampl, source_ampl)
 
-    z_src = st.center_z[SOURCE_LEVEL]
+    z_src = st.center_z[st.src]
     z_top = st.center_z[end]
     @. ᶜρ_t = ρ0 * exp(-(ᶜz / H_ρ))
     if wind == :reversing
@@ -886,11 +908,11 @@ function run_beres_case!(
     fill!(ᶜv_t, FT(0))
     fill!(ᶜbf_t, N_const)
 
-    fill!(st.source_level, FT(SOURCE_LEVEL))
+    fill!(st.source_level, FT(st.src))
     for (dst, src) in
         ((st.ρ_source, ᶜρ_t), (st.u_source, ᶜu_t), (st.v_source, ᶜv_t))
         Fields.field_values(dst) .=
-            Fields.field_values(Fields.level(src, SOURCE_LEVEL))
+            Fields.field_values(Fields.level(src, st.src))
     end
     set_damp_level!(st, damp_spec)
 
@@ -947,6 +969,16 @@ const BERES_CASES = (
         build_state(:sphere; deep_atmosphere = true, gw = build_gw_beres()),
         Val(:varying),
     ),
+    (
+        "hybrid 0.5 km column",
+        build_state(:column; z_faces = HYBRID_FACES, gw = build_gw_beres()),
+        HYBRID_NLEV,
+    ),
+    (
+        "hybrid 0.5 km sphere, per-column damp_level",
+        build_state(:sphere; z_faces = HYBRID_FACES, gw = build_gw_beres()),
+        Val(:varying),
+    ),
 )
 
 @testset "Beres column momentum budget, alone and on top of AD99" begin
@@ -968,7 +1000,7 @@ const BERES_CASES = (
         # Setup: the Beres launch level lies above the ground and below the
         # damping layer and, on the sphere, differs between columns.
         @test all(>(1), beres_only.launch_level)
-        @test all(<(NLEV - 3), beres_only.launch_level)
+        @test all(<(st.nlev - 3), beres_only.launch_level)
         st.kind == :sphere && @test length(unique(beres_only.launch_level)) > 1
 
         @test all(isapprox.(beres_only.deposited_u ./ F_beres_u, 1; rtol = RTOL_CLOSURE))

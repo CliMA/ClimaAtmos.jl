@@ -458,13 +458,14 @@ function get_z_mesh(
 end
 
 """
-    z_faces_mesh(::Type{FT}, z_faces, z_max)
+    z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 1)
 
 Build a vertical mesh from the explicit face heights `z_faces` [m], which must rise
-strictly from `0` to `z_max`; one element lies between each pair of neighbouring faces.
-Throws an `ArgumentError` naming the first face that breaks these rules.
+strictly from `0` to `z_max`, each layer at least `dz_min` [m] thick; one element lies
+between each pair of neighbouring faces. Throws an `ArgumentError` naming the first face
+that breaks these rules.
 """
-function z_faces_mesh(::Type{FT}, z_faces, z_max) where {FT}
+function z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 1) where {FT}
     faces = Float64.(collect(z_faces))
     length(faces) >= 2 ||
         throw(ArgumentError("`z_faces` needs at least two faces; got $(length(faces))"))
@@ -480,6 +481,13 @@ function z_faces_mesh(::Type{FT}, z_faces, z_max) where {FT}
         ArgumentError(
             "`z_faces` must rise strictly; face $(k + 1) ($(faces[k + 1]) m) is not \
              above face $k ($(faces[k]) m)",
+        ),
+    )
+    k = findfirst(i -> faces[i + 1] - faces[i] < dz_min, 1:(length(faces) - 1))
+    isnothing(k) || throw(
+        ArgumentError(
+            "`z_faces` layers must be at least $(dz_min) m thick; faces $k and \
+             $(k + 1) ($(faces[k]) m, $(faces[k + 1]) m) are $(faces[k + 1] - faces[k]) m apart",
         ),
     )
     domain = Domains.IntervalDomain(

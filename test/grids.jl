@@ -137,6 +137,9 @@ import ClimaCore as CC
             [0.0, 500.0, 500.0, 1000.0],
             1000.0,
         )
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 0.5, 1000.0], 1000.0)
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 1000.0], 999.0)
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0], 0.0)
         @test_throws ArgumentError CA.z_faces_from_config("no_such_preset", 60000.0)
         @test isnothing(CA.z_faces_from_config(nothing, 60000.0))
         @test CA.z_faces_from_config([0, 1, 2], 2.0) == [0.0, 1.0, 2.0]
@@ -189,5 +192,153 @@ import ClimaCore as CC
         )
         (; face_space) = CA.get_spaces(grid)
         @test vec(parent(CC.Fields.coordinate_field(face_space).z)) == f
+    end
+
+    @testset "Explicit faces equal to a built-in mesh give the same spaces" begin
+        # The faces of the built-in uniform and 63-level two-scale meshes, given as an
+        # explicit list, must give the same faces, centres and local geometry, bit for bit.
+        for FT in (Float32, Float64),
+            (z_elem, z_max, z_stretch) in
+            ((10, 30000.0, false), (63, 60000.0, true))
+
+            kw = (;
+                z_elem,
+                z_max,
+                z_stretch,
+                dz_bottom = 30.0,
+                dz_top = 3000.0,
+                z_pbl = 2200.0,
+            )
+            builtin = CA.get_z_mesh(FT; kw...)
+            faces = [Float64(CC.Geometry.component(x, 1)) for x in builtin.faces]
+            explicit = CA.z_faces_mesh(FT, faces, z_max)
+            @test explicit.faces == builtin.faces
+            for make in (
+                m -> CA.ColumnGrid(FT; z_elem, z_max, z_mesh = m),
+                m -> CA.SphereGrid(FT; z_elem, z_max, z_mesh = m, h_elem = 2),
+            )
+                a = CA.get_spaces(make(builtin))
+                b = CA.get_spaces(make(explicit))
+                for sp in (:center_space, :face_space)
+                    ga = CC.Fields.local_geometry_field(getproperty(a, sp))
+                    gb = CC.Fields.local_geometry_field(getproperty(b, sp))
+                    @test parent(ga) == parent(gb)
+                end
+            end
+        end
+    end
+
+    @testset "Vertical operators on the hybrid faces converge at second order" begin
+        # Refine the hybrid faces by cubic Hermite interpolation of z(ξ) at the face
+        # index ξ (Catmull-Rom slopes), which keeps the spacing smooth, and compare
+        # the vertical operators applied to analytic profiles with the exact values.
+        FT = Float64
+        Ops = CC.Operators
+        f0 = CA.z_faces_from_config("hybrid_0p5km", 60000.0)
+        function refine(f, r)
+            n = length(f) - 1
+            d = [
+                i == 1 ? f[2] - f[1] :
+                i == n + 1 ? f[n + 1] - f[n] :
+                (f[i + 1] - f[i - 1]) / 2 for i in 1:(n + 1)
+            ]
+            out = [f[1]]
+            for i in 1:n, j in 1:r
+                t = j / r
+                h00, h10 = 2t^3 - 3t^2 + 1, t^3 - 2t^2 + t
+                h01, h11 = -2t^3 + 3t^2, t^3 - t^2
+                push!(out, h00 * f[i] + h10 * d[i] + h01 * f[i + 1] + h11 * d[i + 1])
+            end
+            out[end] = f[end]
+            return out
+        end
+        L, H = 20000.0, 7000.0
+        prof(z) = sin(2π * z / L) + exp(-z / H)
+        dprof(z) = 2π / L * cos(2π * z / L) - exp(-z / H) / H
+        iprof(z) = -L / (2π) * cos(2π * z / L) - H * exp(-z / H)
+        lin(z) = 3 + 2e-4 * z
+        rs = (1, 2, 4, 8)
+        errs = Dict{Symbol, Vector{Float64}}()
+        trans = Dict{Symbol, Vector{Float64}}()   # 7 to 12 km, the spacing transition
+        lin_errs = Dict{Symbol, Float64}()
+        for r in rs
+            fr = refine(f0, r)
+            @test all(>(0), diff(fr)) && fr[1] == 0 && fr[end] == 60000.0
+            grid = CA.ColumnGrid(FT; z_elem = length(fr) - 1, z_max = 60000.0,
+                z_mesh = CA.z_faces_mesh(FT, fr, 60000.0))
+            (; center_space, face_space) = CA.get_spaces(grid)
+            ᶜz = CC.Fields.coordinate_field(center_space).z
+            ᶠz = CC.Fields.coordinate_field(face_space).z
+            zc = vec(parent(ᶜz));
+            zf = vec(parent(ᶠz))
+            for (g, label) in ((prof, :smooth), (lin, :linear))
+                ᶜg = g.(ᶜz);
+                ᶠg = g.(ᶠz)
+                grad = Ops.GradientC2F(
+                    bottom = Ops.SetValue(g(0.0)),
+                    top = Ops.SetValue(g(60000.0)),
+                )
+                div = Ops.DivergenceF2C()
+                c2f =
+                    Ops.InterpolateC2F(bottom = Ops.Extrapolate(), top = Ops.Extrapolate())
+                f2c = Ops.InterpolateF2C()
+                ᶠgrad = vec(parent(CC.Geometry.WVector.(grad.(ᶜg))))
+                ᶜdiv = vec(parent(div.(CC.Geometry.WVector.(ᶠg))))
+                ᶠint = vec(parent(c2f.(ᶜg)))
+                ᶜint = vec(parent(f2c.(ᶠg)))
+                col = CC.Fields.Field(FT, CC.Spaces.level(face_space, CC.Utilities.half))
+                CC.Operators.column_integral_definite!(col, ᶜg)
+                dg = label == :smooth ? dprof : (z -> 2e-4)
+                ig =
+                    label == :smooth ? (iprof(60000.0) - iprof(0.0)) :
+                    (3 * 60000.0 + 1e-4 * 60000.0^2)
+                inner = 2:(length(zf) - 1)
+                e = (
+                    grad = abs.(ᶠgrad[inner] .- dg.(zf[inner])),
+                    div = abs.(ᶜdiv .- dg.(zc)),
+                    c2f = abs.(ᶠint[inner] .- g.(zf[inner])),
+                    f2c = abs.(ᶜint .- g.(zc)),
+                )
+                if label == :smooth
+                    for (k, v) in pairs(e)
+                        push!(get!(errs, k, Float64[]), maximum(v))
+                        win =
+                            k in (:grad, :c2f) ? (7000 .< zf[inner] .< 12000) :
+                            (7000 .< zc .< 12000)
+                        push!(get!(trans, k, Float64[]), maximum(v[win]))
+                    end
+                    push!(get!(errs, :integral, Float64[]), abs(parent(col)[1] - ig))
+                elseif r == 1
+                    for (k, v) in pairs(e)
+                        lin_errs[k] = maximum(v)
+                    end
+                    lin_errs[:integral] = abs(parent(col)[1] - ig) / ig
+                end
+            end
+        end
+        order(v) = log2(v[end - 1] / v[end])
+        for k in (:grad, :div, :c2f, :f2c, :integral)
+            @info "hybrid faces, $k: max errors $(errs[k]) (r = $rs), order $(round(order(errs[k]), digits = 2))" *
+                  (
+                haskey(trans, k) ?
+                "; 7-12 km: $(trans[k]), order $(round(order(trans[k]), digits = 2))" : ""
+            )
+            @test 1.9 < order(errs[k]) < 2.2
+            # In 7-12 km the largest face error sits at 8.1 km, where the spacing stops
+            # growing and starts shrinking: the refined spacing ratio there tends to 1
+            # more slowly, and the face operators (gradient, centre-to-face
+            # interpolation) converge at about 1.7-1.85 (1.84 from r = 8 to 16), with
+            # errors several times below the column maximum; the centre operators keep 2.
+            haskey(trans, k) &&
+                @test (k in (:grad, :c2f) ? 1.6 : 1.9) < order(trans[k]) < 2.2
+            haskey(trans, k) && @test trans[k][end] < errs[k][end]
+        end
+        @info "hybrid faces, linear profile (r = 1): $(lin_errs)"
+        # Linear profiles: the gradient, the divergence, the face-to-centre interpolation
+        # (centres are mid-way between faces) and the midpoint column integral are exact.
+        @test lin_errs[:grad] < 1e-12
+        @test lin_errs[:div] < 1e-12
+        @test lin_errs[:f2c] < 1e-10
+        @test lin_errs[:integral] < 1e-12
     end
 end
