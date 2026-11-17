@@ -159,6 +159,14 @@ end
         Float64,
         (; sgs_displacement_truncation = 0.5),
     )
+    @test CAP.edmf_tail_entr_fraction(CA.TurbulenceConvectionParameters(Float64)) ==
+          0.5
+    for f in (0.0, -0.1, 1.5)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_tail_entr_fraction = f),
+        )
+    end
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(

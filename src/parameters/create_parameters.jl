@@ -664,6 +664,10 @@ function TurbulenceConvectionParameters(
     FT = CP.float_type(toml_dict)
     provisional_defaults = (;
         edmfx_updraft_kh_diffusion_factor = FT(1),
+        # Tail entrainment (`tail_entrainment_increments`): the dynamical
+        # entrainment draws the upper half, in moist static energy, of the
+        # environment; fraction 1 = environment-mean air.
+        edmf_tail_entr_fraction = FT(0.5),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -677,6 +681,12 @@ function TurbulenceConvectionParameters(
         )
     parameters =
         merge(parameters, provisional_defaults, provisional_params, overrides)
+    f_tail = parameters.edmf_tail_entr_fraction
+    # The entrained air is the mean of a nonempty top fraction of the
+    # environment, at most all of it.
+    0 < f_tail <= 1 || throw(
+        ArgumentError("edmf_tail_entr_fraction must lie in (0, 1]; got $f_tail"),
+    )
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)

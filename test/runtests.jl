@@ -88,6 +88,7 @@ if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+    @safetestset "EDMFX tail entrainment" begin @time include("prognostic_equations/edmfx_tail_entrainment_tests.jl") end
 end
 
 # ============================================================================

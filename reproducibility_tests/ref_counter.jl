@@ -1,4 +1,4 @@
-471
+472
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+472
+- Tail entrainment on by default for the prognostic EDMF updraft
+  (`edmf_tail_entr_fraction = 0.5`). Changes the output of every
+  prognostic EDMF job with SGS covariances.
+
 471
 - The linearized saturation-excess width `σ_S` is evaluated as
   `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`, and the temperature

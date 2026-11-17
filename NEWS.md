@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Tail entrainment for the prognostic EDMF updraft
+  (provisional parameter `edmf_tail_entr_fraction`, default `0.5`): the air
+  drawn in by the dynamical entrainment is the mean of the top fraction, in
+  moist static energy, of the environment's Gaussian subgrid `(T, q_tot)`
+  distribution instead of the environment mean (`tail_entrainment_increments`).
+  The default entrains the upper half; `1` restores environment-mean
+  entrainment, as do configurations without SGS covariances.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The linearized saturation-excess
   width `σ_S` (`_sgs_linear_sigma_S`) is evaluated as
   `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`. The expanded form
