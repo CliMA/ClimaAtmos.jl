@@ -165,7 +165,10 @@ import ClimaCore.Geometry as Geometry
         non_orographic_gravity_wave = nogw_ad99,
     )
 
-    CA.non_orographic_gravity_wave_compute_tendency!(
+    # The 45 km top lies below `nogw_damp_pressure`, so the first call warns that the
+    # damping layer is widened. The warning fires once per session; reset its flag.
+    CA.NOGW_DAMP_LAYER_CHECKED[] = false
+    @test_logs (:warn, r"Fewer than") match_mode = :any CA.non_orographic_gravity_wave_compute_tendency!(
         Y,
         p_ad99,
         p_ad99.atmos.non_orographic_gravity_wave,
