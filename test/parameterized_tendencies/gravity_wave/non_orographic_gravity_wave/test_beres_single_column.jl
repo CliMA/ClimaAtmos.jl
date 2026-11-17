@@ -1345,6 +1345,15 @@ end
     ᶜN_l = p_l.non_orographic_gravity_wave.ᶜbuoyancy_frequency
     fill!(ᶜN_l, FT_l(0.012))
 
+    # The Beres latent heating reads the 1M tendencies the model applies to the
+    # draft, which `set_precomputed_quantities!` keeps current; refresh them for
+    # the draft state just set, as it would.
+    mp_model = p_l.atmos.microphysics_model
+    tc_model = p_l.atmos.turbconv_model
+    CA.set_microphysics_tendency_cache!(Y_l, p_l, mp_model, tc_model)
+    @test CA.has_implicit_1m_microphysics(p_l)
+    CA.update_implicit_1m_tendency!(Y_l, p_l, mp_model, tc_model)
+
     CA.compute_beres_convective_heating!(Y_l, p_l, ᶜN_l)
 
     Q_ic = Array(Fields.field2array(p_l.non_orographic_gravity_wave.gw_Q_conv_ic))[:, 1]
@@ -1354,6 +1363,34 @@ end
         @test all(isfinite, Q_ic)
         @test any(!=(0), Q_ic[band])
         @test all(==(0), Q_ic[.!band])
+    end
+
+    @testset "the heating is that of the stored bulk and implicit tendencies" begin
+        # With one draft the in-cloud heating is the draft's own latent heating.
+        # Replace the stored tendencies by known values: condensation in the bulk
+        # set and deposition in the implicit set. The heating must be
+        # (L_v·dq_lcl/dt + L_s·dq_icl/dt)/c_p of the draft, so it reads both stored
+        # tendencies and recomputes neither.
+        (; ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs) = p_l.precomputed
+        zero_rates = (;
+            dq_lcl_dt = FT_l(0),
+            dq_icl_dt = FT_l(0),
+            dq_rai_dt = FT_l(0),
+            dq_sno_dt = FT_l(0),
+        )
+        fill!(ᶜmp_tendencyʲs.:(1), merge(zero_rates, (; dq_lcl_dt = FT_l(1e-6))))
+        fill!(ᶜmp_tendency_implicitʲs.:(1), merge(zero_rates, (; dq_icl_dt = FT_l(2e-7))))
+        CA.compute_beres_convective_heating!(Y_l, p_l, ᶜN_l)
+        Q_known =
+            Array(Fields.field2array(p_l.non_orographic_gravity_wave.gw_Q_conv_ic))[:, 1]
+        Lv = CA.TD.Parameters.LH_v0(thp_l)
+        Ls = CA.TD.Parameters.LH_s0(thp_l)
+        q_tot = Array(Fields.field2array(ᶜq_tot_nonnegʲs.:(1)))[:, 1]
+        q_lcl = Array(Fields.field2array(Y_l.c.sgsʲs.:(1).q_lcl))[:, 1]
+        cp = CA.TD.cp_m.(thp_l, q_tot, q_lcl, FT_l(0))
+        expected = (Lv * FT_l(1e-6) + Ls * FT_l(2e-7)) ./ cp
+        @test Q_known[band] ≈ expected[band] rtol = 10 * eps(FT_l)
+        @test all(==(0), Q_known[.!band])
     end
 end
 

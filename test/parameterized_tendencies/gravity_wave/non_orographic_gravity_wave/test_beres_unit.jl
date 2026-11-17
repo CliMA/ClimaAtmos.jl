@@ -774,7 +774,11 @@ end
 # The shipped in-cloud heating (when `nogw_beres_heating_latent: true`) is
 #   Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl + dq_rai) + L_s·(dq_icl + dq_sno) ]
 # i.e. CA._beres_latent_heating, built from the CloudMicrophysics 1-moment
-# *aggregated* phase-change tendencies (the tested `_aggregate_tendencies`).
+# *aggregated* phase-change tendencies (the tested `_aggregate_tendencies`). In the
+# model those are the tendencies it applies to the draft: the bulk set averaged over
+# the step and the implicit set at its instantaneous rate. Here both come from
+# instantaneous rates of the same state (`shipped_latent`), so the oracle below,
+# built from the instantaneous per-process terms, must match.
 #
 # An integral-only check cannot localize a sign/coefficient bug in a small
 # melt/freeze term — such a bug preserves the column integral while corrupting
@@ -790,6 +794,19 @@ end
 # including the freezing terms (S_accr_lcl_sno_cold, S_accr_rai_sno_cold) and the
 # warm-arm melt (S_accr_rai_sno_warm) that a naive hand-selection omits.
 # ============================================================================
+
+# The shipped heating for one state: CA._beres_latent_heating applied to the
+# instantaneous 1M tendencies of the bulk and the implicit parameter sets, with the
+# condensate floored at zero as the model does before calling CM BMT.
+function shipped_latent(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    FT = typeof(ρ)
+    q = max.(zero(FT), (q_lcl, q_icl, q_rai, q_sno))
+    q_tot = max(zero(FT), q_tot, sum(q))
+    rates(mp) = BMT.bulk_microphysics_tendencies(
+        BMT.Instantaneous(), BMT.Microphysics1Moment(), mp, thp, ρ, T, w, q_tot, q...,
+    )
+    return CA._beres_latent_heating(thp, q_tot, q..., rates(mp_bulk), rates(mp_imp))
+end
 
 # Independent oracle: the explicit canonical sum Q_lat = (1/cp) Σ_p L_p R_p,
 # assembled from the individual verbose source terms with hand-assigned signs
@@ -862,7 +879,7 @@ const FREEZE_MELT_TERMS = (
                 toml_dict;
                 rain_autoconversion = CMP.PrescribedNd(toml_dict),
             )
-            # `_beres_latent_heating` sums CM BMT on both the bulk and
+            # `_beres_latent_heating` sums the tendencies of the bulk and
             # implicit 1M parameter sets. Here we exercise the "no implicit
             # split" case: all processes live on `mp`, and `mp_imp` has every
             # process nulled so its BMT contribution is zero.
@@ -904,7 +921,7 @@ const FREEZE_MELT_TERMS = (
             atol = FT === Float32 ? FT(1e-9) : FT(1e-10)
 
             for T in Ts, (q_tot, q_lcl, q_icl, q_rai, q_sno) in qs
-                shipped = CA._beres_latent_heating(
+                shipped = shipped_latent(
                     mp,
                     mp_imp,
                     thp,
@@ -1016,11 +1033,10 @@ const OTHER_1M_PROCESSES = (
             q_sat = TD.q_vap_saturation(thp, T, ρ)
             q = (FT(1e-3), FT(2e-4), FT(5e-4), FT(3e-4))   # q_lcl, q_icl, q_rai, q_sno
             q_tot = q_tot_over_sat * q_sat + sum(q)
-            shipped = CA._beres_latent_heating(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q...)
+            shipped = shipped_latent(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q...)
             oracle = Q_lat_explicit(mp_full, thp, ρ, T, q_tot, q...; w)
             @test isapprox(shipped, oracle; rtol, atol)
-            bulk_only =
-                CA._beres_latent_heating(mp_bulk, mp_none, thp, ρ, T, w, q_tot, q...)
+            bulk_only = shipped_latent(mp_bulk, mp_none, thp, ρ, T, w, q_tot, q...)
             implicit_share = max(implicit_share, abs(shipped - bulk_only))
         end
         # Setup: the implicit set carries a real part of the heating.
@@ -1059,7 +1075,7 @@ end
     # Warm, strongly supersaturated, no ice → net condensation → warming.
     T_warm = FT(295)
     q_sat_warm = TD.q_vap_saturation(thp, T_warm, ρ)
-    Q_cond = CA._beres_latent_heating(
+    Q_cond = shipped_latent(
         mp,
         mp_imp,
         thp,
@@ -1075,7 +1091,7 @@ end
     @test Q_cond > 0  # condensation releases latent heat
 
     # Warm, strongly subsaturated, rain present → net evaporation → cooling.
-    Q_evap = CA._beres_latent_heating(
+    Q_evap = shipped_latent(
         mp,
         mp_imp,
         thp,

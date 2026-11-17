@@ -42,9 +42,10 @@ set is loaded only when its flag is `true`. Passing `microphysics_model = nothin
 
   - `microphysics_model = nothing`: Microphysics model; selects which
     microphysics parameter sets to keep. `nothing` keeps all of them.
-  - `implicit_microphysics = true`: Whether 1M `cloud_liquid_formation` and
-    `cloud_ice_formation` go to the implicit 1M parameter set (cond/subl only)
-    instead of the bulk 1M parameter set. Default matches
+  - `implicit_microphysics = true`: Whether 1M `cloud_liquid_formation`,
+    `cloud_ice_formation`, `rain_condensation_evaporation` and
+    `snow_deposition_sublimation` go to the implicit 1M parameter set instead of the
+    bulk 1M parameter set. Default matches
     `default_config.yml`'s `implicit_microphysics: true`, so direct
     constructor calls (e.g. in `test/parameter_tests.jl`) agree with the
     config-driven path.

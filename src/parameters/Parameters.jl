@@ -588,8 +588,8 @@ accessors generated at the bottom of this module, e.g.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
   - `microphysics_1m_params`: Full 1-moment process set used by CM BMT bulk;
-    `cloud_liquid_formation` and `cloud_ice_formation` are nulled when
-    `implicit_microphysics: true`. `nothing` outside 1M configurations.
+    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`
+    and `snow_deposition_sublimation` are nulled when `implicit_microphysics: true`. `nothing` outside 1M configurations.
   - `microphysics_1m_implicit_params`: 1-moment parameters with only
     `cloud_liquid_formation`, `cloud_ice_formation`,
     `rain_condensation_evaporation`, and `snow_deposition_sublimation`

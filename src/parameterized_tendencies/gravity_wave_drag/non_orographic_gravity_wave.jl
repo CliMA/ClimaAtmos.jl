@@ -12,7 +12,8 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(thp, q_tot, q_lcl, q_icl, q_rai, q_sno, tendency_bulk,
+                          tendency_implicit)
 
 Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
@@ -20,9 +21,8 @@ Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
 where `p` runs over the microphysical phase-change processes (e.g., condensation,
 evaporation), `L_p` is the latent heat released or absorbed by process `p` [J/kg], and
-`R_p⁽ʲ⁾` is the mass-mixing-ratio tendency [kg/kg/s], built from the CloudMicrophysics
-1-moment aggregated phase-change tendencies `dq_{lcl,icl,rai,sno}_dt`. `cp⁽ʲ⁾` is the
-subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`.
+`R_p⁽ʲ⁾` is the mass-mixing-ratio tendency [kg/kg/s]. `cp⁽ʲ⁾` is the subdomain moist heat
+capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`.
 
 Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by `L_v` and
 the ice reservoir (`icl + sno`) by `L_s`. Within the reservoir sums, same-phase mass
@@ -30,68 +30,39 @@ transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`, so
 
     Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
 
-with reference-`T₀` constants `L_v` and `L_s`. The 1M species tendencies are the sum of
-two CM BMT calls — one on the bulk parameter set (every explicit process) and one on the
-isolated implicit set (`cloud_liquid_formation` / `cloud_ice_formation` only) — so the
-latent heating reflects every active 1M process regardless of which stage integrates each.
-Condensate inputs are floored at zero and `q_tot` at the condensate sum before evaluating
-`cp_m` and the tendencies. Called from `compute_beres_convective_heating!` when
-`heating_latent` is enabled.
+with reference-`T₀` constants `L_v` and `L_s`. The species tendencies are the sum of the
+two 1M tendencies the model applies to the updraft: `tendency_bulk`, the bulk processes
+(autoconversion, accretion, freezing, melting, and any phase change not assigned to the
+implicit set) averaged over the step (`p.precomputed.ᶜmp_tendencyʲs`), and
+`tendency_implicit`, the implicit set (cloud liquid and ice formation, rain evaporation, and
+snow deposition and sublimation when `implicit_microphysics` is on, zero otherwise) at its
+instantaneous rate (`p.precomputed.ᶜmp_tendency_implicitʲs`). Condensate inputs are floored
+at zero and `q_tot` at the condensate sum before evaluating `cp_m`. Called from
+`compute_beres_convective_heating!` when `heating_latent` is enabled.
 """
 @inline function _beres_latent_heating(
-    mp_bulk,
-    mp_imp,
     thp,
-    ρ,
-    T,
-    w,
     q_tot,
     q_lcl,
     q_icl,
     q_rai,
     q_sno,
+    tendency_bulk,
+    tendency_implicit,
 )
-    FT = typeof(ρ)
+    FT = typeof(q_tot)
     q_lcl = max(zero(FT), q_lcl)
     q_icl = max(zero(FT), q_icl)
     q_rai = max(zero(FT), q_rai)
     q_sno = max(zero(FT), q_sno)
     q_tot = max(zero(FT), q_tot, q_lcl + q_icl + q_rai + q_sno)
-    src_bulk = BMT.bulk_microphysics_tendencies(
-        BMT.InstantaneousVerbose(),
-        BMT.Microphysics1Moment(),
-        mp_bulk,
-        thp,
-        ρ,
-        T,
-        w,
-        q_tot,
-        q_lcl,
-        q_icl,
-        q_rai,
-        q_sno,
-    )
-    src_imp = BMT.bulk_microphysics_tendencies(
-        BMT.InstantaneousVerbose(),
-        BMT.Microphysics1Moment(),
-        mp_imp,
-        thp,
-        ρ,
-        T,
-        w,
-        q_tot,
-        q_lcl,
-        q_icl,
-        q_rai,
-        q_sno,
-    )
     Lv = TD.Parameters.LH_v0(thp)
     Ls = TD.Parameters.LH_s0(thp)
     cpʲ = TD.cp_m(thp, q_tot, q_lcl, q_icl)
-    dq_lcl_dt = src_bulk.dq_lcl_dt + src_imp.dq_lcl_dt
-    dq_icl_dt = src_bulk.dq_icl_dt + src_imp.dq_icl_dt
-    dq_rai_dt = src_bulk.dq_rai_dt + src_imp.dq_rai_dt
-    dq_sno_dt = src_bulk.dq_sno_dt + src_imp.dq_sno_dt
+    dq_lcl_dt = tendency_bulk.dq_lcl_dt + tendency_implicit.dq_lcl_dt
+    dq_icl_dt = tendency_bulk.dq_icl_dt + tendency_implicit.dq_icl_dt
+    dq_rai_dt = tendency_bulk.dq_rai_dt + tendency_implicit.dq_rai_dt
+    dq_sno_dt = tendency_bulk.dq_sno_dt + tendency_implicit.dq_sno_dt
     return (Lv * (dq_lcl_dt + dq_rai_dt) + Ls * (dq_icl_dt + dq_sno_dt)) / cpʲ
 end
 
@@ -926,43 +897,39 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # whose Q0_threshold is calibrated to grid-mean magnitudes of the flux convergence.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        # Run CM BMT on both 1M parameter sets and sum: the bulk set carries
-        # every explicit process; the implicit set carries only
-        # `cloud_liquid_formation` and `cloud_ice_formation` (nulled when
-        # `implicit_microphysics: false`). The sum is the full latent heating
-        # regardless of which stage integrates cond/subl, without double-
-        # counting (the two sets are process-disjoint by construction).
-        mp_bulk = CAP.microphysics_1m_params(p.params)
-        mp_imp = CAP.microphysics_1m_implicit_params(p.params)
+        # The 1M tendencies the model applies to each updraft, as the model last
+        # computed them: the bulk processes averaged over the step and the implicit
+        # set (cloud liquid and ice formation, rain evaporation, snow deposition and
+        # sublimation) at its instantaneous rate. The two sets are process-disjoint,
+        # so their sum is the full latent heating, whichever stage integrates each
+        # process. `set_precomputed_quantities!` refreshes both before any callback.
         thp = CAP.thermodynamics_params(p.params)
-        ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
+        (; ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
         gw_Q_conv_ic .= FT(0)
         for j in 1:n_updrafts
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            # Bound outside the broadcast, which would otherwise read `.:(j)` as a
+            # field named `j`.
+            ᶜsgsʲ = Y.c.sgsʲs.:($j)
+            ᶜρaʲ = ᶜsgsʲ.ρa
             ᶜρʲ = ᶜρʲs.:($j)
-            ᶜTʲ = ᶜTʲs.:($j)
-            ᶜuʲ = ᶜuʲs.:($j)
             ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
-            ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
-            ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
-            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
-            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
-            # physical draft vertical velocity [m/s] for the velocity-dependent autoconversion
-            ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲ)))
+            ᶜq_lclʲ = ᶜsgsʲ.q_lcl
+            ᶜq_iclʲ = ᶜsgsʲ.q_icl
+            ᶜq_raiʲ = ᶜsgsʲ.q_rai
+            ᶜq_snoʲ = ᶜsgsʲ.q_sno
+            ᶜtendencyʲ = ᶜmp_tendencyʲs.:($j)
+            ᶜtendency_implicitʲ = ᶜmp_tendency_implicitʲs.:($j)
             @. gw_Q_conv_ic += ifelse(
                 ᶜρʲ > eps(FT),
                 max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
-                    mp_bulk,
-                    mp_imp,
                     thp,
-                    ᶜρʲ,
-                    ᶜTʲ,
-                    ᶜwʲ_air,
                     ᶜq_totʲ,
                     ᶜq_lclʲ,
                     ᶜq_iclʲ,
                     ᶜq_raiʲ,
                     ᶜq_snoʲ,
+                    ᶜtendencyʲ,
+                    ᶜtendency_implicitʲ,
                 ),
                 FT(0),
             )

@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The Beres latent in-cloud heating (`nogw_beres_heating_latent`)
+  uses the 1M tendencies the model applies to the updraft: the bulk processes averaged
+  over the step and the implicit set (cloud liquid and ice formation, rain evaporation,
+  snow deposition and sublimation) at its instantaneous rate, read from the cache. It
+  recomputed both sets at their instantaneous rates, which overstated the heating where
+  the bulk processes are fast (on two frozen 1M states, by 1.7 and 2.1 times averaged
+  over 4-5.5 km in active tropical updrafts).
 - ![][badge-🔥behavioralΔ] The Julia-API default gravity-wave cadences (`dt_nogw`,
   `dt_ogw` in the `callback_kwargs` of `AtmosSimulation`) are 1800 s, the same as the
   `default_config.yml` defaults; they were 3 hours. Runs set up from a config file are
