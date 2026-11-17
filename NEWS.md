@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] ![][badge-🚀performance] Update to CloudMicrophysics 0.50.
+  1-moment snow deposition defaults to `DepositionWithoutCloudCondensate` (no snow
+  deposition where cloud liquid or cloud ice is present; sublimation is unchanged), and
+  pointwise 1-moment all-zero early exits are delegated to
+  `CloudMicrophysics.BulkMicrophysicsTendencies`.
 - ![][badge-✨feature/enhancement] Subsaturation-deficit floor of the
   cloud-fraction width (provisional parameter `cloud_fraction_eps_rel`,
   `ε_rel`): `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, which

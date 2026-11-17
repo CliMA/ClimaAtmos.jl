@@ -89,8 +89,9 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
     the same way as `cloud_liquid_formation`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`. Routed by
-    `implicit_microphysics` the same way as `cloud_liquid_formation`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`,
+    `"DepositionWithoutCloudCondensate"` (no snow deposition where cloud liquid or cloud ice is
+    present). Routed by `implicit_microphysics` the same way as `cloud_liquid_formation`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
     `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
@@ -173,6 +174,8 @@ function get_microphysics_1m_options(parsed_args)
             "SublimationOnly" => CMP.SublimationOnly(),
             "DepositionAndSublimation" =>
                 CMP.DepositionAndSublimation(),
+            "DepositionWithoutCloudCondensate" =>
+                CMP.DepositionWithoutCloudCondensate(),
         ),
         "snow_deposition_sublimation",
     )

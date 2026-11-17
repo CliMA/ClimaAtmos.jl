@@ -581,22 +581,6 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
             (eval.q_rai, eval.q_sno, q_tot_eff)
         end
 
-    # When a quadrature node has zero condensate and precipitation and lies
-    # below both liquid and ice saturation, all 1M microphysics rates vanish;
-    # return zero directly instead of running the 5-substep 4x4 linear solver.
-    if isempty(eval.args) &&
-       no_1m_condensate(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
-        tps = _unwrapped(eval.tps)
-        T_freeze = TD.Parameters.T_freeze(tps)
-        T_icenuc = TD.Parameters.T_icenuc(tps)
-        q_smin =
-            (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
-            TD.q_vap_saturation(tps, T_hat, eval.ρ, TD.Ice())
-        if q_tot_node <= q_smin
-            return zero_1m_tendency(FT)
-        end
-    end
-
     return _call_bmt_1m(
         eval.mode, eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
         eval.ρ, T_hat, eval.w,
@@ -605,8 +589,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     )
 end
 
-# The zero 1M tendency of the early exits for cells and quadrature nodes in which all
-# 1M rates vanish, and their shared test that no condensate or precipitation is present.
+# Zero 1M tendency and clear-air predicate for cell-level SGS quadrature skips
+# (pointwise early exits live in `CloudMicrophysics.BulkMicrophysicsTendencies`).
 @inline zero_1m_tendency(::Type{FT}) where {FT} =
     (;
         dq_lcl_dt = zero(FT),
@@ -731,19 +715,6 @@ their sum.
         q_tot_nonneg,
         q_lcl_pos + q_icl_pos + q_rai_pos + q_sno_pos,
     )
-    # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
-    # return zero without running the substepped 4x4 linear solver.
-    if no_1m_condensate(q_lcl_pos, q_icl_pos, q_rai_pos, q_sno_pos)
-        tps = _unwrapped(thp)
-        q_smin = ifelse(
-            T >= TD.Parameters.T_freeze(tps),
-            TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
-            TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
-        )
-        if q_tot_safe < q_smin * (one(FT) - 2 * eps(FT))
-            return zero_1m_tendency(FT)
-        end
-    end
     return _call_bmt_1m(
         mode, BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp),
         ρ, T, w,

@@ -36,6 +36,8 @@ end
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
     @test defaults.processes.cloud_ice_formation isa
           CMP.TemperatureDependentIceNumber
+    @test defaults.processes.snow_deposition_sublimation isa
+          CMP.DepositionWithoutCloudCondensate
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
 
@@ -96,7 +98,9 @@ end
     kk_mp = CA.Parameters.microphysics_1m_params(CA.ClimaAtmosParameters(kk_config))
     # the prescribed droplet number is the one the radiation effective radius uses
     @test kk_mp.process_params.rain_autoconversion.Nc ==
-          CA.Parameters.microphysics_cloud_params(CA.ClimaAtmosParameters(kk_config)).N_cloud_liquid_droplets
+          CA.Parameters.microphysics_cloud_params(
+        CA.ClimaAtmosParameters(kk_config),
+    ).N_cloud_liquid_droplets
     @test isnothing(yaml_processes.rain_snow_accretion)
 end
 
