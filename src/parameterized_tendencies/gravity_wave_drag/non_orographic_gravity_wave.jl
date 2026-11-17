@@ -227,13 +227,20 @@ function _beres_cache_fields(Y, ::BeresSourceParams, ::Val{nc}) where {nc}
         gw_beres_dz_level = similar(Fields.level(Y.c.ρ, 1)),
         gw_z_surface = _surface_height(Y),
         # Launch-filter winds: the range of u and v over the heating layer up to the
-        # launch level and the winds there, and u, v on the gather grid.
+        # launch level and the winds there, and u, v on the gather grid. The gather-grid
+        # winds are written only by the height-resolved filter, so they start at zero:
+        # otherwise they hold whatever memory they were given, which a restart cannot
+        # reproduce.
         gw_beres_wind_range =
         similar(Fields.level(Y.c.ρ, 1), NTuple{6, FT}),
-        gw_beres_u_profile =
-        similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
-        gw_beres_v_profile =
-        similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+        gw_beres_u_profile = fill!(
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            ntuple(_ -> zero(FT), Val(N_BERES_PROFILE)),
+        ),
+        gw_beres_v_profile = fill!(
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            ntuple(_ -> zero(FT), Val(N_BERES_PROFILE)),
+        ),
         gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
     )
 end
