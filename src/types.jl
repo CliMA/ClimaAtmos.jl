@@ -141,7 +141,8 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # Override CM's `ConstantTimescale` ice formation default to match
+        # Override CM's `ConstantTimescale` ice formation and
+        # `DepositionAndSublimation` snow defaults to match
         # `default_config.yml`. `create_parameters.jl` splits
         # `cloud_liquid_formation`, `cloud_ice_formation`,
         # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
@@ -150,6 +151,7 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
+            snow_deposition_sublimation = CMP.DepositionWithoutCloudCondensate(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)

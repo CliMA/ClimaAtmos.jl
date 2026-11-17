@@ -87,13 +87,13 @@ non-quadrature `microphysics_tendencies_1m`.
 end
 
 # ---------------------------------------------------------------------------
-# The 18 source terms produced by _microphysics_source_terms.
+# Source terms produced by _microphysics_source_terms.
 # Each entry: (field_symbol, human-readable description)
 # ---------------------------------------------------------------------------
 """
     MP1M_SOURCE_TERMS
 
-The eighteen 1-moment source terms exposed as diagnostics, as
+The 1-moment source terms exposed as diagnostics, as
 `(field_symbol, description)` pairs.
 
 Each entry is registered three times — for the grid mean, the first updraft, and the
@@ -108,11 +108,12 @@ const MP1M_SOURCE_TERMS = [
     (:S_accr_lcl_sno_cold, "Cloud liquid + snow accretion (cold)"),
     (:S_accr_lcl_sno_warm, "Cloud liquid + snow accretion (warm)"),
     (:S_accr_melt_lcl_sno, "Thermal melt of snow by warm cloud liquid"),
-    (:S_accr_icl_rai, "Cloud ice + rain accretion"),
+    (:S_accr_icl_rai, "Cloud ice + rain accretion, ice → snow"),
+    (:S_accr_melt_icl_rai, "Cloud ice + rain accretion, ice → rain"),
     (:S_accr_freeze_icl_rai, "Rain frozen in ice-rain collision"),
     (:S_accr_icl_sno, "Cloud ice + snow accretion"),
-    (:S_accr_rai_sno_cold, "Rain-snow accretion (cold, rain → snow)"),
-    (:S_accr_rai_sno_warm, "Rain-snow accretion (warm, snow → rain)"),
+    (:S_accr_rai_sno_cold, "Rain-snow accretion, rain → snow"),
+    (:S_accr_rai_sno_warm, "Rain-snow accretion, snow → rain"),
     (:S_accr_melt_rai_sno, "Thermal melt of snow by warm rain"),
     (:S_phase_change_vap_rai, "Rain condensation/evaporation"),
     (:S_phase_change_vap_sno, "Snow deposition/sublimation"),

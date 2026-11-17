@@ -711,6 +711,7 @@ function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
     melt =
         src.S_melt_icl_lcl +
         src.S_melt_sno_rai +
+        src.S_accr_melt_icl_rai +
         src.S_accr_melt_lcl_sno +
         src.S_accr_melt_rai_sno +
         src.S_accr_rai_sno_warm

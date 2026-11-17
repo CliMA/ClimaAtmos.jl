@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.50. The products of
+  rain collisions with cloud ice, and below freezing with snow, are split between snow and rain
+  by a liquid fraction that rises linearly from the ClimaParams `temperature_rain_collision_snow`
+  to one at freezing; above freezing the cloud ice collected by rain becomes rain. Snow
+  deposition defaults to `DepositionWithoutCloudCondensate` (no snow deposition where cloud
+  liquid or cloud ice is present). The new diagnostics
+  `mp1m_S_accr_melt_icl_rai` (`mp1mup_`, `mp1men_`) hold the cloud ice collected by rain that
+  becomes rain; `mp1m_S_accr_icl_rai` holds the part that becomes snow.
 - ![][badge-✨feature/enhancement] Subsaturation-deficit floor of the
   cloud-fraction width (provisional parameter `cloud_fraction_eps_rel`,
   `ε_rel`): `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, which
