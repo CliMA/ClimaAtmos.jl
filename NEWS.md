@@ -13,9 +13,9 @@ main
   the linearization the Newton step uses for the updraft condensates (the rates at the
   Newton state plus the Jacobian's `−1/τ` and linearized evaporation and deposition rates
   times the change of the condensate) and adds the heating at the solved state, weighted
-  by `b_imp·dt`. The first NOGW call of a run or after a restart (the accumulators are not
-  in the restart file), a solver without the stage accumulator, and
-  `reproducible_restart` use the stored rates.
+  by `b_imp·dt`. The accumulators are saved in restart files and read back, so a restarted
+  run continues the window; the first NOGW call of a cold start and a solver without the
+  stage accumulator use the stored rates.
 - New config key `z_faces`: explicit vertical face heights, or the preset
   `hybrid_0p5km` (the 63-level grid up to 8.1 km, shrinking to 500 m at 10.6 km, uniform
   500 m to 34.6 km, then growing by about 11% per level to 3 km at 60 km; 106 levels).

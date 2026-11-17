@@ -3,6 +3,7 @@
 #####
 using UnrolledUtilities
 import ClimaCore.DataLayouts
+import ClimaCore: InputOutput
 import ClimaCore.Domains
 import ClimaCore.Meshes
 import ClimaCore.Spaces as Spaces
@@ -147,9 +148,15 @@ The cache fields of the applied latent heating of the updrafts (`heating_latent`
     the time since the last NOGW call of `Σⱼ max(ρaʲ, 0)·Qʲ` [K/s·kg/m³·s], `Σⱼ max(ρaʲ, 0)`
     [kg/m³·s] and the total draft area `Σⱼ max(ρaʲ, 0)/ρʲ` [s], each implicit stage
     weighted by `b_imp·dt`;
-  - `gw_latent_time_acc`: the time those integrals cover [s].
+  - `gw_latent_time_acc`: the time those integrals cover [s];
+  - `gw_latent_window_used`: whether the NOGW call has used the integrals since the last
+    stage added to them. The next stage then starts a new window: the reset is deferred
+    to it, so a checkpoint written at a NOGW call holds the window that call used.
 
-The accumulators live in the cache, not in the state, so a restart starts them at zero.
+The checkpoint callback writes the integrals and the time to the restart file
+(`write_beres_latent_accumulators!`), and a restart reads them back
+(`read_beres_latent_accumulators!`), so a restarted run computes the same NOGW calls as a
+continuous one when the checkpoint period is a multiple of `dt_nogw`.
 """
 function _beres_latent_accumulator_fields(Y)
     FT = Spaces.undertype(axes(Y.c))
@@ -161,7 +168,58 @@ function _beres_latent_accumulator_fields(Y)
         gw_latent_mass_acc = zero(Y.c.ρ),
         gw_latent_area_acc = zero(Y.c.ρ),
         gw_latent_time_acc = Ref(zero(FT)),
+        gw_latent_window_used = Ref(false),
     )
+end
+
+const BERES_LATENT_ACC_NAMES =
+    (:gw_latent_heat_acc, :gw_latent_mass_acc, :gw_latent_area_acc)
+
+"""
+    write_beres_latent_accumulators!(hdfwriter, p)
+
+Write the Beres applied-latent-heating integrals and their time to a restart file; a
+no-op unless the Beres latent heating is on.
+"""
+function write_beres_latent_accumulators!(hdfwriter, p)
+    nogw = p.non_orographic_gravity_wave
+    haskey(nogw, :gw_latent_lin) || return nothing
+    for name in BERES_LATENT_ACC_NAMES
+        InputOutput.write!(hdfwriter, getproperty(nogw, name), string(name))
+    end
+    InputOutput.HDF5.write_attribute(
+        hdfwriter.file,
+        "gw_latent_time_acc",
+        Float64(nogw.gw_latent_time_acc[]),
+    )
+    return nothing
+end
+
+"""
+    read_beres_latent_accumulators!(p, restart_file, comms_ctx)
+
+Read the Beres applied-latent-heating integrals and their time from `restart_file` into
+the cache, and mark the window as not yet used, so the NOGW call at the restart time uses
+them as the continuous run did. A restart file without them (written before they were
+saved, or with the latent heating off) leaves the integrals at zero, and that first call
+uses the stored rates. A no-op unless the Beres latent heating is on.
+"""
+function read_beres_latent_accumulators!(p, restart_file, comms_ctx)
+    nogw = p.non_orographic_gravity_wave
+    haskey(nogw, :gw_latent_lin) || return nothing
+    reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
+    if haskey(InputOutput.HDF5.attrs(reader.file), "gw_latent_time_acc")
+        for name in BERES_LATENT_ACC_NAMES
+            field = InputOutput.read_field(reader, string(name))
+            parent(getproperty(nogw, name)) .= parent(field)
+        end
+        FT = eltype(nogw.gw_latent_heat_acc)
+        nogw.gw_latent_time_acc[] =
+            FT(InputOutput.HDF5.read_attribute(reader.file, "gw_latent_time_acc"))
+        nogw.gw_latent_window_used[] = false
+    end
+    Base.close(reader)
+    return nothing
 end
 
 """
@@ -322,9 +380,18 @@ function _accumulate_beres_latent_heating!(Y, p, gw_latent_lin)
         gw_latent_mass_acc,
         gw_latent_area_acc,
         gw_latent_time_acc,
+        gw_latent_window_used,
     ) = p.non_orographic_gravity_wave
     (; ᶜρʲs) = p.precomputed
     FT = eltype(Y)
+    # The first stage after a NOGW call starts a new window.
+    if gw_latent_window_used[]
+        fill!(gw_latent_heat_acc, zero(FT))
+        fill!(gw_latent_mass_acc, zero(FT))
+        fill!(gw_latent_area_acc, zero(FT))
+        gw_latent_time_acc[] = zero(FT)
+        gw_latent_window_used[] = false
+    end
     k = p.scratch.precip_stage_idx[]
     w = FT(p.scratch.b_imp_stages[k]) * FT(p.dt)
     ϵ = eps(FT)
@@ -996,7 +1063,10 @@ means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over the whole e
     the envelope and `gw_Q0`, and the deposited flux is later diluted by `gw_a_cover` in
     `waveforcing_column_accumulate!`, giving a grid-mean flux ∝ ā·Q_ic². When
     `heating_latent` is set, `gw_Q_conv_ic` is instead the ρaʲ-weighted in-cloud mean of
-    the transport-free latent heating `_beres_latent_heating`; `gw_Q_conv` is untouched.
+    the transport-free latent heating the implicit stages applied since the last call
+    (`accumulate_beres_latent_heating!`; the stored rates of the current state,
+    `_beres_latent_heating_snapshot!`, at the first call of a cold start), a lagged mean
+    while the rest of the source comes from the current state; `gw_Q_conv` is untouched.
 
 The envelope `[z_bot, z_top]` is obtained by moment matching over `z ≥ z_bot_floor` (2 km
 by default, which excludes the EDMF boundary-layer and dry-thermal signal): a half-sine of
@@ -1187,9 +1257,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             gw_latent_mass_acc,
             gw_latent_area_acc,
             gw_latent_time_acc,
+            gw_latent_window_used,
         ) = p.non_orographic_gravity_wave
         T_acc = gw_latent_time_acc[]
-        if T_acc > 0 && !p.atmos.numerics.reproducible_restart
+        if T_acc > 0
             # The heating the implicit stages applied since the last NOGW call
             # (`accumulate_beres_latent_heating!`): the time means of Σⱼ max(ρaʲ, 0)·Qʲ
             # over Σⱼ max(ρaʲ, 0), on levels whose time-mean draft area is at least
@@ -1200,18 +1271,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
                 FT(0),
             )
         else
-            # No applied heating to average: the first call of a run or after a
-            # restart (the accumulators are not in the restart file), with a solver
-            # that has no stage accumulator, or with `reproducible_restart`, where a
-            # restart must give the same result as a continuous run. Use the stored
-            # rates of the current state (`_beres_latent_heating_snapshot!`).
+            # No applied heating to average: the first call of a cold start (or of a
+            # restart from a file without the integrals), or a solver with no stage
+            # accumulator. Use the stored rates of the current state
+            # (`_beres_latent_heating_snapshot!`).
             _beres_latent_heating_snapshot!(gw_Q_conv_ic, Y, p, a_min)
         end
-        # The next window starts here.
-        fill!(gw_latent_heat_acc, FT(0))
-        fill!(gw_latent_mass_acc, FT(0))
-        fill!(gw_latent_area_acc, FT(0))
-        gw_latent_time_acc[] = FT(0)
+        # The next stage starts a new window (`accumulate_beres_latent_heating!`).
+        gw_latent_window_used[] = true
     end
 
     # `ᶜuv_temp` holds UVVector(uₕ), which `non_orographic_gravity_wave_compute_tendency!`

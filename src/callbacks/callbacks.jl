@@ -306,6 +306,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
         hash_physics(p.atmos),
     )
     InputOutput.write!(hdfwriter, Y, "Y")
+    # The Beres applied-latent-heating integrals live in the cache, not in `Y`.
+    write_beres_latent_accumulators!(hdfwriter, p)
     Base.close(hdfwriter)
     return nothing
 end

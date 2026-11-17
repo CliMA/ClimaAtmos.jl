@@ -401,6 +401,8 @@ function AtmosSimulation(
         jacobian,
         update_cache_every,
     )
+    # Cache state a restart must continue: the Beres applied-latent-heating integrals.
+    isnothing(restart_file) || read_beres_latent_accumulators!(p, restart_file, context)
 
     # Combine all callbacks
     discrete_callbacks = @timed_log verbose "Assembled callbacks" if default_callbacks
