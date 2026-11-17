@@ -511,6 +511,8 @@ function get_grid(parsed_args, params, context)
     # Explicit face heights replace the stretching rule (`z_elem` follows from them).
     z_faces = z_faces_from_config(parsed_args["z_faces"], parsed_args["z_max"])
     if !isnothing(z_faces)
+        @info "`z_faces` sets the vertical mesh ($(length(z_faces) - 1) levels); the keys \
+               z_elem, z_stretch, dz_bottom, dz_top and z_pbl are ignored"
         kwargs = (
             kwargs...,
             z_elem = length(z_faces) - 1,

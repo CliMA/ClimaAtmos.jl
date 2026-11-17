@@ -458,14 +458,14 @@ function get_z_mesh(
 end
 
 """
-    z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 1)
+    z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 0.1)
 
 Build a vertical mesh from the explicit face heights `z_faces` [m], which must rise
 strictly from `0` to `z_max`, each layer at least `dz_min` [m] thick; one element lies
 between each pair of neighbouring faces. Throws an `ArgumentError` naming the first face
 that breaks these rules.
 """
-function z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 1) where {FT}
+function z_faces_mesh(::Type{FT}, z_faces, z_max; dz_min = 0.1) where {FT}
     faces = Float64.(collect(z_faces))
     length(faces) >= 2 ||
         throw(ArgumentError("`z_faces` needs at least two faces; got $(length(faces))"))
@@ -511,12 +511,16 @@ stratosphere, for resolving the QBO:
     level, reaches `dz_strat` closest to `z_strat_bottom`.
  2. That shrinking: a geometric sequence from the last spacing of the 63-level grid to
     `dz_strat` in as few levels as `max_change` allows, so the spacing has no jump.
+    (The inherited 63-level faces themselves change by up to 10.6% per level, near
+    3.9 km; `max_change` bounds only the shrinking.)
  3. Uniform `dz_strat` up to the last face at or below `z_strat_top`.
  4. Spacing growing geometrically to `z_max`, in the number of levels whose ratio makes
     the top spacing closest to `dz_max`; the ratio is solved so the last face is
     exactly `z_max`.
 
-The defaults (the `hybrid_0p5km` preset of the `z_faces` config key) give 106 levels: the
+The 63-level base and the stretching to the top are built for `z_max = 60` km; any other
+`z_max` is an `ArgumentError`. The defaults (the `hybrid_0p5km` preset of the `z_faces`
+config key) give 106 levels: the
 63-level faces up to 8.1 km (37 levels, the last 745 m thick), shrinking by 7.7% per
 level to 500 m at 10.6 km (5 levels, the last 500 m thick), 500 m up to 34.6 km (47
 more levels), and growing by 11.3% per level to 3.08 km at 60 km (17 levels). From 500 m
@@ -530,6 +534,11 @@ function hybrid_z_faces(;
     dz_max = 3000.0,
     max_change = 0.1,
 )
+    z_max == 60000 || throw(
+        ArgumentError(
+            "the hybrid faces are built on the 60 km 63-level grid; got z_max = $(z_max) m",
+        ),
+    )
     base_mesh = CommonGrids.DefaultZMesh(
         Float64;
         z_min = 0,
@@ -588,7 +597,14 @@ preset for its name (`"hybrid_0p5km"`, see `hybrid_z_faces`), or the list itself
 z_faces_from_config(::Nothing, z_max) = nothing
 z_faces_from_config(z_faces::AbstractVector, z_max) = Float64.(z_faces)
 function z_faces_from_config(z_faces::AbstractString, z_max)
-    z_faces == "hybrid_0p5km" && return hybrid_z_faces(; z_max = Float64(z_max))
+    if z_faces == "hybrid_0p5km"
+        z_max == 60000 || throw(
+            ArgumentError(
+                "the `z_faces` preset \"hybrid_0p5km\" needs `z_max` = 60000 m; got $(z_max) m",
+            ),
+        )
+        return hybrid_z_faces()
+    end
     throw(
         ArgumentError(
             "Unknown `z_faces` preset \"$(z_faces)\"; give a list of face heights or \

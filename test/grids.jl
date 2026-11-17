@@ -137,10 +137,16 @@ import ClimaCore as CC
             [0.0, 500.0, 500.0, 1000.0],
             1000.0,
         )
-        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 0.5, 1000.0], 1000.0)
         @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 1000.0], 999.0)
         @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0], 0.0)
         @test_throws ArgumentError CA.z_faces_from_config("no_such_preset", 60000.0)
+        # The preset is built for a 60 km top only.
+        @test_throws ArgumentError CA.z_faces_from_config("hybrid_0p5km", 55000.0)
+        @test_throws ArgumentError CA.hybrid_z_faces(; z_max = 80000.0)
+        # Layers down to 0.1 m are allowed, thinner ones are not.
+        @test CA.z_faces_mesh(Float64, [0.0, 0.1, 1000.0], 1000.0) isa
+              CC.Meshes.IntervalMesh
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 0.05, 1000.0], 1000.0)
         @test isnothing(CA.z_faces_from_config(nothing, 60000.0))
         @test CA.z_faces_from_config([0, 1, 2], 2.0) == [0.0, 1.0, 2.0]
 
@@ -163,9 +169,9 @@ import ClimaCore as CC
         k = findfirst(i -> f[i] != base[i], eachindex(f)) - 1   # last shared face
         @test f[1:k] == base[1:k]
         @test 5000 < f[k] < 11000
-        # Uniform 500 m from about 11 to 35 km, reached without a jump: below 35 km no
-        # spacing changes by more than 10% from one level to the next above the shared
-        # faces.
+        # Uniform 500 m from about 11 to 35 km, reached without a jump: above the
+        # inherited 63-level faces (which themselves change by up to 10.6% per level near
+        # 3.9 km) and below 35 km, no spacing changes by more than 10% per level.
         strat = (z_c .> 11500) .& (z_c .< 34500)
         @test all(d -> isapprox(d, 500; atol = 1e-6), dz[strat])
         k_strat = findlast(<(34500), z_c)
@@ -176,9 +182,10 @@ import ClimaCore as CC
         top = z_c .> 35000
         growth = dz[top][2:end] ./ dz[top][1:(end - 1)]
         @test all(r -> isapprox(r, growth[1]; rtol = 1e-9), growth)
-        @test 1.08 < growth[1] < 1.14
+        @test isapprox(growth[1], 1.113; atol = 1e-3)
+        @test length(dz) == 106
+        @test count(isapprox.(dz, 500; atol = 1e-6)) == 48
         @test 2700 < dz[end] < 3300
-        @test 100 <= length(dz) <= 110
         # Through the config key, on a column grid.
         grid = CA.get_grid(
             Dict(
