@@ -585,8 +585,7 @@ end
 # renormalised by Σ|B0|), so the target is the same `F_launch` as in test 1.
 #
 # The check runs with two different numbers of receiving layers at the top
-# (`damp_level = nlev` = one layer, the production column setting;
-# `nlev - 3` = four), because a wrong divisor in the hand-back scales with that
+# (`damp_level = nlev` = one layer; `nlev - 3` = four), because a wrong divisor in the hand-back scales with that
 # count and can even flip the sign of the error. The sphere runs both at once,
 # one per column.
 # ============================================================================
