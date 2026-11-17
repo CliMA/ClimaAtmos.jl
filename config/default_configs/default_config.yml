@@ -9,6 +9,9 @@ dz_top:
 z_pbl:
   help: "Scale height of the boundary-layer refinement of the two-scale vertical stretching. Default: 2200m"
   value: 2200.0
+z_faces:
+  help: "Explicit vertical face heights [m], rising strictly from 0 to `z_max`, which replace `z_elem`, `z_stretch`, `dz_bottom`, `dz_top` and `z_pbl`; or the name of a preset: `hybrid_0p5km` (the 63-level grid up to 8.1 km, shrinking to 500 m at 10.6 km, uniform 500 m to 34.6 km, then about 11% per level to 3 km at 60 km; 106 levels, for `z_max` 60 km). [`~` (default), list of heights, `hybrid_0p5km`]"
+  value: ~
 z_stretch:
   help: "Stretch the vertical grid with the two-scale rule, which rejects a `z_elem` outside the range that `dz_bottom`, `dz_top`, `z_pbl`, and `z_max` admit. [`true` (default), `false`]"
   value: true

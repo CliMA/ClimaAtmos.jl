@@ -458,6 +458,138 @@ function get_z_mesh(
 end
 
 """
+    z_faces_mesh(::Type{FT}, z_faces, z_max)
+
+Build a vertical mesh from the explicit face heights `z_faces` [m], which must rise
+strictly from `0` to `z_max`; one element lies between each pair of neighbouring faces.
+Throws an `ArgumentError` naming the first face that breaks these rules.
+"""
+function z_faces_mesh(::Type{FT}, z_faces, z_max) where {FT}
+    faces = Float64.(collect(z_faces))
+    length(faces) >= 2 ||
+        throw(ArgumentError("`z_faces` needs at least two faces; got $(length(faces))"))
+    faces[1] == 0 ||
+        throw(ArgumentError("`z_faces` must start at 0 m; the first face is $(faces[1]) m"))
+    faces[end] == z_max || throw(
+        ArgumentError(
+            "`z_faces` must end at `z_max` = $(z_max) m; the last face is $(faces[end]) m",
+        ),
+    )
+    k = findfirst(i -> faces[i + 1] <= faces[i], 1:(length(faces) - 1))
+    isnothing(k) || throw(
+        ArgumentError(
+            "`z_faces` must rise strictly; face $(k + 1) ($(faces[k + 1]) m) is not \
+             above face $k ($(faces[k]) m)",
+        ),
+    )
+    domain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(0),
+        Geometry.ZPoint{FT}(z_max);
+        boundary_names = (:bottom, :top),
+    )
+    return Meshes.IntervalMesh(domain, Geometry.ZPoint{FT}.(faces))
+end
+
+"""
+    hybrid_z_faces(; dz_strat = 500, z_strat_bottom = 11000, z_strat_top = 35000,
+                   z_max = 60000, dz_max = 3000, max_change = 0.1)
+
+Face heights [m] of a hybrid vertical grid with uniform spacing `dz_strat` in the
+stratosphere, for resolving the QBO:
+
+ 1. The faces of the 63-level two-scale grid (`z_max` 60 km, `dz_bottom` 30 m,
+    `dz_top` 3 km, `z_pbl` 2.2 km, the grid of the 1M aquaplanet Beres runs), up to the
+    face from which the spacing, shrinking to `dz_strat` by at most `max_change` per
+    level, reaches `dz_strat` closest to `z_strat_bottom`.
+ 2. That shrinking: a geometric sequence from the last spacing of the 63-level grid to
+    `dz_strat` in as few levels as `max_change` allows, so the spacing has no jump.
+ 3. Uniform `dz_strat` up to the last face at or below `z_strat_top`.
+ 4. Spacing growing geometrically to `z_max`, in the number of levels whose ratio makes
+    the top spacing closest to `dz_max`; the ratio is solved so the last face is
+    exactly `z_max`.
+
+The defaults (the `hybrid_0p5km` preset of the `z_faces` config key) give 106 levels: the
+63-level faces up to 8.1 km (37 levels, the last 745 m thick), shrinking by 7.7% per
+level to 500 m at 10.6 km (5 levels, the last 500 m thick), 500 m up to 34.6 km (47
+more levels), and growing by 11.3% per level to 3.08 km at 60 km (17 levels). From 500 m
+at 35 km, a 9% growth would reach only about 2.3 km at 60 km.
+"""
+function hybrid_z_faces(;
+    dz_strat = 500.0,
+    z_strat_bottom = 11000.0,
+    z_strat_top = 35000.0,
+    z_max = 60000.0,
+    dz_max = 3000.0,
+    max_change = 0.1,
+)
+    base_mesh = CommonGrids.DefaultZMesh(
+        Float64;
+        z_min = 0,
+        z_max = 60000.0,
+        z_elem = 63,
+        stretch = Meshes.BoundaryLayerHyperbolicTangentStretching{Float64}(
+            30.0,
+            3000.0,
+            2200.0,
+        ),
+    )
+    base = [Geometry.component(f, 1) for f in base_mesh.faces]
+    # The spacings shrinking from `dz` to `dz_strat` by at most `max_change` per level.
+    taper(dz) =
+        dz <= dz_strat ? Float64[] :
+        (n = ceil(Int, log(dz / dz_strat) / log(1 + max_change));
+            [dz * (dz_strat / dz)^(i / n) for i in 1:n])
+    # The shared face from which the shrinking ends closest to z_strat_bottom.
+    taper_end(k) = base[k] + sum(taper(base[k] - base[k - 1]); init = 0.0)
+    k = argmin(k -> abs(taper_end(k) - z_strat_bottom), 2:length(base))
+    faces = base[1:k]
+    for dz in taper(base[k] - base[k - 1])
+        push!(faces, faces[end] + dz)
+    end
+    while faces[end] + dz_strat <= z_strat_top + 1e-6
+        push!(faces, faces[end] + dz_strat)
+    end
+    # Geometric growth over m levels from dz_strat, ratio r: dz_strat Σᵢ rⁱ = remaining.
+    z_join = faces[end]
+    remaining = z_max - z_join
+    function ratio(m)
+        g(r) = dz_strat * r * (r^m - 1) / (r - 1) - remaining
+        lo, hi = 1 + 1e-9, 2.0
+        for _ in 1:200
+            mid = (lo + hi) / 2
+            g(mid) < 0 ? (lo = mid) : (hi = mid)
+        end
+        return (lo + hi) / 2
+    end
+    ms = filter(m -> dz_strat * m < remaining, 1:200)
+    m = argmin(m -> abs(dz_strat * ratio(m)^m - dz_max), ms)
+    r = ratio(m)
+    for i in 1:m
+        push!(faces, z_join + dz_strat * r * (r^i - 1) / (r - 1))
+    end
+    faces[end] = z_max
+    return faces
+end
+
+"""
+    z_faces_from_config(z_faces, z_max)
+
+The face heights the `z_faces` config key selects: `nothing` for none, the faces of a
+preset for its name (`"hybrid_0p5km"`, see `hybrid_z_faces`), or the list itself.
+"""
+z_faces_from_config(::Nothing, z_max) = nothing
+z_faces_from_config(z_faces::AbstractVector, z_max) = Float64.(z_faces)
+function z_faces_from_config(z_faces::AbstractString, z_max)
+    z_faces == "hybrid_0p5km" && return hybrid_z_faces(; z_max = Float64(z_max))
+    throw(
+        ArgumentError(
+            "Unknown `z_faces` preset \"$(z_faces)\"; give a list of face heights or \
+             \"hybrid_0p5km\"",
+        ),
+    )
+end
+
+"""
     get_spaces(grid)
 
 Create the center and face spaces of a ClimaCore grid, returned as

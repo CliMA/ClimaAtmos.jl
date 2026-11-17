@@ -116,4 +116,78 @@ import ClimaCore as CC
 
         @test_throws ErrorException CA.MultiColumnGrid(Float64; n_columns = 0)
     end
+
+    @testset "Vertical mesh from explicit faces (z_faces)" begin
+        faces = [0.0, 100.0, 250.0, 500.0, 1000.0]
+        mesh = CA.z_faces_mesh(Float32, faces, 1000.0)
+        @test [CC.Geometry.component(f, 1) for f in mesh.faces] == Float32.(faces)
+        grid = CA.ColumnGrid(
+            Float64;
+            z_elem = 4,
+            z_max = 1000.0,
+            z_mesh = CA.z_faces_mesh(Float64, faces, 1000.0),
+        )
+        (; face_space) = CA.get_spaces(grid)
+        @test vec(parent(CC.Fields.coordinate_field(face_space).z)) == faces
+        # The faces must rise strictly from 0 to z_max.
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [0.0, 500.0, 900.0], 1000.0)
+        @test_throws ArgumentError CA.z_faces_mesh(Float64, [10.0, 500.0, 1000.0], 1000.0)
+        @test_throws ArgumentError CA.z_faces_mesh(
+            Float64,
+            [0.0, 500.0, 500.0, 1000.0],
+            1000.0,
+        )
+        @test_throws ArgumentError CA.z_faces_from_config("no_such_preset", 60000.0)
+        @test isnothing(CA.z_faces_from_config(nothing, 60000.0))
+        @test CA.z_faces_from_config([0, 1, 2], 2.0) == [0.0, 1.0, 2.0]
+
+        # The hybrid 0.5 km preset
+        f = CA.z_faces_from_config("hybrid_0p5km", 60000.0)
+        dz = diff(f)
+        z_c = (f[1:(end - 1)] .+ f[2:end]) ./ 2
+        @test f[1] == 0 && f[end] == 60000.0
+        @test all(>(0), dz)
+        # Below the shrinking, the faces of the 63-level two-scale grid, exactly.
+        base_mesh = CC.CommonGrids.DefaultZMesh(
+            Float64; z_min = 0, z_max = 60000.0, z_elem = 63,
+            stretch = CC.Meshes.BoundaryLayerHyperbolicTangentStretching{Float64}(
+                30.0,
+                3000.0,
+                2200.0,
+            ),
+        )
+        base = [CC.Geometry.component(x, 1) for x in base_mesh.faces]
+        k = findfirst(i -> f[i] != base[i], eachindex(f)) - 1   # last shared face
+        @test f[1:k] == base[1:k]
+        @test 5000 < f[k] < 11000
+        # Uniform 500 m from about 11 to 35 km, reached without a jump: below 35 km no
+        # spacing changes by more than 10% from one level to the next above the shared
+        # faces.
+        strat = (z_c .> 11500) .& (z_c .< 34500)
+        @test all(d -> isapprox(d, 500; atol = 1e-6), dz[strat])
+        k_strat = findlast(<(34500), z_c)
+        @test maximum(abs.(dz[(k + 1):k_strat] ./ dz[k:(k_strat - 1)] .- 1)) <= 0.1 + 1e-9
+        k_start = findfirst(d -> isapprox(d, 500; atol = 1e-6), dz)
+        @test 10500 < f[k_start] < 11500
+        # Above 35 km: growing geometrically (about 11% per level) to about 3 km at the top.
+        top = z_c .> 35000
+        growth = dz[top][2:end] ./ dz[top][1:(end - 1)]
+        @test all(r -> isapprox(r, growth[1]; rtol = 1e-9), growth)
+        @test 1.08 < growth[1] < 1.14
+        @test 2700 < dz[end] < 3300
+        @test 100 <= length(dz) <= 110
+        # Through the config key, on a column grid.
+        grid = CA.get_grid(
+            Dict(
+                "config" => "column", "n_columns" => 1, "z_elem" => 10,
+                "z_max" => 60000.0,
+                "z_stretch" => true, "dz_bottom" => 30.0, "dz_top" => 3000.0,
+                "z_pbl" => 2200.0, "z_faces" => "hybrid_0p5km",
+            ),
+            CA.ClimaAtmosParameters(Float64),
+            CA.ClimaComms.context(),
+        )
+        (; face_space) = CA.get_spaces(grid)
+        @test vec(parent(CC.Fields.coordinate_field(face_space).z)) == f
+    end
 end

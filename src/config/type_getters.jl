@@ -483,7 +483,9 @@ columns when `n_columns` is not 1), `"box"` a `BoxGrid`, and `"plane"` a
 `PlaneGrid`.
 
 All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`,
-`dz_bottom`, `dz_top`, and `z_pbl`. Every grid except the column also reads the
+`dz_bottom`, `dz_top`, and `z_pbl`, or, when `z_faces` is set, take the vertical mesh
+from its face heights (a list, or a preset name; see `z_faces_from_config`). Every grid
+except the column also reads the
 topography keys `topography`, `topography_damping_factor`, `mesh_warp_type`, and
 `topo_smoothing`. The sphere reads `h_elem`, `nh_poly`, `bubble`, and
 `deep_atmosphere`, with the planet radius taken from `params`; the box and plane read
@@ -506,6 +508,15 @@ function get_grid(parsed_args, params, context)
         dz_top = parsed_args["dz_top"],
         z_pbl = parsed_args["z_pbl"],
     )
+    # Explicit face heights replace the stretching rule (`z_elem` follows from them).
+    z_faces = z_faces_from_config(parsed_args["z_faces"], parsed_args["z_max"])
+    if !isnothing(z_faces)
+        kwargs = (
+            kwargs...,
+            z_elem = length(z_faces) - 1,
+            z_mesh = z_faces_mesh(FT, z_faces, parsed_args["z_max"]),
+        )
+    end
 
     # Add topography parameters for non-column grids
     if config != "column"

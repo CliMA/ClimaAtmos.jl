@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- New config key `z_faces`: explicit vertical face heights, or the preset
+  `hybrid_0p5km` (the 63-level grid up to 8.1 km, shrinking to 500 m at 10.6 km, uniform
+  500 m to 34.6 km, then growing by about 11% per level to 3 km at 60 km; 106 levels).
 - ![][badge-🔥behavioralΔ] ![][badge-🚀performance] The Beres-G launch spectrum builds
   about 8 times faster on GPU, and by default its bins average over as many sub-samples
   as they need instead of 8, which changes Beres-G output: bin values by about 0.45%
