@@ -57,10 +57,7 @@ data.
 function plot_ensemble(output_dir, ekp)
     curr_iter = EKP.get_N_iterations(ekp)
     # Size is number of variables by number of ensemble members
-    g_ens_as_vars = reconstruct_g_ens(
-        ekp,
-        curr_iter,
-    )
+    g_ens_as_vars = ObservationRecipe.reconstruct_g(ekp, curr_iter)
 
     obs = ClimaCalibrate.get_observations_for_nth_iteration(
         EKP.get_observation_series(ekp),
@@ -107,52 +104,4 @@ function plot_ensemble(output_dir, ekp)
         )
     end
     CairoMakie.save(joinpath(output_dir, "ensemble_plot_of_iter_$(curr_iter).png"), fig)
-end
-
-"""
-    reconstruct_g_ens(
-        ekp::EKP.EnsembleKalmanProcess,
-        it,
-    )
-
-Reconstruct the G ensemble matrix at the `it`th iteration as a matrix of
-`OutputVar`s.
-"""
-function reconstruct_g_ens(
-    ekp::EKP.EnsembleKalmanProcess,
-    it,
-)
-    obs_series = EKP.get_observation_series(ekp)
-    metadata = ClimaCalibrate.get_metadata_for_nth_iteration(
-        obs_series,
-        it,
-    )
-    all(m isa ClimaAnalysis.Var.Metadata for m in metadata) || error(
-        "Getting the short names from an observation is only supported with metadata from ClimaAnalysis",
-    )
-
-    g_ens = EKP.get_g(ekp, it)
-    num_cols = size(g_ens)[2]
-
-    # Check if length of g ensemble is the same as the length of the data in the metadatas
-    total_metadata_length =
-        sum(ClimaAnalysis.flattened_length(m) for m in metadata)
-    length(g_ens[:, 1]) != total_metadata_length && error(
-        "Length of g_mean_final is not the same as the length of all the metadata",
-    )
-
-    # Reconstruct each OutputVar for every ensemble member (column of g_ens)
-    ext = Base.get_extension(ClimaCalibrate, :ClimaCalibrateClimaAnalysisExt)
-    minibatch_indices =
-        ext.ObservationRecipe._get_minibatch_indices_for_nth_iteration(
-            obs_series,
-            EKP.get_N_iterations(ekp),
-        )
-    vars_per_ens = [
-        map(metadata, minibatch_indices) do m, range
-            ClimaAnalysis.unflatten(m, g_ens[range, col])
-        end
-        for col in 1:num_cols
-    ]
-    return hcat(vars_per_ens...)
 end

@@ -26,4 +26,4 @@ A perfect single column model calibration experiment in set up in
 
 ## New Experiments
 
-To set up your own experiment, please follow the [setup guide](https://clima.github.io/ClimaCalibrate.jl/dev/atmos_setup_guide/).
+To set up your own experiment, please follow the [Getting Started guide](https://clima.github.io/ClimaCalibrate.jl/stable/quickstart/) of ClimaCalibrate.
