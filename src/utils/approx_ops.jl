@@ -91,17 +91,20 @@ macro approx_ops(expr)
     return esc(_approx_ops(expr))
 end
 _approx_ops(x) = x
+# The callee is the qualified name, not the function object: `@.` dots a call
+# only if its callee is a symbol or a qualified name.
+_approx_fn(name::Symbol) = Expr(:., @__MODULE__, QuoteNode(name))
 function _approx_ops(ex::Expr)
     args = map(_approx_ops, ex.args)
     if ex.head === :call && length(args) == 3 && args[1] === :/
-        return Expr(:call, fast_div, args[2], args[3])
+        return Expr(:call, _approx_fn(:fast_div), args[2], args[3])
     elseif ex.head === :call && length(args) == 3 && args[1] === :^ &&
            !(args[3] isa Integer)
-        return Expr(:call, approx_pow, args[2], args[3])
+        return Expr(:call, _approx_fn(:approx_pow), args[2], args[3])
     elseif ex.head === :call && length(args) == 2 && args[1] === :sqrt
-        return Expr(:call, fast_sqrt, args[2])
+        return Expr(:call, _approx_fn(:fast_sqrt), args[2])
     elseif ex.head === :call && length(args) == 2 && args[1] === :inv
-        return Expr(:call, fast_inv, args[2])
+        return Expr(:call, _approx_fn(:fast_inv), args[2])
     end
     return Expr(ex.head, args...)
 end

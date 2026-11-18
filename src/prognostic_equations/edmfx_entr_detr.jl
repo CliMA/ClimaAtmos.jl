@@ -85,7 +85,7 @@ This is the entrainment counterpart of `lower_area_limiter_factor`,
 which damps detrainment near the lower bound `a_min`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
-@inline function upper_area_limiter_factor(a::FT, turbconv_params) where {FT}
+@approx_ops @inline function upper_area_limiter_factor(a::FT, turbconv_params) where {FT}
     a_max = CAP.max_area(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_safe = max(eps(FT), a)
@@ -110,7 +110,7 @@ This is the detrainment counterpart of `upper_area_limiter_factor`,
 which damps entrainment near the upper bound `a_max`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
-@inline function lower_area_limiter_factor(a::FT, turbconv_params) where {FT}
+@approx_ops @inline function lower_area_limiter_factor(a::FT, turbconv_params) where {FT}
     a_min = CAP.min_area(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
     a_safe = max(eps(FT), a)
@@ -155,7 +155,11 @@ Extracted as a helper so it can be reused by `detrainment_rate` (the
 explicit detrainment closure) and the implicit ρa solve (where the same
 buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
 """
-@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+@approx_ops @inline function detr_buoy_inv_time_scale(
+    Δwʲ,
+    Δbuoyʲ,
+    entr_detr_buoy_inv_tau_max,
+)
     FT = typeof(Δwʲ)
     return min(
         entr_detr_buoy_inv_tau_max,

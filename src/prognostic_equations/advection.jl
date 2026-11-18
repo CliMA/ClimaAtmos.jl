@@ -775,7 +775,7 @@ species_pairs(species::Tuple) =
 
 # One pair of species of `updraft_sedimentation_rate!`, whose rate is added to
 # `ᶜr_prev`, or to zero for the first pair (`nothing`).
-function sedimentation_rate_pair!(
+@approx_ops function sedimentation_rate_pair!(
     ᶜr,
     ᶜr_prev,
     pair,

@@ -43,12 +43,12 @@ See also `sgs_weight_function` and `env_relaxation_feedback`.
 """
 specific(ρχ, ρ) = ρχ / ρ
 
-function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+@approx_ops function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
     return specific(ρaχ, ρa, ρχ, ρ, sgs_weight_function(ρa / ρ, turbconv_model.a_half))
 end
-function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
+@approx_ops function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
     # If ρa is exactly zero, the weight is zero, making the first term NaN (0 * … / 0).
     # For negligible ρa the weight is also zero, and autodiff can still produce NaNs.
     # The ifelse handles both cases explicitly by returning the grid-mean value when ρa < eps.
@@ -307,7 +307,7 @@ derivatives.
 
 The weight `w(a)` [-].
 """
-function sgs_weight_function(a, a_half)
+@approx_ops function sgs_weight_function(a, a_half)
     if a < 0
         zero(a)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
