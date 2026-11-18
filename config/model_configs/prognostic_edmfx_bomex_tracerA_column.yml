@@ -20,7 +20,7 @@ perturb_initstate: false
 dt: "1secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_1M.toml]
+toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 41]
 ode_algo: "ARS222"
 chemistry_model: "passive"

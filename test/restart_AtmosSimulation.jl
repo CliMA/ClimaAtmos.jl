@@ -23,7 +23,7 @@ function amip_target(context, output_dir)
     param_dict =
         ClimaParams.create_toml_dict(
             FT;
-            override_file = "toml/prognostic_edmfx.toml",
+            override_file = "toml/default_parameters.toml",
         )
     params = CA.ClimaAtmosParameters(param_dict)
 

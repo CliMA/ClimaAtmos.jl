@@ -337,7 +337,7 @@ if MANYTESTS
                 "enable_diagnostics" => false,
                 "debug_tendency_diagnostics" => false,
                 "toml" => [
-                    joinpath(@__DIR__, "../toml/prognostic_edmfx_1M.toml"),
+                    joinpath(@__DIR__, "../toml/default_parameters.toml"),
                 ],
                 "output_dir" => joinpath(edmf_1m_output_loc, edmf_1m_job_id),
             ),
@@ -405,7 +405,7 @@ else
             "radiation_reset_rng_seed" => true,
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
-                joinpath(@__DIR__, "../toml/prognostic_edmfx.toml"),
+                joinpath(@__DIR__, "../toml/default_parameters.toml"),
                 joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),

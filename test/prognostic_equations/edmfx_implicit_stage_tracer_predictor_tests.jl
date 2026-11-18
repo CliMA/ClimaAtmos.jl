@@ -53,7 +53,7 @@ column(f) = vec(Array(parent(f)))
             "dt" => "1secs",
             "t_end" => "10secs",
             "ode_algo" => "ARS222",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "edmfx_tracer_predictor_test",
@@ -856,7 +856,7 @@ column(f) = vec(Array(parent(f)))
                     "t_end" => "2secs",
                     "ode_algo" => "ARS222",
                     "toml" =>
-                        [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                        [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
                     "output_default_diagnostics" => false,
                 );
                 job_id = "edmfx_nomf_imp_$(imp_mp)",

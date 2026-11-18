@@ -1,4 +1,4 @@
-474
+475
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+475
+- `toml/default_parameters.toml` (renamed from `prognostic_edmfx_1M.toml`)
+  replaces most case parameter files.
+
 474
 - 1M `PrognosticEDMFX`: `toml/prognostic_edmfx_1M.toml` and
   `toml/prognostic_edmfx_1M_mlcloud.toml` set `edmf_buoyancy_clear_env_weight =
