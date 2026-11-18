@@ -199,6 +199,32 @@ import ClimaCore as CC
         )
         (; face_space) = CA.get_spaces(grid)
         @test vec(parent(CC.Fields.coordinate_field(face_space).z)) == f
+
+        # The production sphere: Float32, h_elem 16, nh_poly 3, deep atmosphere, no topography.
+        config = CA.AtmosConfig(
+            Dict(
+                "config" => "sphere", "FLOAT_TYPE" => "Float32",
+                "h_elem" => 16, "nh_poly" => 3, "z_max" => 60000.0,
+                "z_faces" => "hybrid_0p5km", "log_progress" => false,
+            );
+            job_id = "grids_hybrid_sphere_float32",
+        )
+        params = CA.ClimaAtmosParameters(config)
+        @test eltype(params) == Float32
+        grid = CA.get_grid(config, params)
+        (; center_space, face_space) = CA.get_spaces(grid)
+        z_raw = vec(parent(CC.Fields.coordinate_field(face_space).z))
+        @test eltype(z_raw) == Float32
+        # On the sphere the face heights are radial distances minus the radius, so allow
+        # Float32 rounding of a 6.4e6 m radius.
+        # Each face height appears once per horizontal node; keep one value per level
+        # (the thinnest layer is 30 m, far above the rounding).
+        z_sorted = sort(Float64.(z_raw))
+        z_unique = z_sorted[[true; diff(z_sorted) .> 10]]
+        @test CC.Spaces.nlevels(center_space) == 106
+        @test CC.Spaces.nlevels(face_space) == 107
+        @test length(z_unique) == 107
+        @test all(isapprox.(z_unique, f; atol = 2))
     end
 
     @testset "Explicit faces equal to a built-in mesh give the same spaces" begin
