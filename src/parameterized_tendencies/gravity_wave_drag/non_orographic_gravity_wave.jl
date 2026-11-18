@@ -907,8 +907,9 @@ function non_orographic_gravity_wave_compute_tendency!(
     )
 
     # Sanitize the forcing here, once per callback, rather than at every stage that applies
-    # it (same limit as OGW: 3e-3 m/s²). The cells it zeroes are counted first, so that a
-    # NaN or Inf is reported instead of silently removed.
+    # it. Each component is clipped to ±3e-3 m/s² on its own; OGW uses the same bound but
+    # scales the (u, v) vector, keeping its direction. The cells it zeroes are counted
+    # first, so that a NaN or Inf is reported instead of silently removed.
     warn_nonfinite_gravity_wave_forcing(uforcing, vforcing)
     DataLayouts.foreach_point(uforcing, vforcing) do ᶜuforcing, ᶜvforcing
         @inline
@@ -920,8 +921,8 @@ end
 """
     limited_gravity_wave_forcing(forcing)
 
-Return the drag `forcing` [m/s²] clamped to ±3e-3 m/s², the same limit the orographic
-scheme uses, or zero if it is `NaN` or infinite.
+Return the drag `forcing` [m/s²] clamped to ±3e-3 m/s² (the bound the orographic scheme
+applies to the vector magnitude), or zero if it is `NaN` or infinite.
 """
 limited_gravity_wave_forcing(forcing) = ifelse(
     isnan(forcing) | isinf(forcing),
