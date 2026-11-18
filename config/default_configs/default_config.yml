@@ -268,7 +268,7 @@ vertical_water_borrowing_species:
   help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_lcl, ρq_rai, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_lcl\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_lcl, ρq_rai, ρq_icl, ρq_sno)."
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]. `MLCloud` needs Flux to be loaded (`import Flux`)."
   value: "quadrature"
 cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"

@@ -412,6 +412,17 @@ function MLCloud_constructor(model)
 end
 
 """
+    build_mlcloud(nn_filepath, nn_param_vec)
+
+Build an `MLCloud` from the network architecture stored in the JLD2 file
+`nn_filepath` and the parameter vector `nn_param_vec`.
+
+The method is defined in the `ClimaAtmosFlux` extension, which is loaded when
+`Flux` is imported alongside `ClimaAtmos`.
+"""
+function build_mlcloud end
+
+"""
     AbstractInsolation
 
 Source of the top-of-atmosphere solar flux and cosine of the solar zenith angle

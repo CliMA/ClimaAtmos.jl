@@ -32,6 +32,10 @@ main
   `larcform1_1M_prognostic_edmfx`, and the 1M aquaplanet, AMIP target, and
   benchmark configurations; the 2M RICO job, which also reads the 1M TOML,
   ignores the weight.
+- ![][badge-💥breaking] Flux is now a weak dependency, The `ClimaAtmosFlux`
+  extension builds the `MLCloud` network (`build_mlcloud`) and loads when `Flux`
+  is imported alongside ClimaAtmos. Configurations with `cloud_model: "MLCloud"`
+  need `import Flux` before the simulation is built.
 - ![][badge-🔥behavioralΔ] Tail entrainment for the prognostic EDMF updraft
   (provisional parameter `edmf_tail_entr_fraction`, default `0.5`): the air
   drawn in by the dynamical entrainment is the mean of the top fraction, in

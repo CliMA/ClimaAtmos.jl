@@ -17,7 +17,6 @@ ClimaTimeSteppers = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 CloudMicrophysics = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Insolation = "e98cc03f-d57e-4e3c-b70c-8d51efe9e0d8"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
@@ -40,9 +39,11 @@ UnrolledUtilities = "0fe1646c-419e-43be-ac14-22321958931b"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [weakdeps]
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 
 [extensions]
+ClimaAtmosFlux = "Flux"
 ClimaAtmosMusica = "Musica"
 
 [compat]

@@ -14,6 +14,7 @@ haskey(ENV, "CI") && (using PrecompileCI)
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+import Flux # needed for MLCloud
 import Random
 Random.seed!(1234)
 

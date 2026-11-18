@@ -1,5 +1,3 @@
-using Flux
-import JLD2
 import CloudMicrophysics as CM
 
 """
@@ -804,13 +802,9 @@ function get_cloud_model(parsed_args, params)
             @clima_artifact("cloud_fraction_nn"),
             parsed_args["cloud_nn_architecture"],
         )
-        nn_model_data = JLD2.load(nn_filepath)
-        nn_architecture = nn_model_data["re"]
-
         nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # build the model
-        cf_nn_model = nn_architecture(nn_param_vec)
-        MLCloud_constructor(cf_nn_model)
+        build_mlcloud(nn_filepath, nn_param_vec)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
