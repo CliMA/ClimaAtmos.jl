@@ -614,6 +614,79 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test launched > 0                    # opposes the westward wind
             @test value(nogw.gw_beres_mech_flux) ≈ a_cover * launched rtol = 1e-6
         end
+
+        @testset "With latent heating, the gate tests its grid mean" begin
+            # The applied latent heating of the drafts since the last NOGW call is set
+            # directly in its accumulators: a half-sine in-cloud heating from 3 to
+            # 10 km, area fraction a0. The drafts carry no temperature anomaly, so the
+            # dry-static-energy flux convergence is zero and the DSE gate would never
+            # fire. gw_Q_conv must be the grid mean Σⱼ ρaʲ·Qʲ/ρ = a0·Q, and the
+            # column must be active exactly when its amplitude above the floor
+            # exceeds Q0_threshold.
+            nogw = p.non_orographic_gravity_wave
+            @. ᶜTʲs.:(1) = ᶜT
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+            fill!(ᶜbuoyancy_frequency, FT(0.012))
+            bs_latent = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                heating_latent = true,
+            )
+            nogw_latent = merge(
+                nogw,
+                CA._beres_latent_accumulator_fields(Y),
+                (; gw_beres_source = bs_latent),
+            )
+            p_latent = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = nogw_latent,
+            )
+            T_acc = FT(1800)
+            Q_shape = @. ifelse(
+                (ᶜz >= z_lo) & (ᶜz <= z_hi),
+                sin(FT(π) * (ᶜz - z_lo) / (z_hi - z_lo)),
+                FT(0),
+            )
+            dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+            function run_with_peak(Q_peak)
+                (; gw_latent_heat_acc, gw_latent_mass_acc, gw_latent_area_acc) =
+                    nogw_latent
+                nogw_latent.gw_latent_time_acc[] = T_acc
+                @. gw_latent_mass_acc = Y.c.sgsʲs.:(1).ρa * T_acc
+                @. gw_latent_area_acc = Y.c.sgsʲs.:(1).ρa / ᶜρ * T_acc
+                @. gw_latent_heat_acc = Y.c.sgsʲs.:(1).ρa * Q_peak * Q_shape * T_acc
+                CA.compute_beres_convective_heating!(Y, p_latent, ᶜbuoyancy_frequency)
+                Q = Array(Fields.field2array(nogw_latent.gw_Q_conv))[:, 1]
+                Q_ic = Array(Fields.field2array(nogw_latent.gw_Q_conv_ic))[:, 1]
+                z_b, z_t = parent(gw_zbot)[1], parent(gw_ztop)[1]
+                z_start = max(z_b, beres.z_bot_floor)
+                above = (center_z .>= z_start) .& (center_z .<= z_t)
+                return (;
+                    Q,
+                    Q_ic,
+                    amplitude = (π / 2) * sum(Q[above] .* dz_col[above]) / (z_t - z_start),
+                    active = parent(gw_beres_active)[1],
+                )
+            end
+            unit = run_with_peak(FT(1))
+            shape_col = Array(Fields.field2array(Q_shape))[:, 1]
+            heated = findall(>(0), shape_col)
+            @test unit.Q_ic[heated] ≈ shape_col[heated] rtol = 1e-10
+            @test unit.Q[heated] ≈ a0 .* shape_col[heated] rtol = 1e-10
+            @test all(iszero, unit.Q[setdiff(eachindex(shape_col), heated)])
+            Q_on = 1.05 * beres.Q0_threshold / unit.amplitude
+            Q_off = 0.95 * beres.Q0_threshold / unit.amplitude
+            on = run_with_peak(FT(Q_on))
+            off = run_with_peak(FT(Q_off))
+            @test on.amplitude ≈ 1.05 * beres.Q0_threshold rtol = 1e-6
+            @test on.active == 1
+            @test off.active == 0
+            # The cold-start path, from the stored 1M rates, is checked in the 1M
+            # build at the end of this file.
+        end
     end
 
     # ============================================================================
@@ -1391,6 +1464,12 @@ end
         expected = (Lv * FT_l(1e-6) + Ls * FT_l(2e-7)) ./ cp
         @test Q_known[band] ≈ expected[band] rtol = 10 * eps(FT_l)
         @test all(==(0), Q_known[.!band])
+        # The activation reads the grid mean of the same heating, Σⱼ ρaʲ·Qʲ/ρ, here
+        # a0 times the in-cloud heating.
+        Q_grid =
+            Array(Fields.field2array(p_l.non_orographic_gravity_wave.gw_Q_conv))[:, 1]
+        @test Q_grid[band] ≈ a0 .* expected[band] rtol = 10 * eps(FT_l)
+        @test all(==(0), Q_grid[.!band])
     end
 end
 

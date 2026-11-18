@@ -72,16 +72,18 @@ at zero and `q_tot` at the condensate sum before evaluating `cp_m`. Called from
 end
 
 """
-    _beres_latent_heating_snapshot!(ᶜQ_ic, Y, p, a_min)
+    _beres_latent_heating_snapshot!(ᶜQ_ic, ᶜQ_grid, Y, p, a_min)
 
 Set `ᶜQ_ic` to the ρaʲ-weighted in-cloud mean of `_beres_latent_heating`, the latent
 heating of each updraft from the model's stored 1M rates at the current state (the bulk
-processes as the step-averaged forecast, the implicit set at its instantaneous rate), on
-levels whose total draft area is at least `a_min`, zero elsewhere. These are rates of the
-state, not what the solver applied; `compute_beres_convective_heating!` uses them only
-when no applied heating has been accumulated since the last NOGW call.
+processes as the step-averaged forecast, the implicit set at its instantaneous rate), and
+`ᶜQ_grid` to its grid mean `Σⱼ max(ρaʲ, 0)·Qʲ / ρ` (the same draft sum per unit mass of
+the whole cell, about `Σⱼ aʲ·Qʲ`), both on levels whose total draft area is at least
+`a_min` and zero elsewhere. These are rates of the state, not what the solver applied;
+`compute_beres_convective_heating!` uses them only when no applied heating has been
+accumulated since the last NOGW call.
 """
-function _beres_latent_heating_snapshot!(ᶜQ_ic, Y, p, a_min)
+function _beres_latent_heating_snapshot!(ᶜQ_ic, ᶜQ_grid, Y, p, a_min)
     FT = eltype(Y)
     ϵ = eps(FT)
     n_updrafts = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -127,6 +129,12 @@ function _beres_latent_heating_snapshot!(ᶜQ_ic, Y, p, a_min)
         (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
     ᶜdraft_area =
         @. lazy(mapreduce_with_init(positive_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    # The grid mean first, while gw_Q_conv_ic still holds the draft sum.
+    @. ᶜQ_grid = ifelse(
+        (ᶜdraft_area >= a_min) & (ᶜdraft_mass > FT(0)),
+        gw_Q_conv_ic / Y.c.ρ,
+        FT(0),
+    )
     @. gw_Q_conv_ic = ifelse(
         (ᶜdraft_area >= a_min) & (ᶜdraft_mass > FT(0)),
         gw_Q_conv_ic / ᶜdraft_mass,
@@ -1058,7 +1066,10 @@ means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over the whole e
 
   - `gw_Q_conv` — the grid-mean flux convergence, i.e. the draft anomalies weighted by
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
-    `Q0_threshold` is calibrated to grid-mean magnitudes.
+    `Q0_threshold` is a grid-mean heating rate. When `heating_latent` is set,
+    `gw_Q_conv` is instead the grid mean `Σⱼ max(ρaʲ, 0)·Q_latʲ / ρ` of the same latent
+    heating that sets `gw_Q_conv_ic` (same time window, same `a_min` level mask), so the
+    gate tests the heating the source is built from.
   - `gw_Q_conv_ic` — the ρaʲ-weighted in-cloud (conditional-mean) heating, with no area
     factor. This is the local amplitude convention Beres' linear theory expects: it sets
     the envelope and `gw_Q0`, and the deposited flux is later diluted by `gw_a_cover` in
@@ -1067,7 +1078,7 @@ means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over the whole e
     the transport-free latent heating the implicit stages applied since the last call
     (`accumulate_beres_latent_heating!`; the stored rates of the current state,
     `_beres_latent_heating_snapshot!`, at the first call of a cold start), a lagged mean
-    while the rest of the source comes from the current state; `gw_Q_conv` is untouched.
+    while the rest of the source comes from the current state.
 
 The envelope `[z_bot, z_top]` is obtained by moment matching over `z ≥ z_bot_floor` (2 km
 by default, which excludes the EDMF boundary-layer and dry-thermal signal): a half-sine of
@@ -1171,8 +1182,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # column (typically cooling the lower part of the draft and warming the upper part),
     # and its mass-weighted column integral is zero when the flux vanishes at the draft
     # base and top. It is not the latent heating of the drafts, which the
-    # `heating_latent` option computes instead for the in-cloud profile.
-    # The activation always uses the grid-mean value, for 0M and 1M microphysics alike.
+    # `heating_latent` option computes instead (below) for both profiles.
+    # The activation uses the grid-mean value, the in-cloud one sets the source.
     #
     # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
     cp_d = FT(CAP.cp_d(p.params))
@@ -1246,11 +1257,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         )
     end
 
-    # When enabled, replace the in-cloud dry-static-energy flux convergence
-    # just computed in gw_Q_conv_ic with Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾, the
-    # ρaʲ-weighted in-cloud mean of the per-draft latent heating.
-    # The grid-mean gw_Q_conv above is left untouched: it still drives the activation,
-    # whose Q0_threshold is calibrated to grid-mean magnitudes of the flux convergence.
+    # When enabled, replace both heatings just computed with the latent heating
+    # Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾ of the drafts: gw_Q_conv_ic with its ρaʲ-weighted
+    # in-cloud mean, and gw_Q_conv, which drives the activation, with its grid mean
+    # Σⱼ max(ρaʲ, 0)·Qʲ / ρ, so the gate tests the same heating the source is built from.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
         (;
@@ -1263,11 +1273,20 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         T_acc = gw_latent_time_acc[]
         if T_acc > 0
             # The heating the implicit stages applied since the last NOGW call
-            # (`accumulate_beres_latent_heating!`): the time means of Σⱼ max(ρaʲ, 0)·Qʲ
-            # over Σⱼ max(ρaʲ, 0), on levels whose time-mean draft area is at least
-            # a_min.
-            @. gw_Q_conv_ic = ifelse(
+            # (`accumulate_beres_latent_heating!`), on levels whose time-mean draft
+            # area is at least a_min: the time mean of Σⱼ max(ρaʲ, 0)·Qʲ over that of
+            # Σⱼ max(ρaʲ, 0) (in-cloud), and over T_acc·ρ (grid mean). The grid mean
+            # divides by the current density, which changes little over the window.
+            ᶜlatent_levels = @. lazy(
                 (gw_latent_area_acc >= a_min * T_acc) & (gw_latent_mass_acc > FT(0)),
+            )
+            @. gw_Q_conv = ifelse(
+                ᶜlatent_levels,
+                gw_latent_heat_acc / (T_acc * ᶜρ),
+                FT(0),
+            )
+            @. gw_Q_conv_ic = ifelse(
+                ᶜlatent_levels,
                 gw_latent_heat_acc / gw_latent_mass_acc,
                 FT(0),
             )
@@ -1276,7 +1295,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             # restart from a file without the integrals), or a solver with no stage
             # accumulator. Use the stored rates of the current state
             # (`_beres_latent_heating_snapshot!`).
-            _beres_latent_heating_snapshot!(gw_Q_conv_ic, Y, p, a_min)
+            _beres_latent_heating_snapshot!(gw_Q_conv_ic, gw_Q_conv, Y, p, a_min)
         end
         # The next stage starts a new window (`accumulate_beres_latent_heating!`).
         gw_latent_window_used[] = true
@@ -1433,9 +1452,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     end
 
     # Unpack Pass 2 results, and set the beres_active flag: GRID-MEAN amplitude above
-    # threshold AND heating depth above minimum. The activation trigger always uses
-    # grid-mean flux convergence gw_Q_conv (slot 1) to ensure the same activation criteria between 0M and 1M
-    # microphysics. The grid-mean amplitude is the half-sine peak of the heating over the
+    # threshold AND heating depth above minimum. The activation uses the grid-mean
+    # heating gw_Q_conv (slot 1): the DSE flux convergence, or with `heating_latent`
+    # the latent heating, the grid-mean counterpart of the heating the source is built
+    # from. The grid-mean amplitude is the half-sine peak of that heating over the
     # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min

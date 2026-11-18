@@ -1005,7 +1005,8 @@ convective heating.
   - `heating_latent`: Whether to source the in-cloud heating from the latent
     heating `Q_lat = Σ_p L_p R_p` (requires 1-moment microphysics with
     `PrognosticEDMFX`) instead of the updrafts' eddy dry-static-energy flux
-    convergence, a transport term whose column integral is about zero.
+    convergence, a transport term whose column integral is about zero. The activation
+    then tests the grid mean of the same latent heating against `Q0_threshold`.
   - `detailed_diagnostics`: Whether to expose the `nogw_*` source-internal
     extended diagnostics.
   - `beres_smoothing_width`: Standard deviation of an optional Gaussian smoothing of the

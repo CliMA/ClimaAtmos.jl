@@ -294,7 +294,7 @@ add_diagnostic_variable!(
     short_name = "nogw_Q_conv",
     long_name = "NOGW Convective Heating Rate",
     units = "K s-1",
-    comments = "3D grid-mean convective heating rate from EDMF mass-flux divergence; used for Beres envelope detection and activation gating",
+    comments = "3D grid-mean convective heating rate used for the Beres activation gate: the EDMF updraft dry-static-energy flux convergence, or with nogw_beres_heating_latent the grid mean of the updraft latent heating",
     compute! = compute_nogw_Q_conv!,
 )
 
