@@ -24,19 +24,19 @@
 # this budget, so there are four tests:
 #
 # 1. Interior deposition. When a wave breaks between two cell centres, the
-#    kernel converts its flux into a drag, and `postprocess_and_accumulate!`
+#    kernel returns the flux the layer gives up, and `postprocess_and_accumulate!`
 #    divides it by the mean mass of the two cells and gives half to each, so
 #    the two cells together receive exactly the layer's flux. Dividing by any
-#    other mass (the kernel's own `√(ρ_k ρ_{k+1})·Δz`, say) leaves a residual
+#    other mass (`√(ρ_k ρ_{k+1})·Δz`, say) leaves a residual
 #    of second order on uniform and stretched grids and, on a deep-atmosphere
 #    grid, equal to the area growth from the surface (about 1.6% at 50 km),
 #    which the round-off tolerance catches.
 #
 # 2. Escaped flux. The wind and stability are set so that no wave breaks on
 #    the way up: everything reaches the top and goes through the forced-break
-#    path in `gw_deposit`. That path must rescale by `m_top / M_R` (the mass
-#    of the fictitious top layer the kernel divided by, over the total mass of
-#    the levels that receive the momentum) for the budget to close exactly.
+#    path in `gw_deposit`. That path must divide the escaped flux by `M_R`
+#    (the total mass of the levels that receive the momentum) for the budget
+#    to close exactly.
 #
 # 3. Source level. A wave can be unstable already at its own launch level. The
 #    old code (as in MiMA's `cg_drag.f90`) ran the AD99 launch-level test
@@ -412,14 +412,6 @@ function set_damp_level!(st, ::Val{:varying})
     return nothing
 end
 
-# Mass of the ghost layer the kernel divided the escaped flux by: it
-# extrapolates ρ_ghost = ρ_end²/ρ_end-1 above the top centre.
-function ghost_layer_mass(st)
-    ρ_ghost = st.ρ_profile[end]^2 / st.ρ_profile[end - 1]
-    return sqrt(st.ρ_profile[end] * ρ_ghost) *
-           (st.center_z[end] - st.center_z[end - 1])
-end
-
 # Set up the idealized atmosphere, run the AD99 scheme once, and count where
 # the launched momentum went. For each column:
 # - `deposited` (Pa): the total momentum per second the air received. The
@@ -431,8 +423,8 @@ end
 # - `escaped` (Pa): how much flux reached the model top. Already included in
 #   `deposited` (`gw_deposit` puts it back into the column); returned only to
 #   check each test took the intended path — ≈0 in tests 1/3, ≈all in test 2.
-#   Recovered from the ghost layer's stored acceleration by multiplying with
-#   the ghost-layer mass (needs `nk == 1`, asserted below).
+#   Read from the top level of the kernel's output, which holds the escaped
+#   flux (needs `nk == 1`, asserted below).
 function run_case!(st; Bw, wind::Symbol, damp_spec, damp_index = false)
     (; gwc, p, ᶜz, ᶜρ_t, ᶜu_t, ᶜv_t, ᶜbf_t, ᶜmom, deposited_field) = st
     @assert gwc.gw_nk == 1 "the `escaped` diagnostic assumes a single wave band"
@@ -516,10 +508,8 @@ function run_case!(st; Bw, wind::Symbol, damp_spec, damp_index = false)
         deposited_v,
         forcing_u = profile(gwc.uforcing),
         forcing_v = profile(gwc.vforcing),
-        # `postprocess_and_accumulate!` leaves the escaped flux, as an acceleration,
-        # in the top level of `u_waveforcing`.
-        escaped = per_column(Fields.level(gwc.u_waveforcing, st.nlev)) .*
-                  ghost_layer_mass(st),
+        # The kernel leaves the escaped flux in the top level of `u_waveforcing`.
+        escaped = per_column(Fields.level(gwc.u_waveforcing, st.nlev)),
         damp_level = round.(Int, per_column(gwc.damp_level)),
     )
 end
@@ -566,7 +556,7 @@ const INTERIOR_CASES = (
 # The small amplitude (`Bw = 1e-4`) keeps every wave stable at the launch
 # level (no test-3 breaking there), and the reversing wind absorbs every wave
 # at a critical level before the model top (no test-2 escape). The only
-# machinery left running is the interior path — the kernel putting drag on
+# machinery left running is the interior path — the kernel putting flux on
 # half-levels, then `postprocess_and_accumulate!` moving it to full levels — whose
 # deposited/launched ratio must be 1 on every grid.
 #

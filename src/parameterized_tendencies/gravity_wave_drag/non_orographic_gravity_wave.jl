@@ -2235,19 +2235,17 @@ function non_orographic_gravity_wave_forcing(
         Fields.field_values(z_endlevel_m1)
     field_shiftlevel_up!(ᶜz, ᶜz_p1, gw_temp_surface)
 
-    # The kernel turns the flux each layer loses into a drag by dividing by an estimate of
-    # the layer's mass, `√(ρ_k·ρ_{k+1})·Δz`. Here that estimate is replaced by the mean mass
-    # of the two cells on either side of the layer, `m = ρ·J/ΔA` (`ΔA`: the area at the
-    # bottom of the column). Half of each cell lies inside the layer, so the drag given to
-    # the two cells then adds up exactly to the flux the layer lost, on any grid.
+    # The kernel returns the flux each layer loses. It is turned into a drag by dividing by
+    # the mean mass of the two cells on either side of the layer, `m = ρ·J/ΔA` (`ΔA`: the
+    # area at the bottom of the column). Half of each cell lies inside the layer, so the drag
+    # given to the two cells then adds up exactly to the flux the layer lost, on any grid.
     # `u_waveforcing` is not written until the kernel runs, so it serves as scratch here.
     ᶜlayer_ratio = p.scratch.ᶜtemp_scalar_6
     ᶜρJ_p1 = u_waveforcing
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     @. ᶜlayer_ratio = ᶜρ * ᶜJ
     field_shiftlevel_up!(ᶜlayer_ratio, ᶜρJ_p1, FT(0))
-    @. ᶜlayer_ratio =
-        sqrt(ᶜρ * ᶜρ_p1) * (ᶜz_p1 - ᶜz) / ((ᶜlayer_ratio + ᶜρJ_p1) / 2)
+    @. ᶜlayer_ratio = 2 / (ᶜlayer_ratio + ᶜρJ_p1)
     ᶠspace = Spaces.face_space(axes(ᶜρ))
     Fields.field_values(gw_temp_surface) .=
         Fields.field_values(
@@ -2266,20 +2264,13 @@ function non_orographic_gravity_wave_forcing(
     # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
-    # Per-column rescaling for the escaped-flux redistribution.
+    # The escaped flux is spread over the damping layer as a uniform acceleration, so it is
+    # divided by the layer's mass `M_R`, measured as in the column integrals.
     gw_deposit_scale = p.scratch.temp_field_level
     ᶜmasked_ρ = @. lazy(ifelse(ᶜlevel >= damp_level, ᶜρ, FT(0)))
     Operators.column_integral_definite!(gw_deposit_scale, ᶜmasked_ρ)
     Fields.field_values(gw_deposit_scale) .=
-        Fields.field_values(ρ_endlevel) .*
-        sqrt.(
-            Fields.field_values(ρ_endlevel) ./
-            Fields.field_values(ρ_endlevel_m1),
-        ) .*
-        (
-            Fields.field_values(z_endlevel) .-
-            Fields.field_values(z_endlevel_m1)
-        ) ./ Fields.field_values(gw_deposit_scale)
+        inv.(Fields.field_values(gw_deposit_scale))
 
     # Collect the per-column fields each source mode needs into a broadcasted
     # tuple. Both modes share the same 7 fields in slots 1–7; slots 8–16 hold the
@@ -2452,11 +2443,11 @@ Mutates `uforcing`/`vforcing`, which are incremented, in one column loop. Called
 wavenumber band and source from `non_orographic_gravity_wave_forcing`, after the pair of
 `waveforcing_column_accumulate!` calls that set `u_waveforcing`/`v_waveforcing`.
 
-The top level of the half-level drag left by the upward march holds the momentum flux that
-escaped through the model top. The rest of the drag `X` is multiplied by `ᶜlayer_ratio`
-(set in `non_orographic_gravity_wave_forcing`) and moved to full levels by averaging
-adjacent half-levels, `½(X[k-1/2] + X[k+1/2])`, with zero below the bottom level and at
-the top level. The escaped flux is spread over the levels at and above `damp_level` by
+The top level of the half-level flux left by the upward march holds the momentum flux that
+escaped through the model top. The rest, the flux each layer gives up, is multiplied by
+`ᶜlayer_ratio` (set in `non_orographic_gravity_wave_forcing`) and moved to full levels by
+averaging adjacent half-levels, `½(X[k-1/2] + X[k+1/2])`, with zero below the bottom level
+and at the top level. The escaped flux is spread over the levels at and above `damp_level` by
 `gw_deposit`, scaled by the per-column `deposit_scale`. The drag from waves breaking
 inside the column and the redistributed escaped flux each conserve momentum exactly; the
 *Non-orographic Gravity Waves* docs page explains why. On a sphere
@@ -2489,7 +2480,7 @@ function postprocess_and_accumulate!(
             @inline
             # The momentum flux that escaped through the model top
             ᶜescaped_flux = Fields.level(ᶜwaveforcing, level_end)
-            # The half-level drag, divided by the mean mass of the two cells it spans
+            # The flux each layer loses, divided by the mean mass of the two cells it spans
             ᶜlayer_drag = @. lazy(ᶜwaveforcing * ᶜlayer_ratio)
             @. ᶜforcing += gw_deposit(
                 ᶜescaped_flux,
@@ -2521,9 +2512,9 @@ compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
     waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
                                    gw_ncval, beres_source, source_mode::Val{MODE})
 
-March one source spectrum up each column and write the half-level drag it deposits.
+March one source spectrum up each column and write the momentum flux each layer gives up.
 
-Mutates `waveforcing` [m/s²]; the return value is unused. This is the kernel shared by both
+Mutates `waveforcing` [Pa]; the return value is unused. This is the kernel shared by both
 sources; `MODE` is `:ad99` or `:beres` and selects the launch spectrum, the launch level,
 and the intermittency factor at compile time.
 
@@ -2552,14 +2543,14 @@ bin already unstable at launch deposits into the layer between the launch level 
 next level. This departs from [alexander1999](@cite), whose Eq. (22) instead removes such
 waves from the launch spectrum; the *Non-orographic Gravity Waves* page gives the reasons.
 
-The drag is then
-`(ρ_source/√(ρ_k·ρ_{k+1}))·fm·ε/(z_{k+1} - z_k)`, zero below the launch level, where the
+The flux each layer gives up is then
+`ρ_source·fm·ε`, zero below the launch level, where the
 intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
 `a_cover/(ρ_source·nk)` for Beres.
 
 # Arguments
 
-  - `waveforcing`: Output drag at cell centers [m/s²]; overwritten.
+  - `waveforcing`: Output momentum flux given up by each layer [Pa]; overwritten.
   - `mask`: Initial `StaticBitVector{nc}` of active phase-speed bins. A bit vector is used
     because `unrolled_reduce` over a plain tuple mask allocates past 32 elements.
   - `input`: Broadcasted 16-slot tuple field. Slots 1-7 are shared
@@ -2766,8 +2757,9 @@ end
                 zero(FT1),
             )
         end
-        rbh = sqrt(ρ_k * ρ_kp1)
-        wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
+        # The momentum flux the layer gives up [Pa]; `postprocess_and_accumulate!`
+        # divides it by the layer's mass.
+        wave_forcing = ρ_source_eff * FT1(fm) * eps
     end
     # Below the launch level the block is skipped and `wave_forcing` passes
     # through unchanged from the level below. It starts at the `FT(0)` from
@@ -2834,12 +2826,11 @@ conserved. Applied pointwise by `postprocess_and_accumulate!`.
 
 # Arguments
 
-  - `wave_forcing_top`: Drag carried by the waves that reached the model top [m/s²].
+  - `wave_forcing_top`: Momentum flux carried by the waves that reached the model top [Pa].
   - `wave_forcing`: Drag already accumulated at this level [m/s²].
   - `damp_level`: Index of the lowest damping level [-].
   - `level`: Index of the current level [-].
-  - `deposit_scale`: Per-column ratio of the mass of the top half-level (where
-    `wave_forcing_top` was diagnosed) to the integrated mass of the damping layer [-].
+  - `deposit_scale`: Per column, one over the mass of the damping layer [m²/kg].
 """
 function gw_deposit(
     wave_forcing_top,
@@ -2848,9 +2839,8 @@ function gw_deposit(
     level,
     deposit_scale,
 )
-    # A heavier level needs more flux for the same acceleration, so `deposit_scale`
-    # rescales `wave_forcing_top` to the acceleration that the receiving levels'
-    # combined mass can support.
+    # `deposit_scale` turns the escaped flux into the uniform acceleration it gives the
+    # damping layer's combined mass.
     if level >= damp_level
         wave_forcing = wave_forcing + wave_forcing_top * deposit_scale
     end
