@@ -1031,7 +1031,7 @@ The SGS covariances `ᶜT′T′`, `ᶜq′q′`, `ᶜcorr_Tq`, `ᶜα` that
 their last `set_explicit_precomputed_quantities!` values; only
 `ᶜsgs_moments` and the 1M BMT call track the iterate.
 """
-function set_implicit_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     if has_implicit_1m_microphysics(p)
         set_sgs_moments!(Y, p)

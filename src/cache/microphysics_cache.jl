@@ -1238,7 +1238,7 @@ function update_updraft_microphysics_tendency_cache!(
     return nothing
 end
 
-function update_updraft_microphysics_tendency_cache!(
+NVTX.@annotate function update_updraft_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, dtγ,
 )
     # Refresh both bulk and implicit updraft tendencies at the Picard-

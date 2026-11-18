@@ -90,7 +90,7 @@ with one column loop for every draft that applies the microphysics sources,
 refreshes the draft thermodynamics and buoyancy, and restores the snapshot of
 the draft scalars.
 """
-function initialize_implicit_stage_problem!(Y, p, dtγ)
+NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
     reset_precip_stage_accumulator!(p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
@@ -479,7 +479,7 @@ are computed in one column loop, which writes `B` and `K` to `p.scratch.ᶠtemp_
 `ᶠtemp_scalar_2` and overwrites `u₃_old` in `u₃` with `C`; the sweep reads `C`
 at each face before overwriting it with the solution.
 """
-function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
+NVTX.@annotate function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
     p.atmos.turbconv_model isa PrognosticEDMFX || return
 
@@ -892,7 +892,7 @@ limiters and buoyancy detrainment gate in the second pass see
 `max(ρa_old, ρa_pass1)` where an updraft advances into cells with
 `ρa_old < ρʲ a_min` over the implicit stage.
 """
-function solve_sgs_ρa_two_pass!(
+NVTX.@annotate function solve_sgs_ρa_two_pass!(
     Y,
     p,
     dtγ,
@@ -1120,7 +1120,7 @@ and each scalar is then swept on its own, which reads two values per level.
 The environment values `χ⁰` are diagnosed from the draft states in `ᶜsnapshot`,
 or from `Y.c.sgsʲs` when it is `nothing`.
 """
-function _sweep_sgs_updraft_tracers!(
+NVTX.@annotate function _sweep_sgs_updraft_tracers!(
     Y,
     p,
     dtγ,
