@@ -1140,11 +1140,11 @@ For 1M, this is the **stage-initial** cache update (runs once per IMEX stage,
 before the Newton solve starts): it writes only the bulk CM BMT tendency
 (`microphysics_1m_params`). The implicit tendency (`ᶜmp_tendency_implicit*`,
 driven by `microphysics_1m_implicit_params`) is refreshed by
-`set_implicit_precomputed_quantities!` at every Newton iterate, by
-`set_precomputed_quantities!` once per step (after the covariance pass), and
-by `update_updraft_microphysics_tendency_cache!` at every Picard round; it
-stays zero when `implicit_microphysics: false` (`has_implicit_1m_microphysics`
-is `false`, so none of those three refreshes fires).
+`ensure_1m_tendencies!` at every Newton iterate, by
+`set_precomputed_quantities!` (after the covariance pass), and by
+`update_updraft_microphysics_tendency_cache!` at every Picard round; it stays
+zero when `implicit_microphysics: false` (`has_implicit_1m_microphysics` is
+`false`, so none of those three refreshes fires).
 
 **Dispatch table** (`microphysics_model` × `turbconv_model`):
 
@@ -1187,6 +1187,22 @@ See also `set_precipitation_velocities!` and `set_precipitation_surface_fluxes!`
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 
+# `Val(true)` defers the tendencies that the next implicit stage overwrites
+# before it reads them (`set_precomputed_quantities_deferred!`): the updraft
+# tendency of the 1M scheme with `PrognosticEDMFX` and Picard rounds.
+set_microphysics_tendency_cache!(Y, p, mm, tm, ::Val) =
+    set_microphysics_tendency_cache!(Y, p, mm, tm)
+
+"""
+    set_updraft_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
+
+Write the 1M updraft tendency `ᶜmp_tendencyʲs` of `PrognosticEDMFX` for the
+current state `Y`, with the averaging window of
+`set_microphysics_tendency_cache!`. A no-op for the other models. Called from
+`set_microphysics_tendency_cache!` and `ensure_1m_tendencies!`.
+"""
+set_updraft_microphysics_tendency_cache!(Y, p, _, _) = nothing
+
 """
     update_updraft_microphysics_tendency_cache!(
         Y, p, microphysics_model, turbconv_model, dtγ,
@@ -1204,8 +1220,8 @@ non-equilibrium schemes, after its transport sweep, and from the Picard loop
 of `initialize_implicit_stage_problem!` for the 0-moment scheme. The bulk
 `ᶜmp_tendencyʲs` is frozen through the Newton solve, matching the Jacobian
 (no derivative of `ᶜmp_tendencyʲs`); `ᶜmp_tendency_implicitʲs` is overwritten
-on each Newton iterate by `set_implicit_precomputed_quantities!`. A no-op for
-any combination not covered by a specialization.
+on each Newton iterate by `ensure_1m_tendencies!`. A no-op for any combination
+not covered by a specialization.
 """
 update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
 
@@ -1243,7 +1259,7 @@ NVTX.@annotate function update_updraft_microphysics_tendency_cache!(
 )
     # Refresh both bulk and implicit updraft tendencies at the Picard-
     # transported state. The Picard predictor applies the sum; Newton later
-    # overwrites the implicit entries via `set_implicit_precomputed_quantities!`.
+    # overwrites the implicit entries via `ensure_1m_tendencies!`.
     # Skip the implicit BMT call entirely when the split is off: the implicit
     # entries stay zero from their allocation-time initialization.
     #
@@ -1299,6 +1315,7 @@ NVTX.@annotate function update_updraft_microphysics_tendency_cache!(
             )
         end
     end
+    p.scratch.updraft_1m_tendency_is_stale[] = false
     return nothing
 end
 
@@ -1530,7 +1547,7 @@ function set_microphysics_tendency_cache!(
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!` (resolved at `AtmosCache` build time).
     # Bulk CM BMT only; the implicit cache is refreshed per Newton iterate
-    # by `set_implicit_precomputed_quantities!`.
+    # by `ensure_1m_tendencies!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
@@ -1571,22 +1588,46 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
+    set_updraft_microphysics_tendency_cache!(Y, p, mp1m, tm)
+    p.scratch.updraft_1m_tendency_is_stale[] = false
+    set_environment_microphysics_tendency_cache!(Y, p, mp1m, tm)
+    return nothing
+end
+
+function set_microphysics_tendency_cache!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, ::Val{true},
+)
+    # With Picard rounds, `update_updraft_microphysics_tendency_cache!`
+    # overwrites `ᶜmp_tendencyʲs` in `initialize_implicit_stage_problem!`
+    # before the Newton solve reads it; a reader with no implicit stage in
+    # between evaluates it (`ensure_1m_tendencies!`). Without Picard rounds, the
+    # Newton solve reads the tendency of this state, evaluated here.
+    if p.atmos.edmfx_model.updraft_picard_rounds > 0
+        p.scratch.updraft_1m_tendency_is_stale[] = true
+    else
+        set_updraft_microphysics_tendency_cache!(Y, p, mp1m, tm)
+        p.scratch.updraft_1m_tendency_is_stale[] = false
+    end
+    set_environment_microphysics_tendency_cache!(Y, p, mp1m, tm)
+    return nothing
+end
+
+function set_updraft_microphysics_tendency_cache!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
+)
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!`. Bulk CM BMT only; the implicit cache
-    # is refreshed per Newton iterate by `set_implicit_precomputed_quantities!`
-    # and per Picard round by `update_updraft_microphysics_tendency_cache!`.
+    # is refreshed per Newton iterate by `ensure_1m_tendencies!` and per Picard
+    # round by `update_updraft_microphysics_tendency_cache!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     dev = ClimaComms.device(Y.c)
     vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     nsubs = mp1m.n_substeps
-    nsubs_quad = mp1m.n_substeps_quad
 
-    ### Updraft contribution
     DataLayouts.foreach_point(
         Y.c,
         ᶜuʲs,
@@ -1605,10 +1646,20 @@ function set_microphysics_tendency_cache!(
             )
         end
     end
+    return nothing
+end
 
-    ### Environment contribution
+# Write the 1M tendency `ᶜmp_tendency⁰` of the `PrognosticEDMFX` environment,
+# with the averaging window of `set_microphysics_tendency_cache!`.
+function set_environment_microphysics_tendency_cache!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
+)
+    dt = mp_averaging_dt(p, p.mp_averaging)
+    thp = CAP.thermodynamics_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
     set_environment_1m_tendency!(
-        ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, (),
+        p.precomputed.ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt,
+        mp1m.n_substeps, mp1m.n_substeps_quad, (),
     )
     return nothing
 end

@@ -58,6 +58,8 @@ Add the tendencies of `remaining_tendency!` to `Yₜ`, overwriting `Yₜ_lim`.
 Returns `Yₜ`.
 """
 function add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    # The SGS diffusive flux of the cloud condensate reads `ᶜsgs_moments`.
+    ensure_sgs_moments!(Y, p)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
