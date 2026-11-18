@@ -132,6 +132,11 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
         end
     end
     n_picard > 0 && set_implicit_precomputed_quantities_core!(Y, p, zero(FT))
+    # The excess of the updraft reference density over the grid mean, at the
+    # stage-entering state of the environment thermodynamics refreshed above.
+    # The Picard rounds keep it: they hold the grid mean at that state, and
+    # their environment comes from the snapshot of the drafts.
+    n_picard > 0 && set_updraft_reference_density_excess!(Y, p)
     a_max = CAP.max_area(CAP.turbconv_params(p.params))
     for j in 1:n
         @. Y.c.sgsʲs.:($$j).ρa =
@@ -150,10 +155,12 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
             @inline
             (ᶜsnapshot.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j), ᶜρʲs.:($j))
         end
-        DataLayouts.foreach_point(snapshot_drafts, Y.c.ρ) do snapshot_drafts, ᶜρ
+        DataLayouts.foreach_point(
+            snapshot_drafts, Y.c.ρ, p.precomputed.ᶜρ_ref_excess,
+        ) do snapshot_drafts, ᶜρ, ᶜρ_ref_excess
             for (ᶜsnapshotʲ, ᶜρ_diffʲ, ᶜsgsʲ, ᶜρʲ) in snapshot_drafts
                 @. ᶜsnapshotʲ = ᶜsgsʲ
-                @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
+                @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ - ᶜρ_ref_excess) / ᶜρʲ
             end
         end
         (; ᶜmp_tendencyʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
@@ -195,10 +202,11 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
             # at zero, and rescale them so that their sum does not exceed `q_totʲ`
             # (`add_updraft_microphysics_sources!`), and refresh the draft
             # thermodynamics at the full iterate. Then refresh `ᶜρ_diffʲs`, the
-            # buoyancy input of the next `u₃` solve, and, between rounds, restore
-            # the snapshot of the stage-initial draft scalars; the last round
-            # leaves the Picard-converged draft scalars as a warm start for the
-            # Newton solve.
+            # buoyancy input of the next `u₃` solve, with the reference density
+            # excess of the stage-entering state. Between rounds, the loop
+            # restores the snapshot of the stage-initial draft scalars; the last
+            # round leaves the Picard-converged draft scalars as a warm start
+            # for the Newton solve.
             last_round = round == n_picard
             let dtγ = dtγ
                 round_drafts = unrolled_map(StaticOneTo(n)) do j
@@ -215,8 +223,9 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
                     )
                 end
                 DataLayouts.foreach_column(
-                    round_drafts, Y.c.ρ, p.core.ᶜΦ, p.precomputed.ᶜp,
-                ) do round_drafts, ᶜρ, ᶜΦ, ᶜp
+                    round_drafts, Y.c.ρ, p.precomputed.ᶜρ_ref_excess, p.core.ᶜΦ,
+                    p.precomputed.ᶜp,
+                ) do round_drafts, ᶜρ, ᶜρ_ref_excess, ᶜΦ, ᶜp
                     for (ᶜsgsʲ, ᶜρʲ, ᶜρ_diffʲ, ᶜsnapshotʲ, sources_args) in round_drafts
                         if !isempty(sources_args)
                             (
@@ -231,7 +240,7 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
                                 ᶜp, microphysics_model, thermo_params, T_min_sgs,
                             )
                         end
-                        @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ) / ᶜρʲ
+                        @. ᶜρ_diffʲ = (ᶜρʲ - ᶜρ - ᶜρ_ref_excess) / ᶜρʲ
                         last_round || @. ᶜsgsʲ = ᶜsnapshotʲ
                     end
                 end
@@ -435,7 +444,9 @@ The underlying evolution equation for the physical vertical velocity `w` is
 
     ∂w/∂t + ∂(w²/2)/∂z = (1 − α_b) b + E (w₀ − w) − a⁰ d_c (w − w₀) |w − w₀|,
 
-with `d_c` the coefficient of `pressure_drag_coefficient` and `a⁰ = ρ̂⁰/ρ` the
+with the buoyancy `b` (from `ᶜρ_diffʲs`) taken against the reference density
+of `set_updraft_reference_density_excess!`, `d_c` the coefficient of
+`pressure_drag_coefficient`, and `a⁰ = ρ̂⁰/ρ` the
 environment weight of the pairwise form drag, which, at an IMEX/ARK stage,
 becomes an algebraic equation for the new stage value. The environment
 velocity is eliminated with the mass-flux constraint,

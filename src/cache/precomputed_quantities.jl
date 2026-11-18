@@ -386,6 +386,14 @@ function precomputed_quantities(Y, atmos)
                 (; ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) : (;)
             )...,
             ᶜprecip_frac = zeros(axes(Y.c)),
+            # The cloud fraction of the PrognosticEDMFX environment before the
+            # updraft weighting, for the clear-air buoyancy reference
+            # (`set_updraft_reference_density_excess!`).
+            (
+                atmos.turbconv_model isa PrognosticEDMFX &&
+                atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
+                (; ᶜcloud_fraction⁰ = zeros(axes(Y.c))) : (;)
+            )...,
         ) : base
     else
         (;)
@@ -525,6 +533,9 @@ function precomputed_quantities(Y, atmos)
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜarea_bounding_entr_detrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
+            # Excess of the updraft reference density over the grid mean
+            # (`set_updraft_reference_density_excess!`).
+            ᶜρ_ref_excess = similar(Y.c, FT),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
             # Per-updraft surface conditions at level 1.
@@ -1051,14 +1062,17 @@ current state `Y`. This is only called before each evaluation of
 `implicit_tendency!` and `remaining_tendency!`.
 
 Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
-and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
-precipitation terminal velocities (unless they depend on the state, in which case
-`set_implicit_precomputed_quantities_core!` sets them; see
-`state_dependent_precipitation_velocities`), the microphysics tendency cache,
-surface precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
-Smagorinsky-Lilly quantities (each step only when the corresponding model
-component is active). Reads the implicit precomputed quantities, so it must follow
-`set_implicit_precomputed_quantities_core!` at the same state. Returns `nothing`.
+and cloud fraction, the EDMFX closures that depend on the environment cloud
+fraction (`set_prognostic_edmf_draft_closures!`), face diffusivities, the
+master mixing length `ᶜl_mix`, precipitation terminal velocities (unless they
+depend on the state, in which case `set_implicit_precomputed_quantities_core!`
+sets them; see `state_dependent_precipitation_velocities`), the microphysics
+tendency cache, surface precipitation fluxes, and, when
+`p.atmos.diff_mode == Explicit()`, the Smagorinsky-Lilly quantities (each step
+only when the corresponding model component is active). Reads the implicit
+precomputed quantities, so it must follow
+`set_implicit_precomputed_quantities_core!` at the same state. Returns
+`nothing`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model) = p.atmos
@@ -1078,6 +1092,12 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+
+    # The draft closures, whose buoyancy reference reads the environment cloud
+    # fraction from the update above.
+    if turbconv_model isa PrognosticEDMFX
+        set_prognostic_edmf_draft_closures!(Y, p)
+    end
 
     # Face-native diffusivities. Need the final cloud fraction from the
     # covariance/cloud-fraction update above.

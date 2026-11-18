@@ -304,12 +304,47 @@ does not appear in the resolved momentum equation.
 !!! note "Reference density in the code"
 
     The formulation takes ``\rho_{\mathrm{ref}} = \rho_h``, the hydrostatic
-    reference density. The code uses the grid-mean density,
+    reference density. By default, the code uses the grid-mean density,
     ``\rho_{\mathrm{ref}} = \rho``, computing the normalized density excess
     `ᶜρ_diffʲs = (ρʲ - ρ)/ρʲ` once and reusing it in the momentum and energy
     tendencies and in the implicit solve. The two agree wherever the grid mean
     is close to hydrostatic, and differ by the grid-mean hydrostatic imbalance
     at gray-zone resolutions. Reconciling them is tracked as a code-side task.
+
+    With `edmf_buoyancy_clear_env_weight` ``f_{\mathrm{ev}} > 0`` (1M
+    microphysics), `ᶜρ_diffʲs` measures the updraft density against
+    ``\rho + \Delta\rho`` (`set_updraft_reference_density_excess!`), because
+    updrafts rise through the clear part of the environment. The clear part is
+    cooler than the environment mean, whose temperature includes the latent
+    heat of the cloudy part. ``\Delta\rho`` is the density excess, at fixed
+    pressure, total water, and liquid-ice temperature, of the environment state
+    with the fraction ``f_{\mathrm{ev}} (1 - \mathrm{cf}^0)`` of its cloud
+    condensate and the latent heat of that condensate removed, where
+    ``\mathrm{cf}^0`` is the environment cloud fraction of the SGS closure. With
+    ``f_{\mathrm{ev}} = 1``, this is the clear part of the environment blended
+    with its mean by the clear fraction; ``\Delta\rho`` vanishes in clear and in
+    overcast environments. Reading the environment as cloudy and clear parts
+    that share the liquid-ice enthalpy, the ``f_{\mathrm{ev}} = 1`` reference
+    holds the mixture ``(\mathrm{cf}^0)^2`` cloudy and
+    ``1 - (\mathrm{cf}^0)^2`` clear in temperature and condensate, one factor
+    of ``\mathrm{cf}^0`` from the cloudy weight in the environment mean and one
+    from the blend by the clear fraction, so
+    ``\Delta\rho \approx \mathrm{cf}^0 (1 - \mathrm{cf}^0) (\rho_{\mathrm{clear}} - \rho_{\mathrm{cloudy}})``, largest in broken
+    cloud. The extra updraft buoyancy
+    ``\Delta b = g \, \Delta\rho / \rho^j`` belongs to the pressure closure:
+    the diagnosed environment takes the opposite force, so the two form a force
+    pair with ``\sum_m \hat{\rho}^m \boldsymbol{d}^m = 0``, and
+    ``\boldsymbol{b}^m`` and the identities above keep the grid-mean
+    reference. Like the pressure drag, the pair is excluded from the work term
+    of the updraft energy equation, which keeps the grid-mean density in
+    ``(\rho^j - \rho) / \rho^j``. The work term represents the conversion
+    between moist static and kinetic energy as the parcel moves through the
+    grid-mean pressure field. A conversion driven by the force pair would have
+    to be equal and opposite between the updraft and its environment to
+    conserve overall energy, and only one side of the pair has a thermal
+    budget, the prognostic updraft moist static energy; the environment is
+    diagnosed. The pair's work therefore stays in the kinetic-energy budget,
+    as the drag's does in the turbulence budget.
 
 **Effective sources.** For a scalar ``\psi \ne q_t``, the source that appears in
 the advective-form equation includes the dilution effect of the mass source,

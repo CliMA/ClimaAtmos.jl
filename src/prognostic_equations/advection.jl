@@ -320,8 +320,10 @@ the EDMFX updraft prognostic variables.
 The fallback method is a no-op for turbulence-convection models other than
 `PrognosticEDMFX`. For `PrognosticEDMFX`, this increments, for each updraft `j`:
 
-  - `Yₜ.c.sgsʲs.:(j).mse`: the buoyancy source (geopotential gradient times the
-    updraft density anomaly `ᶜρ_diffʲs`), advective-form vertical advection with
+  - `Yₜ.c.sgsʲs.:(j).mse`: the pressure work of the hydrostatic grid mean
+    (geopotential gradient times the updraft density excess `(ρʲ − ρ) / ρʲ`
+    over the grid-mean density `ρ`, `ᶜρ_diffʲs + ᶜρ_ref_excess / ρʲ`),
+    advective-form vertical advection with
     the updraft velocity using the `p.atmos.numerics.edmfx_mse_humidity_upwinding`
     scheme, and the static energy `h_μ(Tʲ) + Φ` carried by condensate and
     precipitation sedimentation (with laterally entrained environment condensate
@@ -342,11 +344,11 @@ The fallback method is a no-op for turbulence-convection models other than
     every SGS tracer also receive the dilution `-χ Σ_μ vtt_μ / ρaʲ` by the
     sedimented mass. This path supports a single updraft.
 
-Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, `ᶜTʲs`, `ᶜT⁰`, and
-sedimentation velocities, and the core fields `ᶜgradᵥ_ᶠΦ` and `ᶜΦ`, in one
-column loop for every updraft. `t` is unused. Called from `implicit_tendency!`.
-See the "PROPHET: Overview and Equations" page (`docs/src/prophet.md`) for the
-continuous equations. Returns `nothing`.
+Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, `ᶜρ_ref_excess`,
+`ᶜTʲs`, `ᶜT⁰`, and sedimentation velocities, and the core fields `ᶜgradᵥ_ᶠΦ` and
+`ᶜΦ`, in one column loop for each updraft. `t` is unused. Called from
+`implicit_tendency!`. See the "PROPHET: Overview and Equations" page
+(`docs/src/prophet.md`) for the continuous equations. Returns `nothing`.
 """
 edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -359,7 +361,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 )
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; edmfx_mse_humidity_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
+    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜρ_ref_excess, ᶜTʲs, ᶜT⁰) = p.precomputed
     (; ᶜgradᵥ_ᶠΦ, ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; microphysics_model) = p.atmos
 
@@ -423,11 +425,19 @@ function edmfx_sgs_vertical_advection_tendency!(
     # mse, q_tot, and the tracers, and the sedimentation of the microphysics
     # species.
     DataLayouts.foreach_column(
-        drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c,
+        drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c, ᶜρ_ref_excess,
         ᶜw_pairs(mass_sedimentation), ᶜw_pairs(number_sedimentation),
-    ) do drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Yc, ᶜw_mass, ᶜw_number
+    ) do drafts, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Yc, ᶜρ_ref_excess, ᶜw_mass, ᶜw_number
         for (ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜρʲ, ᶜTʲ) in drafts
-            @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
+            # The pressure work `(w / ρʲ) ∂p/∂z + w ∂Φ/∂z` with the hydrostatic
+            # grid-mean pressure gradient `∂p/∂z = −ρ ∂Φ/∂z`, so the density
+            # excess is `(ρʲ − ρ) / ρʲ` over the grid-mean density: `ᶜρ_diffʲs`
+            # plus the excess of the buoyancy reference density over the grid
+            # mean (`set_updraft_reference_density_excess!`) divided by `ρʲ`,
+            # up to the change of `ρʲ` since `ᶜρ_diffʲs` was set.
+            @. ᶜsgsʲₜ.mse +=
+                adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * (ᶜρ_diffʲ + ᶜρ_ref_excess / ᶜρʲ) *
+                ᶜgradᵥ_ᶠΦ
 
             va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_humidity_upwinding)
             @. ᶜsgsʲₜ.mse += va

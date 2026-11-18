@@ -28,6 +28,10 @@ value = 0.001
 [min_area_limiter_power]
 value = 1
 
+[edmf_buoyancy_clear_env_weight]
+value = 1.0
+type = "float"
+
 [detr_coeff]
 value = 0
 

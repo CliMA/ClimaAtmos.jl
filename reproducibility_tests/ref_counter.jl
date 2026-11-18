@@ -1,4 +1,4 @@
-473
+474
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+474
+- 1M `PrognosticEDMFX`: `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` set `edmf_buoyancy_clear_env_weight =
+  1`, so the updraft buoyancy is referenced to the clear part of the
+  environment, blended with its mean by the environment clear fraction.
+  Changes the output of the jobs that use these TOMLs.
+
 473
 - `prognostic_edmfx_1M.toml` matches ClimaCoupler's `amip_progedmf_1m.toml`:
   Changes the output of every job that uses this parameter file.

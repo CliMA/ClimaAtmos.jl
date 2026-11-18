@@ -167,6 +167,15 @@ end
             (; edmf_tail_entr_fraction = f),
         )
     end
+    @test CAP.edmf_buoyancy_clear_env_weight(
+        CA.TurbulenceConvectionParameters(Float64),
+    ) == 0
+    for f_ev in (-0.1, 1.1)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_buoyancy_clear_env_weight = f_ev),
+        )
+    end
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(
