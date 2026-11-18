@@ -78,7 +78,7 @@ Return the draft area fraction `a = ρa / ρ` [-].
   - `ρa`: Area-weighted density of the subdomain, `ρ a` [kg/m³].
   - `ρ`: Density of the same subdomain [kg/m³].
 """
-function draft_area(ρa, ρ)
+@approx_ops function draft_area(ρa, ρ)
     return ρa / ρ
 end
 
@@ -131,7 +131,7 @@ Shared by the implicit updraft momentum solve
 (the pressure-drag term of `edmfx_tke_sources!`), so the kinetic energy the drag
 removes from the updraft is the energy the TKE budget receives.
 """
-pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
+@approx_ops pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
     α_d / (2 * scale_height) * (
         1 / sqrt(clamp(aʲ, a_min, a_max)) +
         1 / sqrt(clamp(a⁰, 1 - a_max, one(a⁰)))

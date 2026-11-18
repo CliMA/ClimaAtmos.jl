@@ -187,7 +187,7 @@ function set_precipitation_velocities!(
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / ᶜρ
     return nothing
 end
-function set_precipitation_velocities!(
+@approx_ops function set_precipitation_velocities!(
     Y,
     p,
     microphysics_model::NonEquilibriumMicrophysics1M,
