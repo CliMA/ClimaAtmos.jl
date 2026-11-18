@@ -1062,7 +1062,11 @@ and it is not the latent heating of the drafts (that is the `heating_latent` opt
 Levels whose total updraft area `Σⱼ max(ρaʲ, 0)/ρʲ` is below `a_min`
 are left out of the heating fit: their in-cloud heating is zero, so they enter neither the
 moment fit nor the gather, and they are left out of the activation integral. The envelope
-means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over the whole envelope.
+means (`u_heat`, `v_heat`, `N_source`, `a_cover`) still average over every level of their
+layer, which depends on the shape: the whole envelope `[z_bot, z_top]` for the half-sine
+(Beres-C), and its part above the floor, `[max(z_bot, z_bot_floor), z_top]`, for the sine
+transform (Beres-G, `beres_shape_general`), the layer whose heating Beres-G transforms and
+whose winds its launch filter reads.
 
   - `gw_Q_conv` — the grid-mean flux convergence, i.e. the draft anomalies weighted by
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
@@ -1369,19 +1373,31 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         @. gw_h_heat = ifelse(isnan(ᶜh) | isinf(ᶜh), _zero, ᶜh)
     end
 
-    # Pass 2: within [z_bot, z_top], compute:
+    # Pass 2: within the heating layer of the shape, compute:
     #   - Q₀ integrals: Σ(Q · Δz) for the grid-mean (gating) and in-cloud
     #     (spectrum amplitude) heatings
     #   - Mass-weighted mean wind (u, v), buoyancy frequency (N), and
     #     updraft area fraction (a_cover, the Beres deposition factor)
-    # All quantities drawn from the same convective envelope.
+    # The layer starts where the heating each shape uses starts: at z_bot for the
+    # half-sine (Beres-C), at the gather window bottom max(z_bot, z_bot_floor) for
+    # Beres-G, which has no heating below the floor. The same layer bounds the winds of
+    # the launch filter below.
 
     ᶜΔz = Fields.Δz_field(axes(Y.c))
-    # 3D envelope mask (2D z_bot/z_top broadcast over column) and total updraft area
-    # fraction, evaluated in the column reduction
+    z_floor = FT(gw_beres_source.z_bot_floor)
+    shape_general = gw_beres_source.beres_shape_general
+    ᶜlayer_bottom = @. lazy(
+        ifelse(
+            shape_general,
+            _beres_gather_bottom(gw_zbot, gw_ztop, z_floor),
+            gw_zbot,
+        ),
+    )
+    # 3D layer mask (2D layer bottom and z_top broadcast over the column) and total
+    # updraft area fraction, evaluated in the column reduction
     ᶜin_env = @. lazy(
         ifelse(
-            (ᶜz_above_surface >= gw_zbot) & (ᶜz_above_surface <= gw_ztop),
+            (ᶜz_above_surface >= ᶜlayer_bottom) & (ᶜz_above_surface <= gw_ztop),
             FT(1),
             FT(0),
         ),
@@ -1391,8 +1407,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # ρaʲ counts as empty, so it cannot lower the coverage of the others. Levels below
     # a_min are left out of the heating fit only (the moments, the gather, and the
     # activation integral); the envelope means u_heat, v_heat, N_source and the
-    # coverage a_cover average over the whole envelope, so a column whose updraft is
-    # nearly empty over most of its envelope has a small a_cover and fails the
+    # coverage a_cover average over every level of the layer, so a column whose
+    # updraft is nearly empty over most of its layer has a small a_cover and fails the
     # coverage gate.
     nonnegative_draft_area =
         (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
@@ -1400,7 +1416,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         @. lazy(mapreduce_with_init(nonnegative_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
     # The activation integral counts only the heating at or above the floor, as the
     # moment fit and the gather do.
-    z_floor = FT(gw_beres_source.z_bot_floor)
     ᶜabove_floor = @. lazy(ifelse(ᶜz_above_surface >= z_floor, FT(1), FT(0)))
     input2 = Base.Broadcast.broadcasted(
         tuple,
@@ -1573,15 +1588,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # or above z_top), and u, v at the launch level; with the height-resolved filter
     # also u and v on N_BERES_PROFILE points over the heating layer. The layer starts where the heating each shape
     # uses starts: at z_bot for the half-sine, at the gather window bottom
-    # max(z_bot, z_bot_floor) for Beres-G, which has no heating below the floor.
-    shape_general = gw_beres_source.beres_shape_general
-    ᶜlayer_bottom = @. lazy(
-        ifelse(
-            shape_general,
-            _beres_gather_bottom(gw_zbot, gw_ztop, z_floor),
-            gw_zbot,
-        ),
-    )
+    # max(z_bot, z_bot_floor) for Beres-G, which has no heating below the floor
+    # (`ᶜlayer_bottom`, the bottom of the layer of the envelope means above).
     wind_input = Base.Broadcast.broadcasted(
         tuple, ᶜz_above_surface, ᶜu, ᶜv, ᶜlayer_bottom, gw_ztop,
     )

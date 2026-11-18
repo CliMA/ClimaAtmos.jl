@@ -1007,6 +1007,11 @@ convective heating.
     `PrognosticEDMFX`) instead of the updrafts' eddy dry-static-energy flux
     convergence, a transport term whose column integral is about zero. The activation
     then tests the grid mean of the same latent heating against `Q0_threshold`.
+  - `beres_shape_general`: Whether the vertical shape factor is the sine transform of
+    the EDMF in-cloud heating profile (Beres-G) instead of the half-sine of
+    [beres2004](@cite) (Beres-C). The envelope means `u_heat`, `v_heat`, `N_source`
+    and `a_cover` average over the heating layer of the shape: `[z_bot, z_top]` for
+    Beres-C, `[max(z_bot, z_bot_floor), z_top]` for Beres-G.
   - `detailed_diagnostics`: Whether to expose the `nogw_*` source-internal
     extended diagnostics.
   - `beres_smoothing_width`: Standard deviation of an optional Gaussian smoothing of the

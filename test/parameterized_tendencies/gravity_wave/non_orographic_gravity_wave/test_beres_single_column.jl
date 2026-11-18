@@ -615,6 +615,77 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test value(nogw.gw_beres_mech_flux) ≈ a_cover * launched rtol = 1e-6
         end
 
+        @testset "Envelope means: whole envelope for Beres-C, above the floor for Beres-G" begin
+            # The draft heats from 2 to 14 km and cools from 1 to 2 km (as in the floor
+            # test above), so the fitted envelope reaches below the 2 km floor. The
+            # wind, the buoyancy frequency and the area fraction all vary with height,
+            # so a mean over [z_bot, z_top] differs from one over
+            # [max(z_bot, z_bot_floor), z_top]. Beres-C must give the first, Beres-G
+            # the second.
+            z_floor = beres.z_bot_floor
+            ΔT(z) =
+                z < 1000 || z > 14000 ? 0.0 :
+                z < 2000 ? 2 * (z - 1000) / 1000 : 2 * (14000 - z) / 12000
+            @. ᶜTʲs.:(1) = ᶜT + ΔT(ᶜz)
+            area(z) = 0.02 + 0.03 * z / 15000
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= 500) & (ᶜz <= 15000), FT(area(ᶜz)) * ᶜρ, FT(0))
+            ᶠlg = Fields.local_geometry_field(Y.f)
+            @. ᶠu³ʲs.:(1) = Geometry.Contravariant3Vector(Geometry.WVector(FT(1)), ᶠlg)
+            @. ᶠu³ = Geometry.Contravariant3Vector(Geometry.WVector(FT(0)), ᶠlg)
+            nogw = p.non_orographic_gravity_wave
+            @. nogw.ᶜuv_temp = Geometry.UVVector(ᶜz / 1000, ᶜz / -2000)
+            @. ᶜbuoyancy_frequency = FT(0.01) + FT(0.004) * ᶜz / 15000
+            ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
+            dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
+            mass = ρ_col .* dz_col
+            function means_with(shape_general)
+                bs = CA.BeresSourceParams{FT}(;
+                    (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                    Q0_threshold = FT(0),
+                    beres_shape_general = shape_general,
+                )
+                p_shape = (;
+                    p.precomputed,
+                    p.params,
+                    p.atmos,
+                    p.scratch,
+                    non_orographic_gravity_wave = merge(nogw, (; gw_beres_source = bs)),
+                )
+                CA.compute_beres_convective_heating!(Y, p_shape, ᶜbuoyancy_frequency)
+                value(f) = parent(f)[1]
+                z_b, z_t = value(gw_zbot), value(gw_ztop)
+                bottom = shape_general ? min(max(z_b, z_floor), z_t) : z_b
+                layer = (center_z .>= bottom) .& (center_z .<= z_t)
+                w = mass[layer] ./ sum(mass[layer])
+                z_layer = center_z[layer]
+                return (;
+                    z_b,
+                    u_heat = value(nogw.gw_u_heat),
+                    v_heat = value(nogw.gw_v_heat),
+                    N_source = value(nogw.gw_N_source),
+                    a_cover = value(gw_a_cover),
+                    active = value(gw_beres_active),
+                    u_ref = sum(w .* z_layer ./ 1000),
+                    v_ref = sum(w .* -z_layer ./ 2000),
+                    N_ref = sum(w .* (0.01 .+ 0.004 .* z_layer ./ 15000)),
+                    a_ref = sum(w .* area.(z_layer)),
+                )
+            end
+            C = means_with(false)
+            G = means_with(true)
+            @test C.z_b < 1000                    # the envelope reaches below the floor
+            @test C.z_b == G.z_b                  # the same envelope for both shapes
+            @test C.active == 1 && G.active == 1
+            for r in (C, G)
+                @test r.u_heat ≈ r.u_ref rtol = 1e-10
+                @test r.v_heat ≈ r.v_ref rtol = 1e-10
+                @test r.N_source ≈ r.N_ref rtol = 1e-10
+                @test r.a_cover ≈ r.a_ref rtol = 1e-10
+            end
+            @test G.u_heat > C.u_heat + 0.1       # the check has power
+        end
+
         @testset "With latent heating, the gate tests its grid mean" begin
             # The applied latent heating of the drafts since the last NOGW call is set
             # directly in its accumulators: a half-sine in-cloud heating from 3 to
