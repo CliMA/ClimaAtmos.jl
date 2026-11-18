@@ -1,4 +1,4 @@
-473
+474
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+474
+- Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
+  its two cells, the non-orographic damping layer spans at least the top three cells,
+  and the buoyancy frequency in the bottom and top cells uses a one-sided `dT/dz`
+  (non-orographic and orographic). Changes the output of every run with gravity-wave
+  drag enabled.
+
 473
 - `prognostic_edmfx_1M.toml` matches ClimaCoupler's `amip_progedmf_1m.toml`:
   Changes the output of every job that uses this parameter file.

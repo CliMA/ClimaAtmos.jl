@@ -49,7 +49,7 @@ The reflection frequency is defined as
 \omega_r(z) = \left(\frac{N(z)^2 k^2}{k^2+\alpha^2}\right)^{1/2}
 ```
 
-where $N(z)$ is the buoyancy frequency, $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
+where $N(z)$ is the buoyancy frequency (from $dT/dz$ at cell centres, with a one-sided difference in the bottom and top cells, where interpolating to the boundary face would give only about half the gradient), $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
 
 The instability condition is defined as
 
@@ -88,19 +88,17 @@ The drag at full levels is obtained by averaging adjacent half-levels:
 X(z_{n}) = \frac{1}{2} \left[ X(z_{n-1/2}) + X(z_{n+1/2}) \right].
 ```
 
-The kernel converts each layer's flux into a drag by dividing by an estimate of the layer mass, $\sqrt{\rho(z_{n-1})\rho(z_n)}\,\Delta z$, and the averaging then gives half of that drag to the cell below and half to the cell above. Those halves do not land on cells of exactly the mass that was divided by, so the column-integrated drag matches the deposited flux only to second order in the grid spacing. For a uniform grid and density falling off as $e^{-z/H}$ the deposited momentum is exactly $\cosh(\Delta z / 2H)$ times the flux, e.g. $1.003$ for $\Delta z = 1$ km and $H = 7$ km. A stretched grid adds a term of the same order, proportional to the product of the density change and the spacing change between adjacent cells.
+The kernel returns the flux corresponding to each layer, which is converted into a drag by dividing by the mean mass of the two cells on either side of the layer, i.e., $\tfrac{1}{2}(m_{n-1} + m_n)$, in place of the layer mass $\rho(z_{n-1/2})\Delta z$ above. The resulting drag is then distributed to the two vertically adjacent cells. Here, $m = \rho J / \Delta A$ is the cell mass per unit area of the column's bottom face, which includes the change of a cell's area with height in the deep-atmosphere configuration. As half of each adjacent cell's mass lies inside the layer, the averaging then distributes a mass-weighted share of the layer's flux to the two adjacent cells. With such a distribution, the column-integrated momentum tendency, $\sum_n m_n X(z_n)$, exactly matches the total deposited flux for uniform, stretched, and deep-atmosphere configurations.
 
-Any momentum flux that reaches the model top without breaking is force-broken there and redistributed within the model, because momentum flux that leaves through the model lid would otherwise be lost and give the atmosphere below a spurious response that depends on the lid height [shepherd2004](@cite). It is redistributed as a uniform acceleration over the levels at and above the damping level (defined by `nogw_damp_pressure`). The redistribution is mass-weighted, so it deposits exactly the momentum that escaped:
+Any momentum flux that reaches the model top without breaking is force-broken there and redistributed within the model, because momentum flux that leaves through the model lid would otherwise be lost and give the atmosphere below a spurious response that depends on the lid height [shepherd2004](@cite). It is redistributed as a uniform acceleration over the levels at and above the damping level, i.e., the lowest level whose pressure is below `nogw_damp_pressure`. However, to ensure that the escaped momentum is always spread over several cells rather than concentrated in the top cell, the damping layer is set to always span at least the top three cells (`NOGW_MIN_DAMP_CELLS`). A warning is logged when the pressure rule results in a damping layer with fewer than three cells and has to be corrected (once per run). As a result, on a sphere the damping layer comprises three cells or more, depending on the model top, while in a single column it is always the top three cells. The redistribution is mass-weighted, so it deposits exactly the momentum that escaped:
 
 ```math
-X_{\mathrm{redist}} = X_{\mathrm{top}} \, \frac{m_{\mathrm{top}}}{M_R},
+X_{\mathrm{redist}} = \frac{F_{\mathrm{top}}}{M_R},
 \qquad
-m_{\mathrm{top}} = \sqrt{\rho(z_{n_t})\,\rho_{\mathrm{ghost}}}\,\left(z_{n_t} - z_{n_t-1}\right),
-\qquad
-M_R = \int_{z_{\mathrm{damp}-1/2}}^{z_{n_t+1/2}} \rho \, \mathrm{d}z .
+M_R = \int_{z_{\mathrm{damp}-1/2}}^{z_{n_t+1/2}} \rho \, \frac{J}{\Delta A} \, \mathrm{d}z ,
 ```
 
-Here $n_t$ is the topmost value of the level index $n$ used above, and $z_{n_t}$ the corresponding top cell centre. $X_{\mathrm{top}}$ is the acceleration the kernel computed at that level, and $m_{\mathrm{top}}$ is the mass of the ghost layer it divided by, with $\rho_{\mathrm{ghost}} = \rho(z_{n_t})^2 / \rho(z_{n_t-1})$ the density extrapolated above the top cell centre. $M_R$ is the mass of the receiving levels, the whole cells from the bottom face of the damping level, $z_{\mathrm{damp}-1/2}$, to the model top face, $z_{n_t+1/2}$. The product $X_{\mathrm{top}}\, m_{\mathrm{top}}$ is the escaped momentum flux, so $\int \rho \, X_{\mathrm{redist}} \, \mathrm{d}z = X_{\mathrm{top}}\, m_{\mathrm{top}}$ exactly. This redistribution is applied after the half-level averaging above, so it is not smoothed.
+Here $n_t$ is the topmost value of the level index $n$ used above. $F_{\mathrm{top}}$ is the escaped momentum flux, which the kernel returns at the top level $n_t$. $M_R$ is the mass of the receiving levels, the whole cells from the bottom face of the damping level, $z_{\mathrm{damp}-1/2}$, to the model top face, $z_{n_t+1/2}$, weighted by $J/\Delta A$ as in the column integrals ($J$ the metric Jacobian, $\Delta A$ the area of the column's bottom face). Therefore, $\int \rho \, X_{\mathrm{redist}} \, (J/\Delta A) \, \mathrm{d}z = F_{\mathrm{top}}$ exactly. This redistribution is applied after the half-level averaging above, so it is not smoothed.
 
 Note that the assembled forcing is clipped to $\pm 3\times 10^{-3}\ \mathrm{m\,s^{-2}}$ per component when it is added to the momentum tendency. Therefore, where the clip is active, the deposited momentum is smaller than the launched momentum by construction.
 

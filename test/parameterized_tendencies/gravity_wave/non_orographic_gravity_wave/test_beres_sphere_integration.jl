@@ -165,7 +165,10 @@ import ClimaCore.Geometry as Geometry
         non_orographic_gravity_wave = nogw_ad99,
     )
 
-    CA.non_orographic_gravity_wave_compute_tendency!(
+    # The 45 km top lies below `nogw_damp_pressure`, so the first call warns that the
+    # damping layer is widened. The warning fires once per session; reset its flag.
+    CA.NOGW_DAMP_LAYER_CHECKED[] = false
+    @test_logs (:warn, r"Fewer than") match_mode = :any CA.non_orographic_gravity_wave_compute_tendency!(
         Y,
         p_ad99,
         p_ad99.atmos.non_orographic_gravity_wave,
@@ -208,6 +211,38 @@ import ClimaCore.Geometry as Geometry
     @testset "Both column populations present" begin
         @test !isempty(active_cols)
         @test !isempty(inactive_cols)
+    end
+
+    # The AD99 launch and damping levels that `compute_tendency!` picked, checked in
+    # every column against the selection rules written out from the column's
+    # pressure profile. The 45 km top lies below `nogw_damp_pressure` (85 Pa, about
+    # 50 km), so the pressure rule alone would leave the top cell as the whole
+    # damping layer; the guard must widen it to `NOGW_MIN_DAMP_CELLS` cells.
+    @testset "Launch and damp levels follow the pressure rules" begin
+        nogw = p.non_orographic_gravity_wave
+        p_arr = Array(Fields.field2array(p.precomputed.ᶜp))     # [nlev, ncol]
+        nlev = size(p_arr, 1)
+        level_values(f) = round.(Int, vec(Array(Fields.field2array(f))))
+        source_level = level_values(nogw.source_p_ρ_z_u_v_level.:6)
+        damp_level = level_values(nogw.damp_level)
+        @test length(source_level) == length(damp_level) == size(p_arr, 2)
+        # Launch: the highest level whose pressure exceeds the source pressure.
+        expected_source = [
+            findlast(>(nogw.gw_source_pressure), p_arr[:, col]) for
+            col in axes(p_arr, 2)
+        ]
+        @test source_level == expected_source
+        # Damping layer: from the lowest level whose pressure is below the damp
+        # pressure, or from the top cell when no level is, and always at least the
+        # top `NOGW_MIN_DAMP_CELLS` cells.
+        expected_damp = map(axes(p_arr, 2)) do col
+            last_above = findlast(>=(nogw.gw_damp_pressure), p_arr[:, col])
+            pressure_rule = min(something(last_above, 0) + 1, nlev)
+            min(pressure_rule, CA.highest_damp_level(nlev))
+        end
+        @test damp_level == expected_damp
+        @test minimum(p_arr[end, :]) > nogw.gw_damp_pressure    # setup guard
+        @test all(==(nlev - CA.NOGW_MIN_DAMP_CELLS + 1), damp_level)
     end
 
     @testset "Forcing finite and bounded" begin
@@ -273,5 +308,42 @@ import ClimaCore.Geometry as Geometry
         du_arr = Array(Fields.field2array(du))
         @test all(isfinite, du_arr)
         @test maximum(abs, du_arr) > 0
+    end
+
+    # N in the bottom and top cells uses the one-sided dT/dz across the face between
+    # each end cell and its only neighbour, recomputed here from the column's T, z and
+    # moist heat capacity. The initial state is isothermal near the top, where half of a
+    # zero gradient equals the full one, so T gets an added 2 K/km first. Runs last
+    # because it changes ᶜT and the NOGW cache.
+    @testset "Buoyancy frequency in the end cells uses a one-sided dT/dz" begin
+        ᶜz = Fields.coordinate_field(Y.c).z
+        @. ᶜT += FT(2e-3) * ᶜz
+        CA.non_orographic_gravity_wave_compute_tendency!(
+            Y,
+            p,
+            p.atmos.non_orographic_gravity_wave,
+        )
+        (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        thermo_params = CA.Parameters.thermodynamics_params(p.params)
+        grav = CA.Parameters.grav(p.params)
+        ᶜcp_m = @. CA.TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+        T_arr = Array(Fields.field2array(ᶜT))
+        z_arr = Array(Fields.field2array(ᶜz))
+        cp_arr = Array(Fields.field2array(ᶜcp_m))
+        N_arr = Array(
+            Fields.field2array(p.non_orographic_gravity_wave.ᶜbuoyancy_frequency),
+        )
+        n = size(T_arr, 1)
+        N_from(dTdz, k) = map(axes(T_arr, 2)) do col
+            N² = grav / T_arr[k, col] * (dTdz[col] + grav / cp_arr[k, col])
+            N² < 2.5e-5 ? sqrt(2.5e-5) : sqrt(abs(N²))
+        end
+        dTdz_bottom = (T_arr[2, :] .- T_arr[1, :]) ./ (z_arr[2, :] .- z_arr[1, :])
+        dTdz_top = (T_arr[n, :] .- T_arr[n - 1, :]) ./ (z_arr[n, :] .- z_arr[n - 1, :])
+        @test N_arr[1, :] ≈ N_from(dTdz_bottom, 1) rtol = 1e-5
+        @test N_arr[n, :] ≈ N_from(dTdz_top, n) rtol = 1e-5
+        # setup guard: half the gradient would give a different N in these cells
+        @test !isapprox(N_from(dTdz_top ./ 2, n), N_from(dTdz_top, n); rtol = 1e-3)
+        @test !isapprox(N_from(dTdz_bottom ./ 2, 1), N_from(dTdz_bottom, 1); rtol = 1e-3)
     end
 end
