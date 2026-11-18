@@ -1550,7 +1550,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # (1b) Winds for the launch filter (`beres.launch_filter`): the range of u and v
     # over the heating layer, up to and including the launch level (the first level at
     # or above z_top), and u, v at the launch level; with the height-resolved filter
-    # also u and v on the gather grid. The layer starts where the heating each shape
+    # also u and v on N_BERES_PROFILE points over the heating layer. The layer starts where the heating each shape
     # uses starts: at z_bot for the half-sine, at the gather window bottom
     # max(z_bot, z_bot_floor) for Beres-G, which has no heating below the floor.
     shape_general = gw_beres_source.beres_shape_general
@@ -1576,8 +1576,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         let _ng_val = ng_val
             for (wind_profile, ᶜwind) in
                 ((gw_beres_u_profile, ᶜu), (gw_beres_v_profile, ᶜv))
+                # On the layer the shape uses: the gather window (Beres-G) or the
+                # envelope [z_bot, z_top] of the half-sine (Beres-C).
                 wind_gather_input = Base.Broadcast.broadcasted(
-                    tuple, ᶜz_above_surface, ᶜwind, ᶜgather_bottom, gw_ztop,
+                    tuple, ᶜz_above_surface, ᶜwind, ᶜlayer_bottom, gw_ztop,
                 )
                 Operators.column_reduce!(
                     wind_profile,
@@ -1882,6 +1884,9 @@ function _beres_precompute_launch_spectra!(nogw)
         gw_zbot,
         gw_ztop,
         gw_beres_wind_range,
+        gw_beres_u_profile,
+        gw_beres_v_profile,
+        gw_beres_dz_level,
         gw_w_obstacle,
         gw_beres_B0_u,
         gw_beres_B0_v,
@@ -1905,6 +1910,36 @@ function _beres_precompute_launch_spectra!(nogw)
         if beres.beres_shape_general
             _beres_launch_spectra_per_bin!(nogw, Val(1))
             _beres_launch_spectra_per_bin!(nogw, Val(2))
+        elseif beres.launch_filter == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED
+            # The half-sine through the height-resolved filter: the winds on the
+            # envelope (`gw_beres_u_profile`, `gw_beres_v_profile`) set, per phase speed,
+            # the cut of the half-sine (`_beres_halfsine_cut`), tapered over one mean
+            # level thickness `gw_beres_dz_level`, as for Beres-G.
+            b0hs_hr(azimuth) =
+                (active, u, Q0, h, N, zbot, ztop, w, wind_range, wind_profile, dz_level) ->
+                    BeresB0(
+                        _beres_launch_spectrum_or_zero(
+                            active, cgrid, u, Q0, h, N, zbot, ztop - zbot, nothing, w,
+                            beres, ncv, Val(false);
+                            launch_filter = _beres_launch_filter(
+                                beres, wind_range, wind_profile, azimuth,
+                                dz_level /
+                                max((ztop - zbot) / (N_BERES_PROFILE - 1), eps(dz_level)),
+                            ),
+                        ),
+                    )
+            b0hs_hr_u = b0hs_hr(Val(1))
+            b0hs_hr_v = b0hs_hr(Val(2))
+            @. gw_beres_B0_u = b0hs_hr_u(
+                gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_w_obstacle, gw_beres_wind_range,
+                gw_beres_u_profile, gw_beres_dz_level,
+            )
+            @. gw_beres_B0_v = b0hs_hr_v(
+                gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_w_obstacle, gw_beres_wind_range,
+                gw_beres_v_profile, gw_beres_dz_level,
+            )
         else
             b0hs(azimuth) =
                 (active, u, Q0, h, N, zbot, ztop, w, wind_range) -> BeresB0(
@@ -3180,6 +3215,21 @@ end
 const N_BERES_GS_CHAINS = 8
 
 """
+    BeresHalfSineCut(active, x_cut, width)
+
+The part of a half-sine heating a phase speed sees through the height-resolved launch
+filter (`_beres_halfsine_cut`): with `active`, the heating is zero up to `x_cut` [m] above
+the bottom of the half-sine and rises to the full half-sine over `width` [m] above it with
+a raised cosine, as `_beres_filter_profile` masks a gathered Beres-G profile. Inactive,
+the half-sine is whole.
+"""
+struct BeresHalfSineCut{FT}
+    active::Bool
+    x_cut::FT
+    width::FT
+end
+
+"""
     _beres_shape_factor_sq(shape_general, gprofile, z_bot, h, span, m, m_max)
 
 The squared vertical shape factor entering `R² = (·)·m²/(N²−ν̂²)²`, dispatching
@@ -3193,6 +3243,9 @@ factor fixed is the `1/m²`-parity pinned by gate 1. The Beres-G factor is zero 
 """
 @inline _beres_shape_factor_sq(::Bool, ::Nothing, z_bot, h, span, m, m_max) =
     V_hs_sq(m, h)
+# The half-sine seen through the height-resolved launch filter (Beres-C).
+@inline _beres_shape_factor_sq(::Bool, cut::BeresHalfSineCut, z_bot, h, span, m, m_max) =
+    _beres_halfsine_sq(cut, m, h)
 @inline function _beres_shape_factor_sq(
     shape_general::Bool,
     gprofile::NTuple,
@@ -3244,6 +3297,64 @@ normalized `sin(πx)/(πx)` and would be wrong.
     δ = m * h - FT(π)
     sinc_δ = abs(δ) < FT(1e-10) ? FT(1) : sin(δ) / δ
     return FT(π)^2 * h^2 * sinc_δ^2 / (m * h + FT(π))^2
+end
+
+
+"""
+    _beres_halfsine_sq(cut, m, h)
+
+The squared vertical shape factor of a half-sine heating of depth `h` [m] at vertical
+wavenumber `m` [1/m], measured from the bottom of the heating as `V_hs_sq`: `V_hs_sq(m, h)`
+for no cut or an inactive one, and for an active `BeresHalfSineCut` the square of the exact
+sine transform of the half-sine masked and tapered as the cut says,
+
+    F(m) = ∫_0^h sin(π x/h) T(x) sin(m x) dx,
+
+with `T = 0` below `x_cut`, `(1 − cos(π (x − x_cut)/width))/2` up to `x_cut + width`, and 1
+above. The products of sines and cosines are expanded into cosines of linear arguments
+and integrated in closed form (`_beres_cos_integral`), which stays exact at the resonance
+`m = π/h`.
+"""
+@inline _beres_halfsine_sq(::Nothing, m, h) = V_hs_sq(m, h)
+@inline _beres_halfsine_sq(::NTuple, m, h) = V_hs_sq(m, h)
+@inline function _beres_halfsine_sq(cut::BeresHalfSineCut, m, h)
+    cut.active || return V_hs_sq(m, h)
+    FT = typeof(m)
+    k = FT(π) / h
+    x0 = clamp(cut.x_cut, zero(FT), h)
+    x1 = clamp(cut.x_cut + cut.width, zero(FT), h)
+    # Above the taper: ∫ sin(kx) sin(mx) = ½∫ [cos((m−k)x) − cos((m+k)x)].
+    F =
+        (
+            _beres_cos_integral(m - k, zero(FT), x1, h) -
+            _beres_cos_integral(m + k, zero(FT), x1, h)
+        ) / 2
+    if cut.width > zero(FT) && x1 > x0
+        # In the taper: ½ sin·sin − ½ sin·sin·cos(q(x − x_cut)), q = π/width.
+        q = FT(π) / cut.width
+        φ = -q * cut.x_cut
+        F +=
+            (
+                _beres_cos_integral(m - k, zero(FT), x0, x1) -
+                _beres_cos_integral(m + k, zero(FT), x0, x1)
+            ) / 4 -
+            (
+                _beres_cos_integral(m - k + q, φ, x0, x1) +
+                _beres_cos_integral(m - k - q, -φ, x0, x1) -
+                _beres_cos_integral(m + k + q, φ, x0, x1) -
+                _beres_cos_integral(m + k - q, -φ, x0, x1)
+            ) / 8
+    end
+    return F^2
+end
+
+# ∫_a^b cos(κ x + φ) dx, in the form (b − a)·cos(κ (a + b)/2 + φ)·sinc(κ (b − a)/2), which
+# stays accurate as κ → 0.
+@inline function _beres_cos_integral(κ, φ, a, b)
+    FT = typeof(κ)
+    half = κ * (b - a) / 2
+    sinc_half = abs(half) < FT(1e-6) ? one(FT) - half^2 / 6 : sin(half) / half
+    return (b - a) * cos(κ * (a + b) / 2 + φ) * sinc_half
 end
 
 """
@@ -3472,7 +3583,7 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
     # with no averaging, so the thermal steady term uses the Beres-G shape as the
     # transient bins do.
     # `span = z_top - z_bot` (clamped envelope width) must match the gather grid.
-    Vbar = if shape_general && gprofile !== nothing
+    Vbar = if shape_general && gprofile isa NTuple
         # The gathered profile resolves vertical wavelengths down to two gather
         # spacings. Beyond that, i.e. as U → 0, its transform is set by the profile's
         # edges and kinks rather than by the heating, falls off only like 1/m₀, and
@@ -3482,14 +3593,14 @@ Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Wave
         (m0 * dz_gather > FT(π)) | (m0 > m_max) ? FT(0) :
         _beres_gs(_beres_sine_knots(gprofile, z_bot, span), m0)^2
     elseif n_h_avg <= 1
-        V_hs_sq(m0, h)
+        _beres_halfsine_sq(gprofile, m0, h)
     else
         Δh = Δh_frac * h
         h_min = h - Δh
         dh = FT(2) * Δh / FT(n_h_avg - 1)
         acc = FT(0)
         for ih in 1:n_h_avg
-            acc += V_hs_sq(m0, h_min + FT(ih - 1) * dh)
+            acc += _beres_halfsine_sq(gprofile, m0, h_min + FT(ih - 1) * dh)
         end
         acc / FT(n_h_avg)
     end
@@ -3646,7 +3757,7 @@ end
 
 # The launch filter of azimuth 1 (u) or 2 (v) from the column's launch-filter winds
 # `wind_range = (u_min, u_max, v_min, v_max, u_L, v_L)` and that azimuth's wind on the
-# gather grid (`nothing` for the half-sine path).
+# heating layer (`nothing` for none: the height-resolved filter then removes the band).
 @inline function _beres_launch_filter(
     beres,
     wind_range_raw,
@@ -3670,7 +3781,7 @@ end
 
 # Whether the filter removes the phase speed `c` outright: the Beres (2004) filter removes
 # every `c` in the wind range over the layer (± margin); the height-resolved filter does
-# so only without a gathered profile to mask (the half-sine path).
+# so only without a wind profile to cut the heating at (a filter built with `nothing`).
 @inline _beres_filter_removes(::Nothing, c) = false
 @inline function _beres_filter_removes(f::BeresLaunchFilter, c)
     in_band = (c >= f.wind_min - f.margin) & (c <= f.wind_max + f.margin)
@@ -3688,6 +3799,53 @@ end
     (f.mode != BERES_LAUNCH_FILTER_NONE) &
     (c >= f.wind_min - f.margin) &
     (c <= f.wind_max + f.margin)
+
+# The highest segment of the filter's wind profile whose winds bracket c ± margin: between
+# points s and s + 1, or, for s = ng, between the top point and the launch level; 0 if
+# none. Every point at and below its lower end s is cut. (Literal tuple indices only: a
+# runtime index into an NTuple does not compile on the GPU.)
+@inline function _beres_filter_cut_index(
+    f::BeresLaunchFilter{FT, <:NTuple{ng}},
+    c,
+) where {FT, ng}
+    w = f.wind_profile
+    return maximum(
+        ntuple(Val(ng)) do s
+            w_upper = s < ng ? w[min(s + 1, ng)] : f.wind_launch
+            crosses =
+                (min(w[s], w_upper) <= c + f.margin) &
+                (max(w[s], w_upper) >= c - f.margin)
+            ifelse(crosses, s, 0)
+        end,
+    )
+end
+
+"""
+    _beres_halfsine_cut(launch_filter, c, span)
+
+The `BeresHalfSineCut` the phase speed `c` sees, for a half-sine whose winds the filter
+holds on `N_BERES_PROFILE` points over `[z_bot, z_bot + span]`: `nothing` for a filter
+with no wind profile (or none), and, for the height-resolved filter, a cut at the highest
+of those points below which the wind meets `c` (the point `_beres_filter_profile` cuts a
+Beres-G profile at), tapered over `taper_points` spacings. Any other mode gives an inactive
+cut, which leaves the half-sine whole.
+"""
+@inline _beres_halfsine_cut(::Nothing, c, span) = nothing
+@inline _beres_halfsine_cut(::BeresLaunchFilter{FT, Nothing}, c, span) where {FT} = nothing
+@inline function _beres_halfsine_cut(
+    f::BeresLaunchFilter{FT, <:NTuple{ng}},
+    c,
+    span,
+) where {FT, ng}
+    i_cut = _beres_filter_cut_index(f, c)
+    dz_g = span / FT(ng - 1)
+    return BeresHalfSineCut(
+        (f.mode == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED) & (i_cut > 0),
+        FT(max(i_cut - 1, 0)) * dz_g,
+        max(f.taper_points, zero(FT)) * dz_g,
+    )
+end
+
 
 """
     _beres_filter_profile(launch_filter, gprofile, c)
@@ -3707,26 +3865,15 @@ Otherwise the profile is returned unchanged.
 @inline _beres_filter_profile(::Nothing, gprofile, c) = gprofile
 @inline _beres_filter_profile(::BeresLaunchFilter{FT, Nothing}, gprofile, c) where {FT} =
     gprofile
+@inline _beres_filter_profile(::BeresLaunchFilter{FT, <:NTuple}, ::Nothing, c) where {FT} =
+    nothing
 @inline function _beres_filter_profile(
     f::BeresLaunchFilter{FT, <:NTuple{ng}},
     gprofile::NTuple{ng},
     c,
 ) where {FT, ng}
     f.mode == BERES_LAUNCH_FILTER_HEIGHT_RESOLVED || return gprofile
-    # The highest segment whose winds bracket c ± margin: between gather points s and
-    # s + 1, or, for s = ng, between the top gather point and the launch level. Every
-    # point at and below its lower end s is cut. (Literal tuple indices only: a
-    # runtime index into an NTuple does not compile on the GPU.)
-    w = f.wind_profile
-    i_cut = maximum(
-        ntuple(Val(ng)) do s
-            w_upper = s < ng ? w[min(s + 1, ng)] : f.wind_launch
-            crosses =
-                (min(w[s], w_upper) <= c + f.margin) &
-                (max(w[s], w_upper) >= c - f.margin)
-            ifelse(crosses, s, 0)
-        end,
-    )
+    i_cut = _beres_filter_cut_index(f, c)
     width = max(f.taper_points, eps(FT))
     return ntuple(Val(ng)) do j
         d = FT(j - i_cut)   # distance above the cut, in gather spacings
@@ -3897,11 +4044,14 @@ hours to compile.
     c_hat = c_n - u_heat
     ((abs(c_hat) < FT(1e-6)) | _beres_filter_removes(launch_filter, c_n)) &&
         return FT(0)
+    # The half-sine as this phase speed sees it through the height-resolved launch
+    # filter (`nothing`, the whole half-sine, without a filter wind profile).
+    cut = _beres_halfsine_cut(launch_filter, c_n, span)
     result = if n_h_avg <= 1
         _beres_spectrum_single_h(
             c_n, c_hat, h, u_heat, N2, N_source,
             Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-            use_VG, gprofile, z_bot, span, m_max,
+            use_VG, cut, z_bot, span, m_max,
         )
     else
         # Half-sine averaged over n_h_avg values of h in [h-Δh, h+Δh] per
@@ -3916,7 +4066,7 @@ hours to compile.
             acc += _beres_spectrum_single_h(
                 c_n, c_hat, h_i, u_heat, N2, N_source,
                 Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
-                false, nothing, z_bot, span,
+                false, cut, z_bot, span,
             )
         end
         acc / FT(n_h_avg)
@@ -4067,6 +4217,11 @@ function _beres_launch_setup(
     return setup
 end
 
+# The heating the steady (c = 0) wave sees through the launch filter: the masked gathered
+# profile (Beres-G), or the cut half-sine (Beres-C, `_beres_halfsine_cut`).
+@inline _beres_steady_profile(f, gprofile, c, span) = _beres_filter_profile(f, gprofile, c)
+@inline _beres_steady_profile(f, ::Nothing, c, span) = _beres_halfsine_cut(f, c, span)
+
 # The steady (ν = 0) flux of the c = 0 bin from the per-column `setup`: the thermal
 # term plus, when enabled, the mechanical term. The launch filter treats the c = 0 bin
 # as any other: removed when c = 0 lies in the filter band, or, height-resolved, built
@@ -4082,8 +4237,8 @@ end
         _beres_steady_flux(
             s.u_heat, s.N_source, s.h, s.Q0_eff, s.scale_factor, s.n_h_avg,
             s.Δh_frac, s.σ_x, s.L_system, s.dc_frac, s.ν_min, s.use_VG,
-            _beres_filter_profile(s.launch_filter, s.gprofile, zero(FT)), s.z_bot,
-            s.span, s.m_max,
+            _beres_steady_profile(s.launch_filter, s.gprofile, zero(FT), s.span),
+            s.z_bot, s.span, s.m_max,
         ) : FT(0)
     steady_mech =
         (
@@ -4336,7 +4491,7 @@ function _beres_banded_spectrum(
         _beres_steady_flux(
             u_heat, N_source, h, Q0_eff, scale_factor, n_h_avg, Δh_frac, σ_x,
             L_system, FT(beres_steady_dc_frac), ν_min, use_VG,
-            _beres_filter_profile(launch_filter, gprofile, zero(FT)),
+            _beres_steady_profile(launch_filter, gprofile, zero(FT), span),
             z_bot, span, m_max,
         ) : FT(0)
     steady_mech =

@@ -395,7 +395,7 @@ nogw_beres_smoothing_width:
   help: "Standard deviation in m of an optional Gaussian smoothing of the gathered Beres-G heating profile in the vertical, applied before the edge taper and the rescaling to the column heating [0.0 (default, no smoothing)]"
   value: 0.0
 nogw_beres_launch_filter:
-  help: "Which Beres waves are removed at launch because they meet a critical level inside the heating layer. `beres2004` (default): every phase speed between the minimum and maximum wind over the heating layer up to the launch level, per azimuth, including the steady c = 0 bin (Beres et al. 2004; CAM). `height_resolved`: Beres-G only (the half-sine path uses `beres2004`); the heating at each height contributes to a phase speed only if the wind between that height and the launch level never equals it (beyond Beres 2004). `none`: no filter. [`beres2004` (default), `height_resolved`, `none`]"
+  help: "Which Beres waves are removed at launch because they meet a critical level inside the heating layer. `beres2004` (default): every phase speed between the minimum and maximum wind over the heating layer up to the launch level, per azimuth, including the steady c = 0 bin (Beres et al. 2004; CAM). `height_resolved`: the heating at each height contributes to a phase speed only if the wind between that height and the launch level never equals it, with a one-level taper above the cut, for the gathered profile (Beres-G) and the half-sine (Beres-C) alike (beyond Beres 2004). `none`: no filter. [`beres2004` (default), `height_resolved`, `none`]"
   value: "beres2004"
 nogw_beres_launch_filter_margin:
   help: "Widens the Beres launch-filter band by this many m/s on both sides [0.0 (default)]"

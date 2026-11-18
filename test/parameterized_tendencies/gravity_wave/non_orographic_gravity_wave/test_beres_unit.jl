@@ -2005,9 +2005,14 @@ end
         gprofile =
             shape_general ? ntuple(i -> FT(sin(π * (i - 1) / (ng - 1))), Val(ng)) : nothing
         wind_range = ntuple(i -> FT(i), Val(6))
-        wind_profile = shape_general ? ntuple(i -> FT(i), Val(ng)) : nothing
-        for filter in
-            (nothing, CA._beres_launch_filter(beres, wind_range, wind_profile, Val(1)))
+        wind_profile = ntuple(i -> FT(i), Val(ng))
+        # no filter, a filter without a wind profile, and one with (the half-sine path
+        # uses one under the height-resolved filter, as Beres-G does)
+        for filter in (
+            nothing,
+            CA._beres_launch_filter(beres, wind_range, nothing, Val(1)),
+            CA._beres_launch_filter(beres, wind_range, wind_profile, Val(1), 2),
+        )
             setup = CA._beres_launch_setup(
                 CA._beres_bin_grid(c, Val(nc)), FT(-4), FT(5e-5), FT(9000), FT(0.012),
                 FT(2000), FT(10000), gprofile, FT(0), beres, Val(shape_general);
@@ -2099,6 +2104,149 @@ end
 # -5 m/s and every phase speed in [-15, 5] m/s meets a critical level in the
 # layer, the steady c = 0 wave included.
 # ============================================================================
+@testset "Beres-C under the height-resolved launch filter" begin
+    FT = Float64
+    ng = CA.N_BERES_PROFILE
+    kw = (;
+        Q0_threshold = FT(0),
+        beres_scale_factor = FT(2e-6),
+        σ_x = FT(4000),
+        ν_min = FT(8.727e-4),
+        ν_max = FT(1.047e-2),
+        n_ν = 9,
+        beres_steady_source = true,
+    )
+    filt(mode, wind_profile, wind_launch; taper = 2.0) = CA._beres_launch_filter(
+        BeresSourceParams{FT}(; kw..., launch_filter = mode),
+        (minimum(wind_profile), maximum(wind_profile), FT(0), FT(0), wind_launch, FT(0)),
+        wind_profile,
+        Val(1),
+        taper,
+    )
+    dc, cmax = FT(0.8), FT(40)
+    nc = Int(2 * cmax / dc + 1)
+    c = ntuple(n -> (n - 1) * dc - cmax, Val(nc))
+    z_bot, h = FT(2000), FT(10000)
+    Q0, N, u_heat = FT(5e-5), FT(0.012), FT(-3)
+    spectrum_c(filter) = _beres_launch_spectrum(
+        c, u_heat, Q0, h, N, z_bot, h, nothing, FT(0), BeresSourceParams{FT}(; kw...),
+        Val(nc); launch_filter = filter,
+    )
+
+    @testset "no critical level in the layer: same as beres2004 and none" begin
+        # A uniform wind of 3.3 m/s, between the bins: no bin meets it.
+        w = ntuple(_ -> FT(3.3), Val(ng))
+        B_hr = spectrum_c(filt(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED, w, FT(3.3)))
+        @test B_hr == spectrum_c(filt(CA.BERES_LAUNCH_FILTER_BERES2004, w, FT(3.3)))
+        @test B_hr == spectrum_c(filt(CA.BERES_LAUNCH_FILTER_NONE, w, FT(3.3)))
+        @test B_hr == spectrum_c(nothing)
+        @test sum(abs, B_hr) > 0
+    end
+
+    # Linear shear from -10 m/s at z_bot to +10 m/s at the top of the layer, and on to the
+    # launch level: phase speed c meets it at x*(c) = h (c + 10)/20 above z_bot.
+    dz_g = h / (ng - 1)
+    w_shear = ntuple(i -> FT(-10 + 20 * (i - 1) / (ng - 1)), Val(ng))
+    f_hr = filt(CA.BERES_LAUNCH_FILTER_HEIGHT_RESOLVED, w_shear, FT(10.5); taper = 3.0)
+
+    @testset "cut at the analytic critical height" begin
+        for c_k in (FT(-9.3), FT(-2.1), FT(0.7), FT(6.9))
+            cut = CA._beres_halfsine_cut(f_hr, c_k, h)
+            x_star = h * (c_k + 10) / 20
+            @test cut.active
+            # the gather point at or below x*: the segment holding x* starts there
+            @test cut.x_cut == floor(x_star / dz_g) * dz_g
+            @test cut.width ≈ 3 * dz_g
+        end
+        # outside the wind range: no cut, the whole half-sine
+        @test !CA._beres_halfsine_cut(f_hr, FT(-15), h).active
+        @test !CA._beres_halfsine_cut(f_hr, FT(15), h).active
+        # met only between the top of the layer and the launch level: all heating cut
+        cut_top = CA._beres_halfsine_cut(f_hr, FT(10.2), h)
+        @test cut_top.active && cut_top.x_cut ≈ h
+        @test CA._beres_halfsine_sq(cut_top, FT(1e-3), h) == 0
+    end
+
+    @testset "masked transform against quadrature" begin
+        # midpoint rule on 400 000 points of the masked, tapered half-sine
+        function quad(m, x_cut, width)
+            n = 400_000
+            dx = h / n
+            s = 0.0
+            for i in 1:n
+                x = (i - 0.5) * dx
+                T =
+                    x < x_cut ? 0.0 :
+                    x < x_cut + width ? (1 - cos(π * (x - x_cut) / width)) / 2 : 1.0
+                s += sin(π * x / h) * T * sin(m * x)
+            end
+            return (s * dx)^2
+        end
+        for (x_cut, width) in
+            ((1234.0, 500.0), (0.0, 800.0), (6000.0, 0.0), (9800.0, 600.0)),
+            m in (1e-5, 2e-4, π / h, 1e-3, 3.7e-3)
+
+            cut = CA.BeresHalfSineCut(true, x_cut, width)
+            ref = quad(m, x_cut, width)
+            got = CA._beres_halfsine_sq(cut, m, h)
+            @test isapprox(got, ref; rtol = 1e-6, atol = 1e-12 * CA.V_hs_sq(π / h, h))
+        end
+        # an inactive cut and a cut below the layer are the whole half-sine
+        @test CA._beres_halfsine_sq(CA.BeresHalfSineCut(false, 3000.0, 500.0), 2e-4, h) ==
+              CA.V_hs_sq(2e-4, h)
+        @test CA._beres_halfsine_sq(CA.BeresHalfSineCut(true, -5000.0, 0.0), 2e-4, h) ≈
+              CA.V_hs_sq(2e-4, h) rtol = 1e-12
+    end
+
+    @testset "Beres-C and Beres-G with the same half-sine agree" begin
+        # z_bot = 0, so both transforms are measured from the same origin; Beres-G gets
+        # Q0 times the half-sine on its 64 points and no wavenumber cut, bin centres only.
+        g = ntuple(i -> Q0 * sin(π * (i - 1) / (ng - 1)), Val(ng))
+        steady_off = BeresSourceParams{FT}(; kw..., beres_steady_source = false)
+        BC = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, FT(0), h, nothing, FT(0), steady_off, Val(nc);
+            launch_filter = f_hr,
+        )
+        BG = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, FT(0), h, g, FT(0),
+            BeresSourceParams{FT}(;
+                kw...,
+                beres_steady_source = false,
+                beres_shape_general = true,
+            ),
+            Val(nc); launch_filter = f_hr, n_bin_samples = Val(1),
+        )
+        cut_bins = [CA._beres_halfsine_cut(f_hr, c[n], h).active for n in 1:nc]
+        @test count(cut_bins) > 10                       # setup: many bins are cut
+        scale = maximum(abs, BC)
+        diff = abs.(collect(BC) .- collect(BG)) ./ scale
+        # Away from u_heat (|ĉ| ≥ 5 m/s, m ≲ N/5 ≈ 2.4e-3/m) the two masked transforms
+        # agree to the O(dz²) error of the 64-point profile; nearer u_heat the vertical
+        # wavelengths approach the taper width (3 gather spacings, 476 m), which the
+        # piecewise-linear Beres-G profile resolves only coarsely (10-15% at m = 5e-3/m).
+        far = [abs(c[n] - u_heat) >= 5 for n in 1:nc]
+        @info "Beres-C vs Beres-G, height-resolved, same half-sine: max |diff|/max: uncut $(maximum(diff[.!cut_bins])), cut and |ĉ| ≥ 5 m/s $(maximum(diff[cut_bins .& far])), cut and |ĉ| < 5 m/s $(maximum(diff[cut_bins .& .!far]))"
+        @test maximum(diff[.!cut_bins]) < 2e-3
+        @test maximum(diff[cut_bins .& far]) < 2e-2
+        @test maximum(diff[cut_bins .& .!far]) < 0.2
+        # the shape factors themselves, at one cut
+        cut = CA._beres_halfsine_cut(f_hr, FT(-3.2), h)
+        knots = CA._beres_sine_knots(
+            CA._beres_filter_profile(f_hr, g, FT(-3.2)), FT(0), h,
+        )
+        for m in (2e-4, 5e-4, 1e-3, 2e-3)
+            @test CA._beres_halfsine_sq(cut, m, h) * Q0^2 ≈ CA._beres_gs(knots, m)^2 rtol =
+                3e-2
+        end
+        # and the cut changes the cut bins
+        BC_none = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N, FT(0), h, nothing, FT(0), steady_off, Val(nc),
+        )
+        @test all(n -> BC[n] != BC_none[n] || BC[n] == 0, findall(cut_bins))
+        @test all(n -> BC[n] == BC_none[n], findall(.!cut_bins))
+    end
+end
+
 @testset "Beres launch filter" begin
     FT = Float64
     ng = CA.N_BERES_PROFILE

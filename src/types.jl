@@ -1016,13 +1016,13 @@ convective heating.
         minimum and maximum wind over the heating layer up to the launch level, in
         each azimuth with that azimuth's wind, including the steady `c = 0` bin
         (Beres et al. 2004, pp. 332 and 336; CAM `gw_beres_src`).
-      + `BERES_LAUNCH_FILTER_HEIGHT_RESOLVED`: with the gathered profile (Beres-G),
-        the heating at a height contributes to a phase speed only if the wind
-        between that height and the launch level never equals it; the profile below
-        the highest such level is masked before the sine transform. This goes beyond
-        Beres et al. (2004), whose theory assumes a uniform wind over the heating.
-        The half-sine path, which has no profile to mask, uses the Beres (2004)
-        filter.
+      + `BERES_LAUNCH_FILTER_HEIGHT_RESOLVED`: the heating at a height contributes to
+        a phase speed only if the wind between that height and the launch level never
+        equals it; the heating below the highest such level is masked, with a
+        raised-cosine taper over one level thickness above it, before the transform:
+        the gathered profile for Beres-G, the half-sine for Beres-C (in closed form,
+        `_beres_halfsine_sq`). This goes beyond Beres et al. (2004), whose theory
+        assumes a uniform wind over the heating.
       + `BERES_LAUNCH_FILTER_NONE`: no filter; such waves are launched with the sign
         of `c - u_heat` and deposit where the wind first reaches their phase speed.
   - `launch_filter_margin`: Widens the filter band by this much on both sides [m/s].
