@@ -18,16 +18,24 @@ include("../gw_plotutils.jl")
 
 const FT = Float64
 
-# Limits of the numeric gate at the end of this file (see `mima_agreement`). The
-# reference run (rc/beres-bugfix, 2026-11-16) gave, over the 13 months, zonal
-# correlations 0.963-0.976, meridional correlations 0.50-0.64, and zonal RMS ratios
-# 2.12-2.28. The correlation limits check the pattern. The RMS-ratio window is only a
-# regression guard, set from that one run: the ClimaAtmos drag is about 2.2 times
-# MiMA's for a reason not yet known, and the window is not a physical bound.
-# TODO: explain the ~2.2x AD99-vs-MiMA amplitude gap, then tighten the window.
-const MIMA_MIN_CORR_U = 0.93
-const MIMA_MIN_CORR_V = 0.4
-const MIMA_RATIO_RANGE_U = (1.8, 2.6)
+# Limits of the numeric gate at the end of this file (see `mima_agreement`). The test
+# feeds the kernel MiMA's own column heights (`mima_column_space`) and MiMA's uniform
+# source amplitude. Over the 13 months, the run on rc/beres-run (2026-11-18) gave zonal
+# correlations 0.981-0.988, meridional correlations 0.64-0.76, and zonal RMS ratios
+# (ClimaAtmos over MiMA) 0.64-0.68. The ratio is below one because of the model top
+# alone. ClimaAtmos spreads the flux that escapes the top as one momentum-conserving
+# acceleration over the mass of the damping layer (p < gw_damp_pressure), while MiMA
+# adds the drag of the top layer, divided by the number of damping levels, to each of
+# them; with MiMA's rule for the top, the same deposit gives ratios 1.02-1.07 (an
+# offline NumPy port of both kernels). Split by height, the RMS ratio is 0.99 between
+# 100 and 10 hPa, 1.00 between 10 and 1 hPa, 1.12 below 100 hPa, and 0.66 in the three
+# damping-layer cells, whose large drag dominates the RMS over the whole domain. The
+# limits leave a margin of 0.03 on the zonal correlation, 0.09 on the meridional one,
+# and about 15% on the ratio; a change to the AD99 kernel that moves the drag shows up
+# as a drop in correlation or a shift of the ratio.
+const MIMA_MIN_CORR_U = 0.95
+const MIMA_MIN_CORR_V = 0.55
+const MIMA_RATIO_RANGE_U = (0.55, 0.8)
 
 # Set up ClimaAtmos infrastructure
 comms_ctx = ClimaComms.SingletonCommsContext()
@@ -103,8 +111,10 @@ function non_orographic_gravity_wave_param(
     Bw = FT(0.4),
     Bn = FT(0),
     Bt_0 = FT(0.0043),
-    Bt_n = FT(0.001),
-    Bt_s = FT(0.001),
+    # No extra amplitude poleward of ϕ0: the drag in the MiMA file matches a uniform
+    # source amplitude of Bt_0 = Bt_eq = 0.0043 at all latitudes.
+    Bt_n = FT(0),
+    Bt_s = FT(0),
     Bt_eq = FT(0.0043),
     ϕ0_n = FT(15),
     ϕ0_s = FT(-15),
@@ -168,112 +178,128 @@ k_damp = findlast(pfull * 100 .< param.gw_damp_pressure)
 uforcing = zeros(size(lev))
 vforcing = zeros(size(lev))
 
-# Generate domain, space and field for single column computation
-column_domain = ClimaCore.Domains.IntervalDomain(
-    ClimaCore.Geometry.ZPoint(FT(z[1, 1, end, 1])) ..
-    ClimaCore.Geometry.ZPoint(FT(z[1, 1, 1, 1])),
-    boundary_names = (:bottom, :top),
-)
-
-column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 40)
-
-# Construct the face space from the center one
-column_face_space = ClimaCore.Spaces.FaceFiniteDifferenceSpace(
-    ClimaComms.device(),
-    column_mesh,
-)
-column_center_space =
-    Spaces.CenterFiniteDifferenceSpace(column_face_space)
-
-coordinate = Fields.coordinate_field(column_center_space)
+# One single-column space per MiMA column, built from that column's own full-level
+# heights: the cell faces lie midway between neighbouring full levels, and the two outer
+# faces mirror the nearest interior face about the outermost full level. The kernel
+# deposits the drag into the cell masses ρ·Δz of this space, so they must be the
+# column's own; a mesh that does not follow the file's heights changes the deposited
+# drag (see the gate constants above).
+function mima_column_space(z_full)   # heights bottom to top
+    n = length(z_full)
+    z_faces = similar(z_full, n + 1)
+    z_faces[2:n] .= (z_full[1:(n - 1)] .+ z_full[2:n]) ./ 2
+    z_faces[1] = 2 * z_full[1] - z_faces[2]
+    z_faces[n + 1] = 2 * z_full[n] - z_faces[n]
+    domain = ClimaCore.Domains.IntervalDomain(
+        ClimaCore.Geometry.ZPoint(z_faces[1]) ..
+        ClimaCore.Geometry.ZPoint(z_faces[end]),
+        boundary_names = (:bottom, :top),
+    )
+    mesh = ClimaCore.Meshes.IntervalMesh(domain, ClimaCore.Geometry.ZPoint.(z_faces))
+    face_space = Spaces.FaceFiniteDifferenceSpace(ClimaComms.device(), mesh)
+    return Spaces.CenterFiniteDifferenceSpace(face_space)
+end
 
 gw_ncval = Val(333)
-ᶜz = coordinate.z
-ᶜρ = copy(ᶜz)
-ᶜu = copy(ᶜz)
-ᶜv = copy(ᶜz)
-ᶜbf = copy(ᶜz)
-ᶜlevel = similar(ᶜρ, FT)
-u_waveforcing = similar(ᶜu)
-v_waveforcing = similar(ᶜu)
-for i in 1:Spaces.nlevels(axes(ᶜρ))
-    fill!(Fields.level(ᶜlevel, i), i)
-end
-ᶜuforcing = similar(ᶜρ, FT)
-ᶜvforcing = similar(ᶜρ, FT)
 
-scratch = (;
-    ᶜtemp_scalar = similar(ᶜz, FT),
-    ᶜtemp_scalar_2 = similar(ᶜz, FT),
-    ᶜtemp_scalar_3 = similar(ᶜz, FT),
-    ᶜtemp_scalar_4 = similar(ᶜz, FT),
-    ᶜtemp_scalar_5 = similar(ᶜz, FT),
-    ᶜtemp_scalar_6 = similar(ᶜz, FT),
-    temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+# The AD99 drag of one MiMA column (inputs bottom to top), with the source amplitude
+# and spectrum parameters of its latitude.
+function mima_column_forcing(
+    z_full,
+    ρ_full,
+    u_full,
+    v_full,
+    bf_full,
+    lat_param,
+    source_level,
+    damp_level,
 )
-
-for j in eachindex(lat)
-    local non_orographic_gravity_wave = (;
-        non_orographic_gravity_wave_param(lat[j], FT)...,
+    space = mima_column_space(z_full)
+    ᶜz = copy(Fields.coordinate_field(space).z)
+    parent(ᶜz) .= z_full
+    ᶜρ = copy(ᶜz)
+    ᶜu = copy(ᶜz)
+    ᶜv = copy(ᶜz)
+    ᶜbf = copy(ᶜz)
+    parent(ᶜρ) .= ρ_full
+    parent(ᶜu) .= u_full
+    parent(ᶜv) .= v_full
+    parent(ᶜbf) .= bf_full
+    ᶜlevel = similar(ᶜρ, FT)
+    for k in 1:Spaces.nlevels(space)
+        fill!(Fields.level(ᶜlevel, k), k)
+    end
+    ᶜuforcing = fill!(similar(ᶜz, FT), FT(0))
+    ᶜvforcing = fill!(similar(ᶜz, FT), FT(0))
+    level_field() = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0))
+    scratch = (;
+        ᶜtemp_scalar = similar(ᶜz, FT),
+        ᶜtemp_scalar_2 = similar(ᶜz, FT),
+        ᶜtemp_scalar_3 = similar(ᶜz, FT),
+        ᶜtemp_scalar_4 = similar(ᶜz, FT),
+        ᶜtemp_scalar_5 = similar(ᶜz, FT),
+        ᶜtemp_scalar_6 = similar(ᶜz, FT),
+        temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+    )
+    non_orographic_gravity_wave = (;
+        lat_param...,
         gw_temp_surface = similar(Fields.level(ᶜz, 1), FT),
-        gw_beres_active = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_Q0 = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_h_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_u_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_v_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_N_source = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
-        gw_a_cover = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
+        gw_beres_active = level_field(),
+        gw_Q0 = level_field(),
+        gw_h_heat = level_field(),
+        gw_u_heat = level_field(),
+        gw_v_heat = level_field(),
+        gw_N_source = level_field(),
+        gw_a_cover = level_field(),
         gw_beres_source = nothing,
         beres_source_ρ_z_u_v_level = similar(
             Fields.level(ᶜz, 1),
             Tuple{FT, FT, FT, FT, FT},
         ),
     )
-    # Create input parameters at each level
-    local params_nogw = (; non_orographic_gravity_wave, scratch)
+    CA.non_orographic_gravity_wave_forcing(
+        ᶜu,
+        ᶜv,
+        ᶜbf,
+        ᶜρ,
+        ᶜz,
+        ᶜlevel,
+        source_level,
+        damp_level,
+        Fields.level(ᶜρ, source_level),
+        Fields.level(ᶜu, source_level),
+        Fields.level(ᶜv, source_level),
+        ᶜuforcing,
+        ᶜvforcing,
+        gw_ncval,
+        similar(ᶜu),
+        similar(ᶜu),
+        (; non_orographic_gravity_wave, scratch),
+    )
+    return vec(parent(ᶜuforcing)), vec(parent(ᶜvforcing))
+end
+
+for j in eachindex(lat)
+    local lat_param = non_orographic_gravity_wave_param(lat[j], FT)
+    local source_level =
+        kmax + 2 -
+        Int(floor((kmax + 1) - ((kmax + 1 - k_source) * cosd(lat[j]) + 0.5)))
+    local damp_level = length(pfull) + 1 - k_damp
     for i in 1:length(lon)
         for it in 1:length(time)
-            local source_level =
-                kmax + 2 - Int(
-                    floor(
-                        (kmax + 1) -
-                        ((kmax + 1 - k_source) * cosd(lat[j]) + 0.5),
-                    ),
-                )
-            local damp_level = length(pfull) + 1 - k_damp
-            parent(ᶜz) .= z[i, j, end:-1:1, it]
-            parent(ᶜρ) .= ρ[i, j, end:-1:1, it]
-            parent(ᶜu) .= u[i, j, end:-1:1, it]
-            parent(ᶜv) .= v[i, j, end:-1:1, it]
-            parent(ᶜbf) .= bf[i, j, end:-1:1, it]
-            ᶜρ_source = Fields.level(ᶜρ, source_level)
-            ᶜu_source = Fields.level(ᶜu, source_level)
-            ᶜv_source = Fields.level(ᶜv, source_level)
-            ᶜuforcing .= 0
-            ᶜvforcing .= 0
-
-            CA.non_orographic_gravity_wave_forcing(
-                ᶜu,
-                ᶜv,
-                ᶜbf,
-                ᶜρ,
-                ᶜz,
-                ᶜlevel,
+            column(a) = FT.(a[i, j, end:-1:1, it])
+            local (uf, vf) = mima_column_forcing(
+                column(z),
+                column(ρ),
+                column(u),
+                column(v),
+                column(bf),
+                lat_param,
                 source_level,
                 damp_level,
-                ᶜρ_source,
-                ᶜu_source,
-                ᶜv_source,
-                ᶜuforcing,
-                ᶜvforcing,
-                gw_ncval,
-                u_waveforcing,
-                v_waveforcing,
-                params_nogw,
             )
-
-            uforcing[i, j, :, it] = parent(ᶜuforcing)
-            vforcing[i, j, :, it] = parent(ᶜvforcing)
+            uforcing[i, j, :, it] = uf
+            vforcing[i, j, :, it] = vf
         end
     end
 end
@@ -287,9 +313,7 @@ gwfv_zonalave = dropdims(mean(gwfv_cgwd, dims = 1), dims = 1)
 # Numeric gate against MiMA: for each month, the pattern correlation over latitude and
 # pressure of the zonal-mean drag, and the ratio of its root-mean-square values
 # (ClimaAtmos over MiMA). ClimaAtmos levels run bottom to top, MiMA's top to bottom.
-# The limits leave a margin around the values of the reference run named below; a
-# change to the AD99 kernel that moves the drag shows up as a drop in correlation or a
-# shift of the ratio.
+# The limits and the reference run they come from are given at the top of this file.
 function mima_agreement(clima_zonalave, mima_zonalave)
     clima = clima_zonalave[:, end:-1:1, :]
     mima = convert(Array{FT}, mima_zonalave)
