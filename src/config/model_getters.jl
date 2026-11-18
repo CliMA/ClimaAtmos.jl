@@ -1166,8 +1166,8 @@ function check_case_consistency(parsed_args)
 
     if !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
-            "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
-             which is needed for topography. Thus, prescribed flow must have flat surface."
+            "Prescribed flow elides the impenetrability filter of \
+             `set_implicit_precomputed_quantities_core!`, which is needed for topography. Thus, prescribed flow must have flat surface."
         )
         @assert(
             !parsed_args["implicit_microphysics"] &&

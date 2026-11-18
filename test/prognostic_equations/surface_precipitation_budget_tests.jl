@@ -256,7 +256,17 @@ end
     T_up = first_value(p.precomputed.ᶜTʲs.:(1))
     T_en = first_value(p.precomputed.ᶜT⁰)
     ρ_up = first_value(p.precomputed.ᶜρʲs.:(1))
-    ρ_en = first_value(p.scratch.sfc_precip_env_density)
+    ρ_en = max(
+        eps(FT),
+        CA.TD.air_density(
+            thp,
+            T_en,
+            first_value(p.precomputed.ᶜp),
+            first_value(p.precomputed.ᶜq_tot_nonneg⁰),
+            first_value(p.precomputed.ᶜq_liq⁰),
+            first_value(p.precomputed.ᶜq_ice⁰),
+        ),
+    )
     ρa_up = first_value(Y.c.sgsʲs.:(1).ρa)
     f_e_sgs_exact = FT(0)
     for (q_name, ρq_name, wʲ_name, w_name, e_fn) in (

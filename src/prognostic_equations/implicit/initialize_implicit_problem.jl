@@ -62,7 +62,7 @@ For `PrognosticEDMFX`:
     velocity, the buoyancy `ᶜρ_diffʲs` of the last `cache!` call (the refreshed
     `ρʲ` carries the extrapolation error of the stage), and the precomputed
     entrainment and drag inputs, then impose the impenetrable velocity on the
-    boundary faces (`set_velocity_at_surface!`, `set_velocity_at_top!`), where
+    boundary faces (`set_boundary_velocities!`), where
     the sweep gives zero or a swept value.
 
  4. Transport `ρa` (`predict_sgs_ρa!`) and then the draft scalars
@@ -99,8 +99,7 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
     if !(p.atmos.prescribed_flow isa PrescribedFlow)
         ᶠuₕ³ = p.scratch.ᶠtemp_CT3
         @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
-        set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-        set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
+        set_boundary_velocities!(Y, ᶠuₕ³, turbconv_model)
     end
     predict_sgs_ρa!(Y, p, dtγ)
     predict_sgs_tracers!(Y, p, dtγ)
@@ -185,18 +184,9 @@ NVTX.@annotate function predict_sgs_u₃!(Y, p, dtγ)
         ᶜentr_vel_scaleʲs,
         ᶜentr_nonvel_rateʲs,
     ) = p.precomputed
-    FT = eltype(p.params)
-    (zero_FT, one_FT) = (zero(FT), one(FT))
     inv_dtγ = 1 / dtγ
 
     turbconv_params = CAP.turbconv_params(params)
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    c_R = CAP.pressure_drag_plume_radius_slope(turbconv_params)
-    R_max = CAP.pressure_drag_plume_radius_max(turbconv_params)
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     nh_pressure = p.atmos.edmfx_model.nh_pressure
     (sponge, ᶠz) =
         isnothing(rayleigh_sponge) ? ((), ()) :
@@ -207,7 +197,8 @@ NVTX.@annotate function predict_sgs_u₃!(Y, p, dtγ)
     ᶠdz = Fields.Δz_field(axes(Y.f))
     # Spacing of the face below; the bottom face has none, and its inflow
     # velocity is zero, so any positive value serves there.
-    ᶠface_below = Operators.BottomBiasedC2F(bottom = Operators.SetValue(one_FT))
+    ᶠface_below =
+        Operators.BottomBiasedC2F(bottom = Operators.SetValue(one(eltype(params))))
     ᶠdz_below = @. lazy(ᶠface_below(ᶜbottom_bias(ᶠdz)))
 
     # Face coefficients of the quadratic equation divided by a,
@@ -229,6 +220,14 @@ NVTX.@annotate function predict_sgs_u₃!(Y, p, dtγ)
         ᶠgradᵥ_ᶜΦ, ᶠdz, ᶠdz_below, ᶠz, ᶜz, z_sfc
             @inline
             (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) = rates
+            one_FT = one(eltype(ᶠdz))
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+            α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+            a_min = CAP.min_area(turbconv_params)
+            a_max = CAP.max_area(turbconv_params)
+            scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+            c_R = CAP.pressure_drag_plume_radius_slope(turbconv_params)
+            R_max = CAP.pressure_drag_plume_radius_max(turbconv_params)
             # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft
             # case). Guard against an out-of-range stage-entering ρa.
             # Clamp a⁰ ∈ [1−a_max, 1].
@@ -291,7 +290,7 @@ NVTX.@annotate function predict_sgs_u₃!(Y, p, dtγ)
         Operators.column_accumulate!(
             ᶠu₃ʲ,
             input;
-            init = C3(zero_FT),
+            init = C3(zero(eltype(params))),
         ) do u₃_prev_face, (B_face, K_face, C_face)
             return C3(
                 -B_face +
@@ -340,14 +339,7 @@ NVTX.@annotate function predict_sgs_ρa!(Y, p, dtγ)
     (; ᶜρʲs, sfc_mass_flux_sourceʲs, ᶜρ_diffʲs) = p.precomputed
     (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    FT = eltype(p.params)
-    (zero_FT, one_FT) = (zero(FT), one(FT))
     turbconv_params = CAP.turbconv_params(p.params)
-    a_max = CAP.max_area(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     ᶜoffset = p.scratch.ᶜtemp_scalar
     ᶜfactor = p.scratch.ᶜtemp_scalar_2
     ᶠu³ʲ = p.scratch.ᶠtemp_CT3
@@ -367,6 +359,12 @@ NVTX.@annotate function predict_sgs_ρa!(Y, p, dtγ)
         ᶜρ_diffʲ, rates, ᶠgradᵥ_ᶜΦ
             @inline
             (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
+            (zero_FT, one_FT) = (zero(eltype(ᶜρʲ)), one(eltype(ᶜρʲ)))
+            detr_massflux_vertdiv_coeff =
+                CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+            detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+            entr_detr_buoy_inv_tau_max =
+                CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
             ᶜJ = Fields.local_geometry_field(axes(ᶜρaʲ)).J
             ᶠlg = Fields.local_geometry_field(axes(ᶠu³ʲ))
             ᶠJ = ᶠlg.J
@@ -423,8 +421,9 @@ NVTX.@annotate function predict_sgs_ρa!(Y, p, dtγ)
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
-            init = zero_FT,
+            init = zero(eltype(p.params)),
         ) do ρa_prev, (offset, factor, ρʲ)
+            a_max = CAP.max_area(turbconv_params)
             return clamp(offset + factor * ρa_prev, zero(ρa_prev), a_max * ρʲ)
         end
     end
@@ -753,40 +752,41 @@ in `p.precomputed.ᶜsgsʲs_stage_snapshot`, and the energy decomposition
 `ρe_tot = ρa⁰ mse⁰ + Σⱼ ρaʲ mseʲ + (ρK − p)` at fixed `ρK − p`. Without this
 update, the environment of the guess absorbs the change of the updraft
 content. The grid-mean `ρ` is unchanged. Tracers without a grid-mean
-counterpart are skipped. Writes `p.scratch.ᶜtemp_scalar`.
+counterpart are skipped.
 """
 function warm_start_grid_mean_tracers!(Y, p)
     (; turbconv_model) = p.atmos
     (; ᶜh_tot, ᶜK) = p.precomputed
     ᶜsnapshot = p.precomputed.ᶜsgsʲs_stage_snapshot
-    ᶜχ⁰_old = p.scratch.ᶜtemp_scalar
     zero_FT = zero(eltype(p.params))
-    ᶜρa⁰_old = @. lazy(ρa⁰(Y.c.ρ, ᶜsnapshot, turbconv_model))
-    ᶜΔρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model) - ᶜρa⁰_old)
-
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
         (@name(q_tot), sgs_tracer_names(Y)...),
     )
-    MatrixFields.unrolled_foreach(χ_names) do χ_name
-        ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
-        contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, χ_name)
-        @. ᶜχ⁰_old = max(
-            zero_FT,
-            specific_env_value(
-                χ_name, ᶜρχ, Y.c.ρ, ᶜsnapshot, ᶜρa⁰_old, turbconv_model,
-            ),
-        )
-        @. ᶜρχ +=
-            ᶜΔρa⁰ * ᶜχ⁰_old + draft_sum(contrib, Y.c.sgsʲs) -
-            draft_sum(contrib, ᶜsnapshot)
-    end
-
     contrib_mse(sgsʲ) = sgsʲ.ρa * sgsʲ.mse
-    @. ᶜχ⁰_old =
-        specific_env_mse(Y.c.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model)
-    @. Y.c.ρe_tot +=
-        ᶜΔρa⁰ * ᶜχ⁰_old + draft_sum(contrib_mse, Y.c.sgsʲs) -
-        draft_sum(contrib_mse, ᶜsnapshot)
+    DataLayouts.foreach_point(Y.c, ᶜsnapshot, ᶜh_tot, ᶜK) do Yc, ᶜsnapshot, ᶜh_tot, ᶜK
+        ᶜρa⁰_old = @. ρa⁰(Yc.ρ, ᶜsnapshot, turbconv_model)
+        ᶜΔρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model) - ᶜρa⁰_old
+        MatrixFields.unrolled_foreach(χ_names) do χ_name
+            @inline
+            ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+            contrib(sgsʲ) = sgsʲ.ρa * MatrixFields.get_field(sgsʲ, χ_name)
+            ᶜχ⁰_old = @. max(
+                zero_FT,
+                specific_env_value(
+                    χ_name, ᶜρχ, Yc.ρ, ᶜsnapshot, ᶜρa⁰_old, turbconv_model,
+                ),
+            )
+            @. ᶜρχ +=
+                ᶜΔρa⁰ * ᶜχ⁰_old + draft_sum(contrib, Yc.sgsʲs) -
+                draft_sum(contrib, ᶜsnapshot)
+        end
+        ᶜmse⁰_old = @. specific_env_mse(
+            Yc.ρ, ᶜsnapshot, ᶜh_tot, ᶜK, ᶜρa⁰_old, turbconv_model,
+        )
+        @. Yc.ρe_tot +=
+            ᶜΔρa⁰ * ᶜmse⁰_old + draft_sum(contrib_mse, Yc.sgsʲs) -
+            draft_sum(contrib_mse, ᶜsnapshot)
+    end
     return nothing
 end

@@ -227,7 +227,7 @@ function sgs_u₃_implicit_tendency!(
             end
             # cache_imp! imposes the impenetrable u₃ (u³ = 0) on both boundary
             # faces before every Newton residual evaluation
-            # (set_velocity_at_surface! / set_velocity_at_top!), and
+            # (set_boundary_velocities!), and
             # `initialize_implicit_stage_problem!` imposes it on the guess.
             # Zero the boundary face tendencies here so the Newton residual is zero there.
             ᶠset_zero_bc = Operators.SetBoundaryOperator(

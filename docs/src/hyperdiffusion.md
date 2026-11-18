@@ -134,7 +134,7 @@ h_{\mathrm{tot,cl}} = \frac{q_v h_{\mathrm{tot},v}
 Given the water partitioning above, this expression for the water-enthalpy flux
 is exact. In the code, the DSSed Laplacians are the cache fields `ᶜ∇²T`, `ᶜ∇²Φ`,
 and `ᶜ∇²q_tot_eff`, with the coefficients held in `ᶜcp_diffusing!` and
-`ᶜh_eff_plus_Φ!` (the average ``h_{\mathrm{tot,cl}}`` includes the
+`h_eff` (the average ``h_{\mathrm{tot,cl}}`` also includes the
 geopotential) and applied outside the second Laplacian; energy hyperdiffusion
 does not act on a lumped `h_tot`. For intensive updraft moist static energy
 ``h_s^j``, the same split gives
@@ -142,7 +142,7 @@ does not act on a lumped `h_tot`. For intensive updraft moist static energy
 changing ``q_t^j`` at fixed temperature and phase partitioning substitutes water
 for dry air (`∂h_s^j/\partial q_{v,l,i}^j|_T = h_{v,l,i}(T^j) - h_d(T^j)`), so
 the updraft water-enthalpy hyperdiffusion term weights ``\boldsymbol{\mathcal{H}}_{q_t^j}``
-by ``h_{\mathrm{tot,cl}}^j - h_d(T^j) - \Phi`` (`ᶜh_eff_minus_h_d!`), preserving
+by ``h_{\mathrm{tot,cl}}^j - h_d(T^j) - \Phi`` (`h_eff` minus ``h_d``), preserving
 exact invariance under a Kirchhoff reference-temperature shift ``T_0 \to T_0 + \Delta T_0``.
 The updrafts share the grid-mean ``\nabla_h^2 (\Phi - \Phi_r)``.
 
