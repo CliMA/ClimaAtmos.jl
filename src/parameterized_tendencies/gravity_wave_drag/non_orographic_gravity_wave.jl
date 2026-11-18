@@ -1072,8 +1072,8 @@ whose winds its launch filter reads.
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
     `Q0_threshold` is a grid-mean heating rate. When `heating_latent` is set,
     `gw_Q_conv` is instead the grid mean `Σⱼ max(ρaʲ, 0)·Q_latʲ / ρ` of the same latent
-    heating that sets `gw_Q_conv_ic` (same time window, same `a_min` level mask), so the
-    gate tests the heating the source is built from.
+    heating that sets `gw_Q_conv_ic` (same time window, same `a_min` level mask), and
+    the gate reads its column integral as a condensation rate (below).
   - `gw_Q_conv_ic` — the ρaʲ-weighted in-cloud (conditional-mean) heating, with no area
     factor. This is the local amplitude convention Beres' linear theory expects: it sets
     the envelope and `gw_Q0`, and the deposited flux is later diluted by `gw_a_cover` in
@@ -1090,10 +1090,15 @@ depth `h` has variance `h²(π²−8)/(4π²)`, so `h = σ/√((π²−8)/(4π²
 `max(gw_Q_conv_ic, 0)` about its centroid `z_c`, and `z_bot, z_top = z_c ∓ h/2` (`z_top`
 clamped to the column's top cell centre, `z_bot` to `[0, z_top]`). The amplitude follows
 from inverting the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same
-integral. Activation requires the grid-mean amplitude over the part of the envelope above
-the floor, `(π/2)·∫ gw_Q_conv dz / (z_top − max(z_bot, z_bot_floor))`, to exceed
-`Q0_threshold`, `h > h_heat_min`, and the coverage `gw_a_cover ≥ a_min`, which keeps a
-column with near-empty updrafts inactive.
+integral. Activation requires a convection test, `h > h_heat_min`, and the coverage
+`gw_a_cover ≥ a_min`, which keeps a column with near-empty updrafts inactive. The
+convection test is, on the DSE path, the grid-mean amplitude over the part of the
+envelope above the floor, `(π/2)·∫ gw_Q_conv dz / (z_top − max(z_bot, z_bot_floor))`,
+above `Q0_threshold`; with `heating_latent`, the net updraft condensation rate in
+rain-rate units, `P = c_pd·∫ ρ·gw_Q_conv dz / L_v` over the whole column, above
+`rain_threshold`. `P` is the rate at which the updrafts turn vapour into condensate,
+net of evaporation inside them, over the time window of the heating; it is not the
+surface precipitation. The amplitude `Q0` comes from the in-cloud heating either way.
 
 The launch spectrum is built here once per column, not inside the propagation kernel,
 because it does not depend on the AD99 horizontal wavenumber. With
@@ -1325,7 +1330,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) and slot 4 with the height of the column's top cell
     # centre, and carries slots 5-7 through untouched, i.e., the `_5..._7`
     # placeholders in the reducer below. Pass 2 then reuses all 7 slots as
-    # (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum); see the
+    # (Q_integral, u_sum, v_sum, N_sum, mass_sum, ρQ_column, a_sum); see the
     # `reduce_init2` accumulator there.
     reduce_init = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
     let _z_floor = gw_beres_source.z_bot_floor, _zero = FT(0)
@@ -1374,10 +1379,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     end
 
     # Pass 2: within the heating layer of the shape, compute:
-    #   - Q₀ integrals: Σ(Q · Δz) for the grid-mean (gating) and in-cloud
-    #     (spectrum amplitude) heatings
+    #   - Σ(Q · Δz) of the grid-mean heating, for the amplitude gate
     #   - Mass-weighted mean wind (u, v), buoyancy frequency (N), and
     #     updraft area fraction (a_cover, the Beres deposition factor)
+    # and over the whole column Σ(ρ · Q · Δz) of the grid-mean heating, for the
+    # rain-rate gate of the latent path.
     # The layer starts where the heating each shape uses starts: at z_bot for the
     # half-sine (Beres-C), at the gather window bottom max(z_bot, z_bot_floor) for
     # Beres-G, which has no heating below the floor. The same layer bounds the winds of
@@ -1426,14 +1432,15 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜρ,
         ᶜΔz,
         ᶜin_env,
-        gw_Q_conv_ic,
         ᶜabove_floor,
         ᶜa_level,
     )
-    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum).
-    # Same 7-slot `result_field` as Pass 1, which used only slots 1-3 for the
-    # heating moments. Slot 6 (Qic_integral) is accumulated but currently unread:
-    # the amplitude Q0 comes from the Pass 1 moments instead.
+    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, ρQ_column, a_sum).
+    # Same 7-slot `result_field` as Pass 1, which used only slots 1-4.
+    # ρQ_column = Σ ρ·Q·Δz over every level of the column (not only the layer, and
+    # below the floor too): with `heating_latent`, Q is the grid-mean latent heating,
+    # zero on levels whose draft area is below a_min, so this is the column's net
+    # updraft condensation heating [kg K m⁻² s⁻¹], read by the rain-rate gate.
     _half = FT(0.5)
     reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero, _zero)
     Operators.column_reduce!(
@@ -1446,10 +1453,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         v_sum_prev,
         N_sum_prev,
         m_sum_prev,
-        Qic_int_prev,
+        ρQ_column_prev,
         a_sum_prev,
     ),
-    (Q, u, v, N, ρ, dz, env, Q_ic, above_floor, a_level)
+    (Q, u, v, N, ρ, dz, env, above_floor, a_level)
         active = env > _half
         ρdz = ρ * dz
         Q_int = ifelse(
@@ -1461,18 +1468,30 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         v_sum = ifelse(active, v_sum_prev + v * ρdz, v_sum_prev)
         N_sum = ifelse(active, N_sum_prev + N * ρdz, N_sum_prev)
         m_sum = ifelse(active, m_sum_prev + ρdz, m_sum_prev)
-        Qic_int = ifelse(active, Qic_int_prev + Q_ic * dz, Qic_int_prev)
+        ρQ_column = ρQ_column_prev + Q * ρdz
         a_sum = ifelse(active, a_sum_prev + a_level * ρdz, a_sum_prev)
-        return (Q_int, u_sum, v_sum, N_sum, m_sum, Qic_int, a_sum)
+        return (Q_int, u_sum, v_sum, N_sum, m_sum, ρQ_column, a_sum)
     end
 
-    # Unpack Pass 2 results, and set the beres_active flag: GRID-MEAN amplitude above
-    # threshold AND heating depth above minimum. The activation uses the grid-mean
-    # heating gw_Q_conv (slot 1): the DSE flux convergence, or with `heating_latent`
-    # the latent heating, the grid-mean counterpart of the heating the source is built
-    # from. The grid-mean amplitude is the half-sine peak of that heating over the
-    # part of the envelope above the floor, (π/2)·∫Q dz / (z_top − max(z_bot, floor)).
+    # Unpack Pass 2 results, and set the beres_active flag: the convection test
+    # AND heating depth above minimum AND coverage at least a_min. The convection
+    # test depends on the heating:
+    #   - DSE path: the grid-mean amplitude of gw_Q_conv (slot 1), the half-sine peak
+    #     over the part of the envelope above the floor,
+    #     (π/2)·∫Q dz / (z_top − max(z_bot, floor)), above Q0_threshold.
+    #   - latent path (`heating_latent`): the net updraft condensation rate in
+    #     rain-rate units, P = cp_d·∫ρ·Q dz / L_v over the whole column (slot 6), with
+    #     Q the grid-mean latent heating, above rain_threshold [kg/m²/s]. This is the
+    #     rate at which the updrafts turn vapour into condensate (net of evaporation
+    #     inside them), over the same time window as the heating the source is built
+    #     from; it is not the surface precipitation.
     Q0_threshold = gw_beres_source.Q0_threshold
+    rain_threshold = gw_beres_source.rain_threshold
+    heating_latent = gw_beres_source.heating_latent
+    # cp_d/L_v: the latent heating Q is Σ L·R / cp of each draft, so cp·Q/L_v is the
+    # condensation rate per unit mass; cp_d stands in for the drafts' moist cp, and
+    # deposition (L_s) is counted at L_v.
+    cp_over_Lv = cp_d / FT(TD.Parameters.LH_v0(CAP.thermodynamics_params(p.params)))
     h_heat_min = gw_beres_source.h_heat_min
     _one = FT(1)
     N_source_default = FT(0.01)
@@ -1482,8 +1501,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ) do gw_u_heat, gw_v_heat, gw_N_source, gw_a_cover, gw_beres_active, gw_h_heat,
     gw_zbot, gw_ztop, sums
         @inline
-        (Q_integral, u_sum, v_sum, N_sum, mass_sum, a_sum) =
-            (sums.:1, sums.:2, sums.:3, sums.:4, sums.:5, sums.:7)
+        (Q_integral, u_sum, v_sum, N_sum, mass_sum, ρQ_column, a_sum) =
+            (sums.:1, sums.:2, sums.:3, sums.:4, sums.:5, sums.:6, sums.:7)
         @. gw_u_heat = ifelse(mass_sum > ϵ, u_sum / mass_sum, _zero)
         @. gw_v_heat = ifelse(mass_sum > ϵ, v_sum / mass_sum, _zero)
         @. gw_N_source =
@@ -1498,7 +1517,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜfloor_width =
             @. gw_ztop - _beres_gather_bottom(gw_zbot, gw_ztop, z_floor)
         @. gw_beres_active = ifelse(
-            (max(half_π * Q_integral / max(ᶜfloor_width, ϵ), _zero) > Q0_threshold) &
+            ifelse(
+                heating_latent,
+                cp_over_Lv * ρQ_column > rain_threshold,
+                max(half_π * Q_integral / max(ᶜfloor_width, ϵ), _zero) >
+                Q0_threshold,
+            ) &
             (gw_h_heat > h_heat_min) &
             (gw_a_cover >= a_min),
             _one,

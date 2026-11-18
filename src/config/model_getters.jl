@@ -497,6 +497,10 @@ function get_non_orographic_gravity_wave_model(
                 n_h_avg = Int(bsp.n_h_avg),
                 Δh_frac = FT(bsp.Δh_frac),
                 z_bot_floor = FT(bsp.z_bot_floor),
+                # mm/day -> kg m⁻² s⁻¹ (1 mm of water = 1 kg/m²)
+                rain_threshold = FT(
+                    get(parsed_args, "nogw_beres_rain_threshold", 1.0) / 86400,
+                ),
                 beres_steady_dc_frac = FT(bsp.steady_dc_frac),
                 beres_L_system = FT(bsp.L_system),
                 # beres_steady_source defaults true on the struct (no YAML switch); it

@@ -1168,6 +1168,38 @@ end
         n_ν = 9,
     )
     @test bsp.heating_latent == false
+    # The rain-rate threshold defaults to 1 mm/day = 1 kg m⁻² per 86400 s, and must
+    # not be negative.
+    @test bsp.rain_threshold == 1 / 86400
+    @test_throws ErrorException CA.BeresSourceParams{Float64}(;
+        Q0_threshold = 1.0e-5,
+        beres_scale_factor = 2.0e-6,
+        σ_x = 4000.0,
+        ν_min = 8.727e-4,
+        ν_max = 1.047e-2,
+        n_ν = 9,
+        rain_threshold = -1.0,
+    )
+
+    # The getter reads nogw_beres_rain_threshold in mm/day and stores kg m⁻² s⁻¹.
+    params = CA.ClimaAtmosParameters(
+        Float64;
+        has_non_orographic_gw = true,
+        has_beres_source = true,
+    )
+    for (mm_per_day, expected) in ((nothing, 1 / 86400), (2.5, 2.5 / 86400))
+        args = merge(
+            beres_base,
+            Dict{String, Any}(
+                "nogw_beres_heating_latent" => true,
+                "microphysics_model" => "1M",
+            ),
+            isnothing(mm_per_day) ? Dict{String, Any}() :
+            Dict{String, Any}("nogw_beres_rain_threshold" => mm_per_day),
+        )
+        gw = CA.get_non_orographic_gravity_wave_model(args, params, Float64)
+        @test gw.beres_source.rain_threshold ≈ expected rtol = 1e-14
+    end
 end
 
 # ============================================================================

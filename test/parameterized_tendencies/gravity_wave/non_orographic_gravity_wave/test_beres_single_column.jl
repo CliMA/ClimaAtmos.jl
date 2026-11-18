@@ -686,14 +686,15 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test G.u_heat > C.u_heat + 0.1       # the check has power
         end
 
-        @testset "With latent heating, the gate tests its grid mean" begin
+        @testset "With latent heating, the gate tests the condensation rate" begin
             # The applied latent heating of the drafts since the last NOGW call is set
             # directly in its accumulators: a half-sine in-cloud heating from 3 to
             # 10 km, area fraction a0. The drafts carry no temperature anomaly, so the
             # dry-static-energy flux convergence is zero and the DSE gate would never
             # fire. gw_Q_conv must be the grid mean Σⱼ ρaʲ·Qʲ/ρ = a0·Q, and the
-            # column must be active exactly when its amplitude above the floor
-            # exceeds Q0_threshold.
+            # column must be active exactly when its net condensation rate
+            # P = cp_d·Σ ρ·Q·Δz / L_v exceeds rain_threshold, whatever its heating
+            # amplitude.
             nogw = p.non_orographic_gravity_wave
             @. ᶜTʲs.:(1) = ᶜT
             @. Y.c.sgsʲs.:(1).ρa =
@@ -703,6 +704,8 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                 (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
                 heating_latent = true,
             )
+            # 1 mm/day of water is 1 kg/m² per 86400 s.
+            @test bs_latent.rain_threshold == FT(1 / 86400)
             nogw_latent = merge(
                 nogw,
                 CA._beres_latent_accumulator_fields(Y),
@@ -722,16 +725,32 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                 FT(0),
             )
             dz_col = Array(Fields.field2array(Fields.Δz_field(axes(Y.c))))[:, 1]
-            function run_with_peak(Q_peak)
+            ρ_column = Array(Fields.field2array(ᶜρ))[:, 1]
+            cp_d = CA.CAP.cp_d(p.params)
+            L_v = CA.TD.Parameters.LH_v0(CA.CAP.thermodynamics_params(p.params))
+            function run_with_peak(Q_peak, rain_threshold = bs_latent.rain_threshold)
+                nogw_run = merge(
+                    nogw_latent,
+                    (;
+                        gw_beres_source = CA.BeresSourceParams{FT}(;
+                            (
+                                n => getfield(bs_latent, n) for
+                                n in fieldnames(typeof(bs_latent))
+                            )...,
+                            rain_threshold = FT(rain_threshold),
+                        ),
+                    ),
+                )
+                p_run = (; p_latent..., non_orographic_gravity_wave = nogw_run)
                 (; gw_latent_heat_acc, gw_latent_mass_acc, gw_latent_area_acc) =
-                    nogw_latent
-                nogw_latent.gw_latent_time_acc[] = T_acc
+                    nogw_run
+                nogw_run.gw_latent_time_acc[] = T_acc
                 @. gw_latent_mass_acc = Y.c.sgsʲs.:(1).ρa * T_acc
                 @. gw_latent_area_acc = Y.c.sgsʲs.:(1).ρa / ᶜρ * T_acc
                 @. gw_latent_heat_acc = Y.c.sgsʲs.:(1).ρa * Q_peak * Q_shape * T_acc
-                CA.compute_beres_convective_heating!(Y, p_latent, ᶜbuoyancy_frequency)
-                Q = Array(Fields.field2array(nogw_latent.gw_Q_conv))[:, 1]
-                Q_ic = Array(Fields.field2array(nogw_latent.gw_Q_conv_ic))[:, 1]
+                CA.compute_beres_convective_heating!(Y, p_run, ᶜbuoyancy_frequency)
+                Q = Array(Fields.field2array(nogw_run.gw_Q_conv))[:, 1]
+                Q_ic = Array(Fields.field2array(nogw_run.gw_Q_conv_ic))[:, 1]
                 z_b, z_t = parent(gw_zbot)[1], parent(gw_ztop)[1]
                 z_start = max(z_b, beres.z_bot_floor)
                 above = (center_z .>= z_start) .& (center_z .<= z_t)
@@ -739,6 +758,8 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                     Q,
                     Q_ic,
                     amplitude = (π / 2) * sum(Q[above] .* dz_col[above]) / (z_t - z_start),
+                    # kg m⁻² s⁻¹, from the gate's own grid-mean heating
+                    P = cp_d * sum(ρ_column .* Q .* dz_col) / L_v,
                     active = parent(gw_beres_active)[1],
                 )
             end
@@ -748,13 +769,30 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test unit.Q_ic[heated] ≈ shape_col[heated] rtol = 1e-10
             @test unit.Q[heated] ≈ a0 .* shape_col[heated] rtol = 1e-10
             @test all(iszero, unit.Q[setdiff(eachindex(shape_col), heated)])
-            Q_on = 1.05 * beres.Q0_threshold / unit.amplitude
-            Q_off = 0.95 * beres.Q0_threshold / unit.amplitude
+            # The rain rate by hand from the set-up alone: Σ ρ·a0·Q·Δz·cp_d/L_v, in
+            # mm/day (kg m⁻² s⁻¹ times 86400 s/day, 1 kg/m² of water = 1 mm).
+            P_unit_mm_day =
+                86400 * cp_d * sum(ρ_column .* a0 .* shape_col .* dz_col) / L_v
+            @test 86400 * unit.P ≈ P_unit_mm_day rtol = 1e-6
+            # Just above and just below the default 1 mm/day.
+            Q_on = 1.05 / P_unit_mm_day
+            Q_off = 0.95 / P_unit_mm_day
             on = run_with_peak(FT(Q_on))
             off = run_with_peak(FT(Q_off))
-            @test on.amplitude ≈ 1.05 * beres.Q0_threshold rtol = 1e-6
+            @test 86400 * on.P ≈ 1.05 rtol = 1e-5
+            @test 86400 * off.P ≈ 0.95 rtol = 1e-5
             @test on.active == 1
             @test off.active == 0
+            # The heating amplitude no longer gates: with a threshold of half the rain
+            # rate of a column whose amplitude is half of Q0_threshold, the column is
+            # active; with twice that rain rate as threshold, it is not.
+            Q_weak = FT(0.5 * beres.Q0_threshold / unit.amplitude)
+            P_weak = Q_weak * P_unit_mm_day / 86400
+            weak_on = run_with_peak(Q_weak, 0.5 * P_weak)
+            weak_off = run_with_peak(Q_weak, 2 * P_weak)
+            @test weak_on.amplitude ≈ 0.5 * beres.Q0_threshold rtol = 1e-5
+            @test weak_on.active == 1
+            @test weak_off.active == 0
             # The cold-start path, from the stored 1M rates, is checked in the 1M
             # build at the end of this file.
         end

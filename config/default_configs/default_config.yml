@@ -377,8 +377,11 @@ nogw_beres_source:
   help: "Use Beres (2004) convective source spectrum for non-orographic gravity waves, launched wherever the prognostic EDMF scheme convects (requires `turbconv: prognostic_edmfx` with `updraft_number` >= 1) [`false` (default), `true`]"
   value: false
 nogw_beres_heating_latent:
-  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum, from the updraft microphysics the time stepper applied since the last NOGW call (the stored rates at the first call of a cold start), instead of the convergence of the updrafts' eddy dry-static-energy flux (a transport term whose column integral is about zero). The activation then tests the grid mean of the same latent heating. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum, from the updraft microphysics the time stepper applied since the last NOGW call (the stored rates at the first call of a cold start), instead of the convergence of the updrafts' eddy dry-static-energy flux (a transport term whose column integral is about zero). The activation then tests the net updraft condensation rate from the same latent heating against `nogw_beres_rain_threshold`, in place of the heating amplitude against `nogw_beres_Q0_threshold`. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
   value: false
+nogw_beres_rain_threshold:
+  help: "With `nogw_beres_heating_latent`, the Beres source activates in a column only if its net updraft condensation rate, in rain-rate units, exceeds this value in mm/day: c_pd times the column integral of rho times the grid-mean updraft latent heating, divided by L_v, over the same time window as the heating (not the surface precipitation). Unused without `nogw_beres_heating_latent`. [1.0 (default)]"
+  value: 1.0
 nogw_beres_shape_mode:
   help: "Beres convective-source vertical shape factor. `half_sine` (default): the prescribed half-sine V_hs of Beres (2004). `sine_transform`: Beres-G (Extension 1), V_G = the finite sine transform of the actual EDMF in-cloud heating profile evaluated at the physical wavenumber. Holds Q0, h, sigma_x, propagation, and the efficiency E identical between modes. The envelope means (wind, buoyancy frequency, coverage) average over [z_bot, z_top] for `half_sine` and over its part above nogw_beres_z_bot_floor for `sine_transform`. [`half_sine` (default), `sine_transform`]"
   value: "half_sine"

@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With the Beres latent heating (`nogw_beres_heating_latent`), a
+  column activates the Beres source when its net updraft condensation rate, in rain-rate
+  units, exceeds the new config key `nogw_beres_rain_threshold` (mm/day, default 1), in
+  place of the grid-mean heating amplitude against `nogw_beres_Q0_threshold`. The rate is
+  `c_pd ∫ρ Q dz / L_v` over the column, with `Q` the grid mean of the same applied latent
+  heating over the same time window; it is not the surface precipitation. The depth and
+  coverage tests and the amplitude `Q0` are unchanged, and so is the activation without
+  `nogw_beres_heating_latent`.
 - ![][badge-🐛bugfix] The constant-N background of `ConstantBuoyancyFrequencyProfile`,
   shared with the steady-state solutions, evaluates the constant-N pressure only below
   the isothermal cap; above it the base of the power turned negative, which threw a

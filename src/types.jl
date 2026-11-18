@@ -970,14 +970,20 @@ Parameters for the convective gravity-wave source spectrum of [beres2004](@cite)
 
 When supplied as the `beres_source` field of `NonOrographicGravityWave`, the
 Beres convective spectrum is launched on top of the Alexander-Dunkerton
-background spectrum in every column whose EDMF convective heating exceeds
-`Q0_threshold` and whose heating layer is deeper than `h_heat_min`. There is no
+background spectrum in every column that convects (EDMF convective heating above
+`Q0_threshold`, or with `heating_latent` a net updraft condensation rate above
+`rain_threshold`) and whose heating layer is deeper than `h_heat_min`. There is no
 latitude gate: the source is placed wherever the EDMF scheme produces deep
 convective heating.
 
 # Fields
 
-  - `Q0_threshold`: Minimum convective heating rate that activates the source [K/s].
+  - `Q0_threshold`: Minimum grid-mean convective heating amplitude that activates the
+    source when `heating_latent` is off [K/s].
+  - `rain_threshold`: Minimum net updraft condensation rate, in rain-rate units, that
+    activates the source when `heating_latent` is on [kg m⁻² s⁻¹; 1 mm/day =
+    1/86400]: `c_{p,d} ∫ ρ Q dz / L_v` over the column, with `Q` the grid-mean latent
+    heating of the updrafts. Default 1 mm/day.
   - `beres_scale_factor`: Dimensionless efficiency ℰ, absorbing the `ρ₀/(Lτ)`
     normalization, the `|Q_t(ν)|²` weight, and tuning [-].
   - `σ_x`: Horizontal half-width of a convective cell [m].
@@ -1006,7 +1012,8 @@ convective heating.
     heating `Q_lat = Σ_p L_p R_p` (requires 1-moment microphysics with
     `PrognosticEDMFX`) instead of the updrafts' eddy dry-static-energy flux
     convergence, a transport term whose column integral is about zero. The activation
-    then tests the grid mean of the same latent heating against `Q0_threshold`.
+    then tests the column integral of the grid mean of the same latent heating, as a
+    condensation rate, against `rain_threshold` instead of `Q0_threshold`.
   - `beres_shape_general`: Whether the vertical shape factor is the sine transform of
     the EDMF in-cloud heating profile (Beres-G) instead of the half-sine of
     [beres2004](@cite) (Beres-C). The envelope means `u_heat`, `v_heat`, `N_source`
@@ -1047,6 +1054,7 @@ Base.@kwdef struct BeresSourceParams{FT}
     h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
     z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
     a_min::FT = FT(1e-4)         # -, min coverage a_cover to activate (guards against near-empty updrafts)
+    rain_threshold::FT = FT(1 / 86400) # kg m⁻² s⁻¹, min net updraft condensation rate to activate (latent path); 1 mm/day
     beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
     beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
     beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in the two-sided H of the steady source
@@ -1078,6 +1086,12 @@ Base.@kwdef struct BeresSourceParams{FT}
                 "BeresSourceParams: n_ν must satisfy (n_ν - 1) % 4 == 0 " *
                 "(i.e. n_ν ∈ {5, 9, 13, ...}) for composite Boole's rule, " *
                 "got n_ν = $(obj.n_ν)",
+            )
+        end
+        if obj.rain_threshold < 0
+            error(
+                "BeresSourceParams: rain_threshold (nogw_beres_rain_threshold) must " *
+                "not be negative, got $(obj.rain_threshold) kg m⁻² s⁻¹",
             )
         end
         if obj.launch_filter_margin < 0
