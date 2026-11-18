@@ -74,7 +74,7 @@ function setup_diagnostics_and_writers(
         debug_tendency,
     ) = diagnostics_config
 
-    all_diagnostics = []
+    all_diagnostics = CAD.ScheduledDiagnostic[]
 
     num_points = if isnothing(interpolation_num_points)
         ClimaDiagnostics.Writers.default_num_points(axes(Y.c))
