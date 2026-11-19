@@ -2092,6 +2092,55 @@ end
             end
         end
     end
+    # The per-level functions of the source extraction, which the model broadcasts or
+    # runs in column reductions: the latent heating and its linearization (with the
+    # implicit 1M set, as the model passes it), the envelope moments, the Beres-G
+    # gather and its smoothing, taper and scaling, and the launch-filter winds. The
+    # anonymous Pass-1/Pass-2 reducers of `compute_beres_convective_heating!` cannot be
+    # named here; they call only these functions and arithmetic.
+    for FT in (Float32, Float64)
+        ng = CA.N_BERES_PROFILE
+        toml_dict = CP.create_toml_dict(FT)
+        thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+        mp_imp = CMP.Microphysics1MParams(
+            toml_dict;
+            (p => nothing for p in OTHER_1M_PROCESSES)...,
+        )
+        rates = (;
+            dq_lcl_dt = FT(1e-6),
+            dq_icl_dt = FT(2e-7),
+            dq_rai_dt = FT(-1e-7),
+            dq_sno_dt = FT(1e-8),
+        )
+        q = (FT(1e-3), FT(2e-4), FT(5e-4), FT(3e-4))
+        lin_args = (
+            thp, mp_imp, true, true, true, true, FT(0.7), FT(265), FT(0.02), q...,
+            rates, rates,
+        )
+        @test !unresolved(CA._beres_latent_linearization, typeof(lin_args))
+        @test all(isfinite, values(CA._beres_latent_linearization(lin_args...)))
+        heat_args = (thp, FT(0.02), q..., rates, rates)
+        @test !unresolved(CA._beres_latent_heating, typeof(heat_args))
+        @test isfinite(CA._beres_latent_heating(heat_args...))
+        @test !unresolved(CA._beres_heating_centroid, Tuple{FT, FT})
+        @test !unresolved(CA._beres_heating_depth, Tuple{FT, FT, FT})
+        @test !unresolved(CA._beres_gather_bottom, Tuple{FT, FT, FT})
+        state = CA._beres_gather_init(FT, Val(ng))
+        level = (FT(3000), FT(1e-4), FT(2000), FT(12000))
+        @test !unresolved(
+            CA._beres_gather_step,
+            typeof((state, level, FT(2000), Val(ng))),
+        )
+        @test !unresolved(CA._beres_gather_wind_step, typeof((state, level, Val(ng))))
+        wind_state = (FT(Inf), FT(-Inf), FT(Inf), FT(-Inf), FT(0), FT(0), FT(0))
+        wind_level = (FT(3000), FT(-5), FT(2), FT(2000), FT(12000))
+        @test !unresolved(CA._beres_wind_range_step, typeof((wind_state, wind_level)))
+        @test !unresolved(CA._beres_wind_range_result, typeof((wind_state,)))
+        profile = ntuple(i -> FT(sin(π * (i - 1) / (ng - 1))), Val(ng))
+        for f in (CA._beres_taper_edges, CA._beres_smooth_profile, CA._beres_scale_profile)
+            @test !unresolved(f, typeof((profile, FT(10000), FT(500))))
+        end
+    end
 end
 
 @testset "Beres launch flux does not depend on the bin width" begin

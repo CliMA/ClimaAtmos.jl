@@ -521,6 +521,46 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test Array(parent(gw_beres_B0_u)) == B0_with_gate
         end
 
+        @testset "The depth gate: active only when h is above h_heat_min" begin
+            # A column activates only when its fitted heating depth h is strictly
+            # above h_heat_min. With the deep column of the last testset (active, no
+            # heating threshold), h_heat_min one float below h, at h, and one float
+            # above h gives active, inactive, inactive, and leaves h unchanged.
+            nogw = p.non_orographic_gravity_wave
+            source_with(; kw...) = CA.BeresSourceParams{FT}(;
+                (n => getfield(beres, n) for n in fieldnames(typeof(beres)))...,
+                Q0_threshold = FT(0),
+                kw...,
+            )
+            with_source(bs) = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(nogw, (; gw_beres_source = bs)),
+            )
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+            CA.compute_beres_convective_heating!(
+                Y,
+                with_source(source_with()),
+                ᶜbuoyancy_frequency,
+            )
+            h = parent(gw_h_heat)[1]
+            @test parent(gw_beres_active)[1] == 1
+            @test h > beres.h_heat_min
+            for (h_heat_min, expected_active) in
+                ((prevfloat(h), 1), (h, 0), (nextfloat(h), 0))
+                CA.compute_beres_convective_heating!(
+                    Y,
+                    with_source(source_with(; h_heat_min)),
+                    ᶜbuoyancy_frequency,
+                )
+                @test parent(gw_h_heat)[1] == h
+                @test parent(gw_beres_active)[1] == expected_active
+            end
+        end
+
         @testset "A draft with negative area counts as empty in the coverage" begin
             # The EDMF solver can leave ρa slightly negative. Such a level holds no
             # updraft, so it adds zero to the coverage, as it adds nothing to the
