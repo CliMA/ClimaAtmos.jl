@@ -21,6 +21,32 @@ main
   `ClimaParams.@params`, so that they hold their values in a type parameter and GPU kernels do
   not allocate any registers or parameter memory for them. Its 1-moment tendencies do less work
   per point.
+- ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
+  exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
+  layer's flux is divided by the mean mass of the two cells it spans (the model's own
+  `ρ·J/ΔA`, which grows with height on a deep-atmosphere grid) before being split between
+  them, so the flux is per unit area of the bottom face. It was divided by
+  `√(ρ_k ρ_{k+1})·Δz`, which left a second-order error on uniform and stretched grids and,
+  on deep-atmosphere grids, an error equal to the area growth from the surface (about 1.6%
+  at 50 km). This changes the results of every run with `non_orographic_gravity_wave`
+  enabled.
+- ![][badge-✨feature/enhancement] A warning is logged when `dt_nogw` or `dt_ogw` is not a
+  whole number of model steps, giving the actual times between drag updates.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave drag is limited by the magnitude
+  of the drag vector, 3e-3·√2 m/s² as in the orographic scheme, so it keeps its direction
+  where the limit binds. Each component was clipped to ±3e-3 m/s² separately, which rotated
+  the drag. Non-finite values are still set to zero, and a `@debug` check reports them.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave damping layer, which receives
+  the momentum flux escaping the model top, now always spans at least the top three cells.
+  With fewer levels above `nogw_damp_pressure` (e.g. the default 30 km top and 85 Pa), it was
+  one or two top cells; a warning is now logged in that case. Single columns use the top three
+  cells instead of the top cell.
+- ![][badge-🐛bugfix] The non-orographic and orographic gravity-wave buoyancy frequency in
+  the bottom and top cells now uses the one-sided `dT/dz` across the face to the neighbouring
+  cell. Previously it was about half of that, as the boundary face took the end-cell
+  temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
+  too high in the bottom cell (where temperature falls with height). This changes the
+  results of every run with either scheme enabled.
 
 0.43.0
 ------
@@ -108,28 +134,6 @@ main
   `precipitation_timescale_updraft_ratio * precipitation_timescale` (default
   ratio 1, unchanged). New diagnostics `prevap`, `tnhusevp` and `prup`. The
   TRMM 0M EDMF column job turns evaporation on.
-- ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
-  exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
-  layer's flux is divided by the mean mass of the two cells it spans (the model's own
-  `ρ·J/ΔA`, which grows with height on a deep-atmosphere grid) before being split between
-  them, so the flux is per unit area of the bottom face. It was divided by
-  `√(ρ_k ρ_{k+1})·Δz`, which left a second-order error on uniform and stretched grids and,
-  on deep-atmosphere grids, an error equal to the area growth from the surface (about 1.6%
-  at 50 km). This changes the results of every run with `non_orographic_gravity_wave`
-  enabled.
-- ![][badge-✨feature/enhancement] A warning is logged when `dt_nogw` or `dt_ogw` is not a
-  whole number of model steps, giving the actual times between drag updates.
-- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave damping layer, which receives
-  the momentum flux escaping the model top, now always spans at least the top three cells.
-  With fewer levels above `nogw_damp_pressure` (e.g. the default 30 km top and 85 Pa), it was
-  one or two top cells; a warning is now logged in that case. Single columns use the top three
-  cells instead of the top cell.
-- ![][badge-🐛bugfix] The non-orographic and orographic gravity-wave buoyancy frequency in
-  the bottom and top cells now uses the one-sided `dT/dz` across the face to the neighbouring
-  cell. Previously it was about half of that, as the boundary face took the end-cell
-  temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
-  too high in the bottom cell (where temperature falls with height). This changes the
-  results of every run with either scheme enabled.
 
 0.42.19
 -------

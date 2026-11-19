@@ -167,6 +167,8 @@ function _beres_cache_fields(Y, ::BeresSourceParams)
 end
 
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
+    # Each run checks its own damping layer once (see `NOGW_DAMP_LAYER_CHECKED`).
+    NOGW_DAMP_LAYER_CHECKED[] = false
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
@@ -320,8 +322,7 @@ Steps, in order:
     upward-marching kernel `waveforcing_column_accumulate!` for the AD99 source and
     (when configured) again for the Beres source, accumulating both into `uforcing` and
     `vforcing` via `postprocess_and_accumulate!`.
- 5. Sanitize the forcing: any `NaN`/`Inf` is replaced by zero and the rest is clamped to
-    ±3e-3 m/s², the same limit the orographic scheme uses.
+ 5. Sanitize the forcing with `limit_gravity_wave_forcing!`.
 
 Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
 clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level`.
@@ -454,7 +455,7 @@ function non_orographic_gravity_wave_compute_tendency!(
             end
         end
         # The damping layer spans at least `NOGW_MIN_DAMP_CELLS` top cells. The warning
-        # check reduces over all columns and MPI ranks, so it runs at the first call only.
+        # check reduces over all columns and MPI ranks, so it runs at each run's first call.
         damp_level_max = highest_damp_level(Spaces.nlevels(axes(ᶜz)))
         if !NOGW_DAMP_LAYER_CHECKED[]
             NOGW_DAMP_LAYER_CHECKED[] = true
@@ -499,26 +500,40 @@ function non_orographic_gravity_wave_compute_tendency!(
         p,
     )
 
-    # Sanitize the forcing here, once per callback, rather than at every stage that applies
-    # it (same limit as OGW: 3e-3 m/s²).
-    DataLayouts.foreach_point(uforcing, vforcing) do ᶜuforcing, ᶜvforcing
-        @inline
-        @. ᶜuforcing = limited_gravity_wave_forcing(ᶜuforcing)
-        @. ᶜvforcing = limited_gravity_wave_forcing(ᶜvforcing)
-    end
+    # Sanitize the forcing here, once per callback, rather than at every stage that
+    # applies it.
+    limit_gravity_wave_forcing!(uforcing, vforcing, p.scratch.ᶜtemp_scalar)
 end
 
 """
-    limited_gravity_wave_forcing(forcing)
+    limit_gravity_wave_forcing!(uforcing, vforcing, ᶜdrag_scale)
 
-Return the drag `forcing` [m/s²] clamped to ±3e-3 m/s², the same limit the orographic
-scheme uses, or zero if it is `NaN` or infinite.
+Set non-finite components of the drag `(uforcing, vforcing)` [m/s²] to zero, then scale the
+vector by `min(1, F_max/|F|)` with `F_max = 3e-3·√2` m/s², as in the orographic scheme. The
+drag keeps its direction. `ᶜdrag_scale` is scratch.
 """
-limited_gravity_wave_forcing(forcing) = ifelse(
-    isnan(forcing) | isinf(forcing),
-    zero(forcing),
-    max(-oftype(forcing, 3e-3), min(oftype(forcing, 3e-3), forcing)),
-)
+function limit_gravity_wave_forcing!(uforcing, vforcing, ᶜdrag_scale)
+    FT = eltype(uforcing)
+    @debug begin
+        if any(!isfinite, uforcing) || any(!isfinite, vforcing)
+            @error(
+                "Non-finite NOGW forcing, set to zero before the magnitude limit",
+                has_nan_u = any(isnan, uforcing),
+                has_nan_v = any(isnan, vforcing),
+                has_inf_u = any(isinf, uforcing),
+                has_inf_v = any(isinf, vforcing),
+            )
+        end
+    end
+    @. uforcing = ifelse(isfinite(uforcing), uforcing, zero(uforcing))
+    @. vforcing = ifelse(isfinite(vforcing), vforcing, zero(vforcing))
+    F_max = FT(3e-3) * sqrt(FT(2))
+    # Materialized first, so scaling `uforcing` does not change the |F| seen by `vforcing`.
+    @. ᶜdrag_scale = min(FT(1), F_max / hypot(uforcing, vforcing))
+    @. uforcing *= ᶜdrag_scale
+    @. vforcing *= ᶜdrag_scale
+    return nothing
+end
 
 """
     set_beres_launch_state!(beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop)
@@ -1692,7 +1707,7 @@ would otherwise shrink to one or two top cells, which then take all the escaped 
 const NOGW_MIN_DAMP_CELLS = 3
 
 # Whether the damping layer has been checked for fewer than `NOGW_MIN_DAMP_CELLS` levels
-# above `nogw_damp_pressure`, which happens once per session.
+# above `nogw_damp_pressure`. Reset when the NOGW cache is built, so each run checks once.
 const NOGW_DAMP_LAYER_CHECKED = Ref(false)
 
 """

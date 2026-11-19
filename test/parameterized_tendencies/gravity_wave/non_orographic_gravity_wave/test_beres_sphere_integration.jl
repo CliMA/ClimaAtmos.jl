@@ -166,7 +166,8 @@ import ClimaCore.Geometry as Geometry
     )
 
     # The 45 km top lies below `nogw_damp_pressure`, so the first call warns that the
-    # damping layer is widened. The warning fires once per session; reset its flag.
+    # damping layer is widened. The warning fires once per run, and the startup
+    # callback has already used it; reset its flag.
     CA.NOGW_DAMP_LAYER_CHECKED[] = false
     @test_logs (:warn, r"Fewer than") match_mode = :any CA.non_orographic_gravity_wave_compute_tendency!(
         Y,
@@ -249,8 +250,8 @@ import ClimaCore.Geometry as Geometry
         @test all(isfinite, uf_beres)
         @test all(isfinite, vf_beres)
         @test maximum(abs, uf_beres) > 0
-        # The compute step clamps the forcing to ±3e-3 m/s².
-        @test maximum(abs, uf_beres) <= 3e-3 + sqrt(eps(FT))
+        # The compute step limits the drag magnitude.
+        @test maximum(hypot.(uf_beres, vf_beres)) <= 3e-3 * sqrt(2) + sqrt(eps(FT))
     end
 
     @testset "Convective heating extracted only in active columns" begin
@@ -288,8 +289,8 @@ import ClimaCore.Geometry as Geometry
     end
 
     @testset "Tendency application deposits the clamped forcing into Yₜ" begin
-        # uforcing currently holds the full-Beres result, which the compute step
-        # clamped to ±3e-3 m/s². apply_tendency adds it to Yₜ.c.uₕ.
+        # uforcing holds the full-Beres result, magnitude-limited by the compute step.
+        # apply_tendency adds it to Yₜ.c.uₕ.
         Yₜ = zero(Y)
         CA.non_orographic_gravity_wave_apply_tendency!(
             Yₜ,
@@ -300,8 +301,10 @@ import ClimaCore.Geometry as Geometry
         )
         uf_clamped =
             Array(Fields.field2array(p.non_orographic_gravity_wave.uforcing))
+        vf_clamped =
+            Array(Fields.field2array(p.non_orographic_gravity_wave.vforcing))
         @test all(isfinite, uf_clamped)
-        @test maximum(abs, uf_clamped) <= 3e-3 + sqrt(eps(FT))
+        @test maximum(hypot.(uf_clamped, vf_clamped)) <= 3e-3 * sqrt(2) + sqrt(eps(FT))
         # Yₜ.c.uₕ is a 2-component Covariant12 vector; field2array can't represent
         # it directly, so extract the zonal (UVVector) component as a scalar field.
         du = Geometry.UVVector.(Yₜ.c.uₕ).components.data.:1

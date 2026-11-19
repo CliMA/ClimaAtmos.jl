@@ -100,7 +100,7 @@ M_R = \int_{z_{\mathrm{damp}-1/2}}^{z_{n_t+1/2}} \rho \, \frac{J}{\Delta A} \, \
 
 Here $n_t$ is the topmost value of the level index $n$ used above. $F_{\mathrm{top}}$ is the escaped momentum flux, which the kernel returns at the top level $n_t$. $M_R$ is the mass of the receiving levels, the whole cells from the bottom face of the damping level, $z_{\mathrm{damp}-1/2}$, to the model top face, $z_{n_t+1/2}$, weighted by $J/\Delta A$ as in the column integrals ($J$ the metric Jacobian, $\Delta A$ the area of the column's bottom face). Therefore, $\int \rho \, X_{\mathrm{redist}} \, (J/\Delta A) \, \mathrm{d}z = F_{\mathrm{top}}$ exactly. This redistribution is applied after the half-level averaging above, so it is not smoothed.
 
-Note that the assembled forcing is clipped to $\pm 3\times 10^{-3}\ \mathrm{m\,s^{-2}}$ per component when it is added to the momentum tendency. Therefore, where the clip is active, the deposited momentum is smaller than the launched momentum by construction.
+Note that the magnitude of the assembled drag vector is limited to $3\sqrt{2}\times 10^{-3}\ \mathrm{m\,s^{-2}}$, as in the orographic scheme, keeping its direction. Therefore, where the limit is active, the deposited momentum is smaller than the launched momentum by construction.
 
 ## Beres (2004) Convective Source Spectrum
 

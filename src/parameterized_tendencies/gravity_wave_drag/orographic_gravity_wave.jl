@@ -614,7 +614,7 @@ function orographic_gravity_wave_forcing!(
     # Check before the limiter: it maps an infinite component to NaN (F_max/Inf = 0,
     # then 0·Inf), which would hide the original problem.
     @debug begin
-        if !all(isfinite, ᶜuforcing) || !all(isfinite, ᶜvforcing)
+        if any(!isfinite, ᶜuforcing) || any(!isfinite, ᶜvforcing)
             @error "Non-finite OGWD forcing before the magnitude limiter!"
             @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), has_inf=$(any(isinf, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
             @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), has_inf=$(any(isinf, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"

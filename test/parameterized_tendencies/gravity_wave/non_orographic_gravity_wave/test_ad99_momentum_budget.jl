@@ -60,10 +60,11 @@
 # hand-back, the production setup; in tests 1, 3 and 4 every column is the same
 # and the sphere run checks that the kernel works on the sphere's data layout.
 #
-# What is deliberately NOT tested: the model later clips each drag component
-# to ±3e-3 m/s² in `non_orographic_gravity_wave_apply_tendency!`. These tests
-# read `uforcing`/`vforcing` before that clipping, so they check the scheme's
-# own consistency, not the momentum the model finally receives.
+# What is deliberately NOT tested here: the model later limits the drag
+# magnitude in `non_orographic_gravity_wave_compute_tendency!` (tested at the end
+# of this file). These tests read `uforcing`/`vforcing` before
+# that limit, so they check the scheme's own consistency, not the momentum the
+# model finally receives.
 #
 # Setup notes:
 # - No `get_simulation`: the forcing only reads `p.non_orographic_gravity_wave`
@@ -151,10 +152,20 @@ per_column(level_field) = copy(vec(Array(parent(level_field))))
 # Everything `non_orographic_gravity_wave_forcing` needs for `kind` (`:column`
 # or `:sphere`), with no simulation: the cache, a minimal `p`, the imposed-state
 # scratch fields, and the grid geometry as plain arrays. The sphere is
-# deliberately tiny (2 elements per panel edge). `z_stretch` selects the stretched
-# vertical grid and `deep_atmosphere` the deep-atmosphere sphere, whose cell areas
-# grow with height.
-function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
+# deliberately tiny (2 elements per panel edge by default). `z_stretch` selects
+# the stretched vertical grid and `deep_atmosphere` the deep-atmosphere sphere,
+# whose cell areas grow with height. `topography` gives the sphere a
+# terrain-following grid, whose `J` and `ΔA` include the terrain metric; `z_ref`
+# is then the flat grid's level heights, which the imposed winds follow (see
+# `ᶜz_wind` below).
+function build_state(
+    kind::Symbol;
+    z_stretch = false,
+    deep_atmosphere = false,
+    topography = CA.NoTopography(),
+    z_ref = nothing,
+    h_elem = 2,
+)
     grid = if kind == :column
         CA.ColumnGrid(
             FT;
@@ -172,8 +183,9 @@ function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
             z_max = Z_MAX,
             z_stretch,
             STRETCH...,
-            h_elem = 2,
+            h_elem,
             deep_atmosphere,
+            topography,
         )
     else
         error("unknown grid kind $kind")
@@ -212,7 +224,20 @@ function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
     ᶜz .= Fields.coordinate_field(center_space).z
     ᶠz .= Fields.coordinate_field(face_space).z
 
-    center_z = first_column(ᶜz)
+    # With topography the heights differ between columns. The winds are then set
+    # by level from the flat grid's heights, so every column launches the same
+    # spectrum and reverses its wind below the model top; the density still
+    # follows each cell's own height.
+    flat = topography isa CA.NoTopography
+    @assert flat == isnothing(z_ref)
+    ᶜz_wind = similar(ᶜz)
+    if flat
+        ᶜz_wind .= ᶜz
+    else
+        ᶜz_wind .= (level -> FT(z_ref[round(Int, level)])).(gwc.ᶜlevel)
+    end
+
+    center_z = flat ? first_column(ᶜz) : collect(z_ref)
     face_z = first_column(ᶠz)
     nlev = Spaces.nlevels(center_space)
     @assert length(center_z) == nlev
@@ -224,6 +249,8 @@ function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
         gwc,
         p,
         ᶜz,
+        ᶜz_wind,
+        z_surface_max = maximum(Fields.level(ᶠz, ClimaCore.Utilities.half)),
         ᶜρ_t,
         ᶜu_t = similar(ᶜρ_t),
         ᶜv_t = similar(ᶜρ_t),
@@ -236,8 +263,6 @@ function build_state(kind::Symbol; z_stretch = false, deep_atmosphere = false)
         v_source = similar(gwc.damp_level),
         nlev,
         center_z,
-        Δz_cell = diff(face_z),
-        ρ_profile = ρ0 .* exp.(-center_z ./ H_ρ),
     )
 end
 
@@ -398,7 +423,7 @@ end
 #   scheme outputs accelerations, so multiply by density and integrate over
 #   the column to get back to flux units. If the scheme loses nothing, this
 #   equals `F_launch`; that is every test's budget check. (Same integral
-#   operator as the scheme's `M_R`; measured before the ±3e-3 m/s² clip
+#   operator as the scheme's `M_R`; measured before the magnitude limit
 #   applied later in the tendency.)
 # - `escaped` (Pa): how much flux reached the model top. Already included in
 #   `deposited` (`gw_deposit` puts it back into the column); returned only to
@@ -425,11 +450,11 @@ function run_case!(st; Bw, wind::Symbol, damp_spec)
     z_top = st.center_z[end]
     @. ᶜρ_t = ρ0 * exp(-(ᶜz / H_ρ))
     if wind == :reversing
-        @. ᶜu_t = reversing_wind(ᶜz, z_src, z_top)
+        @. ᶜu_t = reversing_wind(st.ᶜz_wind, z_src, z_top)
     elseif wind == :constant
         fill!(ᶜu_t, U_SOURCE)
     elseif wind == :on_bins
-        @. ᶜu_t = on_bin_wind(ᶜz)
+        @. ᶜu_t = on_bin_wind(st.ᶜz_wind)
     else
         error("unknown wind $wind")
     end
@@ -500,6 +525,15 @@ const COLUMN_STATE = build_state(:column)
 const SPHERE_STATE = build_state(:sphere)
 const STRETCHED_COLUMN_STATE = build_state(:column; z_stretch = true)
 const DEEP_SPHERE_STATE = build_state(:sphere; deep_atmosphere = true)
+# Four elements per panel edge: at two, the topography smoothed to the grid
+# peaks near 400 m; at four, near 1.4 km.
+const EARTH_TOPO_SPHERE_STATE = build_state(
+    :sphere;
+    topography = CA.EarthTopography(),
+    z_ref = SPHERE_STATE.center_z,
+    h_elem = 4,
+)
+@assert EARTH_TOPO_SPHERE_STATE.z_surface_max > 500 "no mountains on the topography sphere"
 const NLEV = COLUMN_STATE.nlev
 
 # The budget closes to round-off on every grid.
@@ -510,14 +544,20 @@ const RTOL_CLOSURE = 1e-10
 const MAX_ESCAPED_FRAC = 1e-3
 
 # The grids tests 1-3 run on. The stretched grid has uneven cell masses even
-# where the density changes slowly, and the deep sphere has cell areas that grow
-# with height. Dividing by any mass other than the mean of the two cells' masses
-# misses the budget on both.
+# where the density changes slowly, the deep sphere has cell areas that grow
+# with height, and the Earth-topography sphere has a terrain-following grid whose
+# `J` and `ΔA` include the terrain metric. Dividing by any mass other than the
+# mean of the two cells' masses misses the budget on the first two.
 const INTERIOR_CASES = (
     ("column", COLUMN_STATE, NLEV),
     ("stretched column", STRETCHED_COLUMN_STATE, NLEV),
     ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
     ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
+    (
+        "Earth-topography sphere, per-column damp_level",
+        EARTH_TOPO_SPHERE_STATE,
+        Val(:varying),
+    ),
 )
 
 # ============================================================================
@@ -591,6 +631,11 @@ end
         ("stretched column, damp_level = $(NLEV - 3)", STRETCHED_COLUMN_STATE, NLEV - 3),
         ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
         ("deep sphere, per-column damp_level", DEEP_SPHERE_STATE, Val(:varying)),
+        (
+            "Earth-topography sphere, per-column damp_level",
+            EARTH_TOPO_SPHERE_STATE,
+            Val(:varying),
+        ),
     )
         res = run_case!(st; Bw, wind = :constant, damp_spec)
         ratios = res.deposited_u ./ lf.F_launch
@@ -616,7 +661,7 @@ end
 
         # The sphere case checks the per-column hand-back only if the receiving
         # layer really differs between columns.
-        startswith(name, "sphere") && @test length(unique(res.damp_level)) > 1
+        occursin("sphere", name) && @test length(unique(res.damp_level)) > 1
 
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
@@ -707,4 +752,44 @@ end
         @test all(isapprox.(ratios, 1; rtol = RTOL_CLOSURE))
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
+end
+
+# ============================================================================
+# The magnitude limit applied after the scheme: it scales the drag vector as a
+# whole, so the drag keeps its direction where the limit binds, leaves smaller
+# drag untouched, and zeroes non-finite components.
+# ============================================================================
+@testset "NOGW drag magnitude limit keeps the direction" begin
+    st = COLUMN_STATE
+    u = similar(st.ᶜρ_t)
+    v = similar(st.ᶜρ_t)
+    scale = similar(st.ᶜρ_t)
+    F_max = FT(3e-3) * sqrt(FT(2))
+    # Over the limit at an angle where per-component clipping would rotate it.
+    fill!(u, FT(8e-3))
+    fill!(v, FT(2e-3))
+    CA.limit_gravity_wave_forcing!(u, v, scale)
+    U = Array(parent(u))
+    V = Array(parent(v))
+    @test all(isapprox.(hypot.(U, V), F_max; rtol = 1e-6))
+    @test all(isapprox.(V ./ U, FT(0.25); rtol = 1e-6))
+    # Below the limit: unchanged.
+    fill!(u, FT(1e-3))
+    fill!(v, FT(-2e-3))
+    CA.limit_gravity_wave_forcing!(u, v, scale)
+    @test all(==(FT(1e-3)), parent(u))
+    @test all(==(FT(-2e-3)), parent(v))
+    # Non-finite components become zero; the other component is kept.
+    fill!(u, FT(NaN))
+    fill!(v, FT(1e-3))
+    CA.limit_gravity_wave_forcing!(u, v, scale)
+    @test all(iszero, parent(u))
+    @test all(==(FT(1e-3)), parent(v))
+end
+
+# The thin-damping-layer warning fires once per run.
+@testset "Building the NOGW cache resets the damping-layer check" begin
+    CA.NOGW_DAMP_LAYER_CHECKED[] = true
+    build_state(:column)
+    @test !CA.NOGW_DAMP_LAYER_CHECKED[]
 end
