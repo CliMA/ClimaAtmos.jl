@@ -972,7 +972,8 @@ When supplied as the `beres_source` field of `NonOrographicGravityWave`, the
 Beres convective spectrum is launched on top of the Alexander-Dunkerton
 background spectrum in every column that convects (EDMF convective heating above
 `Q0_threshold`, or with `heating_latent` a net updraft condensation rate above
-`rain_threshold`) and whose heating layer is deeper than `h_heat_min`. There is no
+`rain_threshold`), whose fitted heating depth exceeds `h_heat_min`, and whose
+convective coverage `a_cover` is at least `a_min`. There is no
 latitude gate: the source is placed wherever the EDMF scheme produces deep
 convective heating.
 
@@ -984,8 +985,10 @@ convective heating.
     activates the source when `heating_latent` is on [kg m⁻² s⁻¹; 1 mm/day =
     1/86400]: `c_{p,d} ∫ ρ Q dz / L_v` over the column, with `Q` the grid-mean latent
     heating of the updrafts. Default 1 mm/day.
-  - `beres_scale_factor`: Dimensionless efficiency ℰ, absorbing the `ρ₀/(Lτ)`
-    normalization, the `|Q_t(ν)|²` weight, and tuning [-].
+  - `beres_scale_factor`: Efficiency ℰ, absorbing the `ρ₀/(Lτ)` normalization with one
+    global reference density `ρ₀`, the factor `(g/θ₀)²` that turns the heating in K/s
+    into Beres' buoyancy forcing, the `|Q_t(ν)|²` weight, and tuning. Not dimensionless:
+    a bin flux in Pa is ℰ times a quantity in K²·m·s [Pa K⁻² m⁻¹ s⁻¹].
   - `σ_x`: Horizontal half-width of a convective cell [m].
   - `ν_min`: Lowest wave frequency in the quadrature (period ≈ 120 min) [1/s].
   - `ν_max`: Highest wave frequency in the quadrature (period ≈ 10 min) [1/s].
@@ -994,8 +997,9 @@ convective heating.
     rule; the inner constructor errors otherwise [-].
   - `h_heat_min`: Minimum heating depth that activates the source, which filters
     out shallow convection [m].
-  - `z_bot_floor`: Lowest allowed heating-layer base, which excludes the
-    boundary-layer signal from `Q_conv` [m].
+  - `z_bot_floor`: Height above the surface below which the heating is left out of the
+    moment fit, `Q0`, the activation amplitude and the Beres-G profile, which excludes
+    the boundary-layer signal [m]. It does not bound `z_bot`, which can lie below it.
   - `a_min`: Minimum convective coverage `a_cover` (the mass-weighted mean updraft area
     fraction over the heating layer) that activates the source in a column [-]. A guard
     against near-empty updrafts; default `1e-4`. It is a struct field rather than a
@@ -1013,12 +1017,23 @@ convective heating.
     `PrognosticEDMFX`) instead of the updrafts' eddy dry-static-energy flux
     convergence, a transport term whose column integral is about zero. The activation
     then tests the column integral of the grid mean of the same latent heating, as a
-    condensation rate, against `rain_threshold` instead of `Q0_threshold`.
+    condensation rate, against `rain_threshold` instead of `Q0_threshold`. The heating
+    is the mean of what the implicit stages applied since the last NOGW call, so the
+    solver must have the stage-weighted accumulator; `build_cache` errors otherwise
+    (`check_beres_latent_stage_accumulator`).
   - `beres_shape_general`: Whether the vertical shape factor is the sine transform of
     the EDMF in-cloud heating profile (Beres-G) instead of the half-sine of
     [beres2004](@cite) (Beres-C). The envelope means `u_heat`, `v_heat`, `N_source`
     and `a_cover` average over the heating layer of the shape: `[z_bot, z_top]` for
     Beres-C, `[max(z_bot, z_bot_floor), z_top]` for Beres-G.
+  - `beres_mechanical_source`: Whether to add the mechanical (obstacle) steady source
+    to the `c = 0` bin, for either shape: flux `∝ ℰ·mech_weight·w_b²·|U|·H/N`, opposing
+    `U` (`_beres_mech_flux`). Not part of [beres2004](@cite).
+  - `beres_obstacle_frac`: Obstacle height `z_bot + beres_obstacle_frac·h` (`h` the fitted
+    heating depth) at which the vertical velocity `w_b` of updraft 1 is read, at the
+    nearest cell centre [-].
+  - `beres_mech_weight`: Weight of the mechanical source, its analogue of the thermal
+    `Q_t(0)²` [-].
   - `detailed_diagnostics`: Whether to expose the `nogw_*` source-internal
     extended diagnostics.
   - `beres_smoothing_width`: Standard deviation of an optional Gaussian smoothing of the
@@ -1046,13 +1061,13 @@ convective heating.
 Base.@kwdef struct BeresSourceParams{FT}
     # --- Main parameters ---
     Q0_threshold::FT             # K/s, min heating rate to activate Beres
-    beres_scale_factor::FT       # dimensionless efficiency ℰ; knobs for ρ₀/(Lτ) normalization, the |Q_t(ν)|² weight, and tuning
+    beres_scale_factor::FT       # Pa K⁻² m⁻¹ s⁻¹, efficiency ℰ; absorbs ρ₀/(Lτ), (g/θ₀)², the |Q_t(ν)|² weight, and tuning
     σ_x::FT                      # m, convective cell horizontal half-width
     ν_min::FT                    # 1/s, min wave frequency (period ~120 min)
     ν_max::FT                    # 1/s, max wave frequency (period ~10 min)
     n_ν::Int                     # frequency quadrature points (must be 4k+1: 5, 9, 13...)
     h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
-    z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
+    z_bot_floor::FT = FT(2000.0) # m, heating below it is left out of the fit (excludes PBL signal); z_bot can lie below
     a_min::FT = FT(1e-4)         # -, min coverage a_cover to activate (guards against near-empty updrafts)
     rain_threshold::FT = FT(1 / 86400) # kg m⁻² s⁻¹, min net updraft condensation rate to activate (latent path); 1 mm/day
     beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
@@ -1064,7 +1079,7 @@ Base.@kwdef struct BeresSourceParams{FT}
 
     # --- Extension 3: mechanical / obstacle steady (ν=0) source ---
     beres_mechanical_source::Bool = false # add β_mech (Garner obstacle base flux, U→0 vanishing) to the steady c≈0 bin
-    beres_obstacle_frac::FT = FT(1.0)     # obstacle level = z_bot + frac·h within the convective envelope (1.0 = z_top); sensitivity study deferred
+    beres_obstacle_frac::FT = FT(1.0)     # obstacle level = z_bot + frac·h (1.0 = z_top when no clamp binds)
     beres_mech_weight::FT = FT(1.0)       # mechanical ν=0 weight (analogue of thermal Q_t²(0)); sets β_mech relative to β_therm
     heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs the updraft eddy DSE flux convergence
     detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics

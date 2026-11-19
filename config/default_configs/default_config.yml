@@ -377,7 +377,7 @@ nogw_beres_source:
   help: "Use Beres (2004) convective source spectrum for non-orographic gravity waves, launched wherever the prognostic EDMF scheme convects (requires `turbconv: prognostic_edmfx` with `updraft_number` >= 1) [`false` (default), `true`]"
   value: false
 nogw_beres_heating_latent:
-  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum, from the updraft microphysics the time stepper applied since the last NOGW call (the stored rates at the first call of a cold start), instead of the convergence of the updrafts' eddy dry-static-energy flux (a transport term whose column integral is about zero). The activation then tests the net updraft condensation rate from the same latent heating against `nogw_beres_rain_threshold`, in place of the heating amplitude against `nogw_beres_Q0_threshold`. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum, from the updraft microphysics the time stepper applied since the last NOGW call (the stored rates at the first call of a cold start), instead of the convergence of the updrafts' eddy dry-static-energy flux (a transport term whose column integral is about zero). The activation then tests the net updraft condensation rate from the same latent heating against `nogw_beres_rain_threshold`, in place of the heating amplitude against `nogw_beres_Q0_threshold`. Requires microphysics_model=1M, turbconv=prognostic_edmfx, and a solver with the stage-weighted implicit accumulator (IMEX, manual sparse Jacobian, no Krylov method, update_jacobian_every = solve, or stage with max_newton_iters_ode = 1); other solvers are an error. [`false` (default), `true`]"
   value: false
 nogw_beres_rain_threshold:
   help: "With `nogw_beres_heating_latent`, the Beres source activates in a column only if its net updraft condensation rate, in rain-rate units, exceeds this value in mm/day: c_pd times the column integral of rho times the grid-mean updraft latent heating, divided by L_v, over the same time window as the heating (not the surface precipitation). Unused without `nogw_beres_heating_latent`. [1.0 (default)]"
@@ -386,13 +386,13 @@ nogw_beres_shape_mode:
   help: "Beres convective-source vertical shape factor. `half_sine` (default): the prescribed half-sine V_hs of Beres (2004). `sine_transform`: Beres-G (Extension 1), V_G = the finite sine transform of the actual EDMF in-cloud heating profile evaluated at the physical wavenumber. Holds Q0, h, sigma_x, propagation, and the efficiency E identical between modes. The envelope means (wind, buoyancy frequency, coverage) average over [z_bot, z_top] for `half_sine` and over its part above nogw_beres_z_bot_floor for `sine_transform`. [`half_sine` (default), `sine_transform`]"
   value: "half_sine"
 nogw_beres_mechanical_source:
-  help: "Add the Beres-G mechanical/obstacle steady (nu=0) source (Extension 3). The updraft is a moving obstacle the mean wind flows over, radiating a stationary wave with Garner base flux tau_mech ~ rho0*U*w_b^2/N (vanishes as U->0), deposited in the c~0 bin alongside the thermal steady term. [`false` (default), `true`]"
+  help: "Add the Beres mechanical/obstacle steady (nu=0) source (Extension 3), for either shape mode. The updraft is a moving obstacle the mean wind flows over, radiating a stationary wave with Garner base flux tau_mech ~ rho0*U*w_b^2/N (vanishes as U->0), deposited in the c~0 bin alongside the thermal steady term. [`false` (default), `true`]"
   value: false
 nogw_beres_obstacle_level:
-  help: "Beres-G mechanical-source obstacle level as a fraction of the convective envelope: obstacle height = z_bot + frac*(z_top - z_bot). 1.0 = z_top (default; where the draft penetrates the stable shear layer above the convective top). w_b is sampled there. Sensitivity study deferred."
+  help: "Beres mechanical-source obstacle level as a fraction of the fitted heating depth h: obstacle height = z_bot + frac*h. 1.0 (default) = z_top when the envelope is not clamped at the column top; there the draft penetrates the stable shear layer above the convective top. w_b is the vertical velocity of updraft 1 at the cell centre nearest that height."
   value: 1.0
 nogw_beres_mechanical_weight:
-  help: "Beres-G mechanical-source nu=0 weight (analogue of the thermal Q_t(0)^2 = dc_frac*nu_min). Sets beta_mech relative to beta_therm; calibrated via the steady-channel nu=0 weight, not the transient efficiency. [1.0 (default)]"
+  help: "Beres mechanical-source nu=0 weight (analogue of the thermal Q_t(0)^2 = dc_frac*nu_min). Sets beta_mech relative to beta_therm; calibrated via the steady-channel nu=0 weight, not the transient efficiency. [1.0 (default)]"
   value: 1.0
 nogw_beres_smoothing_width:
   help: "Standard deviation in m of an optional Gaussian smoothing of the gathered Beres-G heating profile in the vertical, applied before the edge taper and the rescaling to the column heating [0.0 (default, no smoothing)]"
