@@ -1054,6 +1054,10 @@ convective heating.
       + `BERES_LAUNCH_FILTER_NONE`: no filter; such waves are launched with the sign
         of `c - u_heat` and deposit where the wind first reaches their phase speed.
   - `launch_filter_margin`: Widens the filter band by this much on both sides [m/s].
+  - `wavelength`: Horizontal wavelength of the Beres waves in the breaking and
+    reflection tests of the propagation [m]; default 100 km, the `band_mid` wavelength
+    CAM uses for its Beres source. The AD99 background keeps its own wavelength of
+    `30·10^ink` km (300 km for one band).
   - `n_h_avg`: Number of heating depths to average over, to smooth the resonance
     in the source spectrum; `1` disables averaging [-].
   - `Δh_frac`: Fractional half-range of that averaging, `h ± Δh_frac · h` [-].
@@ -1090,6 +1094,9 @@ Base.@kwdef struct BeresSourceParams{FT}
     launch_filter::Int = BERES_LAUNCH_FILTER_BERES2004 # see the docstring
     launch_filter_margin::FT = FT(0) # m/s, widens the filter band on both sides
 
+    # --- propagation ---
+    wavelength::FT = FT(1.0e5) # m, horizontal wavelength of the Beres waves in the breaking and reflection tests
+
     # --- h-averaging (resonance smoothing; default off) ---
     n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)
     Δh_frac::FT = FT(0.1) # fractional half-range for averaging: h ± Δh_frac·h
@@ -1113,6 +1120,12 @@ Base.@kwdef struct BeresSourceParams{FT}
             error(
                 "BeresSourceParams: launch_filter_margin (nogw_beres_launch_filter_margin) " *
                 "must not be negative, got $(obj.launch_filter_margin) m/s",
+            )
+        end
+        if !(obj.wavelength > 0)
+            error(
+                "BeresSourceParams: wavelength (nogw_beres_wavelength) must be " *
+                "positive, got $(obj.wavelength) m",
             )
         end
         return obj

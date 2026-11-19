@@ -2259,7 +2259,9 @@ source is marched upward for the zonal and meridional directions and deposited b
 `postprocess_and_accumulate!`; when a Beres source is configured, the same pair of calls is
 repeated for it. Both sources use the same kernel
 `waveforcing_column_accumulate!` and differ only in the launch spectrum, the launch level,
-and the intermittency factor.
+the intermittency factor, and the horizontal wavelength of the breaking and reflection
+tests (`30·10^ink` km for AD99, `wavelength` of the `BeresSourceParams`, 100 km by
+default, for Beres).
 
 # Arguments
 
@@ -2678,11 +2680,12 @@ intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
     not read.
   - `c`, `c0`: Phase-speed grid and its AD99 center [m/s].
   - `nk`, `ink`: Number of horizontal wavenumber bands and the current band [-]. The
-    wavelength of band `ink` is `30·10^ink` km.
+    AD99 wavelength of band `ink` is `30·10^ink` km; the Beres source uses
+    `beres_source.wavelength` in every band.
   - `level_end`: Index of the topmost level [-].
-  - `beres_source`: `BeresSourceParams` or `nothing`. Not read by the kernel, which takes
-    the precomputed Beres spectrum from its inputs; the argument keeps the call signature
-    of the AD99 and Beres specializations the same.
+  - `beres_source`: `BeresSourceParams` or `nothing`. Only its `wavelength` is read, on
+    the host, to set the Beres wavenumber; the kernel takes the precomputed Beres
+    spectrum from its inputs.
 
 The per-level body lives in `waveforcing_accumulate_step`, a named function rather than a
 closure, so that inference of the Beres specialization stays concrete on the GPU.
@@ -2704,7 +2707,14 @@ function waveforcing_column_accumulate!(
     source_mode::Val{MODE},
 ) where {nc, MODE}
     FT = eltype(waveforcing)
-    kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000) # wave number of gravity waves
+    # Horizontal wavenumber of the waves [1/m]: 2π over the Beres wavelength
+    # (`beres_source.wavelength`) for the Beres source, 2π over the AD99 band
+    # wavelength 30·10^ink km for the background. It enters the kernel as one scalar.
+    kwv = if MODE == :beres
+        2 * FT(π) / FT(beres_source.wavelength)
+    else
+        2 * FT(π) / (30 * FT(10)^ink * 1000)
+    end
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
     # The accumulate body lives in the named top-level function
     # `waveforcing_accumulate_step` rather than in the do-block. With the Beres
@@ -2728,8 +2738,8 @@ end
 
 # One level step of the waveforcing accumulation; see the note above the
 # column_accumulate! call for why this must be a named top-level function.
-# `kwv` is the horizontal wavenumber of band `ink`, computed once per call of
-# `waveforcing_column_accumulate!`.
+# `kwv` is the horizontal wavenumber of the source (the Beres wavelength, or the AD99
+# band `ink`), computed once per call of `waveforcing_column_accumulate!`.
 @inline function waveforcing_accumulate_step(
     state,
     inp,

@@ -401,8 +401,11 @@ nogw_beres_launch_filter:
   help: "Which Beres waves are removed at launch because they meet a critical level inside the heating layer. `beres2004` (default): every phase speed between the minimum and maximum wind over the heating layer up to the launch level, per azimuth, including the steady c = 0 bin (Beres et al. 2004; CAM). `height_resolved`: the heating at each height contributes to a phase speed only if the wind between that height and the launch level never equals it, with a one-level taper above the cut, for the gathered profile (Beres-G) and the half-sine (Beres-C) alike (beyond Beres 2004). `none`: no filter. [`beres2004` (default), `height_resolved`, `none`]"
   value: "beres2004"
 nogw_beres_launch_filter_margin:
-  help: "Widens the Beres launch-filter band by this many m/s on both sides [0.0 (default)]"
+  help: "Widens the Beres launch-filter band by this many m/s on both sides. The default 0 follows CAM, which removes the phase speeds between the minimum and maximum wind over the heating with no margin; Beres et al. (2004, p. 332) suggest a one-sided 5 m/s margin (eastward waves from min(U) to max(U) + 5, westward from min(U) - 5 to max(U)), with the wind in the upper part of and above the heating. [0.0 (default)]"
   value: 0.0
+nogw_beres_wavelength:
+  help: "Horizontal wavelength in m of the Beres convective waves in the breaking and reflection tests of the propagation. The default 1e5 (100 km) is the `band_mid` wavelength CAM uses for its Beres deep and shallow sources; the AD99 background keeps its own 300 km. Unused without `nogw_beres_source`. [1.0e5 (default)]"
+  value: 1.0e5
 nogw_beres_detailed_diagnostics:
   help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
   value: false

@@ -1200,6 +1200,30 @@ end
         gw = CA.get_non_orographic_gravity_wave_model(args, params, Float64)
         @test gw.beres_source.rain_threshold ≈ expected rtol = 1e-14
     end
+
+    # The Beres wavelength defaults to 100 km (CAM's band_mid), must be positive, and
+    # the getter reads nogw_beres_wavelength in m.
+    @test bsp.wavelength == 1.0e5
+    for bad in (0.0, -1.0e5)
+        @test_throws ErrorException CA.BeresSourceParams{Float64}(;
+            Q0_threshold = 1.0e-5,
+            beres_scale_factor = 2.0e-6,
+            σ_x = 4000.0,
+            ν_min = 8.727e-4,
+            ν_max = 1.047e-2,
+            n_ν = 9,
+            wavelength = bad,
+        )
+    end
+    for (wavelength, expected) in ((nothing, 1.0e5), (3.0e5, 3.0e5))
+        args = merge(
+            beres_base,
+            isnothing(wavelength) ? Dict{String, Any}() :
+            Dict{String, Any}("nogw_beres_wavelength" => wavelength),
+        )
+        gw = CA.get_non_orographic_gravity_wave_model(args, params, Float64)
+        @test gw.beres_source.wavelength == expected
+    end
 end
 
 # ============================================================================

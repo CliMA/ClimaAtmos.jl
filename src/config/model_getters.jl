@@ -539,6 +539,7 @@ function get_non_orographic_gravity_wave_model(
                 launch_filter_margin = FT(
                     get(parsed_args, "nogw_beres_launch_filter_margin", 0.0),
                 ),
+                wavelength = FT(get(parsed_args, "nogw_beres_wavelength", 1.0e5)),
             )
         else
             nothing

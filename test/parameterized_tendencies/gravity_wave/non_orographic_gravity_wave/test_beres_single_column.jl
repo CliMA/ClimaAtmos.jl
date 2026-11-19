@@ -1278,24 +1278,34 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             )
         end
 
-        @testset "Beres breaking test treats B0 as a stress" begin
+        @testset "Beres breaking test treats B0 as a stress, at the Beres wavelength" begin
             # The Beres B0 is a stress [Pa], so a wave breaks where
             # B0/ĉ³ ≥ ½·ρ·k/N, with no division by the launch density (that
-            # division turns the AD99 flux per unit mass into a stress). One bin
-            # at c = 20 m/s with 1.5 times that limit at the first level above
-            # launch must break in the first layer, for a launch density of 0.2
-            # and of 1 (for 1 the two forms agree); with 0.5 times the limit it
-            # must not. The AD99 drag is switched off by its source amplitude.
+            # division turns the AD99 flux per unit mass into a stress), and k is the
+            # Beres wavenumber 2π/wavelength (100 km by default), not that of the
+            # AD99 band. One bin at c = 20 m/s with 1.5 times that limit at the first
+            # level above launch must break in the first layer, for a launch density
+            # of 0.2 and of 1 (for 1 the two forms agree); with 0.5 times the limit it
+            # must not. The same holds with the wavelength set to 300 km and the limit
+            # taken at 300 km. The AD99 drag is switched off by its source amplitude.
             nogw = p.non_orographic_gravity_wave
             (; gw_c, gw_beres_B0_u, gw_beres_B0_v) = nogw
-            p_beres_only = (;
+            bs = nogw.gw_beres_source
+            @test bs.wavelength == FT(1e5)
+            beres_only_cache(wavelength) = (;
                 p.precomputed,
                 p.params,
                 p.atmos,
                 p.scratch,
                 non_orographic_gravity_wave = merge(
                     nogw,
-                    (; gw_source_ampl = zero(nogw.gw_source_ampl)),
+                    (;
+                        gw_source_ampl = zero(nogw.gw_source_ampl),
+                        gw_beres_source = CA.BeresSourceParams{FT}(;
+                            (n => getfield(bs, n) for n in fieldnames(typeof(bs)))...,
+                            wavelength = FT(wavelength),
+                        ),
+                    ),
                 ),
             )
             launch_level = Int(parent(beres_source_ρ_z_u_v_level.:5)[1])
@@ -1303,30 +1313,71 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             ρ_col = Array(Fields.field2array(ᶜρ))[:, 1]
             u_col = Array(Fields.field2array(ᶜu))[:, 1]
             N = FT(0.012)                      # uniform buoyancy frequency above
-            k_band1 = 2 * FT(π) / (30 * FT(10) * 1000)   # largest k of the bands
             n_bin = findfirst(==(FT(20)), gw_c)
             c_hat = gw_c[n_bin] - u_col[launch_level + 1]
-            B0_limit = ρ_col[launch_level + 1] * k_band1 * c_hat^3 / (2 * N)
+            B0_limit(wavelength) =
+                ρ_col[launch_level + 1] * (2 * FT(π) / FT(wavelength)) * c_hat^3 /
+                (2 * N)
             @test c_hat > 0                    # setup: no sign change in the first layer
             fill!(gw_beres_B0_v, CA.BeresB0(ntuple(_ -> FT(0), length(gw_c))))
             # Drag outside the two cells the first layer spans (it puts half its
             # flux in the launch cell and half in the cell above).
-            function drag_beyond_first_layer(B0_factor, ρ_source)
-                B0 = ntuple(n -> n == n_bin ? B0_factor * B0_limit : FT(0), length(gw_c))
+            function drag_beyond_first_layer(B0_factor, ρ_source, wavelength)
+                B0 = ntuple(
+                    n -> n == n_bin ? B0_factor * B0_limit(wavelength) : FT(0),
+                    length(gw_c),
+                )
                 fill!(gw_beres_B0_u, CA.BeresB0(B0))
                 parent(beres_source_ρ_z_u_v_level.:1) .= ρ_source
-                uf, _ = call_forcing!(p_beres_only)
+                uf, _ = call_forcing!(beres_only_cache(wavelength))
                 @test maximum(abs, uf) > 0
                 beyond = vcat(uf[1:(launch_level - 1)], uf[(launch_level + 2):end])
                 return maximum(abs, beyond)
             end
-            for ρ_source in (FT(0.2), FT(1))
-                @test drag_beyond_first_layer(FT(1.5), ρ_source) == 0
-                @test drag_beyond_first_layer(FT(0.5), ρ_source) > 0
+            # The 100 km limit is three times the 300 km one, so the same B0, 0.5
+            # times the 100 km limit and 1.5 times the 300 km one, passes the first
+            # layer at 100 km and breaks in it at 300 km.
+            @test B0_limit(bs.wavelength) ≈ 3 * B0_limit(FT(3e5)) rtol = 1e-6
+            for wavelength in (bs.wavelength, FT(3e5)), ρ_source in (FT(0.2), FT(1))
+                @test drag_beyond_first_layer(FT(1.5), ρ_source, wavelength) == 0
+                @test drag_beyond_first_layer(FT(0.5), ρ_source, wavelength) > 0
             end
             parent(beres_source_ρ_z_u_v_level.:1) .= ρ_launch
             CA._beres_precompute_launch_spectra!(nogw)
             @test call_forcing!()[1] == uf_data   # the launch spectra are restored
+        end
+
+        @testset "The Beres wavelength leaves the AD99 drag unchanged" begin
+            # The AD99 drag alone (a_cover = 0 switches the Beres deposit off) is the
+            # same, bit for bit, for a Beres wavelength of 100 km and of 300 km: the
+            # AD99 waves keep the band wavelength 30·10^ink km (300 km for one band).
+            nogw = p.non_orographic_gravity_wave
+            bs = nogw.gw_beres_source
+            fill!(gw_a_cover, FT(0))
+            uf_ad99, vf_ad99 = call_forcing!()
+            p_300 = (;
+                p.precomputed,
+                p.params,
+                p.atmos,
+                p.scratch,
+                non_orographic_gravity_wave = merge(
+                    nogw,
+                    (;
+                        gw_beres_source = CA.BeresSourceParams{FT}(;
+                            (n => getfield(bs, n) for n in fieldnames(typeof(bs)))...,
+                            wavelength = FT(3e5),
+                        ),
+                    ),
+                ),
+            )
+            uf_ad99_300, vf_ad99_300 = call_forcing!(p_300)
+            fill!(gw_a_cover, FT(1))
+            @test maximum(abs, uf_ad99) > 0
+            @test uf_ad99_300 == uf_ad99
+            @test vf_ad99_300 == vf_ad99
+            # With the Beres deposit on, the wavelength changes the Beres drag.
+            @test call_forcing!(p_300)[1] != uf_data
+            @test call_forcing!()[1] == uf_data
         end
     end
 
