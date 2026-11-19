@@ -765,7 +765,11 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             ρ_column = Array(Fields.field2array(ᶜρ))[:, 1]
             cp_d = CA.CAP.cp_d(p.params)
             L_v = CA.TD.Parameters.LH_v0(CA.CAP.thermodynamics_params(p.params))
-            function run_with_peak(Q_peak, rain_threshold = bs_latent.rain_threshold)
+            function run_with_peak(
+                Q_peak,
+                rain_threshold = bs_latent.rain_threshold;
+                area_factor = 1,
+            )
                 nogw_run = merge(
                     nogw_latent,
                     (;
@@ -783,7 +787,8 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                     nogw_run
                 nogw_run.gw_latent_time_acc[] = T_acc
                 @. gw_latent_mass_acc = Y.c.sgsʲs.:(1).ρa * T_acc
-                @. gw_latent_area_acc = Y.c.sgsʲs.:(1).ρa / ᶜρ * T_acc
+                @. gw_latent_area_acc =
+                    area_factor * Y.c.sgsʲs.:(1).ρa / ᶜρ * T_acc
                 @. gw_latent_heat_acc = Y.c.sgsʲs.:(1).ρa * Q_peak * Q_shape * T_acc
                 CA.compute_beres_convective_heating!(Y, p_run, ᶜbuoyancy_frequency)
                 Q = Array(Fields.field2array(nogw_run.gw_Q_conv))[:, 1]
@@ -798,6 +803,7 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
                     # kg m⁻² s⁻¹, from the gate's own grid-mean heating
                     P = cp_d * sum(ρ_column .* Q .* dz_col) / L_v,
                     active = parent(gw_beres_active)[1],
+                    a_cover = parent(gw_a_cover)[1],
                 )
             end
             unit = run_with_peak(FT(1))
@@ -830,8 +836,46 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test weak_on.amplitude ≈ 0.5 * beres.Q0_threshold rtol = 1e-5
             @test weak_on.active == 1
             @test weak_off.active == 0
+            # The coverage a_cover is the layer mean of the draft area over the time
+            # window of the heating (gw_latent_area_acc / T_acc), not that of the
+            # current state: with a window area twice the state's area a0, a_cover
+            # doubles, and the envelope and the heating stay the same.
+            @test on.a_cover ≈ a0 rtol = 0.05
+            on_double = run_with_peak(FT(Q_on); area_factor = 2)
+            @test on_double.a_cover ≈ 2 * on.a_cover rtol = 1e-6
+            @test on_double.Q_ic == on.Q_ic
+            @test on_double.Q == on.Q
+            @test on_double.active == 1
             # The cold-start path, from the stored 1M rates, is checked in the 1M
             # build at the end of this file.
+        end
+
+        @testset "The level draft area: the window mean, or the current state" begin
+            # `_beres_level_draft_area` gives the window mean gw_latent_area_acc / T_acc
+            # with the latent accumulators and T_acc > 0; the area Σⱼ max(ρaʲ, 0)/ρʲ of
+            # the current state when T_acc = 0 (the first call of a cold start) and
+            # on the DSE path, whose cache has no accumulators.
+            nogw = p.non_orographic_gravity_wave
+            nogw_latent = merge(nogw, CA._beres_latent_accumulator_fields(Y))
+            @. Y.c.sgsʲs.:(1).ρa =
+                ifelse((ᶜz >= z_lo) & (ᶜz <= z_hi), a0 * ᶜρ, FT(0))
+            parent(ᶜρʲs.:(1)) .= parent(ᶜρ)
+            column(lazy_area) = Array(
+                Fields.field2array(Base.Broadcast.materialize(lazy_area)),
+            )[:, 1]
+            a_state = column(@. Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+            @test maximum(a_state) ≈ a0 rtol = 1e-6
+            T_acc = FT(1800)
+            a_window = @. FT(0.03) + FT(0.001) * ᶜz / 1000
+            @. nogw_latent.gw_latent_area_acc = a_window * T_acc
+            nogw_latent.gw_latent_time_acc[] = T_acc
+            @test column(CA._beres_level_draft_area(nogw_latent, Y, ᶜρʲs)) ≈
+                  Array(Fields.field2array(a_window))[:, 1] rtol = 1e-6
+            nogw_latent.gw_latent_time_acc[] = FT(0)
+            @test column(CA._beres_level_draft_area(nogw_latent, Y, ᶜρʲs)) ≈ a_state rtol =
+                1e-12
+            @test !haskey(nogw, :gw_latent_area_acc)
+            @test column(CA._beres_level_draft_area(nogw, Y, ᶜρʲs)) ≈ a_state rtol = 1e-12
         end
     end
 

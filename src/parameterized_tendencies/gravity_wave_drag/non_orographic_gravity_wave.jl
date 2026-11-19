@@ -186,6 +186,37 @@ function _beres_latent_accumulator_fields(Y)
 end
 
 """
+    _beres_level_draft_area(nogw_cache, Y, ᶜρʲs)
+
+Return, as a lazy broadcast, the total updraft area fraction of each level,
+`Σⱼ max(ρaʲ, 0)/ρʲ` without the drafts whose density `ρʲ` is at most `eps(FT)`. A draft
+with a negative `ρaʲ` counts as empty, so it cannot lower the area of the others.
+
+With the latent heating (`heating_latent`, whose cache holds `gw_latent_area_acc`) and a
+time window to average over (`gw_latent_time_acc > 0`), this is the mean area over that
+window, `gw_latent_area_acc / gw_latent_time_acc`: the same window as the applied latent
+heating, so the coverage `a_cover` and the heating it dilutes describe the same drafts.
+Otherwise (the dry-static-energy path, or the first call of a cold start or of a restart
+from a file without the integrals, where the heating also comes from the current state)
+it is the area of the current state.
+"""
+function _beres_level_draft_area(nogw_cache, Y, ᶜρʲs)
+    FT = Spaces.undertype(axes(Y.c))
+    ϵ = eps(FT)
+    nonnegative_draft_area =
+        (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
+    ᶜa_now =
+        @. lazy(mapreduce_with_init(nonnegative_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    haskey(nogw_cache, :gw_latent_area_acc) || return ᶜa_now
+    (; gw_latent_area_acc) = nogw_cache
+    T_acc = nogw_cache.gw_latent_time_acc[]
+    # `max(T_acc, ϵ)` only keeps the unused branch finite when T_acc = 0.
+    return @. lazy(
+        ifelse(T_acc > 0, gw_latent_area_acc / max(T_acc, ϵ), ᶜa_now),
+    )
+end
+
+"""
     check_beres_latent_stage_accumulator(nogw_cache, n_imp_stages)
 
 Throw an error when the Beres latent heating is on (the cache holds `gw_latent_lin`) and
@@ -1125,6 +1156,9 @@ layer, which depends on the shape: the whole envelope `[z_bot, z_top]` for the h
 (Beres-C), and its part above the floor, `[max(z_bot, z_bot_floor), z_top]`, for the sine
 transform (Beres-G, `beres_shape_general`), the layer whose heating Beres-G transforms and
 whose winds its launch filter reads.
+With `heating_latent`, the level area in this test and in `a_cover` is the mean over the
+time window of the latent heating (`_beres_level_draft_area`), and the area of the current
+state when there is no window (the first call of a cold start).
 
   - `gw_Q_conv` — the grid-mean flux convergence, i.e. the draft anomalies weighted by
     area fraction `aʲ`. Used for the activation gate and nowhere else, because
@@ -1470,18 +1504,15 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             FT(0),
         ),
     )
-    # Total updraft area of each level, Σⱼ max(ρaʲ, 0)/ρʲ without the drafts whose
-    # density is at most ϵ, as for the in-cloud heating above. A draft with a negative
-    # ρaʲ counts as empty, so it cannot lower the coverage of the others. Levels below
-    # a_min are left out of the heating fit only (the moments, the gather, and the
-    # activation integral); the envelope means u_heat, v_heat, N_source and the
+    # Total updraft area of each level, Σⱼ max(ρaʲ, 0)/ρʲ (`_beres_level_draft_area`):
+    # with `heating_latent`, its mean over the same time window as the latent heating;
+    # otherwise, and at the first call of a cold start, that of the current state.
+    # Levels below a_min are left out of the heating fit only (the moments, the gather,
+    # and the activation integral); the envelope means u_heat, v_heat, N_source and the
     # coverage a_cover average over every level of the layer, so a column whose
     # updraft is nearly empty over most of its layer has a small a_cover and fails the
     # coverage gate.
-    nonnegative_draft_area =
-        (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, max(sgsʲ.ρa, zero(ρʲ)) / ρʲ, zero(ρʲ))
-    ᶜa_level =
-        @. lazy(mapreduce_with_init(nonnegative_draft_area, +, Y.c.sgsʲs, ᶜρʲs))
+    ᶜa_level = _beres_level_draft_area(p.non_orographic_gravity_wave, Y, ᶜρʲs)
     # The activation integral counts only the heating at or above the floor, as the
     # moment fit and the gather do.
     ᶜabove_floor = @. lazy(ifelse(ᶜz_above_surface >= z_floor, FT(1), FT(0)))
