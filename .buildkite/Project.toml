@@ -40,6 +40,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [sources]
 ClimaAtmos = {path = ".."}
+ClimaCore = {rev = "tr/1.12", url = "https://github.com/CliMA/ClimaCore.jl.git"}
 PrecompileCI = {path = "PrecompileCI"}
 
 [compat]
