@@ -549,8 +549,8 @@ end
 # reference grid and H value hard-coded below (V_hs_sq, β, one-sided H, F_T
 # continuous/discrete, R table, L-invariance) were computed offline from the
 # closed-form expressions in the docstrings of `_beres_steady_flux` and
-# `_beres_steady_horizontal_const` with H counting k > 0 only; H now counts
-# both signs of k, so they are multiplied by 2 here.
+# `_beres_steady_horizontal_const` with H counting k > 0 only; H counts both
+# signs of k, so they are multiplied by 2 here.
 # ============================================================================
 @testset "Beres steady (ν=0) source" begin
     FT = Float64
@@ -2394,7 +2394,7 @@ end
         @test tapered[i_first + 4] == masked[i_first + 4]
     end
 
-    @testset "the half-sine path uses the Beres (2004) band in both filter modes" begin
+    @testset "with no wind profile, height_resolved removes the Beres (2004) band" begin
         beres_hs = BeresSourceParams{FT}(; kw..., beres_shape_general = false)
         spectrum_hs(filter) = _beres_launch_spectrum(
             c, u_heat, FT(5e-5), span, FT(0.012), z_lo, span, nothing, FT(0),

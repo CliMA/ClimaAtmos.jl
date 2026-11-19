@@ -105,8 +105,7 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
 #   4. Activation still gates on the GRID-MEAN amplitude (thresholds are
 #      calibrated to grid-mean magnitudes).
 #   5. The envelope (z_bot, z_top) is moment-matched to the in-cloud heating
-#      Q_conv_ic (centroid z_c + spread σ → half-sine of depth h); the legacy
-#      grid-mean area-threshold detection is deprecated and gated off.
+#      Q_conv_ic (centroid z_c + spread σ → half-sine of depth h).
 # ============================================================================
 # Outer testset so Phase A failures do not abort Phase B: a *top-level*
 # @testset throws at its `end` when it contains failures, which would stop the
@@ -315,10 +314,8 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
 
         @testset "Moment-matched envelope is a valid heating layer" begin
             # The envelope (z_bot, z_top, h) is set by moment-matching a half-sine
-            # to the in-cloud heating Q_conv_ic (the legacy area-threshold
-            # detection is deprecated). Assert the invariants a valid
-            # moment-matched envelope must satisfy, rather than the old area-mode
-            # reference values (which no longer match the implementation).
+            # to the in-cloud heating Q_conv_ic. Assert the invariants a valid
+            # moment-matched envelope must satisfy.
             @test beres.z_bot_floor <= zbot       # respects the PBL altitude floor
             @test zbot < ztop                     # ordered envelope
             @test ztop <= center_z[end]           # at or below the top cell centre
@@ -783,7 +780,7 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test 86400 * off.P ≈ 0.95 rtol = 1e-5
             @test on.active == 1
             @test off.active == 0
-            # The heating amplitude no longer gates: with a threshold of half the rain
+            # The heating amplitude does not gate: with a threshold of half the rain
             # rate of a column whose amplitude is half of Q0_threshold, the column is
             # active; with twice that rain rate as threshold, it is not.
             Q_weak = FT(0.5 * beres.Q0_threshold / unit.amplitude)
@@ -1063,8 +1060,8 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             # them with the steady-OFF parameters (nogw_off shares the B0 arrays
             # with the original cache; they are restored below).
             CA._beres_precompute_launch_spectra!(nogw_off)
-            # Current src no longer supports merge(::AtmosCache); build a lightweight
-            # cache NamedTuple with just the fields the GW forcing path reads.
+            # merge does not accept an AtmosCache; build a lightweight cache
+            # NamedTuple with just the fields the GW forcing path reads.
             p_off = (;
                 p.precomputed,
                 p.params,

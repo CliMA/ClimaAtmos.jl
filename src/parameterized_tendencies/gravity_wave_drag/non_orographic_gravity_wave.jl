@@ -2347,9 +2347,9 @@ function non_orographic_gravity_wave_forcing(
     )
     # Slot 8 carries the precomputed per-column launch spectrum B0 (NTuple{nc});
     # the kernel reads it instead of rebuilding the Beres spectrum at level 1.
-    # Slots 9–12 (Q0, h, u/v_heat, N) are no longer read by the Beres kernel but
-    # are kept so the Beres tuple stays 16-wide and the AD99/Beres shared index
-    # logic typechecks for both specializations.
+    # Slots 9–12 (Q0, h, u/v_heat, N) are not read by the Beres kernel; they keep
+    # the Beres tuple 16 wide, so the index logic the AD99 and Beres
+    # specializations share typechecks for both.
     #
     # Beres per-column inputs are built only when the convective source is
     # configured (the fields do not exist in the cache otherwise).
@@ -2678,10 +2678,10 @@ end
     source_ampl = MODE == :ad99 ? inp[16] : zero(FT1)
     # Beres slot 8 is the precomputed launch spectrum (a BeresB0-wrapped
     # NTuple{nc}; see the struct's docstring for why it must be wrapped); for
-    # the AD99 specialization it is a dead zero tuple. The old per-column
-    # scalars (Q0/h/u_heat/N at slots 9–12) are no longer consumed — B0 already
-    # folds them in (shape mode, steady β_therm + β_mech) from
-    # compute_tendency!.
+    # the AD99 specialization it is an unused zero tuple. The Beres slots 9–12
+    # (Q0/h/u_heat/N) are not read here: B0, precomputed in
+    # compute_beres_convective_heating!, already contains them (shape mode,
+    # steady β_therm + β_mech).
     beres_B0 =
         MODE == :beres ? inp[8].B0 : ntuple(_ -> zero(FT1), gw_ncval)
     beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
@@ -2977,12 +2977,11 @@ asserted by the convergence gate in `test_beres_unit.jl`. The gathered model pro
 itself a linear interpolant of the heating on the model levels, so its transform also
 carries the interpolation error at the model level spacing, which is coarser. The evaluation uses a rotation recurrence: `z_a`
 advances by the constant `dz`, so `(sin(m z_a), cos(m z_a))` advances by a fixed
-rotation by `x = m·dz` — 2 `sincos` calls TOTAL instead of 4 transcendentals per
-segment, which removed a 19x GPU cost on the B0-build broadcast (95% of the
-sine_transform GW call, profiled 2026-08-02). Three cancellations of the naive
-per-segment form are also removed, all as exact rewrites (this evaluator is
-strictly MORE accurate than the one it replaced, max Float32 error vs the
-BigFloat-exact rule 4.2e-4 vs 1.6e-3 on production `m` sweeps):
+rotation by `x = m·dz` — 2 `sincos` calls in total instead of 4 transcendentals per
+segment; on the GPU the per-segment form costs about 19 times more in the B0-build
+broadcast. Three cancellations of the naive per-segment form are avoided by exact
+rewrites (max Float32 error against the BigFloat-exact rule 4.2e-4, against 1.6e-3
+for the naive per-segment form, on production `m` sweeps):
 
   - `I0 = (cos(m z_a) − cos(m z_b))/m` → `2 sin(x/2) sin(m z_a + x/2)/m`
     (sum-to-product; difference of near-equal cosines eliminated);
@@ -2999,7 +2998,7 @@ BigFloat-exact rule 4.2e-4 vs 1.6e-3 on production `m` sweeps):
 LITERAL tuple indices `gprofile[i]` — runtime `NTuple` indexing spills the tuple
 to memory to support dynamic indexing, which on the GPU is a heap allocation
 (gpu_gc_pool_alloc) and fails to compile (InvalidIRError). Summation is strictly
-left-to-right, matching the accumulation order of the rule it replaced.
+left-to-right, the accumulation order of the per-segment rule.
 """
 @generated function _beres_gs(
     gprofile::NTuple{ng, FT},
@@ -3783,8 +3782,9 @@ The launch filter of one Beres azimuth in one column; see `BeresSourceParams`
 (`launch_filter`). `mode` is `BERES_LAUNCH_FILTER_NONE`, `BERES_LAUNCH_FILTER_BERES2004`
 or `BERES_LAUNCH_FILTER_HEIGHT_RESOLVED`; `wind_min`, `wind_max` [m/s] are the range of
 this azimuth's wind over the heating layer up to the launch level, `margin` [m/s] widens
-that range on both sides, `wind_profile` is the wind on the gather grid (Beres-G) or
-`nothing` (half-sine), `wind_launch` [m/s] is the wind at the launch level, and
+that range on both sides, `wind_profile` is the wind on the 64 gather points over the
+heating layer of the shape (gathered only under the height-resolved filter), or
+`nothing` when there is none, `wind_launch` [m/s] is the wind at the launch level, and
 `taper_points` is the width, in gather spacings, of the raised-cosine taper the
 height-resolved filter puts on the edge of the heating it keeps (0 for a hard edge).
 """
@@ -4357,7 +4357,8 @@ end
 end
 
 # Total launched-flux magnitude Σ|B0[n]| of a precomputed launch spectrum B0
-# (the `gw_launch_flux` diagnostic, now Beres-G / mechanical aware via B0).
+# (the `gw_launch_flux` diagnostic; B0 includes the Beres-G shape and the mechanical
+# source).
 @inline function _beres_b0_fluxmag(B0::NTuple{nc, FT}) where {nc, FT}
     s = FT(0)
     for n in 1:nc

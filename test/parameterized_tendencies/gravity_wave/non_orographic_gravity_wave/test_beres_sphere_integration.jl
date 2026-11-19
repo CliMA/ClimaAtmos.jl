@@ -154,7 +154,7 @@ import ClimaCore.Geometry as Geometry
     # so we copy each result out before the next run.
     # ------------------------------------------------------------------
     nogw_ad99 = merge(p.non_orographic_gravity_wave, (; gw_beres_source = nothing))
-    # Current src no longer supports merge(::AtmosCache); build a lightweight cache
+    # merge does not accept an AtmosCache; build a lightweight cache
     # NamedTuple with just the fields the GW compute path reads (non_orographic_
     # gravity_wave, precomputed, params, atmos, scratch).
     p_ad99 = (;
