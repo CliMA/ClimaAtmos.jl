@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With the Beres latent heating (`nogw_beres_heating_latent`),
+  the coverage `a_cover` that dilutes the deposited Beres flux, and the level area that
+  decides which levels enter the heating fit, are the updraft area averaged over the same
+  time window as the applied latent heating (since the last NOGW call), instead of the
+  area of the current state. The first NOGW call of a cold start, or of a restart from a
+  file without the accumulators, uses the current area, as the heating does. The DSE path
+  is unchanged. On frozen aquaplanet states, Beres-C flux at 100 hPa (4°S-4N) +3%,
+  Beres-G about unchanged.
+- ![][badge-🔥behavioralΔ] The Beres waves break and reflect with a horizontal wavelength
+  of 100 km, set by the new config key `nogw_beres_wavelength` (m, default `1e5`, the
+  `band_mid` wavelength CAM uses for its Beres sources), instead of the 300 km of the AD99
+  band. The AD99 background keeps 300 km. On frozen aquaplanet states, Beres flux at
+  100 hPa (4°S-4N) +4% to +5%, at 30 hPa about +12%. Set `nogw_beres_wavelength: 3.0e5`
+  for the 300 km propagation.
 - ![][badge-🔥behavioralΔ] With the Beres latent heating (`nogw_beres_heating_latent`), a
   column activates the Beres source when its net updraft condensation rate, in rain-rate
   units, exceeds the new config key `nogw_beres_rain_threshold` (mm/day, default 1), in
