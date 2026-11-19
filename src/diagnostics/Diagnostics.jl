@@ -93,6 +93,12 @@ import ..ρa⁰
 import ..n_mass_flux_subdomains
 import ..specific
 import ..ᶜspecific_env_value
+import ..ᶜenv_thermo_fields
+import ..ᶜbuoyancy_gradient
+import ..ᶜenv_velocity
+import ..ᶜdraft_thermo_tuples
+import ..compute_ᶠu
+import ..ᶜdraft_velocities
 
 
 # We need the abbreviations for symbols like curl, grad, and so on

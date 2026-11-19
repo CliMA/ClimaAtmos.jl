@@ -1695,8 +1695,10 @@ terminal velocities is written to scratch fields before the loop. Mutates
 """
 function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    (; ᶜρʲs, ᶠu³ʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
-    (; ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    (; ᶜT⁰) = ᶜenv_thermo_fields(Y, p)
+    ᶠu³ʲ_lazy = compute_ᶠu³(Y.c.uₕ, Y.c.ρ, Y.f.sgsʲs.:(1).u₃)
+    (; ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ) = ᶜdraft_thermo_fields(Y, p, 1)
     (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     FT = Spaces.undertype(axes(Y.c))
     turbconv_model = p.atmos.turbconv_model
@@ -1765,10 +1767,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     end
     thermo_inputs =
         isempty(mass_names) ? () :
-        (
-            ᶜTʲs.:(1), ᶜT⁰, ᶜΦ, ᶜq_tot_nonnegʲs.:(1), ᶜq_liqʲs.:(1),
-            ᶜq_iceʲs.:(1),
-        )
+        (ᶜTʲ, ᶜT⁰, ᶜΦ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ)
 
     # One column loop: the advection of every updraft scalar, then the
     # sedimentation of each microphysics tracer (in the order of
@@ -1784,7 +1783,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         sgs_diag(@name(q_tot)),
         Y.c,
         ᶜρʲs.:(1),
-        ᶠu³ʲs.:(1),
+        ᶠu³ʲ_lazy,
         ᶠ∂ξ³∂x³,
         unrolled_map(sgs_diag, sed_names),
         unrolled_map(sgs_diag, passive_sgs_tracer_names(Y)),
@@ -1793,6 +1792,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         thermo_inputs,
     ) do ∂ᶜmseʲ_diag, ∂ᶜq_totʲ_diag, Yc, ᶜρʲ, ᶠu³ʲ, ᶠ∂ξ³∂x³, water_diags,
     passive_diags, mse_col_blocks, species, thermo_inputs
+        ᶠu³ʲ = register_copy(ᶠu³ʲ)
         ᶜadv_q_tot = @. dtγ * (
             DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲ)) -
             ᶜadvdivᵥ_matrix() * ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲ))
@@ -1823,16 +1823,16 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         isempty(species) && return nothing
 
         ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
-        ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
+        ᶠJ = Fields.local_geometry_field(axes(ᶠ∂ξ³∂x³)).J
         ᶜsgsʲ = Yc.sgsʲs.:(1)
         ᶜa = @. draft_area(max(zero_FT, ᶜsgsʲ.ρa), ᶜρʲ)
         ᶜ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
         ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
-        (ᶜTʲ, ᶜT⁰_col, ᶜΦ_col, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ) =
+        (ᶜTʲ_col, ᶜT⁰_col, ᶜΦ_col, ᶜq_tot_nonnegʲ_col, ᶜq_liqʲ_col, ᶜq_iceʲ_col) =
             isempty(thermo_inputs) ? ntuple(Returns(nothing), 6) : thermo_inputs
         ᶜinv_cp_mʲ =
             isempty(thermo_inputs) ? nothing :
-            (@. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ))
+            (@. 1 / TD.cp_m(thermo_params, ᶜq_tot_nonnegʲ_col, ᶜq_liqʲ_col, ᶜq_iceʲ_col))
 
         MatrixFields.unrolled_foreach(
             map(tuple, sed_names, species),
@@ -1874,7 +1874,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimented mass enters with -mseʲ.
             phase = condensate_phase(χ_name)
             h_cond_func = enthalpy_function(phase)
-            ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ) + ᶜΦ_col
+            ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ_col) + ᶜΦ_col
             ᶜh_cond⁰ = @. h_cond_func(thermo_params, ᶜT⁰_col) + ᶜΦ_col
             @. ∂ᶜmseʲ_∂ᶜχʲ_col +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) * (
@@ -1906,7 +1906,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @inline
             L_ν = latent_heat_function(condensate_phase(ν_name))
             @. ∂ᶜmseʲ_∂ᶜq_νʲ +=
-                ∂ᶜmseʲ_diag * DiagonalMatrixRow(L_ν(thermo_params, ᶜTʲ))
+                ∂ᶜmseʲ_diag * DiagonalMatrixRow(L_ν(thermo_params, ᶜTʲ_col))
         end
         @. ∂ᶜmseʲ_diag += ᶜadv_q_tot
     end
@@ -1964,8 +1964,8 @@ function update_sgs_diffusion_and_entr_detr_jacobian!(matrix, Y, p, dtγ, diffus
         ᶜentr_vel_scaleʲs,
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
-        ᶜuʲs,
     ) = p.precomputed
+    ᶜuʲs = ᶜdraft_velocities(Y, p)
     ᶜlg = Fields.local_geometry_field(Y.c)
     turbconv_model = p.atmos.turbconv_model
 
@@ -2198,7 +2198,8 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
     # grid-mean implicit tendency cache is never populated; use environment state
     # and the environment tendency instead.
     if is_edmf
-        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        (; ᶜp) = p.precomputed
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
         ᶜT = ᶜT⁰
         eps_FT = eps(FT)
         ᶜρ = @. lazy(
@@ -2234,14 +2235,13 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
         ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
         @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(dtγ * ᶜr⁰)
         if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+            (; ᶜρʲs) = p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_lcl)
                 MatrixFields.has_field(Y, χ) || continue
                 sgsʲ = Y.c.sgsʲs.:($j)
                 ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+                (; ᶜTʲ, ᶜq_tot_nonnegʲ) = ᶜdraft_thermo_fields(Y, p, j)
                 @. ᶜrʲ =
                     -inv(
                         _implicit_mp_τ_lcl(
@@ -2271,15 +2271,13 @@ function update_implicit_microphysics_jacobian!(matrix, Y, p, dtγ)
         ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
         @. ∂ᶜρq_icl_err_∂ᶜρq_icl += DiagonalMatrixRow(dtγ * ᶜr⁰)
         if is_edmf
-            (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendency_implicitʲs) =
-                p.precomputed
+            (; ᶜρʲs, ᶜmp_tendency_implicitʲs) = p.precomputed
             for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
                 χ = @name(c.sgsʲs.:($j).q_icl)
                 MatrixFields.has_field(Y, χ) || continue
                 sgsʲ = Y.c.sgsʲs.:($j)
                 ᶜρʲ = ᶜρʲs.:($j)
-                ᶜTʲ = ᶜTʲs.:($j)
-                ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+                (; ᶜTʲ, ᶜq_tot_nonnegʲ) = ᶜdraft_thermo_fields(Y, p, j)
                 ᶜtendʲ = ᶜmp_tendency_implicitʲs.:($j)
                 @. ᶜrʲ =
                     -inv(
@@ -2554,8 +2552,9 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     ) || return nothing
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶜρʲs, ᶠu³ʲs, ᶜKʲs) = p.precomputed
-    (; ᶠu³, ᶜK, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    (; ᶜK, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
 
     FT = Spaces.undertype(axes(Y.c))
     cv_d = FT(CAP.cv_d(params))
@@ -2624,14 +2623,17 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     # then the ∂/∂u₃ blocks.
     DataLayouts.foreach_column(∂ᶜρe_tot_err_∂ᶜρ, ∂ᶜρe_tot_err_∂ᶜρq_tot,
         ∂ᶜρe_tot_err_∂ᶜρe_tot, ∂ᶜρe_tot_err_∂ᶜmseʲ, ∂ᶜρq_tot_err_∂ᶜρ, ∂ᶜρq_tot_err_∂ᶜρq_tot,
-        ∂ᶜρq_tot_err_∂ᶜq_totʲ, Y.c, ᶜρʲs.:(1), ᶠu³ʲs.:(1), ᶠu³, ᶜK, ᶜT, ᶜΦ, ᶜh_tot,
+        ∂ᶜρq_tot_err_∂ᶜq_totʲ, Y.c, ᶜρʲs.:(1),
+        compute_ᶠu³(Y.c.uₕ, Y.c.ρ, Y.f.sgsʲs.:(1).u₃), ᶠu³,
+        ᶜK, ᶜT, ᶜΦ, ᶜh_tot,
         ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜJ, ᶠJ,
         (∂ᶜρe_tot_err_∂ᶜρq(TD.Liquid()), ∂ᶜρe_tot_err_∂ᶜρq(TD.Ice())),
         unrolled_map(
             s -> (matrix[s, s], matrix[s, get_χʲ_name_from_ρχ_name(s)]),
             tracer_state_names,
         ), matrix[@name(c.ρe_tot), @name(f.u₃)], matrix[@name(c.ρq_tot), @name(f.u₃)],
-        ᶜKʲs.:(1), ᶠgⁱʲ, unrolled_map(s -> matrix[s, @name(f.u₃)], tracer_state_names),
+        Y.f.sgsʲs.:(1).u₃, ᶠgⁱʲ,
+        unrolled_map(s -> matrix[s, @name(f.u₃)], tracer_state_names),
     ) do ∂ᶜρe_tot_err_∂ᶜρ,
     ∂ᶜρe_tot_err_∂ᶜρq_tot,
     ∂ᶜρe_tot_err_∂ᶜρe_tot,
@@ -2656,9 +2658,11 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     tracer_groups,
     ∂ᶜρe_tot_err_∂ᶠu₃,
     ∂ᶜρq_tot_err_∂ᶠu₃,
-    ᶜKʲ,
+    ᶠu₃ʲ,
     ᶠgⁱʲ,
     tracer_u₃_cols
+        ᶠu³ʲ = register_copy(ᶠu³ʲ)
+        ᶠu³ = register_copy(ᶠu³)
         if !use_derivative(diffusion_flag)
             @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
             @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
@@ -2722,6 +2726,7 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             @. ∂ᶜρχ_diag += ᶜtridiag * ᶜinv_ρ
         end
         ᶜsgsʲ = Yc.sgsʲs.:(1)
+        ᶜKʲ = compute_kinetic(Yc.uₕ, ᶠu₃ʲ)
         # ρʲ aʲ J, the weight of every updraft flux
         ᶜρʲaʲJ = @. ᶜρʲ * ᶜJ * draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
         @. ∂ᶜρe_tot_err_∂ᶠu₃ +=

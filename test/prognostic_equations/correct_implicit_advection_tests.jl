@@ -822,7 +822,8 @@ end
     J_rat = J_c1 / J_f0
     lg1 = Fields.local_geometry_field(Fields.level(Y.c, 1))[]
     uvw_gm1 = Geometry.UVWVector(Fields.level(p.precomputed.ᶜu, 1)[], lg1)
-    uvw_up1 = Geometry.UVWVector(Fields.level(p.precomputed.ᶜuʲs.:(1), 1)[], lg1)
+    ᶜu_up = Base.materialize(CA.ᶜdraft_velocities(Y, p)[1])
+    uvw_up1 = Geometry.UVWVector(Fields.level(ᶜu_up, 1)[], lg1)
     uvw_en1 = Geometry.UVWVector(Fields.level(p.precomputed.ᶜu⁰, 1)[], lg1)
     T_gm1 = Array(parent(p.precomputed.ᶜT))[1]
     T_up1 = Array(parent(p.precomputed.ᶜTʲs.:(1)))[1]

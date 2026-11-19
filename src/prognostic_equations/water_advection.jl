@@ -97,8 +97,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # so that it equals the sum of the updraft and environment energy fluxes;
     # see `updraft_precip_energy_flux` and `environment_precip_energy_flux`.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
-        (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜp) = p.precomputed
+        ᶜuʲs = ᶜdraft_velocities(Y, p)
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+        ᶜu⁰ = ᶜenv_velocity(Y, p)
 
         # TODO the following code works for only one updraft
         sgs_microphysics_tracers = unrolled_filter(
@@ -320,8 +322,11 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
         ),
     )
     isempty(sgs_species) && return nothing
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
-    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜp) = p.precomputed
+    # (materialized: only the bottom level is read)
+    ᶜuʲs = set_draft_velocities!(p.scratch.ᶜtemp_C123s, Y, p)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = ᶜenv_thermo_fields(Y, p)
+    ᶜu⁰ = ᶜenv_velocity(Y, p)
     (; sfc_lev, J_ratio, int_T, int_uvw) = gm
     thp = CAP.thermodynamics_params(p.params)
 
