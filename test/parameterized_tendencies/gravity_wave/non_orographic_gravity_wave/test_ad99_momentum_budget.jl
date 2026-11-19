@@ -1040,13 +1040,26 @@ end
 
 # The set of cells that receive drag from the waves `B0` (intrinsic phase speeds
 # `c_hat`) launched at `launch_level`, for `nk` wavenumber bands, with the
-# reference density `ρ_ref` of the breaking limit. Every z* must lie more than
-# 1 m from a cell centre, so rounding cannot move a wave to another layer.
-function predicted_drag_cells(st, B0, c_hat, launch_level, ρ_ref; nk, damp_level)
+# reference density `ρ_ref` of the breaking limit. The horizontal wavelength is
+# that of band `ink`, 30·10^ink km (AD99), or `wavelength` in every band (Beres).
+# Every z* must lie more than 1 m from a cell centre, so rounding cannot move a
+# wave to another layer.
+function predicted_drag_cells(
+    st,
+    B0,
+    c_hat,
+    launch_level,
+    ρ_ref;
+    nk,
+    damp_level,
+    wavelength = nothing,
+)
     cells = Set{Int}()
     for ink in 1:nk, n in eachindex(B0)
         B0[n] == 0 && continue
-        kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000)
+        kwv =
+            isnothing(wavelength) ? 2 * FT(π) / (30 * FT(10)^ink * 1000) :
+            2 * FT(π) / FT(wavelength)
         ratio = B0[n] / c_hat[n]^3
         @assert ratio > 0 "B0 must carry the sign of the intrinsic phase speed"
         z_star = H_ρ * log(ρ0 * kwv / (2 * N_const * ρ_ref * ratio))
@@ -1077,10 +1090,12 @@ drag_cells(forcing_column) = Set(findall(!iszero, forcing_column))
     res = run_case!(COLUMN_STATE; Bw, wind = :constant, damp_spec = NLEV)
     @test drag_cells(res.forcing_u[:, 1]) == expected
 
-    # Beres: two bins, launched at the first level above 8 km, each breaking at two
-    # heights, one per wavenumber band: the second band's k is 10 times smaller, so
-    # its breaking limit is too, and it breaks H·ln 10 ≈ 16 km lower (here at 9.7
-    # and 15.1 km, the first band at 25.8 and 31.2 km).
+    # Beres: two bins, launched at the first level above 8 km, each breaking at one
+    # height in both wavenumber bands, since the Beres waves use the Beres
+    # wavelength (100 km by default) in every band, not the band wavelength. Its k
+    # is three times that of the first AD99 band (300 km), so they break H·ln 3 ≈
+    # 7.7 km higher than they would at 300 km (here at 33.5 and 38.9 km, against
+    # 25.8 and 31.2 km at 300 km).
     (_, st, _) = BERES_CASES[1]
     n_east = findfirst(==(FT(40)), GW_C)           # ĉ = 16 m/s
     n_west = findfirst(==(FT(0)), GW_C)            # ĉ = -24 m/s
@@ -1099,10 +1114,21 @@ drag_cells(forcing_column) = Set(findall(!iszero, forcing_column))
         B0_v = zero_B0,
     )
     launch_level = round(Int, res_beres.launch_level[1])
+    wavelength = build_gw_beres().beres_source.wavelength
+    @test wavelength == FT(1e5)
     expected_beres = predicted_drag_cells(
-        st, B0_u, GW_C .- U_SOURCE, launch_level, FT(1); nk = 2, damp_level = NLEV,
+        st, B0_u, GW_C .- U_SOURCE, launch_level, FT(1);
+        nk = 2, damp_level = NLEV, wavelength,
     )
-    @test length(expected_beres) == 8              # four separate layers
+    @test length(expected_beres) == 4              # two separate layers
+    # None of them is a cell where the waves would break with the band wavelengths.
+    @test isdisjoint(
+        expected_beres,
+        predicted_drag_cells(
+            st, B0_u, GW_C .- U_SOURCE, launch_level, FT(1);
+            nk = 2, damp_level = NLEV,
+        ),
+    )
     @test drag_cells(res_beres.forcing_u[:, 1]) == expected_beres
     @test all(iszero, res_beres.forcing_v)
 end
