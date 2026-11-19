@@ -17,7 +17,6 @@ using BSON
 include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
-# include("nn_helpers.jl")
 include("nn_helpers.jl")
 
 # load configs
@@ -44,12 +43,12 @@ atmos_config = CA.AtmosConfig(model_config_dict)
 
 # add workers
 @info "Starting $ensemble_size workers."
-addprocs(
-    CAL.SlurmManager(Int(ensemble_size)),
-    t = experiment_config["slurm_time"],
-    mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
-    cpus_per_task = experiment_config["slurm_cpus_per_task"],
-)
+# addprocs(
+#     CAL.SlurmManager(Int(ensemble_size)),
+#     t = experiment_config["slurm_time"],
+#     mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
+#     cpus_per_task = experiment_config["slurm_cpus_per_task"],
+# )
 
 
 @everywhere begin
@@ -72,20 +71,24 @@ addprocs(
 end
 
 
-# if get(model_config_dict, "mixing_length_model", "") == "nn"
-#     prior = create_prior_with_nn(
-#         prior_path,
-#         pretrained_nn_path;
-#         arc = [8, 20, 15, 10, 1],
-#     )
-# else
-#     const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
-# end
-prior = cf_prior_with_nn(
-    joinpath(experiment_dir, prior_path),
-    "/resnick/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/cf_calibration/prior_network_generator_hess-gauss.bson",
-)
-# prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+if get(model_config_dict, "mixing_length_model", "") == "nn"
+    # calibrate mixing length model with neural network prior
+    prior = create_prior_with_nn(
+        prior_path,
+        pretrained_nn_path;
+        arc = [8, 20, 15, 10, 1],
+    )
+elseif get(model_config_dict, "cloud_model", "") == "cloud_ml"
+    # calibrate cloud_ml model with neural network prior
+    # TODO additional function to calibrate both nns simultaneously
+    prior = cf_prior_with_nn(
+        joinpath(experiment_dir, prior_path),
+        joinpath(experiment_dir, nn_prior_generator_path),
+    )
+else
+    # else default to using the standard toml-defined prior only
+    prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+end
 
 ### create output directories & copy configs
 mkpath(output_dir)
