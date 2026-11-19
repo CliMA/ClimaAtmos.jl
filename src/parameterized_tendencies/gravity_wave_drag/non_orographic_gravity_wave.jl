@@ -350,6 +350,13 @@ of each updraft's latent heating (`_beres_latent_linearization`), which
 `implicit_tendency!` after the microphysics tendencies, whose inputs
 (`ᶜmp_tendencyʲs`, `ᶜmp_tendency_implicitʲs`, `ᶜTʲs`, `ᶜρʲs`) are set at this state; a
 no-op unless the Beres latent heating is on.
+
+Cost: with the latent heating on, this runs on every `implicit_tendency!` call (every
+Newton iteration of every implicit stage) over all cells, one broadcast per updraft, and
+`accumulate_beres_latent_heating!` adds three broadcasts per updraft per stage. It is not
+restricted to columns with updrafts. This cost is included in the measured production
+speed of the latent-heating setup (about 1.5 simulated years per day on one A100,
+h_elem 16, Newton 3).
 """
 record_beres_latent_linearization!(Y, p) = _record_beres_latent_linearization!(
     Y,
@@ -2642,8 +2649,9 @@ intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
   - `nk`, `ink`: Number of horizontal wavenumber bands and the current band [-]. The
     wavelength of band `ink` is `30·10^ink` km.
   - `level_end`: Index of the topmost level [-].
-  - `beres_source`: `BeresSourceParams` or `nothing`. Not read by the kernel any more (the
-    Beres spectrum is precomputed); kept so the call signature is unchanged.
+  - `beres_source`: `BeresSourceParams` or `nothing`. Not read by the kernel, which takes
+    the precomputed Beres spectrum from its inputs; the argument keeps the call signature
+    of the AD99 and Beres specializations the same.
 
 The per-level body lives in `waveforcing_accumulate_step`, a named function rather than a
 closure, so that inference of the Beres specialization stays concrete on the GPU.
