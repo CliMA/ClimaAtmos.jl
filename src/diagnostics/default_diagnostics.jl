@@ -13,8 +13,8 @@ Return the default `ScheduledDiagnostic`s for `model`, written through `output_w
 
 The `AtmosModel` method returns the core diagnostics (see `core_default_diagnostics`)
 together with the defaults of every submodel field of `AtmosModel` that defines them.
-Submodels dispatch on their own type; the fallback method returns `[]`, so submodels
-without defaults contribute nothing. Note that `topography` is consumed by the
+Submodels dispatch on their own type; the fallback method returns `ScheduledDiagnostic[]`,
+so submodels without defaults contribute nothing. Note that `topography` is consumed by the
 `AtmosModel` method only and is not forwarded to the submodel methods.
 
 Dates are assigned to simulation times as
@@ -102,7 +102,8 @@ end
 # that all the default_diagnostics return the same type). This is used by
 # default_diagnostics(model::AtmosModel; output_writer), so that we can ignore defaults for
 # submodels that have no given defaults.
-default_diagnostics(submodel, duration, start_date, t_start; output_writer) = []
+default_diagnostics(submodel, duration, start_date, t_start; output_writer) =
+    ScheduledDiagnostic[]
 
 """
     common_diagnostics(period, reduction, output_writer, start_date, t_start,
@@ -147,7 +148,8 @@ function common_diagnostics(
         t_start isa ClimaUtilities.TimeManager.ITime ?
         ClimaUtilities.TimeManager.date(t_start) :
         start_date + Dates.Second(t_start)
-    return vcat(
+    return collect(
+        ScheduledDiagnostic,
         map(short_names) do short_name
             variable = get_diagnostic_variable(short_name)
             return ScheduledDiagnostic(;
@@ -164,8 +166,19 @@ function common_diagnostics(
                 output_writer = output_writer,
                 pre_output_hook! = pre_output_hook!,
             )
-        end...,
+        end,
     )
+end
+
+"""
+    concat_diagnostics(lists...)
+
+Concatenate lists of diagnostics into a single list of diagnostics.
+"""
+function concat_diagnostics(lists...)
+    diagnostics = ScheduledDiagnostic[]
+    foreach(list -> append!(diagnostics, list), lists)
+    return diagnostics
 end
 
 #! format: off
@@ -232,7 +245,7 @@ Return the time-averaging helper appropriate to the total simulation length.
 The returned closure has the signature `(short_names...; kwargs...)`, forwarding to one of
 the `*_averages` helpers with `FT = eltype(duration)` already applied:
 
-  - `duration < 1 hour`: returns an empty tuple, i.e. no averaged diagnostics.
+  - `duration < 1 hour`: returns an empty vector, i.e. no averaged diagnostics.
   - `1 hour ≤ duration < 1 day`: `hourly_averages`.
   - `1 day ≤ duration < 30 days`: `daily_averages`.
   - `30 days ≤ duration < 90 days`: `tendaily_averages`.
@@ -254,7 +267,7 @@ function frequency_averages(duration)
     elseif duration >= 3600
         return (args...; kwargs...) -> hourly_averages(FT, args...; kwargs...)
     else
-        return (args...; kwargs...) -> ()
+        return (args...; kwargs...) -> ScheduledDiagnostic[]
     end
 end
 
@@ -314,11 +327,13 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
         max_func = (args...; kwargs...) -> hourly_max(FT, args...; kwargs...)
     end
     # Base diagnostics for all cases
-    base_diagnostics = [
-        average_func(core_diagnostics...; output_writer, start_date, t_start)...,
-        min_func("ts"; output_writer, start_date, t_start),
-        max_func("ts"; output_writer, start_date, t_start),
-    ]
+    base_diagnostics = concat_diagnostics(
+        average_func(core_diagnostics...; output_writer, start_date, t_start),
+        (
+            min_func("ts"; output_writer, start_date, t_start),
+            max_func("ts"; output_writer, start_date, t_start),
+        ),
+    )
 
     # Prepend orography diagnostic if topography is enabled
     if topography
@@ -329,7 +344,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
             output_writer,
             output_short_name = "orog_inst",
         )
-        return [orog_diagnostic, base_diagnostics...]
+        return concat_diagnostics((orog_diagnostic,), base_diagnostics)
     else
         return base_diagnostics
     end
@@ -366,7 +381,9 @@ function _moist_default_diagnostics(duration, start_date, t_start; output_writer
         "clivi",
     ]
     average_func = frequency_averages(duration)
-    return [average_func(moist_diagnostics...; output_writer, start_date, t_start)...]
+    return concat_diagnostics(
+        average_func(moist_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -388,10 +405,10 @@ function default_diagnostics(
 )
     precip_diagnostics = ["husra", "hussn", "rwp", "swp"]
     average_func = frequency_averages(duration)
-    return [
-        _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
-        average_func(precip_diagnostics...; output_writer, start_date, t_start)...,
-    ]
+    return concat_diagnostics(
+        _moist_default_diagnostics(duration, start_date, t_start; output_writer),
+        average_func(precip_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -403,10 +420,10 @@ function default_diagnostics(
 )
     precip_diagnostics = ["husra", "hussn", "rwp", "swp", "cdnc", "ncra"]
     average_func = frequency_averages(duration)
-    return [
-        _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
-        average_func(precip_diagnostics...; output_writer, start_date, t_start)...,
-    ]
+    return concat_diagnostics(
+        _moist_default_diagnostics(duration, start_date, t_start; output_writer),
+        average_func(precip_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -435,7 +452,7 @@ function default_diagnostics(
             output_writer,
         )
     else
-        return []
+        return ScheduledDiagnostic[]
     end
 end
 
@@ -462,7 +479,9 @@ function _radiation_default_diagnostics(duration, start_date, t_start; output_wr
 
     average_func = frequency_averages(duration)
 
-    return [average_func(rad_diagnostics...; output_writer, start_date, t_start)...]
+    return concat_diagnostics(
+        average_func(rad_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -484,10 +503,10 @@ function default_diagnostics(
 )
     average_func = frequency_averages(duration)
 
-    return [
-        _radiation_default_diagnostics(duration, start_date, t_start; output_writer)...,
-        average_func("clt"; output_writer, start_date, t_start)...,
-    ]
+    return concat_diagnostics(
+        _radiation_default_diagnostics(duration, start_date, t_start; output_writer),
+        average_func("clt"; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -506,16 +525,16 @@ function default_diagnostics(
         "rlutcs",
     ]
 
-    return [
-        _radiation_default_diagnostics(duration, start_date, t_start; output_writer)...,
+    return concat_diagnostics(
+        _radiation_default_diagnostics(duration, start_date, t_start; output_writer),
         average_func(
             "clt",
             rad_clearsky_diagnostics...;
             output_writer,
             start_date,
             t_start,
-        )...,
-    ]
+        ),
+    )
 end
 
 ##################
@@ -559,10 +578,10 @@ function default_diagnostics(
 
     average_func = frequency_averages(duration)
 
-    return [
-        average_func(edmfx_draft_diagnostics...; output_writer, start_date, t_start)...,
-        average_func(edmfx_env_diagnostics...; output_writer, start_date, t_start)...,
-    ]
+    return concat_diagnostics(
+        average_func(edmfx_draft_diagnostics...; output_writer, start_date, t_start),
+        average_func(edmfx_env_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 
@@ -571,9 +590,9 @@ function default_diagnostics(::EDOnlyEDMFX, duration, start_date, t_start; outpu
 
     average_func = frequency_averages(duration)
 
-    return [
-        average_func(edonly_edmfx_diagnostics...; output_writer, start_date, t_start)...,
-    ]
+    return concat_diagnostics(
+        average_func(edonly_edmfx_diagnostics...; output_writer, start_date, t_start),
+    )
 end
 
 function default_diagnostics(
@@ -593,7 +612,7 @@ function default_diagnostics(
             output_writer,
         )
     else
-        return []
+        return ScheduledDiagnostic[]
     end
 end
 
@@ -614,6 +633,6 @@ function default_diagnostics(
             output_writer,
         )
     else
-        return []
+        return ScheduledDiagnostic[]
     end
 end
