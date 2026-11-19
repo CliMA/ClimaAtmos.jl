@@ -3,6 +3,17 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The linearized saturation-excess
+  width `σ_S` (`_sgs_linear_sigma_S`) is evaluated as
+  `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`. The expanded form
+  `σ_q² − 2 γ corr σ_T σ_q + γ² σ_T²` lost its significant digits where
+  `σ_q ≈ γ σ_T` and `corr ≈ 1`, which `Float32` runs reached in cloud layers.
+  The temperature regression on the saturation excess
+  (`sgs_temperature_regression`) clamps the correlation of `T′` and `S′` to
+  `[−1, 1]`, which keeps the node temperatures of the 1M conditional-moment
+  rule within `σ_T |S′| / σ_S` of the mean. With `σ_S` collapsed to its floor,
+  nodes reached the temperature floor and formed cloud ice in warm clouds. The
+  variance fidelity `ᶜα` takes its `σ_S` from `_sgs_linear_sigma_S`.
 - ![][badge-✨feature/enhancement] New Beres diagnostics `nogw_beres_flux_east_u` and
   `nogw_beres_flux_west_u` (Pa, 3D, with `nogw_beres_detailed_diagnostics`): the eastward
   and westward zonal momentum flux of the Beres waves still propagating up through each

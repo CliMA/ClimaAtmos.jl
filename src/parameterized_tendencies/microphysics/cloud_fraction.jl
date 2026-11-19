@@ -949,16 +949,14 @@ function _set_covariance_cache_loop!(
             if is_0m
                 @. ᶜα = one_FT / A
             else
-                ᶜγ = @inline @. lazy(
-                    TD.∂q_vap_sat_∂T(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)),
-                )
                 ᶜsigma_S = @inline @. lazy(
-                    sqrt(
-                        max(
-                            ᶜq′q′ - 2 * ᶜγ * ᶜcorr_Tq * sqrt(max(ᶜT′T′ * ᶜq′q′, zero_FT)) +
-                            ᶜγ^2 * ᶜT′T′,
-                            zero_FT,
-                        ),
+                    _sgs_linear_sigma_S(
+                        thermo_params,
+                        ᶜρ_mean,
+                        ᶜT_mean,
+                        ᶜT′T′,
+                        ᶜq′q′,
+                        ᶜcorr_Tq,
                     ),
                 )
                 ᶜmu_S = @inline @. lazy(
@@ -1036,15 +1034,19 @@ end
     _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
 
 Linearized Clausius–Clapeyron saturation-excess standard deviation
-`σ_S = sqrt(max(σ_q² − 2 γ corr_Tq σ_T σ_q + γ² σ_T², 0))` with
-`γ = ∂q_sat/∂T(T, ρ)`, floored at `ϵ_numerics(FT)`.
+`σ_S = sqrt(σ_q² − 2 γ corr_Tq σ_T σ_q + γ² σ_T²)` with
+`γ = ∂q_sat/∂T(T, ρ)`, floored at `ϵ_numerics(FT)`. The variance is evaluated
+as `(σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr_Tq)`, a sum of two nonnegative
+terms, which keeps its relative precision where the terms of the expanded form
+cancel: where the fluctuations follow the saturation curve, `q′ ≈ γ T′`
+(`σ_q ≈ γ σ_T`, `corr_Tq ≈ 1`).
 """
 @inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
     FT = typeof(ρ)
     (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
     γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
-    var_S = σ_q^2 - 2 * γ * corr * σ_T * σ_q + γ^2 * σ_T^2
-    return max(sqrt(max(var_S, zero(FT))), ϵ_numerics(FT))
+    var_S = (σ_q - γ * σ_T)^2 + 2 * γ * σ_T * σ_q * (one(FT) - corr)
+    return max(sqrt(var_S), ϵ_numerics(FT))
 end
 
 # ============================================================================
