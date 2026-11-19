@@ -171,12 +171,38 @@ function _beres_latent_accumulator_fields(Y)
     n_updrafts = fieldcount(eltype(Y.c.sgsʲs))
     lin_type = NamedTuple{(:H0, :c_lcl, :c_icl, :c_rai, :c_sno), NTuple{5, FT}}
     return (;
-        gw_latent_lin = ntuple(_ -> similar(Y.c.ρ, lin_type), n_updrafts),
+        # Zero until the first implicit stage records it, so the field never holds
+        # uninitialized memory.
+        gw_latent_lin = ntuple(
+            _ -> fill!(similar(Y.c.ρ, lin_type), lin_type(ntuple(_ -> zero(FT), 5))),
+            n_updrafts,
+        ),
         gw_latent_heat_acc = zero(Y.c.ρ),
         gw_latent_mass_acc = zero(Y.c.ρ),
         gw_latent_area_acc = zero(Y.c.ρ),
         gw_latent_time_acc = Ref(zero(FT)),
         gw_latent_window_used = Ref(false),
+    )
+end
+
+"""
+    check_beres_latent_stage_accumulator(nogw_cache, n_imp_stages)
+
+Throw an error when the Beres latent heating is on (the cache holds `gw_latent_lin`) and
+the solver has no stage-weighted implicit accumulator (`n_imp_stages == 0`). The latent
+heating is the mean of what the implicit stages applied, which only that accumulator
+records; without it every NOGW call would fall back to the stored rates of the current
+state. Called from `build_cache`.
+"""
+function check_beres_latent_stage_accumulator(nogw_cache, n_imp_stages)
+    haskey(nogw_cache, :gw_latent_lin) && n_imp_stages == 0 || return nothing
+    error(
+        "nogw_beres_heating_latent needs the stage-weighted implicit accumulator, " *
+        "which this solver configuration does not have. It needs an IMEX algorithm " *
+        "with the manual sparse Jacobian (use_auto_jacobian: false, " *
+        "use_dense_jacobian: false), no Krylov method (use_krylov_method: false), " *
+        "and update_jacobian_every: \"solve\" (or \"stage\" with " *
+        "max_newton_iters_ode: 1).",
     )
 end
 
@@ -938,6 +964,31 @@ limited_gravity_wave_forcing(forcing) = ifelse(
     max(-oftype(forcing, 3e-3), min(oftype(forcing, 3e-3), forcing)),
 )
 
+# Whether a non-finite Beres in-cloud heating has been reported, which happens once per
+# session.
+const BERES_NONFINITE_HEATING_WARNED = Ref(false)
+
+"""
+    warn_nonfinite_beres_heating(ᶜQ_ic)
+
+Return the number of `NaN` or infinite values in the Beres in-cloud heating `ᶜQ_ic`
+(`gw_Q_conv_ic`), and log a warning the first time in a session that it is not zero.
+
+Called once per NOGW call by `compute_beres_convective_heating!`, after the heating is
+set. A non-finite heating makes the column's moments non-finite; `Q0` and `h` are then
+set to zero, so the column stays inactive and the value would otherwise go unnoticed.
+The count is one reduction over the field at the NOGW cadence, as for the drag in
+`warn_nonfinite_gravity_wave_forcing`.
+"""
+function warn_nonfinite_beres_heating(ᶜQ_ic)
+    n_nonfinite = count(!isfinite, parent(ᶜQ_ic))
+    if n_nonfinite > 0 && !BERES_NONFINITE_HEATING_WARNED[]
+        BERES_NONFINITE_HEATING_WARNED[] = true
+        @warn "The Beres in-cloud heating (gw_Q_conv_ic) has $n_nonfinite NaN or infinite values in this NOGW call; the columns that hold them launch no Beres waves. Later occurrences are not reported."
+    end
+    return n_nonfinite
+end
+
 # Whether a non-finite non-orographic gravity-wave forcing has been reported, which
 # happens once per session.
 const NOGW_NONFINITE_WARNED = Ref(false)
@@ -1301,14 +1352,18 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             )
         else
             # No applied heating to average: the first call of a cold start (or of a
-            # restart from a file without the integrals), or a solver with no stage
-            # accumulator. Use the stored rates of the current state
-            # (`_beres_latent_heating_snapshot!`).
+            # restart from a file without the integrals). Use the stored rates of the
+            # current state (`_beres_latent_heating_snapshot!`). A solver with no stage
+            # accumulator is rejected at cache construction
+            # (`check_beres_latent_stage_accumulator`).
             _beres_latent_heating_snapshot!(gw_Q_conv_ic, gw_Q_conv, Y, p, a_min)
         end
         # The next stage starts a new window (`accumulate_beres_latent_heating!`).
         gw_latent_window_used[] = true
     end
+    # A NaN or Inf in the in-cloud heating makes the moments non-finite, and the
+    # sanitizing below then leaves the column inactive; report it instead of hiding it.
+    warn_nonfinite_beres_heating(gw_Q_conv_ic)
 
     # `ᶜuv_temp` holds UVVector(uₕ), which `non_orographic_gravity_wave_compute_tendency!`
     # sets before this call.

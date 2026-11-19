@@ -357,6 +357,7 @@ function build_cache(
         ) : ()
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
+    check_beres_latent_stage_accumulator(non_orographic_gravity_wave, n_imp_stages)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
