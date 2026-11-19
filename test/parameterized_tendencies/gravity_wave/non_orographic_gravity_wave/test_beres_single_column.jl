@@ -875,6 +875,10 @@ const BERES_THIN_LAYER_FLOAT64 = Ref{Any}(nothing)
             @test column(CA._beres_level_draft_area(nogw_latent, Y, ᶜρʲs)) ≈ a_state rtol =
                 1e-12
             @test !haskey(nogw, :gw_latent_area_acc)
+            # The return type is inferred for both caches, so the coverage broadcast
+            # has a concrete type.
+            @inferred CA._beres_level_draft_area(nogw_latent, Y, ᶜρʲs)
+            @inferred CA._beres_level_draft_area(nogw, Y, ᶜρʲs)
             @test column(CA._beres_level_draft_area(nogw, Y, ᶜρʲs)) ≈ a_state rtol = 1e-12
         end
     end
