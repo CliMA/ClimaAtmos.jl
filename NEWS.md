@@ -8,7 +8,7 @@ main
   `ε_rel`): `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, which
   makes the cloud fraction of subsaturated air vanish with its condensate. The
   default `0` supersedes the ClimaParams value `0.02` and leaves results
-  unchanged.
+  unchanged; `toml/default_parameters.toml` sets it to `0.05`.
 - ![][badge-✨feature/enhancement] Parameter files listed under the `toml` key
   are merged in order, and a parameter set in more than one file takes the
   value from the last one with a warning. A case file can list only its differences:

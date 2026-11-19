@@ -1,4 +1,4 @@
-475
+476
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+476
+- `toml/default_parameters.toml` sets `cloud_fraction_eps_rel = 0.05`, the
+  floor of the cloud-fraction width at 5% of the subsaturation deficit, which
+  lowers the cloud fraction of trace condensate in subsaturated air. Changes
+  the output of the moist jobs that use this TOML with the `quadrature` cloud
+  model.
+
 475
 - `toml/default_parameters.toml` (renamed from `prognostic_edmfx_1M.toml`)
   replaces most case parameter files.
