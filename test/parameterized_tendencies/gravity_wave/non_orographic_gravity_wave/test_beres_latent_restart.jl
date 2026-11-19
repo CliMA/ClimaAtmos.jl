@@ -7,12 +7,17 @@
 # first implicit stage after a NOGW call (`gw_latent_window_used`), so a checkpoint
 # written at a NOGW call holds the window that call used.
 #
-# A deep-convection column (TRMM-LBA, 1M, prognostic EDMF) runs 1 h with dt = 120 s,
-# dt_nogw = 600 s and checkpoints every 1800 s (3 NOGW intervals), then runs again
-# from the 1800 s checkpoint to 3600 s. The restarted run must give the same state,
-# drag and latent-heating integrals, bit for bit. Then the window bookkeeping is
-# checked: the integrals at the end cover one NOGW interval, and the next stage
-# starts a new window.
+# A deep-convection column (TRMM-LBA, 1M, prognostic EDMF) runs 4 h with dt = 120 s,
+# dt_nogw = 600 s and checkpoints every hour (6 NOGW intervals), then runs again from
+# the 3 h checkpoint to 4 h. The solver is the production one: 3 Newton iterations with
+# the Jacobian updated at every linear solve. The updrafts first heat above
+# `nogw_beres_z_bot_floor` after about 3 h, so the Beres source is active over the
+# restarted hour; the rain threshold is lowered to 0.01 mm/day so that the rain gate
+# does not hold the source back while the convection is young. The restarted run must
+# give the same state, drag, Beres source and flux profiles, and latent-heating
+# integrals, bit for bit. Then the window
+# bookkeeping is checked: the integrals at the end cover one NOGW interval, and the
+# next stage starts a new window.
 #
 # Run on the CPU (the checks read fields back with scalar indexing):
 #   CLIMACOMMS_DEVICE=CPU julia --project=.buildkite \
@@ -38,10 +43,14 @@ config_dict = merge(
         "non_orographic_gravity_wave" => true,
         "nogw_beres_source" => true,
         "nogw_beres_heating_latent" => true,
+        "nogw_beres_rain_threshold" => 0.01,
+        "nogw_beres_detailed_diagnostics" => true,
+        "max_newton_iters_ode" => 3,
+        "update_jacobian_every" => "solve",
         "dt" => "120secs",
         "dt_nogw" => "600secs",
-        "dt_save_state_to_disk" => "1800secs",
-        "t_end" => "3600secs",
+        "dt_save_state_to_disk" => "3600secs",
+        "t_end" => "14400secs",
         "reproducible_restart" => true,
         "reproducibility_test" => false,
         "debug_tendency_diagnostics" => false,
@@ -58,7 +67,7 @@ job_id = "beres_latent_restart"
 
 simulation = CA.get_simulation(CA.AtmosConfig(config_dict; job_id, comms_ctx))
 CA.solve_atmos!(simulation)
-restart_file = joinpath(simulation.output_dir, "day0.1800.hdf5")
+restart_file = joinpath(simulation.output_dir, "day0.10800.hdf5")
 @test isfile(restart_file)
 restarted = CA.get_simulation(
     CA.AtmosConfig(
@@ -75,10 +84,20 @@ column(field) = vec(Array(parent(field)))
 
 @testset "Beres latent heating: continuous and restarted runs agree" begin
     @test simulation.integrator.t == restarted.integrator.t
-    # The test has power: the updrafts condensed, and the source launched waves.
+    # The test has power: the updrafts condensed, the Beres source is active and
+    # launched waves, and its flux profiles start at the launched flux.
     @test maximum(abs, column(nogw.gw_latent_heat_acc)) > 0
     @test maximum(abs, column(nogw.uforcing)) > 0
-    @info "Beres active at the end: $(column(nogw.gw_beres_active)); max |uforcing| = $(maximum(abs, column(nogw.uforcing)))"
+    @test maximum(column(nogw.gw_beres_active)) > 0
+    @test maximum(column(nogw.gw_launch_flux)) > 0
+    east = column(nogw.gw_beres_flux_east_u)
+    west = column(nogw.gw_beres_flux_west_u)
+    @test all(>=(0), east) && all(>=(0), west)
+    @test maximum(east .+ west) > 0
+    launch_level = Int(column(nogw.beres_source_ρ_z_u_v_level.:5)[1])
+    @test east[launch_level] + west[launch_level] ≈ column(nogw.gw_launch_flux)[1] rtol =
+        1e-5
+    @info "Beres at the end: active $(column(nogw.gw_beres_active)), launched flux $(column(nogw.gw_launch_flux)) Pa, E + W at launch level $launch_level = $(east[launch_level] + west[launch_level]) Pa; max |uforcing| = $(maximum(abs, column(nogw.uforcing)))"
     @test parent(simulation.integrator.u.c) == parent(restarted.integrator.u.c)
     @test parent(simulation.integrator.u.f) == parent(restarted.integrator.u.f)
     for name in (
@@ -91,6 +110,9 @@ column(field) = vec(Array(parent(field)))
         :gw_Q_conv_ic,
         :gw_Q0,
         :gw_beres_active,
+        :gw_launch_flux,
+        :gw_beres_flux_east_u,
+        :gw_beres_flux_west_u,
     )
         @test column(getproperty(nogw, name)) == column(getproperty(nogw_r, name)) ||
               (@info "differs: $name"; false)
@@ -103,7 +125,7 @@ column(field) = vec(Array(parent(field)))
 end
 
 @testset "Beres latent heating: the window covers one NOGW interval, then resets" begin
-    # The run ends on a NOGW call (3600 s = 6 × 600 s), which used the window and marked
+    # The run ends on a NOGW call (14400 s = 24 × 600 s), which used the window and marked
     # it used; the window covered the five steps since the previous call.
     @test nogw.gw_latent_window_used[]
     @test nogw.gw_latent_time_acc[] ≈ 600 rtol = 1e-12
