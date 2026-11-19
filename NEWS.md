@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Parameter files listed under the `toml` key
+  are merged in order, and a parameter set in more than one file takes the
+  value from the last one with a warning. A case file can list only its differences:
+  `toml: [toml/default_parameters.toml, my_case.toml]`.
+- ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` is renamed to
+  `toml/default_parameters.toml`. Most jobs are changed to use this toml.
 - ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Clear-environment
   updraft buoyancy reference for 1M `PrognosticEDMFX` (provisional parameter
   `edmf_buoyancy_clear_env_weight`, `f_ev ∈ [0, 1]`, default `0`): updrafts

@@ -6,7 +6,7 @@ using Test
     mktempdir() do output_dir
         job_id = "test_yaml_path_fix"
 
-        input_toml_path = joinpath(@__DIR__, "..", "toml", "bomex_box_rhoe.toml")
+        input_toml_path = joinpath(@__DIR__, "..", "toml", "default_parameters.toml")
 
         config_dict = Dict(
             "job_id" => job_id,

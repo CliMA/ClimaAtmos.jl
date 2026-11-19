@@ -147,7 +147,7 @@ end
             "dt" => "120secs",
             "t_end" => "30mins",
             "ode_algo" => "ARS222",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "tracer_consistency_edmfx_test",

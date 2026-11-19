@@ -121,9 +121,9 @@ Build an `AtmosConfig` from one or more configuration `Dict`s.
 The dicts are merged (later ones override earlier ones), and the result overrides the
 defaults from `default_config.yml` (see `override_default_config`). The float type `FT`
 is set by the `FLOAT_TYPE` key (`"Float64"` gives `Float64`; anything else gives
-`Float32`), the parameter files listed under the `toml` key are merged into the
-ClimaParams TOML dictionary, and `artifact"name"` strings in config values are resolved
-to local artifact paths.
+`Float32`), the parameter files listed under the `toml` key are merged in order (later
+files override earlier ones) into the ClimaParams TOML dictionary, and `artifact"name"`
+strings in config values are resolved to local artifact paths.
 
 # Keyword Arguments
 
@@ -163,7 +163,9 @@ function AtmosConfig(
         isfile(joinpath(pkgdir(@__MODULE__), file)) ?
         joinpath(pkgdir(@__MODULE__), file) : error("Parameter file $file not found.")
     end
-    override_file = CP.merge_toml_files(atmos_toml)
+    # Later files override earlier ones, so a case file lists only its
+    # differences from a shared base such as `toml/default_parameters.toml`.
+    override_file = CP.merge_toml_files(atmos_toml; override = true)
     toml_dict = CP.create_toml_dict(FT; override_file)
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 

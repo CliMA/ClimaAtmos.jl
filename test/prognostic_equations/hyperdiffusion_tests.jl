@@ -65,7 +65,7 @@ end
             "z_stretch" => false,
             "dt" => "1secs",
             "t_end" => "10secs",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "hyperdiffusion_t0_invariance_test",

@@ -46,7 +46,7 @@ perturb_initstate: false
 dt: "120secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_1M.toml]
+toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 ode_algo: "ARS222"
 ```
@@ -101,15 +101,20 @@ toml: [parameters.toml]
 
 and run as usual. Three behaviors to know about:
 
-  - The `toml` key accepts several files, but a given parameter may appear in
-    only one of them; a duplicate entry across files raises a
-    `Duplicate TOML entry` error.
+  - The `toml` key accepts several files, merged in order: a parameter set in
+    more than one file takes the value from the last one, and a warning names
+    it with both values. The warning prints each entry's `type`, so give every
+    entry of a parameter set in more than one file a `type` field; without it
+    the warning is replaced by a logged `KeyError`, though the merge still
+    succeeds.
+    [`toml/default_parameters.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/default_parameters.toml)
+    gives every entry a `type`, so a case file can list only its differences
+    from it: `toml: [toml/default_parameters.toml, my_case.toml]`.
   - A `toml:` key in a later configuration file *replaces* the earlier list
     rather than appending to it. Many shipped model configurations already
-    carry one (e.g.
-    [`toml/prognostic_edmfx_1M.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/prognostic_edmfx_1M.toml)
-    in the BOMEX example above), so to combine your overrides with such a
-    configuration, list both files.
+    carry one (e.g. `toml/default_parameters.toml` in the BOMEX example above),
+    so to combine your overrides with such a configuration, list its files
+    followed by yours.
   - Overriding a parameter that no component of the current model uses raises
     an error; set `strict_params: false` to allow unused overrides.
 

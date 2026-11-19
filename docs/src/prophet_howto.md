@@ -119,13 +119,14 @@ Closure parameters live in ClimaParams and are overridden through the `toml:`
 key:
 
 ```yaml
-toml: [toml/prognostic_edmfx_1M.toml]
+toml: [toml/default_parameters.toml]
 ```
 
 The tuned sets in `toml/` are the starting point:
-`prognostic_edmfx.toml` (0M), `prognostic_edmfx_1M.toml`,
-`prognostic_edmfx_calibrated.toml`, and case-specific variants such as
-`prognostic_edmfx_bomex_pigroup.toml` and `prognostic_edmfx_gcmdriven.toml`.
+`default_parameters.toml` (shared by the 0M and 1M jobs),
+`prognostic_edmfx_calibrated.toml`, and case-specific files such as
+`prognostic_edmfx_gcmdriven.toml`, which hold only a case's differences and are
+listed after `default_parameters.toml`.
 [Closures](prophet_closures.md#Parameters) maps each symbol in the formulation
 onto its ClimaParams name.
 
