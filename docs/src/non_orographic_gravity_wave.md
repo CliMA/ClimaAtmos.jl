@@ -356,3 +356,15 @@ convective source is added with `nogw_beres_source`, which requires PROPHET;
 heating source and the verification diagnostics. See
 [Configuration Options](configuration_options.md) and
 [Running Global Simulations](global_simulations.md).
+
+Among the verification diagnostics, `nogw_beres_flux_east_u` and `nogw_beres_flux_west_u`
+(Pa, 3D on cell centres) are the zonal momentum flux of the Beres waves still propagating
+up through each centre: the eastward waves ($B_0 > 0$) and the magnitude of the westward
+waves ($B_0 < 0$), both non-negative, with the coverage $a_{cover}$ and summed over the
+wavenumber bands, as the drag deposits them. They are zero below the Beres launch level
+and in inactive columns, and at the launch level their sum is `nogw_launch_flux`. Between
+two centres, east minus west drops by the zonal flux the layer between them gives up as
+Beres drag; a wave removed by total internal reflection is the only other way it drops.
+The value at the top centre is the flux that escapes through the model top and is spread
+over the damping layer. They cover the Beres source only, not the AD99 background; the
+flux at a pressure level, such as 100 hPa, follows by interpolating in `pfull`.

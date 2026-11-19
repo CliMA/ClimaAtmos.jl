@@ -406,6 +406,75 @@ add_diagnostic_variable!(
     compute! = compute_nogw_launch_flux!,
 )
 
+# --- Beres zonal flux profiles (3D, cell centres; zero below the launch level and in
+# inactive columns) ---
+# nogw_beres_flux_east_u, nogw_beres_flux_west_u
+
+"""
+    _copy_field!(out, field)
+
+Copy `field` into `out`, or return a copy of it when `out` is `nothing`.
+"""
+function _copy_field!(out, field)
+    if isnothing(out)
+        return copy(field)
+    else
+        out .= field
+    end
+end
+
+compute_nogw_beres_flux_east_u!(out, state, cache, time) =
+    compute_nogw_beres_flux_east_u!(
+        out, state, cache, time, cache.atmos.non_orographic_gravity_wave,
+    )
+compute_nogw_beres_flux_east_u!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_beres_flux_east_u", non_orographic_gravity_wave)
+compute_nogw_beres_flux_east_u!(
+    _, _, _, _, ::NonOrographicGravityWave{FT, Nothing},
+) where {FT} = error_diagnostic_variable(
+    "nogw_beres_flux_east_u requires Beres source enabled",
+)
+function compute_nogw_beres_flux_east_u!(
+    out, _, cache, _, ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    _require_beres_detailed("nogw_beres_flux_east_u", cache)
+    return _copy_field!(out, cache.non_orographic_gravity_wave.gw_beres_flux_east_u)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_beres_flux_east_u",
+    long_name = "NOGW Beres Eastward Zonal Momentum Flux",
+    units = "Pa",
+    comments = "Zonal momentum flux of the eastward-propagating Beres waves (launch flux B0 > 0) still propagating up through each cell centre, a_cover * sum of B0 over those waves, summed over the wavenumber bands; non-negative, zero below the Beres launch level and in inactive columns. Equals the eastward launched flux at the launch level. Between two centres, the drop of (east - west) is the zonal flux the layer gives up as Beres drag. Beres source only (not the AD99 background).",
+    compute! = compute_nogw_beres_flux_east_u!,
+)
+
+compute_nogw_beres_flux_west_u!(out, state, cache, time) =
+    compute_nogw_beres_flux_west_u!(
+        out, state, cache, time, cache.atmos.non_orographic_gravity_wave,
+    )
+compute_nogw_beres_flux_west_u!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_beres_flux_west_u", non_orographic_gravity_wave)
+compute_nogw_beres_flux_west_u!(
+    _, _, _, _, ::NonOrographicGravityWave{FT, Nothing},
+) where {FT} = error_diagnostic_variable(
+    "nogw_beres_flux_west_u requires Beres source enabled",
+)
+function compute_nogw_beres_flux_west_u!(
+    out, _, cache, _, ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    _require_beres_detailed("nogw_beres_flux_west_u", cache)
+    return _copy_field!(out, cache.non_orographic_gravity_wave.gw_beres_flux_west_u)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_beres_flux_west_u",
+    long_name = "NOGW Beres Westward Zonal Momentum Flux",
+    units = "Pa",
+    comments = "Magnitude of the zonal momentum flux of the westward-propagating Beres waves (launch flux B0 < 0) still propagating up through each cell centre, a_cover * sum of |B0| over those waves, summed over the wavenumber bands; non-negative, zero below the Beres launch level and in inactive columns. Equals the westward launched flux magnitude at the launch level. Between two centres, the drop of (east - west) is the zonal flux the layer gives up as Beres drag. Beres source only (not the AD99 background).",
+    compute! = compute_nogw_beres_flux_west_u!,
+)
+
 # Launched-spectrum flux-weighted phase-speed centroid (2D, gated by beres_active)
 compute_nogw_c_centroid!(out, state, cache, time) = compute_nogw_c_centroid!(
     out,

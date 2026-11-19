@@ -407,7 +407,7 @@ nogw_beres_wavelength:
   help: "Horizontal wavelength in m of the Beres convective waves in the breaking and reflection tests of the propagation. The default 1e5 (100 km) is the `band_mid` wavelength CAM uses for its Beres deep and shallow sources; the AD99 background keeps its own 300 km. Unused without `nogw_beres_source`. [1.0e5 (default)]"
   value: 1.0e5
 nogw_beres_detailed_diagnostics:
-  help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
+  help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries, and the eastward and westward Beres zonal flux profiles nogw_beres_flux_east_u / nogw_beres_flux_west_u) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
   value: false
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"

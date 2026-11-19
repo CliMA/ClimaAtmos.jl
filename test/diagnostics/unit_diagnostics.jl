@@ -489,7 +489,8 @@ VALID_CASES = [
     cases(("nogw_beres_active", "nogw_Q0", "nogw_h_heat", "nogw_zbot",
            "nogw_ztop", "nogw_Q_conv", "nogw_Q_conv_ic", "nogw_c_centroid",
            "nogw_halfsine", "nogw_launch_flux", "nogw_a_cover", "nogw_N_source",
-           "nogw_beres_mech_flux"), :nogw_beres)...,
+           "nogw_beres_mech_flux", "nogw_beres_flux_east_u",
+           "nogw_beres_flux_west_u"), :nogw_beres)...,
     # Five-way band fluxes: 5 variants × (4 bands and the c = 0 bin) × (signed, |B0|)
     cases(
         Tuple(

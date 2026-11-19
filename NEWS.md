@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] New Beres diagnostics `nogw_beres_flux_east_u` and
+  `nogw_beres_flux_west_u` (Pa, 3D, with `nogw_beres_detailed_diagnostics`): the eastward
+  and westward zonal momentum flux of the Beres waves still propagating up through each
+  cell centre, with the coverage `a_cover`, so that east minus west drops between levels
+  by the Beres zonal drag. The Beres flux at a pressure level (e.g. 100 hPa) follows by
+  interpolating in `pfull`. They add two more passes of the propagation kernel per NOGW
+  call when the flag is on, and nothing when it is off.
 - ![][badge-🔥behavioralΔ] With the Beres latent heating (`nogw_beres_heating_latent`),
   the coverage `a_cover` that dilutes the deposited Beres flux, and the level area that
   decides which levels enter the heating fit, are the updraft area averaged over the same

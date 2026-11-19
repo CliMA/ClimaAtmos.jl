@@ -825,6 +825,8 @@ function build_gw_beres()
         ν_min = FT(8.727e-4),
         ν_max = FT(1.047e-2),
         n_ν = 9,
+        # Also sets the eastward and westward flux profiles checked in test 5.
+        detailed_diagnostics = true,
     )
     return CA.NonOrographicGravityWave{FT, typeof(beres_source)}(;
         kwargs...,
@@ -943,7 +945,37 @@ function run_beres_case!(
         forcing_u = profile(gwc.uforcing),
         forcing_v = profile(gwc.vforcing),
         launch_level = per_column(gwc.beres_source_ρ_z_u_v_level.:5),
+        flux_east = profile(gwc.gw_beres_flux_east_u),
+        flux_west = profile(gwc.gw_beres_flux_west_u),
+        drag_from_flux_u = profile(drag_from_flux_drop!(st)),
     )
+end
+
+# The zonal drag the drops of the Beres flux profiles give: the flux each layer at or
+# above the launch level gives up, (E - W) at the centre below it minus (E - W) at the
+# centre above it (all of (E - W) at the top centre, where the escaped flux leaves),
+# divided by the layer's mass and handed to the cells by the scheme's own
+# `postprocess_and_accumulate!`. The step from zero to the launched flux at the launch
+# level is the source, not a drop. Reads the layer masses
+# and the damping-layer scale the last `non_orographic_gravity_wave_forcing` call left
+# in `p.scratch`.
+function drag_from_flux_drop!(st)
+    (; gwc, p) = st
+    ᶜnet = similar(gwc.uforcing)
+    ᶜnet_above = similar(gwc.uforcing)
+    ᶜlayer_flux = similar(gwc.uforcing)
+    ᶜzero = zero(gwc.uforcing)
+    ᶜdrag = zero(gwc.uforcing)
+    ᶜdrag_v = zero(gwc.uforcing)
+    @. ᶜnet = gwc.gw_beres_flux_east_u - gwc.gw_beres_flux_west_u
+    CA.field_shiftlevel_up!(ᶜnet, ᶜnet_above, FT(0))
+    launch_level = gwc.beres_source_ρ_z_u_v_level.:5
+    @. ᶜlayer_flux = ifelse(gwc.ᶜlevel >= launch_level, ᶜnet - ᶜnet_above, FT(0))
+    CA.postprocess_and_accumulate!(
+        ᶜdrag, ᶜdrag_v, ᶜlayer_flux, ᶜzero, gwc.damp_level, gwc.ᶜlevel, st.nlev,
+        p.scratch.temp_field_level, p.scratch.ᶜtemp_scalar_6,
+    )
+    return ᶜdrag
 end
 
 const BERES_CASES = (
@@ -1006,6 +1038,38 @@ const BERES_CASES = (
         for (col, level) in enumerate(round.(Int, beres_only.launch_level))
             @test all(iszero, beres_only.forcing_u[1:(level - 1), col])
         end
+
+        # The eastward and westward zonal flux profiles (`nogw_beres_flux_east_u`,
+        # `nogw_beres_flux_west_u`): (i) never negative; (ii) zero below the launch level
+        # and, at it, the launched eastward and westward flux; (iii) the drops of east
+        # minus west, taken as the flux each layer gives up, give back the Beres drag;
+        # (iv) zero above the highest cell that receives Beres drag, when the waves all
+        # break below the model top (on the column grids; on the others some westward
+        # waves reach the top, and the flux there is the escaped flux, part of (iii)).
+        (; flux_east, flux_west) = beres_only
+        F_east = A_COVER * sum(b -> max(b, 0), BERES_B0_U)
+        F_west = A_COVER * sum(b -> max(-b, 0), BERES_B0_U)
+        @test all(>=(0), flux_east) && all(>=(0), flux_west)
+        for (col, level) in enumerate(round.(Int, beres_only.launch_level))
+            @test all(iszero, flux_east[1:(level - 1), col])
+            @test all(iszero, flux_west[1:(level - 1), col])
+            @test flux_east[level, col] ≈ F_east rtol = 1e-14
+            @test flux_west[level, col] ≈ F_west rtol = 1e-14
+            @test flux_east[level, col] + flux_west[level, col] ≈
+                  A_COVER * sum(abs, BERES_B0_U) rtol = 1e-14
+            top_drag_level = findlast(!iszero, beres_only.forcing_u[:, col])
+            if top_drag_level < st.nlev
+                @test all(iszero, flux_east[top_drag_level:end, col])
+                @test all(iszero, flux_west[top_drag_level:end, col])
+            end
+        end
+        # The uniform 50-level column has no escape, so (iv) is tested there.
+        name == "column" &&
+            @test findlast(!iszero, beres_only.forcing_u[:, 1]) < st.nlev
+        @test maximum(abs, beres_only.drag_from_flux_u .- beres_only.forcing_u) <
+              1e-12 * maximum(abs, beres_only.forcing_u)
+        # With AD99 on, the profiles are still the Beres source alone.
+        @test both.flux_east == flux_east && both.flux_west == flux_west
         # The two sources add.
         scale = maximum(abs, both.forcing_u)
         @test maximum(

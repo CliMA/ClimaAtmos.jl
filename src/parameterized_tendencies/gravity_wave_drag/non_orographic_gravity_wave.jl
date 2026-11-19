@@ -567,7 +567,9 @@ precomputed per-column launch spectra `gw_beres_B0_u`, `gw_beres_B0_v` (each a
 `BeresB0{nc, FT}`), the gathered in-cloud heating `gw_beres_gprofile` [K/s], an
 `NTuple{N_BERES_PROFILE, FT}` (on `[max(z_bot, z_bot_floor), z_top]`), the mean model
 level thickness over that window `gw_beres_dz_level` [m], and the obstacle-level updraft
-velocity `gw_w_obstacle` [m/s].
+velocity `gw_w_obstacle` [m/s]. With `detailed_diagnostics`, it also holds the zonal
+Beres flux still propagating up through each cell centre, eastward `gw_beres_flux_east_u`
+and westward `gw_beres_flux_west_u` [Pa], set by `beres_propagating_flux!`.
 
 Called from `non_orographic_gravity_wave_cache`.
 """
@@ -584,8 +586,14 @@ end
 function _beres_cache_fields(Y, beres::BeresSourceParams, ::Val{nc}) where {nc}
     FT = Spaces.undertype(axes(Y.c))
     latent = beres.heating_latent ? _beres_latent_accumulator_fields(Y) : (;)
+    # The eastward and westward zonal flux profiles, set by `beres_propagating_flux!`.
+    flux_profiles =
+        beres.detailed_diagnostics ?
+        (; gw_beres_flux_east_u = zero(Y.c.ρ), gw_beres_flux_west_u = zero(Y.c.ρ)) :
+        (;)
     return (;
         latent...,
+        flux_profiles...,
         gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
         gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
         gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
@@ -2263,6 +2271,10 @@ the intermittency factor, and the horizontal wavelength of the breaking and refl
 tests (`30·10^ink` km for AD99, `wavelength` of the `BeresSourceParams`, 100 km by
 default, for Beres).
 
+With the Beres `detailed_diagnostics` flag set, `beres_propagating_flux!` then fills the
+eastward and westward Beres zonal flux profiles `gw_beres_flux_east_u` and
+`gw_beres_flux_west_u`, using `u_waveforcing` and `v_waveforcing` as scratch.
+
 # Arguments
 
   - `ᶜu`, `ᶜv`: Physical horizontal wind components at cell centers [m/s].
@@ -2548,7 +2560,109 @@ function non_orographic_gravity_wave_forcing(
             )
         end
     end
+
+    # The wave forcing fields are free once the last band is deposited.
+    if !isnothing(gw_beres_source) && gw_beres_source.detailed_diagnostics
+        beres_propagating_flux!(
+            p.non_orographic_gravity_wave, input_u_beres, u_waveforcing,
+            v_waveforcing, ᶜlevel, gw_c, gw_c0, gw_nk, level_end, gw_ncval,
+            gw_beres_source,
+        )
+    end
     return nothing
+end
+
+"""
+    beres_propagating_flux!(nogw, input_u_beres, ᶜsurviving_east, ᶜsurviving_west, ᶜlevel,
+                            c, c0, nk, level_end, gw_ncval, beres_source)
+
+Set the Beres zonal momentum flux still propagating up through each cell centre, split by
+sign, in `nogw.gw_beres_flux_east_u` and `nogw.gw_beres_flux_west_u` [Pa].
+
+The eastward flux `E` sums the waves with a positive zonal launch flux `B₀ > 0`, and the
+westward flux `W` sums `|B₀|` of the waves with `B₀ < 0`, so both are non-negative. Both
+carry the coverage `a_cover` and are summed over the `nk` wavenumber bands, as the drag is.
+The Beres waves have the same wavelength in every band, so each band carries
+`a_cover·B₀/nk` and the sum is `a_cover·B₀`.
+
+What happens, in order:
+
+ 1. `waveforcing_column_accumulate!` marches the zonal Beres spectrum up the column with
+    the same input and step function as the drag, so each wave is removed at the same
+    level as in the drag. Instead of the flux each layer gives up, it returns the sum of
+    `B₀⁺` (east) or `|B₀⁻|` (west) over the waves left after the tests at each level,
+    written to `ᶜsurviving_east` and `ᶜsurviving_west` (scratch; overwritten).
+ 2. The kernel's tests at level `k` use the values at level `k+1`, so the waves left after
+    them are those that reach centre `k+1`. The sums are moved up one level, and
+    multiplied by `a_cover`.
+ 3. The flux is zero below the Beres launch level. At the launch level it is the launched
+    flux, so `E + W` there equals `nogw_launch_flux` in an active column.
+
+So `E - W` drops between centres `k` and `k+1` by exactly the flux the layer between them
+gives up as drag (summed over bands), except for a wave removed by total internal
+reflection, which leaves `E - W` without depositing. The value at the top centre is the
+flux that escapes through the model top and is spread over the damping layer.
+
+The extra kernel launches use the same argument types as the Beres drag kernel (only the
+`transform` differs, a type with no fields), so they add no kernel parameters. Called from
+`non_orographic_gravity_wave_forcing` after the band loop, only with `detailed_diagnostics`.
+"""
+function beres_propagating_flux!(
+    nogw, input_u_beres, ᶜsurviving_east, ᶜsurviving_west, ᶜlevel, c, c0, nk,
+    level_end, gw_ncval, beres_source,
+)
+    (;
+        gw_beres_flux_east_u,
+        gw_beres_flux_west_u,
+        gw_a_cover,
+        beres_source_ρ_z_u_v_level,
+    ) = nogw
+    FT = eltype(ᶜsurviving_east)
+    mask = StaticBitVector{length(c)}(_ -> true)
+    waveforcing_column_accumulate!(
+        ᶜsurviving_east, mask, input_u_beres, c, c0, nk, 1, level_end, gw_ncval,
+        beres_source, Val(:beres); transform = BeresSurvivingFlux{true}(),
+    )
+    waveforcing_column_accumulate!(
+        ᶜsurviving_west, mask, input_u_beres, c, c0, nk, 1, level_end, gw_ncval,
+        beres_source, Val(:beres); transform = BeresSurvivingFlux{false}(),
+    )
+    # The value at the level below, zero at the bottom level
+    ᶠbelow = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(FT(0)))
+    ᶜbelow = Operators.BottomBiasedF2C()
+    @. gw_beres_flux_east_u = ᶜbelow(ᶠbelow(ᶜsurviving_east))
+    @. gw_beres_flux_west_u = ᶜbelow(ᶠbelow(ᶜsurviving_west))
+    # As in the kernel, a zero launch density gives no flux.
+    ρ_source = beres_source_ρ_z_u_v_level.:1
+    launch_level = beres_source_ρ_z_u_v_level.:5
+    for ᶜflux in (gw_beres_flux_east_u, gw_beres_flux_west_u)
+        @. ᶜflux = ifelse(
+            (ᶜlevel >= launch_level) & (ρ_source > 0),
+            gw_a_cover * ᶜflux,
+            FT(0),
+        )
+    end
+    return nothing
+end
+
+"""
+    BeresSurvivingFlux{EAST}()
+
+The `transform` of the column accumulation in `beres_propagating_flux!`: from the kernel
+state after the tests at one level, return the sum of `B₀[n]` over the eastward waves
+(`EAST = true`, `B₀[n] > 0`) or of `-B₀[n]` over the westward waves (`B₀[n] < 0`) still in
+the propagating mask [Pa].
+"""
+struct BeresSurvivingFlux{EAST} end
+@inline function (::BeresSurvivingFlux{EAST})(state) where {EAST}
+    (_, mask, _, B0) = state
+    FT = eltype(B0)
+    flux = zero(FT)
+    for n in 1:length(B0)
+        b = EAST ? max(B0[n], zero(FT)) : max(-B0[n], zero(FT))
+        flux += ifelse(mask[n], b, zero(FT))
+    end
+    return flux
 end
 
 """
@@ -2629,11 +2743,15 @@ compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
 
 """
     waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
-                                   gw_ncval, beres_source, source_mode::Val{MODE})
+                                   gw_ncval, beres_source, source_mode::Val{MODE};
+                                   transform = first)
 
 March one source spectrum up each column and write the momentum flux each layer gives up.
 
-Mutates `waveforcing` [Pa]; the return value is unused. This is the kernel shared by both
+Mutates `waveforcing` [Pa]; the return value is unused. `transform` maps the kernel state
+after each level to the value written there; the default `first` writes the flux the layer
+gives up, and `beres_propagating_flux!` passes `BeresSurvivingFlux` to write the flux of the
+waves still propagating instead. This is the kernel shared by both
 sources; `MODE` is `:ad99` or `:beres` and selects the launch spectrum, the launch level,
 and the intermittency factor at compile time.
 
@@ -2704,7 +2822,8 @@ function waveforcing_column_accumulate!(
     level_end,
     gw_ncval::Val{nc},
     beres_source,
-    source_mode::Val{MODE},
+    source_mode::Val{MODE};
+    transform = first,
 ) where {nc, MODE}
     FT = eltype(waveforcing)
     # Horizontal wavenumber of the waves [1/m]: 2π over the Beres wavelength
@@ -2728,7 +2847,7 @@ function waveforcing_column_accumulate!(
         waveforcing,
         input;
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
-        transform = first,
+        transform,
     ) do state, inp
         waveforcing_accumulate_step(
             state, inp, c, c0, nk, kwv, level_end, gw_ncval, source_mode,
