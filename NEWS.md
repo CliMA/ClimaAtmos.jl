@@ -10,7 +10,19 @@ main
   `c_pd ∫ρ Q dz / L_v` over the column, with `Q` the grid mean of the same applied latent
   heating over the same time window; it is not the surface precipitation. The depth and
   coverage tests and the amplitude `Q0` are unchanged, and so is the activation without
-  `nogw_beres_heating_latent`.
+  `nogw_beres_heating_latent`. With the latent heating, `gw_Q_conv` (and the `nogw_Q_conv`
+  diagnostic) is the grid mean `Σⱼ max(ρaʲ, 0)·Qʲ/ρ` of that latent heating, not the
+  dry-static-energy flux convergence.
+- ![][badge-💥breaking] `nogw_beres_heating_latent: true` needs a solver with the
+  stage-weighted implicit accumulator (an IMEX algorithm with the manual sparse Jacobian,
+  no Krylov method, and `update_jacobian_every: "solve"`, or `"stage"` with
+  `max_newton_iters_ode: 1`); any other solver is an error when the model is built.
+- ![][badge-✨feature/enhancement] A NaN or infinite Beres in-cloud heating is reported
+  (once per session) before it leaves its column inactive.
+- ![][badge-🔥behavioralΔ] Beres-G (`nogw_beres_shape_mode: sine_transform`): the
+  envelope means `u_heat`, `v_heat`, `N_source` and the coverage `a_cover` average over
+  `[max(z_bot, nogw_beres_z_bot_floor), z_top]`, the layer of its heating and launch
+  filter, instead of `[z_bot, z_top]`. Beres-C keeps the whole envelope.
 - ![][badge-🐛bugfix] The constant-N background of `ConstantBuoyancyFrequencyProfile`,
   shared with the steady-state solutions, evaluates the constant-N pressure only below
   the isothermal cap; above it the base of the power turned negative, which threw a
@@ -22,8 +34,7 @@ main
   Newton state plus the Jacobian's `−1/τ` and linearized evaporation and deposition rates
   times the change of the condensate) and adds the heating at the solved state, weighted
   by `b_imp·dt`. The accumulators are saved in restart files and read back, so a restarted
-  run continues the window; the first NOGW call of a cold start and a solver without the
-  stage accumulator use the stored rates.
+  run continues the window; the first NOGW call of a cold start uses the stored rates.
 - New config key `z_faces`: explicit vertical face heights, or the preset
   `hybrid_0p5km` (the 63-level grid up to 8.1 km, shrinking to 500 m at 10.6 km, uniform
   500 m to 34.6 km, then growing by about 11% per level to 3 km at 60 km; 106 levels).
@@ -51,14 +62,16 @@ main
   and ice formation, rain evaporation, snow deposition and sublimation) at its
   instantaneous rate. It recomputed both sets at their instantaneous rates, which
   overstated the heating where the bulk processes are fast (on two frozen 1M states, by
-  1.7 and 2.1 times averaged over 4-5.5 km in active tropical updrafts). These are still
-  rates of the current state, not the increments the solver applied: with
-  `max_newton_iters_ode = 1` the applied implicit increment, (U − temp)/dtγ, differs
-  from the instantaneous rate, so whether the Beres heating should follow the applied
-  increments remains open.
-- The AD99 drag in `test_nogw_mima.jl` is about 2.2 times MiMA's (RMS of the zonal-mean
-  drag) while its pattern correlates at 0.96-0.98; the cause of this gap is not known.
-  The test's RMS-ratio window is a regression guard on it, not a physical bound.
+  1.7 and 2.1 times averaged over 4-5.5 km in active tropical updrafts). These stored
+  rates are now used only at the first NOGW call of a cold start; every other call uses
+  the applied heating (entry above).
+- `test_nogw_mima.jl` builds each column from MiMA's own full-level heights and uses a
+  uniform source amplitude (`Bt_n = Bt_s = 0`, which matches MiMA's 0.0043). Its AD99
+  zonal drag is then 0.64-0.68 times MiMA's (RMS of the zonal-mean drag, 13 months), with
+  correlations 0.98-0.99 for u and 0.64-0.76 for v. The ratio below one comes from the
+  momentum-conserving redistribution of the flux escaping through the top: it is 0.99
+  at 100-10 hPa, 1.00 at 10-1 hPa and 0.66 in the three damping cells. The test's
+  RMS-ratio window is a regression guard, not a physical bound.
 - ![][badge-🔥behavioralΔ] The Julia-API default gravity-wave cadences (`dt_nogw`,
   `dt_ogw` in the `callback_kwargs` of `AtmosSimulation`) are 1800 s, the same as the
   `default_config.yml` defaults; they were 3 hours. Runs set up from a config file are
@@ -69,7 +82,8 @@ main
 - ![][badge-🐛bugfix] Levels whose total updraft area is below the Beres `a_min`
   (1e-4) are left out of the Beres heating fit (the moments that set the depth and `Q0`,
   the Beres-G profile, and the activation integral); the coverage and the envelope-mean
-  winds and buoyancy frequency still average over the whole envelope. This replaces a
+  winds and buoyancy frequency still average over every level of the heating layer (the
+  whole envelope for Beres-C, its part above the floor for Beres-G). This replaces a
   density guard that compared `ρa` with `eps(FT)`, so Float32 and Float64 agree.
 - ![][badge-🔥behavioralΔ] Beres-G (`nogw_beres_shape_mode: sine_transform`) transforms
   the gathered in-cloud heating itself instead of its peak-normalized shape times the
@@ -82,9 +96,13 @@ main
   phase speed equals the wind between the heating and the launch level are removed at
   launch. `beres2004` (default) removes every phase speed between the minimum and
   maximum wind over the heating layer up to the launch level, per azimuth and including
-  the steady `c = 0` bin; `height_resolved` (Beres-G) keeps, for each phase speed, only
-  the heating above its highest critical level in the layer; `none` launches them, as
-  before. `nogw_beres_launch_filter_margin` widens the band.
+  the steady `c = 0` bin; `height_resolved` keeps, for each phase speed, only the heating
+  above its highest critical level in the layer, with a one-level taper (the gathered
+  profile for Beres-G, the half-sine in closed form for Beres-C); `none` launches them,
+  as before. `nogw_beres_launch_filter_margin` widens the band. `height_resolved` is
+  available but not recommended for Beres-C: the spectrum of the kept heating still uses
+  the layer-mean wind `u_heat` for the Doppler shift and the sign of the flux, which is
+  wrong for phase speeds between `u_heat` and the wind above the cut.
 - ![][badge-🐛bugfix] The steady (`c = 0`) Beres source counts the horizontal
   wavenumbers of both signs: its horizontal constant is `H = (σx²/2)·E1(k_min²σx²/2)`,
   twice what it was, so the steady flux is twice as large at the same
