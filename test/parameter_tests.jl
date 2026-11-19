@@ -154,10 +154,15 @@ end
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
+        @test CAP.cloud_fraction_eps_rel(sq) == FT(0)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,
         (; sgs_displacement_truncation = 0.5),
+    )
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; cloud_fraction_eps_rel = -0.05),
     )
     @test CAP.edmf_tail_entr_fraction(CA.TurbulenceConvectionParameters(Float64)) ==
           0.5
@@ -187,6 +192,9 @@ end
   [sgs_ice_uniform_fraction]
   value = 0.5
   type = "float"
+  [cloud_fraction_eps_rel]
+  value = 0.25
+  type = "float"
   """,
         )
         flush(io)
@@ -197,6 +205,7 @@ end
         sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
         @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.cloud_fraction_eps_rel(sq) == 0.25
         @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
     # The parameter log leaves out the superseded ClimaParams value of `c_Δx`,

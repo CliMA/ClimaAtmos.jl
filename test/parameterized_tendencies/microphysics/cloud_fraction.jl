@@ -2,11 +2,12 @@
 Unit tests for cloud_fraction.jl
 
 Tests cover:
-1. `_compute_cloud_fraction(q_c, mu_S, sigma_S, α, σ_abs)` -
+1. `_compute_cloud_fraction(q_c, mu_S, sigma_S, α, σ_floor)` -
    truncated-Gaussian CF closure with the equilibrium condensate normalized
-   by the gradient width floored at `σ_abs` and the non-equilibrium excess by
-   the subsaturation deficit, which keeps subsaturated air with trace
-   condensate patchy and is `C¹` across `μ_S = 0`.
+   by the gradient width floored at `σ_abs` and at `ε_rel` times the
+   subsaturation deficit, and the non-equilibrium excess by the subsaturation
+   deficit, which keeps subsaturated air with trace condensate patchy and is
+   `C¹` across `μ_S = 0`.
 =#
 
 using Test
@@ -22,26 +23,26 @@ import Thermodynamics as TD
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 α = FT(1)
-                σ_abs = FT(1e-7)
+                σ_floor = CA.CloudFractionFloor(FT(1e-7), FT(0))
                 μ_sub = FT(-1e-3)
 
                 @testset "No condensate → zero cloud fraction" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(0), μ_sub, FT(1e-4), α, σ_abs,
+                        FT(0), μ_sub, FT(1e-4), α, σ_floor,
                     )
                     @test cf < eps(FT)
                 end
 
                 @testset "Condensate present, nonzero sigma → cf > 0" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-3), μ_sub, FT(3.16e-4), α, σ_abs,
+                        FT(1e-3), μ_sub, FT(3.16e-4), α, σ_floor,
                     )
                     @test FT(0) < cf <= FT(1)
                 end
 
                 @testset "Zero sigma, large condensate → cf ≈ 1" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-2), μ_sub, FT(0), α, σ_abs,
+                        FT(1e-2), μ_sub, FT(0), α, σ_floor,
                     )
                     @test cf > FT(0.99)
                 end
@@ -52,10 +53,10 @@ import Thermodynamics as TD
                     # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C ≈ 1, cf ≈ 0.82);
                     # at saturation (μ_S = 0) δ_sub = 0 and cf > 0.99.
                     cf_neq = CA._compute_cloud_fraction(
-                        FT(1e-3), μ_sub, FT(0), α, σ_abs,
+                        FT(1e-3), μ_sub, FT(0), α, σ_floor,
                     )
                     cf_eq = CA._compute_cloud_fraction(
-                        FT(1e-3), FT(0), FT(0), α, σ_abs,
+                        FT(1e-3), FT(0), FT(0), α, σ_floor,
                     )
                     @test FT(0.75) < cf_neq < FT(0.85)
                     @test cf_eq > FT(0.99)
@@ -63,14 +64,14 @@ import Thermodynamics as TD
 
                 @testset "Large condensate, small sigma → cf ≈ 1" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-2), μ_sub, FT(1e-5), α, σ_abs,
+                        FT(1e-2), μ_sub, FT(1e-5), α, σ_floor,
                     )
                     @test cf > FT(0.99)
                 end
 
                 @testset "Type stability" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-3), μ_sub, FT(3.16e-4), α, σ_abs,
+                        FT(1e-3), μ_sub, FT(3.16e-4), α, σ_floor,
                     )
                     @test cf isa FT
                 end
@@ -78,7 +79,7 @@ import Thermodynamics as TD
                 @testset "CF monotone in σ_S at fixed q_c" begin
                     cfs = [
                         CA._compute_cloud_fraction(
-                            FT(1e-3), μ_sub, σ, α, σ_abs,
+                            FT(1e-3), μ_sub, σ, α, σ_floor,
                         ) for σ in FT[1e-4, 3.16e-4, 1e-3, 3.16e-3]
                     ]
                     for i in 2:length(cfs)
@@ -88,14 +89,14 @@ import Thermodynamics as TD
 
                 @testset "Large σ_S, small q_c → cf approaching 0" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-6), μ_sub, FT(3.16e-2), α, σ_abs,
+                        FT(1e-6), μ_sub, FT(3.16e-2), α, σ_floor,
                     )
                     @test cf < FT(0.01)
                 end
 
                 @testset "Tiny q_c with tiny σ_S → cf stays bounded" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-9), μ_sub, FT(1e-12), α, σ_abs,
+                        FT(1e-9), μ_sub, FT(1e-12), α, σ_floor,
                     )
                     @test cf < FT(1e-3)
                 end
@@ -108,13 +109,13 @@ import Thermodynamics as TD
                 @testset "Overcast vs. subsaturated limit" begin
                     # Saturated deck (μ_S ≥ 0): δ_sub = 0, so CF → 1.
                     cf_sat = CA._compute_cloud_fraction(
-                        q_c, q_c, σ_S, α, σ_abs,
+                        q_c, q_c, σ_S, α, σ_floor,
                     )
                     @test cf_sat > FT(0.99)
                     # Subsaturated air (μ_S = -1e-2): q_c_eq = 0, so the
                     # whole condensate is excess normalized by δ_sub = 1e-2.
                     cf_floored = CA._compute_cloud_fraction(
-                        q_c, FT(-1e-2), σ_S, α, σ_abs,
+                        q_c, FT(-1e-2), σ_S, α, σ_floor,
                     )
                     @test cf_floored < FT(0.6)
                 end
@@ -122,7 +123,7 @@ import Thermodynamics as TD
                 @testset "CF monotone in μ_S at fixed q_c" begin
                     cfs = [
                         CA._compute_cloud_fraction(
-                            q_c, μ, σ_S, α, σ_abs,
+                            q_c, μ, σ_S, α, σ_floor,
                         ) for μ in FT[4e-3, 1e-3, 2.5e-4, 0, -5e-4, -2e-3, -1e-2]
                     ]
                     for i in 2:length(cfs)
@@ -132,13 +133,13 @@ import Thermodynamics as TD
 
                 @testset "Smooth C¹ transition across μ_S = 0" begin
                     cf0 = CA._compute_cloud_fraction(
-                        q_c, FT(0), σ_S, α, σ_abs,
+                        q_c, FT(0), σ_S, α, σ_floor,
                     )
                     cf⁻ = CA._compute_cloud_fraction(
-                        q_c, -FT(1e-6), σ_S, α, σ_abs,
+                        q_c, -FT(1e-6), σ_S, α, σ_floor,
                     )
                     cf⁺ = CA._compute_cloud_fraction(
-                        q_c, FT(1e-6), σ_S, α, σ_abs,
+                        q_c, FT(1e-6), σ_S, α, σ_floor,
                     )
                     @test abs(cf0 - cf⁻) < FT(1e-4)
                     @test cf0 == cf⁺
@@ -150,16 +151,16 @@ import Thermodynamics as TD
                     σ_mid = FT(2.5e-4)
                     h = FT(2.5e-5)
                     cf_m0 = CA._compute_cloud_fraction(
-                        q_c, FT(0), σ_mid, α, σ_abs,
+                        q_c, FT(0), σ_mid, α, σ_floor,
                     )
                     cf_mh = CA._compute_cloud_fraction(
-                        q_c, -h, σ_mid, α, σ_abs,
+                        q_c, -h, σ_mid, α, σ_floor,
                     )
                     cf_mh2 = CA._compute_cloud_fraction(
-                        q_c, -h / 2, σ_mid, α, σ_abs,
+                        q_c, -h / 2, σ_mid, α, σ_floor,
                     )
                     cf_ph = CA._compute_cloud_fraction(
-                        q_c, h, σ_mid, α, σ_abs,
+                        q_c, h, σ_mid, α, σ_floor,
                     )
                     @test cf_ph == cf_m0
                     @test cf_m0 > cf_mh2 > cf_mh
@@ -175,13 +176,13 @@ import Thermodynamics as TD
                     @test q_eq > FT(0)
                     dq = FT(0.05) * q_eq
                     cf_lo = CA._compute_cloud_fraction(
-                        q_eq - dq, μ_kink, σ_kink, α, σ_abs,
+                        q_eq - dq, μ_kink, σ_kink, α, σ_floor,
                     )
                     cf_eq = CA._compute_cloud_fraction(
-                        q_eq, μ_kink, σ_kink, α, σ_abs,
+                        q_eq, μ_kink, σ_kink, α, σ_floor,
                     )
                     cf_hi = CA._compute_cloud_fraction(
-                        q_eq + dq, μ_kink, σ_kink, α, σ_abs,
+                        q_eq + dq, μ_kink, σ_kink, α, σ_floor,
                     )
                     @test cf_lo < cf_eq < cf_hi
                     # Non-equilibrium excess above q_c_eq is normalized by
@@ -189,10 +190,10 @@ import Thermodynamics as TD
                     @test (cf_hi - cf_eq) < (cf_eq - cf_lo)
                     dq_fine = FT(1e-3) * q_eq
                     cf_eq⁻ = CA._compute_cloud_fraction(
-                        q_eq - dq_fine, μ_kink, σ_kink, α, σ_abs,
+                        q_eq - dq_fine, μ_kink, σ_kink, α, σ_floor,
                     )
                     cf_eq⁺ = CA._compute_cloud_fraction(
-                        q_eq + dq_fine, μ_kink, σ_kink, α, σ_abs,
+                        q_eq + dq_fine, μ_kink, σ_kink, α, σ_floor,
                     )
                     @test cf_eq⁺ - cf_eq⁻ < FT(1e-2)
                 end
@@ -200,7 +201,8 @@ import Thermodynamics as TD
                 @testset "σ_abs = 0 with σ_S = 0 → guard keeps result finite" begin
                     for μ in FT[0, -1e-3]
                         cf = CA._compute_cloud_fraction(
-                            FT(1e-3), μ, FT(0), α, FT(0),
+                            FT(1e-3), μ, FT(0), α,
+                            CA.CloudFractionFloor(FT(0), FT(0)),
                         )
                         @test isfinite(cf)
                         @test FT(0) <= cf <= FT(1)
@@ -642,6 +644,122 @@ import Thermodynamics as TD
                     σ_abs,
                     CA.NonEquilibriumMicrophysics1M(),
                 ) == FT(0)
+            end
+        end
+    end
+
+    @testset "Subsaturation-deficit floor ε_rel" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                σ_abs = FT(1e-7)
+                ε_rel = FT(0.05)
+                σ_S = FT(2e-4)
+                δ_sub = FT(2e-4)
+                σ_floor_0 = CA.CloudFractionFloor(σ_abs, FT(0))
+                σ_floor = CA.CloudFractionFloor(σ_abs, ε_rel)
+
+                @testset "Augmented width" begin
+                    α = FT(0.5)
+                    @test CA._sgs_augmented_sigma(σ_S, α, σ_floor, δ_sub) ≈
+                          sqrt((α * σ_S)^2 + (ε_rel * δ_sub)^2 + σ_abs^2)
+                    # With `ε_rel = 0`, the deficit leaves the width unchanged.
+                    @test CA._sgs_augmented_sigma(σ_S, α, σ_floor_0, δ_sub) ≈
+                          sqrt((α * σ_S)^2 + σ_abs^2)
+                    # Without a deficit, the deficit floor vanishes.
+                    @test CA._sgs_augmented_sigma(σ_S, α, σ_floor, FT(0)) ==
+                          CA._sgs_augmented_sigma(σ_S, α, σ_floor_0, FT(0))
+                end
+
+                @testset "The deficit floor is inactive in saturated air" begin
+                    for μ in FT[0, 1e-4], q_c in FT[1e-6, 2.5e-4]
+                        @test CA._compute_cloud_fraction(
+                            q_c, μ, σ_S, FT(1), σ_floor,
+                        ) == CA._compute_cloud_fraction(
+                            q_c, μ, σ_S, FT(1), σ_floor_0,
+                        )
+                    end
+                end
+
+                @testset "Cover of trace condensate vanishes with q_c" begin
+                    # Condensate below equilibrium (q_c_eq ≈ 1.7e-5) with the
+                    # ramp width α σ_S = 10 q_c proportional to it, as under
+                    # the equilibrium-ratio modulator of the variance
+                    # fidelity: without the deficit floor, C = q_c / σ_aug
+                    # ≈ 0.1 and the cover stay fixed as q_c decreases.
+                    μ = -δ_sub
+                    q_cs = FT[4e-6, 2e-6, 1e-6]
+                    cf(q_c, σ_fl) = CA._compute_cloud_fraction(
+                        q_c, μ, σ_S, 10 * q_c / σ_S, σ_fl,
+                    )
+                    cfs_0 = cf.(q_cs, Ref(σ_floor_0))
+                    cfs = cf.(q_cs, Ref(σ_floor))
+                    @test all(isapprox.(cfs_0, cfs_0[1]; rtol = FT(1e-3)))
+                    @test cfs[1] > cfs[2] > cfs[3]
+                    @test all(cfs .< cfs_0)
+                    # C ≤ q_c / (ε_rel δ_sub) bounds the cover.
+                    for (q_c, cf_ε) in zip(q_cs, cfs)
+                        bound = CA.normal_cdf(
+                            CA._compute_z(q_c / (ε_rel * δ_sub)),
+                        )
+                        @test cf_ε < bound
+                    end
+                end
+
+                @testset "Cover under the equilibrium-ratio fidelity" begin
+                    # α from `sgs_variance_fidelity` with α_Da = 1 (no TKE)
+                    # and w_eq = 0.5, at a deficit of one standard deviation.
+                    μ = -σ_S
+                    c = FT(3)
+                    q_c_eq = CA.equilibrium_condensate(
+                        μ, σ_S, FT(0), FT(0), c,
+                    )
+                    # The Damköhler number is `√tke` for unit `A`, `τ_mp`,
+                    # `c_d` and `l_mix`.
+                    cf(r, σ_fl, tke = FT(0)) = CA._compute_cloud_fraction(
+                        r * q_c_eq, μ, σ_S,
+                        CA.sgs_variance_fidelity(
+                            FT(1), FT(1), FT(1), tke, FT(1), FT(0.5),
+                            r * q_c_eq, μ, σ_S, FT(1e-10),
+                            FT(0), FT(0), c,
+                        ),
+                        σ_fl, FT(0), FT(0), c,
+                    )
+                    # Without the deficit floor, the cover of condensate
+                    # between 1e-3 and 1e-1 of equilibrium is 9–10%.
+                    for r in FT[1e-1, 1e-2, 1e-3]
+                        @test FT(0.085) < cf(r, σ_floor_0) < FT(0.1)
+                    end
+                    # With it, the cover vanishes with the condensate.
+                    @test cf(FT(1e-1), σ_floor) ≈ FT(0.095) atol = FT(2e-3)
+                    @test cf(FT(1e-3), σ_floor) ≈ FT(0.006) atol = FT(1e-3)
+                    # Condensate in equilibrium keeps the Gaussian cover
+                    # Φ(−1) ≈ 0.16.
+                    @test cf(FT(1), σ_floor) ≈ FT(0.159) atol = FT(2e-3)
+                    @test cf(FT(1), σ_floor) ≈ cf(FT(1), σ_floor_0) atol =
+                        FT(1e-3)
+                    # At α_Da = 0.1, the floor lowers the cover of condensate
+                    # in equilibrium from 76% to 72%.
+                    @test cf(FT(1), σ_floor_0, FT(81)) ≈ FT(0.756) atol =
+                        FT(3e-3)
+                    @test cf(FT(1), σ_floor, FT(81)) ≈ FT(0.717) atol =
+                        FT(3e-3)
+                end
+
+                @testset "Smooth C¹ transition across μ_S = 0" begin
+                    # C(0) − C(−h) = O(h²) with the deficit floor, so halving
+                    # h quarters cf(0) − cf(−h).
+                    q_c = FT(2.5e-4)
+                    σ_mid = FT(2.5e-4)
+                    h = FT(2.5e-5)
+                    cf_m0, cf_mh, cf_mh2, cf_ph = (
+                        CA._compute_cloud_fraction(
+                            q_c, μ, σ_mid, FT(1), σ_floor,
+                        ) for μ in (FT(0), -h, -h / 2, h)
+                    )
+                    @test cf_ph == cf_m0
+                    @test cf_m0 > cf_mh2 > cf_mh
+                    @test (cf_m0 - cf_mh2) < FT(0.3) * (cf_m0 - cf_mh)
+                end
             end
         end
     end

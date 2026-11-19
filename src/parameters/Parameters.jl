@@ -352,6 +352,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
     width (`_sgs_augmented_sigma`) and on the updraft cover width
     (`_updraft_cloud_fraction`) [kg/kg].
+  - `cloud_fraction_eps_rel`: Floor `ε_rel ≥ 0` on the cloud-fraction width as
+    a fraction of the subsaturation deficit `δ_sub = max(0, −μ_S)`,
+    `σ_aug = √((α σ_S)² + (ε_rel δ_sub)² + σ_abs²)` (`_sgs_augmented_sigma`):
+    cloud cover of order one in subsaturated air takes condensate of order
+    `ε_rel δ_sub`. The default `0` leaves the absolute floor alone [-].
   - `sgs_cloud_species_constant_timescales`: Switch for the 1M scheme. A
     positive value makes the Damköhler factor of the variance fidelity
     (`sgs_microphysics_relaxation_time`) and the cloud-species flux blend
@@ -393,6 +398,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_fidelity_updraft_coeff::FT
     sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
+    cloud_fraction_eps_rel::FT
     sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
 end

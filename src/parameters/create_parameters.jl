@@ -713,8 +713,8 @@ provisional parameters (the cloud-species timescale switch, the
 displacement-closure scales, the precipitation placement and the radiative
 condensate inhomogeneity) take the defaults set here and are read from
 `toml_dict` only when a run or calibration TOML defines them; the provisional
-default of `sgs_variance_horizontal_scale_factor` supersedes its ClimaParams
-value the same way.
+defaults of `sgs_variance_horizontal_scale_factor` and `cloud_fraction_eps_rel`
+supersede their ClimaParams values the same way.
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -749,9 +749,10 @@ function SGSQuadratureParameters(
     # Provisional parameters: defaults set here ahead of ClimaParams. Each is
     # read from the run/calibration toml when defined there and otherwise
     # falls back to the default below, which for a parameter that ClimaParams
-    # already defines (`sgs_variance_horizontal_scale_factor`) supersedes the
-    # ClimaParams default. Such a parameter is kept out of `name_map`, so the
-    # parameter log does not record the superseded ClimaParams value.
+    # already defines (`sgs_variance_horizontal_scale_factor`,
+    # `cloud_fraction_eps_rel`) supersedes the ClimaParams default. Such a
+    # parameter is kept out of `name_map`, so the parameter log does not
+    # record the superseded ClimaParams value.
     # TODO: promote each default to ClimaParams (and the name_map above) once
     # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
@@ -816,6 +817,12 @@ function SGSQuadratureParameters(
         # the liquid water path of overcast marine stratocumulus. Applied to all
         # cloud types; ice and convective clouds are likely more inhomogeneous.
         cloud_condensate_relative_variance_floor = FT(0.25),
+        # Floor on the cloud-fraction width as a fraction of the subsaturation
+        # deficit (`_sgs_augmented_sigma`): 0 = the absolute floor alone.
+        # TODO: ClimaParams defines `cloud_fraction_eps_rel` with default 0.02
+        # and describes it as the scale of a `q_sat` term; update the default
+        # and the description there when this default moves to ClimaParams.
+        cloud_fraction_eps_rel = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
@@ -861,6 +868,7 @@ function SGSQuadratureParameters(
     for (name, value) in (
         (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
         (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
+        (:cloud_fraction_eps_rel, parameters.cloud_fraction_eps_rel),
     )
         value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
     end

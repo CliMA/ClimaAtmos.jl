@@ -86,16 +86,16 @@ end
 
 function _allocs_cloud_fraction_simple()
     FT = Float64
-    σ_abs = FT(1e-7)
+    σ_floor = CA.CloudFractionFloor(FT(1e-7), FT(0))
     CA._compute_cloud_fraction(
-        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), σ_abs,
+        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), σ_floor,
     )
     return @allocated CA._compute_cloud_fraction(
         FT(5e-5),
         FT(-1e-4),
         FT(3.16e-4),
         FT(1),
-        σ_abs,
+        σ_floor,
     )
 end
 
@@ -110,7 +110,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0)
     α = FT(1)
-    σ_abs = FT(1e-7)
+    σ_floor = CA.CloudFractionFloor(FT(1e-7), FT(0))
     c = FT(3)
     CA._compute_cloud_fraction(
         thp,
@@ -124,7 +124,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        σ_abs,
+        σ_floor,
         c,
     )
     return @allocated CA._compute_cloud_fraction(
@@ -139,7 +139,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        σ_abs,
+        σ_floor,
         c,
     )
 end
