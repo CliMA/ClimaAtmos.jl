@@ -119,7 +119,6 @@ check_conservation: false
 vertical_water_borrowing_species: ~
 auto_jacobian_padding_bands: ~
 sgs_distribution: "gaussian"
-energy_q_tot_upwinding: "vanleer_limiter"
 prescribed_aerosols: []
 dt_nogw: "400secs"
 output_default_diagnostics: true
@@ -136,12 +135,10 @@ use_sgs_quadrature: true
 disable_surface_flux_tendency: false
 cfsite_number: "site23"
 dt_ogw: "1800secs"
-fixed_terminal_velocity: true
 turbconv: "prognostic_edmfx"
 x_elem: 6
 idealized_clouds: false
 vert_diff: ~
-edmfx_mse_q_tot_upwinding: "first_order"
 check_nan_every: 1024
 use_krylov_method: false
 sleve_s: 10.0
@@ -149,7 +146,7 @@ use_dynamic_krylov_rtol: false
 implicit_microphysics: true
 sst_uniform_offset: 4.0
 reproducible_restart: false
-strict_config: false
+strict_config: true
 toml:
   - "/scratch/chew/aquaplanet_beres_c_4k/frozen_run_parameters.toml"
 mesh_warp_type: "SLEVE"

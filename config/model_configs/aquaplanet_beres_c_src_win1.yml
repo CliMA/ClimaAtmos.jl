@@ -87,3 +87,5 @@ diagnostics:
   - short_name: [zg]
     period: 30days
     reduction: average
+# Unknown config keys are an error, not a warning.
+strict_config: true

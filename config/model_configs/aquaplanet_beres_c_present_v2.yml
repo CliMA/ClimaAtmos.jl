@@ -68,3 +68,5 @@ diagnostics:
   - short_name: [ua, utendnogw, ta]
     period: 1months
     reduction_time: average
+# Unknown config keys are an error, not a warning.
+strict_config: true

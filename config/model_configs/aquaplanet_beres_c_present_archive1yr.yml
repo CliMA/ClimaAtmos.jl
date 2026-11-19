@@ -72,3 +72,5 @@ diagnostics:
   - short_name: [nogw_zbot, nogw_ztop, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_beres_active, nogw_N_source]
     period: 6hours
     reduction: inst
+# Unknown config keys are an error, not a warning.
+strict_config: true
