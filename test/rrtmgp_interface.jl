@@ -320,7 +320,7 @@ end
     @test N_sat_high ≈ 3 * N₀ rtol = 10 * eps(FT)
 end
 
-@testset "Aerosol bin sums" for FT in (Float32, Float64)
+@testset "Prescribed species mass mixing ratio" for FT in (Float32, Float64)
     (; cent_space) = get_cartesian_spaces(; FT)
     names = (:SSLT01, :SSLT02, :SO4)
     aerosol_field = similar(
@@ -331,15 +331,16 @@ end
     fill!(aerosol_field.SSLT02, FT(2e-9))
     fill!(aerosol_field.SO4, FT(4e-9))
     ᶜconc = zeros(cent_space)
+    u = (; c = (; ρ = ones(cent_space)))
+    p = (; tracers = (; prescribed_aerosols_field = aerosol_field))
     c₀ = FT(1e-8)
     seasalt_bins = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
     dust_bins = (:DST01, :DST02, :DST03, :DST04, :DST05)
 
     # Present bins are summed; absent species and absent aerosols give c₀.
-    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, seasalt_bins, c₀)
+    ᶜconc .= RRTMGPI.prescribed_species_mmr(u, p, seasalt_bins, c₀)
     @test all(≈(FT(3e-9)), parent(ᶜconc))
-    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, dust_bins, c₀)
-    @test all(==(c₀), parent(ᶜconc))
-    RRTMGPI.sum_aerosol_bins!(ᶜconc, nothing, seasalt_bins, c₀)
-    @test all(==(c₀), parent(ᶜconc))
+    @test RRTMGPI.prescribed_species_mmr(u, p, dust_bins, c₀) == c₀
+    p_no_aerosols = (; tracers = (;))
+    @test RRTMGPI.prescribed_species_mmr(u, p_no_aerosols, seasalt_bins, c₀) == c₀
 end

@@ -86,8 +86,9 @@ tendencies localized to the surface-adjacent cell by
     is disabled.
   - `Yₜ.c.ρe_tot`, from the total-enthalpy flux `sfc_conditions.ρ_flux_h_tot`.
   - `Yₜ.c.ρq_tot` and, with the same increment, `Yₜ.c.ρ`, from
-    `sfc_conditions.ρ_flux_q_tot`. All other grid-mean tracers are given a zero
-    surface flux here.
+    `sfc_conditions.ρ_flux_q_tot`.
+  - Each prognostic aerosol bin `Yₜ.c.ρ<bin>`, from `sfc_conditions.ρ_flux_<bin>`.
+    All other grid-mean tracers are given a zero surface flux here.
   - For `PrognosticEDMFX` (assuming a single updraft), the corresponding `mse` and
     tracer tendencies of `Yₜ.c.sgsʲs.:(1)`, obtained by dividing the grid-mean
     boundary tendency by the updraft density.
@@ -117,6 +118,13 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             sfc_conditions.ρ_flux_q_tot,
         ) : nothing
     is_edmf = turbconv_model isa PrognosticEDMFX
+    aerosol_ρχ_names = aerosol_state_names(p.atmos.aerosols)
+    # `boundary_tendency_scalar` reads only the space of its first argument
+    btt_aerosols = map(
+        flux_name ->
+            boundary_tendency_scalar(Y.c.ρ, getproperty(sfc_conditions, flux_name)),
+        aerosol_surface_flux_names(p.atmos.aerosols),
+    )
 
     DataLayouts.foreach_column(
         Yₜ.c,
@@ -124,7 +132,8 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         something(btt_uₕ, ()),
         something(btt_q, ()),
         is_edmf ? p.precomputed.ᶜρʲs.:(1) : (),
-    ) do Yₜc, btt_h, btt_uₕ, btt_q, ᶜρʲ
+        btt_aerosols,
+    ) do Yₜc, btt_h, btt_uₕ, btt_q, ᶜρʲ, btt_aerosols
         if btt_uₕ !== ()
             @. Yₜc.uₕ -= btt_uₕ
         end
@@ -140,6 +149,18 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             @. Yₜc.ρ -= ᶜbtt_q
             if ᶜρʲ !== ()
                 @. Yₜc.sgsʲs.:(1).q_tot -= specific(ᶜbtt_q, ᶜρʲ)
+            end
+        end
+        unrolled_foreach(aerosol_ρχ_names, btt_aerosols) do ρχ_name, btt
+            ᶜbtt = Base.materialize(btt)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            @. ᶜρχₜ -= ᶜbtt
+            if ᶜρʲ !== ()
+                ᶜχʲₜ = MatrixFields.get_field(
+                    Yₜc.sgsʲs.:(1),
+                    specific_tracer_name(ρχ_name),
+                )
+                @. ᶜχʲₜ -= specific(ᶜbtt, ᶜρʲ)
             end
         end
         return nothing

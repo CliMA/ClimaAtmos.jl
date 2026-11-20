@@ -1,7 +1,9 @@
 import Thermodynamics as TD
+import RRTMGP
 import ClimaUtilities
 import ClimaCore.Operators
 import ClimaUtilities.TimeVaryingInputs: evaluate!
+import UnrolledUtilities: unrolled_foreach
 import CloudMicrophysics as CM
 import ..Parameters as CAP
 import ..PrescribedCloudInRadiation
@@ -9,6 +11,10 @@ import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
 import ..NonEquilibriumMicrophysics1M
+import ..species_models
+import ..AEROSOL_SPECIES_BIN_NAMES
+import ..ᶜaerosol_bin_mmr, ..ᶜaerosol_species_mmr
+import ..has_prescribed_aerosol_bin
 
 """
     update_atmospheric_state!(integrator)
@@ -49,7 +55,8 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
     # update aerosol concentrations
-    update_aerosol_concentrations!(integrator)
+    update_prescribed_aerosol_concentrations!(integrator)
+    update_rrtmgp_aerosol_columns!(integrator)
     # update cloud properties
     if radiation_mode isa AllSkyRadiation ||
        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
@@ -57,8 +64,6 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     end
     return nothing
 end
-
-import RRTMGP
 
 """
     update_temperature_pressure!(integrator)
@@ -201,80 +206,100 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
 end
 
 """
-    update_aerosol_concentrations!(integrator)
+    update_prescribed_aerosol_concentrations!(integrator)
 
-Update the prescribed aerosol fields and the RRTMGP aerosol column mass densities; return
-`nothing`.
-
-Each prescribed aerosol field is first evaluated from its `TimeVaryingInput` at the current
-time. Then, if `radiation_mode.aerosol_radiation` is enabled, the specific mass of each
-supported species is converted to a layer column mass density, `ρ q_aero Δz` [kg/m²], and
-written into the solver; species absent from the configuration are set to zero.
-
-The supported species are dust (5 size bins), sea salt (5 size bins), sulfate, hydrophilic
-and hydrophobic black carbon, and hydrophilic and hydrophobic organic carbon.
+Evaluate each field of `p.tracers.prescribed_aerosols_field` from its
+`TimeVaryingInput` at the current time; return `nothing`. Does nothing when no
+aerosols are prescribed.
 """
-function update_aerosol_concentrations!((; u, p, t)::I) where {I}
-    (; radiation_mode) = p.atmos
-    (; rrtmgp_solver) = p.radiation
+function update_prescribed_aerosol_concentrations!((; u, p, t)::I) where {I}
     if :prescribed_aerosols_field in propertynames(p.tracers)
-        for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
-            field = getproperty(p.tracers.prescribed_aerosols_field, key)
-            evaluate!(field, tv, t)
+        tvs = p.tracers.prescribed_aerosol_timevaryinginputs
+        fields = p.tracers.prescribed_aerosols_field
+        unrolled_foreach(propertynames(tvs)) do key
+            evaluate!(getproperty(fields, key), getproperty(tvs, key), t)
         end
     end
-
-    # RRTMGP needs effective radius in microns
-    if radiation_mode.aerosol_radiation
-        ᶜΔz = Fields.Δz_field(u.c)
-
-        more_dust_aerosols = (
-            ("dust1", :DST01),
-            ("dust2", :DST02),
-            ("dust3", :DST03),
-            ("dust4", :DST04),
-            ("dust5", :DST05),
-        )
-
-        more_ssl_aerosols = (
-            ("sea_salt1", :SSLT01),
-            ("sea_salt2", :SSLT02),
-            ("sea_salt3", :SSLT03),
-            ("sea_salt4", :SSLT04),
-            ("sea_salt5", :SSLT05),
-        )
-
-        aerosol_names_pair = [
-            more_dust_aerosols...,
-            more_ssl_aerosols...,
-            ("sulfate", :SO4),
-            ("black_carbon_rh", :CB2),
-            ("black_carbon", :CB1),
-            ("organic_carbon_rh", :OC2),
-            ("organic_carbon", :OC1),
-        ]
-
-        for (rrtmgp_aerosol_name, prescribed_aerosol_name) in aerosol_names_pair
-
-            ᶜaero_conc = Fields.array2field(
-                RRTMGP.aerosol_column_mass_density(rrtmgp_solver, rrtmgp_aerosol_name),
-                axes(u.c),
-            )
-            if prescribed_aerosol_name in
-               propertynames(p.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    p.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. ᶜaero_conc = aerosol_field * u.c.ρ * ᶜΔz
-            else
-                @. ᶜaero_conc = 0
-            end
-        end
-    end
-
     return nothing
 end
+
+const MERRA2_TO_RRTMGP_NAME = (;
+    seasalt = (;
+        SSLT01 = "sea_salt1",
+        SSLT02 = "sea_salt2",
+        SSLT03 = "sea_salt3",
+        SSLT04 = "sea_salt4",
+        SSLT05 = "sea_salt5",
+    ),
+    dust = (;
+        DST01 = "dust1",
+        DST02 = "dust2",
+        DST03 = "dust3",
+        DST04 = "dust4",
+        DST05 = "dust5",
+    ),
+    sulfate = (; SO4 = "sulfate"),
+    black_carbon = (; CB1 = "black_carbon", CB2 = "black_carbon_rh"),
+    organic_carbon = (; OC1 = "organic_carbon", OC2 = "organic_carbon_rh"),
+)
+
+"""
+    update_rrtmgp_aerosol_columns!(integrator)
+
+Write the RRTMGP aerosol column mass densities; return `nothing`. Does nothing
+unless `radiation_mode.aerosol_radiation` is enabled.
+
+The specific mass of each bin in `MERRA2_TO_RRTMGP_NAME` is converted to a
+layer column mass density, `ρ q_aero Δz` [kg/m²], and written into the solver;
+bins absent from the `prescribed_aerosols` config are set to zero. Every
+species is read from the prescribed climatology, including those with a
+prognostic model.
+
+The supported species are dust (5 size bins), sea salt (5 size bins), sulfate,
+hydrophilic and hydrophobic black carbon, and hydrophilic and hydrophobic
+organic carbon.
+"""
+function update_rrtmgp_aerosol_columns!((; u, p, t)::I) where {I}
+    (; radiation_mode) = p.atmos
+    radiation_mode.aerosol_radiation || return nothing
+    (; rrtmgp_solver) = p.radiation
+
+    unrolled_foreach(
+        values(species_models(p.atmos.aerosols)),
+        values(MERRA2_TO_RRTMGP_NAME),
+    ) do species_model, merra2_to_rrtmgp_name
+        update_species_aerosol_columns!(
+            rrtmgp_solver,
+            u,
+            p,
+            nothing, # hard-code prescribed, keeping prognostic sslt passive for now
+            merra2_to_rrtmgp_name,
+        )
+    end
+    return nothing
+end
+
+function update_species_aerosol_columns!(
+    rrtmgp_solver,
+    u,
+    p,
+    species_model,
+    merra2_bin_to_rrtmgp_name,
+)
+    ᶜΔz = Fields.Δz_field(u.c)
+    unrolled_foreach(propertynames(merra2_bin_to_rrtmgp_name)) do bin_name
+        rrtmgp_name = getproperty(merra2_bin_to_rrtmgp_name, bin_name)
+        ᶜaero_conc = rrtmgp_aerosol_conc_field(rrtmgp_solver, rrtmgp_name, u)
+        ᶜχ = ᶜaerosol_bin_mmr(u, p, bin_name, species_model)
+        # Mass mixing ratio to layer mass per area; clip negatives for RRTMGP.
+        @. ᶜaero_conc = max(0, ᶜχ) * u.c.ρ * ᶜΔz
+    end
+end
+
+rrtmgp_aerosol_conc_field(rrtmgp_solver, rrtmgp_name, u) = Fields.array2field(
+    RRTMGP.aerosol_column_mass_density(rrtmgp_solver, rrtmgp_name),
+    axes(u.c),
+)
 
 """
     ᶜcloud_liquid_water_content(microphysics_model, u, ᶜq_liq)
@@ -338,7 +363,7 @@ The liquid effective radius follows the Liu and Hallett (1997) parameterization,
 evaluated with a droplet number concentration diagnosed by
 `ml_N_cloud_liquid_droplets` from the prescribed sea-salt, dust, and sulfate
 mass concentrations and the in-cloud liquid specific humidity; a species with no
-prescribed bins enters at its reference concentration (`sum_aerosol_bins!`). The
+prescribed bins enters at its reference concentration (`prescribed_species_mmr`). The
 ice effective radius is a constant. Both radii are zero where the condensate or
 the cloud fraction is zero. Cloud condensate and cloud fraction come from the
 model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field`
@@ -408,29 +433,13 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             kg_to_g_factor * u.c.ρ * cloud_ice_water_content * ᶜΔz /
             max(cloud_fraction, eps_FT)
         @. ᶜfrac = cloud_fraction
-        # RRTMGP needs effective radius in microns
-        aerosol_field =
-            :prescribed_aerosols_field in propertynames(p.tracers) ?
-            p.tracers.prescribed_aerosols_field : nothing
+
+        (; seasalt, dust, sulfate) = AEROSOL_SPECIES_BIN_NAMES
         (; c₀_dust, c₀_seasalt, c₀_SO4) = cmc.aml
-        seasalt_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar,
-            aerosol_field,
-            (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05),
-            c₀_seasalt,
-        )
-        dust_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar_2,
-            aerosol_field,
-            (:DST01, :DST02, :DST03, :DST04, :DST05),
-            c₀_dust,
-        )
-        SO4_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar_3,
-            aerosol_field,
-            (:SO4,),
-            c₀_SO4,
-        )
+        seasalt_aero_conc = prescribed_species_mmr(u, p, seasalt, c₀_seasalt)
+        dust_aero_conc = prescribed_species_mmr(u, p, dust, c₀_dust)
+        SO4_aero_conc = prescribed_species_mmr(u, p, sulfate, c₀_SO4)
+
         ᶜq_liq_in = @. lazy(
             max(zero_FT, cloud_liquid_water_content) /
             max(eps_FT, cloud_fraction),
@@ -499,31 +508,17 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
 end
 
 """
-    sum_aerosol_bins!(ᶜconc, aerosol_field, bin_names, c₀)
+    prescribed_species_mmr(u, p, bin_names, c₀)
 
-Sum the prescribed aerosol bins named in `bin_names` into `ᶜconc` [kg/kg]; return
-`ᶜconc`.
-
-When `aerosol_field` is `nothing` or holds none of the bins, `ᶜconc` is set to the
-reference concentration `c₀`, so the species term of `ml_N_cloud_liquid_droplets`
-vanishes and an unprescribed species leaves the droplet number at its reference
-value. Called from `update_cloud_properties!`.
+Prescribed mass mixing ratio [kg/kg] of a species, summed over the bins in
+`bin_names` that are prescribed. When none is, return the reference
+concentration `c₀`, so the species term of `ml_N_cloud_liquid_droplets`
+vanishes. Prognostic species are passive here, so the prescribed climatology
+is read even for a species with a prognostic model.
 """
-function sum_aerosol_bins!(ᶜconc, aerosol_field, bin_names, c₀)
-    present_names =
-        isnothing(aerosol_field) ? () :
-        filter(in(bin_names), propertynames(aerosol_field))
-    if isempty(present_names)
-        fill!(ᶜconc, c₀)
-    else
-        fill!(ᶜconc, zero(c₀))
-        for name in present_names
-            ᶜbin = getproperty(aerosol_field, name)
-            @. ᶜconc += ᶜbin
-        end
-    end
-    return ᶜconc
-end
+prescribed_species_mmr(u, p, bin_names, c₀) =
+    any(name -> has_prescribed_aerosol_bin(p, name), bin_names) ?
+    ᶜaerosol_species_mmr(u, p, bin_names, nothing) : c₀
 
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
