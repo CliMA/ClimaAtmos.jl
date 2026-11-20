@@ -673,3 +673,75 @@ end
         ) ≈ expected_ft
     end
 end
+
+@testset "Turbulent-entrainment, form-drag, and subsaturation-width parameters" begin
+    for FT in (Float32, Float64)
+        p_def = CA.ClimaAtmosParameters(FT)
+        tc_def = CAP.turbconv_params(p_def)
+        @test CAP.turb_entr_height_scale(tc_def) == zero(FT)
+        @test CAP.pressure_drag_plume_radius_slope(tc_def) == zero(FT)
+        @test CAP.pressure_drag_plume_radius_max(tc_def) == zero(FT)
+        @test CAP.cloud_fraction_subsat_width_coeff(p_def) == one(FT)
+        @test CAP.cloud_fraction_subsat_free_coeff(p_def) == one(FT)
+        @test CAP.cloud_fraction_subsat_inversion_gamma(p_def) == zero(FT)
+        @test CA.turbulent_entrainment(tc_def, FT(0.002), FT(5000), FT(0)) ===
+              CA.turbulent_entrainment(tc_def, FT(0.002))
+
+        mktemp() do path, io
+            write(
+                io,
+                """
+[turb_entr_height_scale]
+type = "float"
+value = 3500.0
+[pressure_drag_plume_radius_slope]
+type = "float"
+value = 0.2
+[pressure_drag_plume_radius_max]
+type = "float"
+value = 1000.0
+[cloud_fraction_subsat_width_coeff]
+type = "float"
+value = 0.25
+[cloud_fraction_subsat_free_coeff]
+type = "float"
+value = 0.7
+[cloud_fraction_subsat_inversion_gamma]
+type = "float"
+value = 0.008
+""",
+            )
+            close(io)
+            p_act = CA.ClimaAtmosParameters(
+                CP.create_toml_dict(FT; override_file = path),
+            )
+            tc_act = CAP.turbconv_params(p_act)
+            @test CAP.turb_entr_height_scale(tc_act) == FT(3500)
+            @test CAP.pressure_drag_plume_radius_slope(tc_act) == FT(0.2)
+            @test CAP.pressure_drag_plume_radius_max(tc_act) == FT(1000)
+            @test CAP.cloud_fraction_subsat_width_coeff(p_act) == FT(0.25)
+            @test CAP.cloud_fraction_subsat_free_coeff(p_act) == FT(0.7)
+            @test CAP.cloud_fraction_subsat_inversion_gamma(p_act) == FT(0.008)
+            r0 = CA.turbulent_entrainment(tc_act, FT(0.002), FT(0), FT(0))
+            r5 = CA.turbulent_entrainment(tc_act, FT(0.002), FT(5000), FT(0))
+            @test r5 ≈ r0 * exp(-(FT(5000) / FT(3500))^2)
+        end
+
+        for bad_key in (
+            "turb_entr_height_scale",
+            "pressure_drag_plume_radius_slope",
+            "pressure_drag_plume_radius_max",
+            "cloud_fraction_subsat_width_coeff",
+            "cloud_fraction_subsat_free_coeff",
+            "cloud_fraction_subsat_inversion_gamma",
+        )
+            mktemp() do path, io
+                write(io, "[$bad_key]\ntype = \"float\"\nvalue = -0.1\n")
+                close(io)
+                @test_throws ArgumentError CA.ClimaAtmosParameters(
+                    CP.create_toml_dict(FT; override_file = path),
+                )
+            end
+        end
+    end
+end

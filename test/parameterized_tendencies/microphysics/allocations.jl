@@ -356,6 +356,14 @@ function _allocs_edmfx_sweep!(Y, p)
     )
 end
 
+function _allocs_edmfx_init_imp!(Y, p)
+    FT = eltype(Y)
+    CA.initialize_implicit_stage_problem!(Y, p, FT(100))
+    return all(isfinite, parent(Y.c)) &&
+           all(isfinite, parent(Y.f)) &&
+           all(isfinite, parent(p.precomputed.ᶜρ_diffʲs))
+end
+
 function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
     return mktemp() do toml_path, io
         if enable_shaft_and_support
@@ -463,6 +471,7 @@ function _measure_edmfx_allocs(enable_shaft_and_support::Bool)
             vel = _allocs_edmfx_vel!(Y, p),
             ed = _allocs_edmfx_ed!(ᶜYₜ, Y, p),
             sweep = _allocs_edmfx_sweep!(Y, p),
+            init_imp = _allocs_edmfx_init_imp!(Y, p),
         )
     end
 end
@@ -696,6 +705,8 @@ end
             @test allocs_on.vel <= allocs_off.vel
             @test allocs_on.ed <= allocs_off.ed
             @test allocs_on.sweep <= allocs_off.sweep
+            @test allocs_on.init_imp
+            @test allocs_off.init_imp
             @test allocs_on.cache <= allocs_off.cache
         end
     end

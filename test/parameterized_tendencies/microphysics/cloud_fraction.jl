@@ -208,6 +208,37 @@ import Thermodynamics as TD
                         @test FT(0) <= cf <= FT(1)
                     end
                 end
+
+                @testset "Subsaturation width scale factor c_sub and stability gate" begin
+                    c0 = FT(0)
+                    c3 = FT(3)
+                    cf_base = CA._compute_cloud_fraction(
+                        q_c, FT(-2e-3), σ_S, α, σ_floor,
+                    )
+                    @test CA._compute_cloud_fraction(
+                        q_c, FT(-2e-3), σ_S, α, σ_floor, c0, c0, c3, c3, FT(1),
+                    ) === cf_base
+                    cf_half = CA._compute_cloud_fraction(
+                        q_c, FT(-2e-3), σ_S, α, σ_floor, c0, c0, c3, c3, FT(0.5),
+                    )
+                    cf_qtr = CA._compute_cloud_fraction(
+                        q_c, FT(-2e-3), σ_S, α, σ_floor, c0, c0, c3, c3, FT(0.25),
+                    )
+                    @test cf_base < cf_half < cf_qtr
+                    @test CA._compute_cloud_fraction(
+                        q_c, FT(5e-4), σ_S, α, σ_floor, c0, c0, c3, c3, FT(0.25),
+                    ) === CA._compute_cloud_fraction(
+                        q_c, FT(5e-4), σ_S, α, σ_floor, c0, c0, c3, c3, FT(1),
+                    )
+                    @test CA._subsat_width_coeff(
+                        FT(0.25), FT(0.7), FT(0.01), FT(0),
+                    ) === FT(0.25)
+                    @test CA._subsat_width_coeff(
+                        FT(0.25), FT(0.7), FT(0.002), FT(0.008),
+                    ) > CA._subsat_width_coeff(
+                        FT(0.25), FT(0.7), FT(0.025), FT(0.008),
+                    )
+                end
             end
         end
     end

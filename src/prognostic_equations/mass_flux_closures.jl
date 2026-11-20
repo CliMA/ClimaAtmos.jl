@@ -111,31 +111,53 @@ function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 end
 
 """
-    pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max)
+    pressure_drag_coefficient(
+        α_d, scale_height, aʲ, a⁰, a_min, a_max,
+        z = 0, z_sfc = 0, c_R = 0, R_max = 0,
+    )
 
 Return the coefficient `d_c` [1/m] of the pairwise form drag between an updraft
 of area fraction `aʲ` and the environment of area fraction `a⁰`,
 
-    d_c = α_d / (2 H) (1 / √clamp(aʲ, a_min, a_max) + 1 / √clamp(a⁰, 1 - a_max, 1)),
+    d_c = α_d / (2 H) *
+          (1 / √clamp(aʲ, a_drag_min, a_max) + 1 / √clamp(a⁰, 1 - a_max, 1)),
 
 so that the drag acceleration on the updraft is `a⁰ d_c (wʲ - w⁰) |wʲ - w⁰|`,
 with `a⁰ = ρ̂⁰/ρ` the environment weight of the pairwise form. The
 length scale of each subdomain is `H √a` with `H = scale_height`, and the
-harmonic mean of the two gives the sum of inverse square roots. The updraft
-radius may shrink to `a_min`; the environment is clamped from below at
-`1 - a_max`, which keeps the coefficient finite when the implicit velocity
-solve is handed an extrapolated `a⁰` outside `[0, 1]`.
+harmonic mean of the two gives the sum of inverse square roots. With positive
+plume-radius parameters `(c_R, R_max)` (`pressure_drag_plume_radius_slope`,
+`pressure_drag_plume_radius_max`), the minimum updraft radius
+`R_min(z) = min(c_R max(0, z − z_sfc), R_max)` sets the lower area bound
+`a_drag_min = min(max(a_min, (R_min / H)²), a_max)`; otherwise
+`a_drag_min = a_min`. The environment is clamped from below at `1 - a_max`,
+which keeps the coefficient finite when the implicit velocity solve is handed
+an extrapolated `a⁰` outside `[0, 1]`.
 
 Shared by the implicit updraft momentum solve
 (`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
 (the pressure-drag term of `edmfx_tke_sources!`), so the kinetic energy the drag
 removes from the updraft is the energy the TKE budget receives.
 """
-pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
-    α_d / (2 * scale_height) * (
-        1 / sqrt(clamp(aʲ, a_min, a_max)) +
+@inline function pressure_drag_coefficient(
+    α_d,
+    scale_height,
+    aʲ,
+    a⁰,
+    a_min,
+    a_max,
+    z = zero(aʲ),
+    z_sfc = zero(aʲ),
+    c_R = zero(aʲ),
+    R_max = zero(aʲ),
+)
+    r_min = min(c_R * max(zero(z), z - z_sfc), R_max)
+    a_drag_min = min(max(a_min, (r_min / scale_height)^2), a_max)
+    return α_d / (2 * scale_height) * (
+        1 / sqrt(clamp(aʲ, a_drag_min, a_max)) +
         1 / sqrt(clamp(a⁰, 1 - a_max, one(a⁰)))
     )
+end
 
 """
     ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)

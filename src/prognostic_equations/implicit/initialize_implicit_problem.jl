@@ -513,11 +513,15 @@ NVTX.@annotate function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
+    c_R_drag = CAP.pressure_drag_plume_radius_slope(turbconv_params)
+    R_max_drag = CAP.pressure_drag_plume_radius_max(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
     nh_pressure = p.atmos.edmfx_model.nh_pressure
     (sponge, ᶠz) =
         isnothing(rayleigh_sponge) ? ((), ()) :
         ((rayleigh_sponge, Spaces.z_max(axes(Y.f))), Fields.coordinate_field(Y.f).z)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
 
     ᶠdz = Fields.Δz_field(axes(Y.f))
 
@@ -535,8 +539,9 @@ NVTX.@annotate function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         DataLayouts.foreach_column(
             ᶠB, ᶠK, Y.c.sgsʲs.:($j).ρa, ᶜρʲs.:($j), Y.c.sgsʲs, ᶜρʲs,
             Y.f.sgsʲs.:($j).u₃, rates, ᶜρ_diffʲs.:($j), ᶠgradᵥ_ᶜΦ, ᶠdz, ᶠz,
+            ᶜz, z_sfc,
         ) do ᶠB, ᶠK, ᶜρaʲ, ᶜρʲ, ᶜsgsʲs, ᶜρʲs, ᶠu₃ʲ, rates, ᶜρ_diffʲ, ᶠgradᵥ_ᶜΦ,
-        ᶠdz, ᶠz
+        ᶠdz, ᶠz, ᶜz, z_sfc
             @inline
             (ᶜentr_vel_scaleʲ, ᶜarea_bounding_entr_detrʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) =
                 rates
@@ -567,6 +572,7 @@ NVTX.@annotate function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
                     nh_pressure,
                     pressure_drag_coefficient(
                         α_d, scale_height, draft_area(ᶜρaʲ, ᶜρʲ), ᶜa⁰, a_min, a_max,
+                        ᶜz, z_sfc, c_R_drag, R_max_drag,
                     ),
                     zero_FT,
                 )

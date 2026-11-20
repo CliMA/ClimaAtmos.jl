@@ -587,7 +587,8 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
                 zero_FT,
                 entr_model,
             )
-            @. ᶜturb_entrʲ = turbulent_entrainment(turbconv_params, ᶜaʲ)
+            @. ᶜturb_entrʲ =
+                turbulent_entrainment(turbconv_params, ᶜaʲ, ᶜz, z_sfc)
 
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 

@@ -678,6 +678,9 @@ function TurbulenceConvectionParameters(
         entr_subsat_power = FT(2),
         entr_subsat_height_min = FT(0.2),
         entr_subsat_height_width = FT(0.1),
+        turb_entr_height_scale = FT(0),
+        pressure_drag_plume_radius_slope = FT(0),
+        pressure_drag_plume_radius_max = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -700,6 +703,21 @@ function TurbulenceConvectionParameters(
     f_ev = parameters.edmf_buoyancy_clear_env_weight
     0 <= f_ev <= 1 || throw(
         ArgumentError("edmf_buoyancy_clear_env_weight must lie in [0, 1]; got $f_ev"),
+    )
+    parameters.turb_entr_height_scale >= 0 || throw(
+        ArgumentError(
+            "turb_entr_height_scale must be non-negative; got $(parameters.turb_entr_height_scale)",
+        ),
+    )
+    parameters.pressure_drag_plume_radius_slope >= 0 || throw(
+        ArgumentError(
+            "pressure_drag_plume_radius_slope must be non-negative; got $(parameters.pressure_drag_plume_radius_slope)",
+        ),
+    )
+    parameters.pressure_drag_plume_radius_max >= 0 || throw(
+        ArgumentError(
+            "pressure_drag_plume_radius_max must be non-negative; got $(parameters.pressure_drag_plume_radius_max)",
+        ),
     )
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
@@ -854,6 +872,11 @@ function SGSQuadratureParameters(
         # Estimated Inversion Strength sensitivity of liquid-cloud shortwave
         # subgrid inhomogeneity (`solve_fluxes!`): off (`0`) by default.
         cloud_inhomogeneity_eis_coeff = FT(0),
+        # Non-equilibrium cloud-fraction subsaturation width scale factors and
+        # inversion stability threshold (`_compute_cloud_fraction_from_q_c_eq`).
+        cloud_fraction_subsat_width_coeff = FT(1),
+        cloud_fraction_subsat_free_coeff = FT(1),
+        cloud_fraction_subsat_inversion_gamma = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
@@ -900,6 +923,18 @@ function SGSQuadratureParameters(
         (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
         (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
         (:cloud_fraction_eps_rel, parameters.cloud_fraction_eps_rel),
+        (
+            :cloud_fraction_subsat_width_coeff,
+            parameters.cloud_fraction_subsat_width_coeff,
+        ),
+        (
+            :cloud_fraction_subsat_free_coeff,
+            parameters.cloud_fraction_subsat_free_coeff,
+        ),
+        (
+            :cloud_fraction_subsat_inversion_gamma,
+            parameters.cloud_fraction_subsat_inversion_gamma,
+        ),
     )
         value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
     end

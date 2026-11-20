@@ -207,6 +207,15 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `entr_subsat_height_width`: Transition half-width `ΔΠ₅ > 0` of the
     dimensionless height gate `G_z(Π₅)` in `InvZEntrainment` (`0.1` by default)
     [-].
+  - `turb_entr_height_scale`: Gaussian height scale `H_scale ≥ 0` [m] above the
+    surface over which `turbulent_entrainment` decays via
+    `shallow_support_weight`; `0` (default) applies turbulent entrainment
+    uniformly at all heights [m].
+  - `pressure_drag_plume_radius_slope`, `pressure_drag_plume_radius_max`:
+    Linear growth rate `c_R ≥ 0` [-] and cap `R_max ≥ 0` [m] of the minimum
+    updraft plume radius `R_min(z) = min(c_R max(0, z − z_sfc), R_max)` setting
+    the lower area bound `(R_min / H)²` in `pressure_drag_coefficient`; `0`
+    (default) bounds the drag area by `min_area` alone [-, m].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -258,6 +267,9 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     entr_subsat_power::FT
     entr_subsat_height_min::FT
     entr_subsat_height_width::FT
+    turb_entr_height_scale::FT
+    pressure_drag_plume_radius_slope::FT
+    pressure_drag_plume_radius_max::FT
 end
 
 """
@@ -383,6 +395,19 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `σ_aug = √((α σ_S)² + (ε_rel δ_sub)² + σ_abs²)` (`_sgs_augmented_sigma`):
     cloud cover of order one in subsaturated air takes condensate of order
     `ε_rel δ_sub`. The default `0` leaves the absolute floor alone [-].
+  - `cloud_fraction_subsat_width_coeff`: Scale factor `c_sub ≥ 0` [-] on the
+    subsaturation deficit `δ_sub = max(0, −μ_S)` in the non-equilibrium
+    cloud-fraction width `σ_neq = √(σ_aug² + (c_sub,eff δ_sub)²)`
+    (`_compute_cloud_fraction_from_q_c_eq`); `1` (default) uses the unscaled
+    deficit [-].
+  - `cloud_fraction_subsat_free_coeff`,
+    `cloud_fraction_subsat_inversion_gamma`: Weak-stratification scale factor
+    `c_sub,free ≥ 0` [-] (default `1`) and static-stability scale
+    `γ_inv ≥ 0` [K/m] (default `0`) of the stability-weighted subsaturation
+    factor
+    `c_sub,eff = c_sub + (c_sub,free − c_sub) /`
+    `(1 + (max(0, ∂_z θ_li) / γ_inv)⁴)`;
+    `γ_inv = 0` applies `c_sub` uniformly at all stabilities [-, K/m].
   - `sgs_cloud_species_constant_timescales`: Switch for the 1M scheme. A
     positive value makes the Damköhler factor of the variance fidelity
     (`sgs_microphysics_relaxation_time`) and the cloud-species flux blend
@@ -459,6 +484,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
     cloud_fraction_eps_rel::FT
+    cloud_fraction_subsat_width_coeff::FT
+    cloud_fraction_subsat_free_coeff::FT
+    cloud_fraction_subsat_inversion_gamma::FT
     sgs_cloud_species_constant_timescales::FT
     sgs_env_autoconversion_updraft_velocity_weight::FT
     sgs_env_autoconversion_detrained_velocity::FT

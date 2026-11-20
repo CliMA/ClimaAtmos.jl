@@ -561,22 +561,35 @@ function detrainment_rate(
 end
 
 """
-    turbulent_entrainment(turbconv_params, ᶜaʲ)
+    turbulent_entrainment(turbconv_params, ᶜaʲ, ᶜz = 0, z_sfc = 0)
 
 Turbulent (diffusive) entrainment rate [1/s] of an updraft of area fraction
 `ᶜaʲ`:
 
-    turb_entr = max(0, c₁ exp(-c₂ aʲ)),
+    turb_entr = max(0, c₁ exp(-c₂ aʲ)) ·
+                shallow_support_weight(1, z, z_sfc, turb_entr_height_scale),
 
 with `(c₁, c₂) = turb_entr_param_vec`. Unlike the dynamical entrainment of
-`compute_entrainment`, it does not scale with the updraft velocity, and
-it decays as the updraft fills the grid box. Precomputed into
+`compute_entrainment`, it does not scale with the updraft velocity, decays as
+the updraft fills the grid box, and (when `turb_entr_height_scale > 0`) decays
+above the surface over `turb_entr_height_scale`. Precomputed into
 `p.precomputed.ᶜturb_entrʲs` and added to the dynamical rate in
 `edmfx_entr_detr_tendency!`.
 """
-function turbulent_entrainment(turbconv_params, ᶜaʲ)
+function turbulent_entrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜz = zero(ᶜaʲ),
+    z_sfc = zero(ᶜaʲ),
+)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
-    return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
+    base = max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
+    return shallow_support_weight(
+        base,
+        ᶜz,
+        z_sfc,
+        CAP.turb_entr_height_scale(turbconv_params),
+    )
 end
 
 """

@@ -81,6 +81,8 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
         a_min = CAP.min_area(turbconv_params)
         a_max = CAP.max_area(turbconv_params)
+        c_R_drag = CAP.pressure_drag_plume_radius_slope(turbconv_params)
+        R_max_drag = CAP.pressure_drag_plume_radius_max(turbconv_params)
         scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
         entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
         detr_model = edmfx_model.detr_model
@@ -93,6 +95,8 @@ function edmfx_tke_sources!(Yₜ, Y, p)
             ᶜu⁰,
         ) = p.precomputed
         (; ᶠgradᵥ_ᶜΦ) = p.core
+        ᶜz = Fields.coordinate_field(Y.c).z
+        z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
         ᶜlg = Fields.local_geometry_field(Y.c)
         ᶠlg = Fields.local_geometry_field(Y.f)
         FT = Spaces.undertype(axes(Y.c))
@@ -103,10 +107,10 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
             ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
-            ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg,
+            ᶠgradᵥ_ᶜΦ, ᶜz, z_sfc, ᶜlg, ᶠlg,
         ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
         ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
-        ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg
+        ᶠgradᵥ_ᶜΦ, ᶜz, z_sfc, ᶜlg, ᶠlg
             add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
             # Pressure-drag return-to-isotropy for every updraft, then the
             # entrainment/detrainment shear-mixing source for every updraft
@@ -118,6 +122,7 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                 ᶜdrag_coeff = @inline @. lazy(
                     pressure_drag_coefficient(
                         α_d, scale_height, ᶜa_dragʲ, ᶜa⁰_col, a_min, a_max,
+                        ᶜz, z_sfc, c_R_drag, R_max_drag,
                     ),
                 )
                 @. Yₜc.ρtke +=

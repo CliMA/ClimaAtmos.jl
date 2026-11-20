@@ -149,7 +149,7 @@ end
 
 @testset "pressure_drag_coefficient" begin
     # `d_c = α_d / (2H) (1/√aʲ + 1/√a⁰)`, with the updraft area clamped to
-    # `[a_min, a_max]` and the environment area to `[1 - a_max, 1]`.
+    # `[a_drag_min, a_max]` and the environment area to `[1 - a_max, 1]`.
     for FT in (Float32, Float64)
         α_d, H, a_min, a_max = FT(10), FT(8000), FT(1e-5), FT(0.7)
         d_c(aʲ, a⁰) = ClimaAtmos.pressure_drag_coefficient(α_d, H, aʲ, a⁰, a_min, a_max)
@@ -159,5 +159,19 @@ end
         @test d_c(FT(0.1), FT(-0.2)) == d_c(FT(0.1), 1 - a_max)
         @test d_c(FT(0.1), FT(1.3)) == d_c(FT(0.1), FT(1))
         @test d_c(FT(0.1), FT(0.9)) isa FT
+
+        # Plume-radius lower bound `(min(c_R max(0, z - z_sfc), R_max) / H)^2`
+        @test ClimaAtmos.pressure_drag_coefficient(
+            α_d, H, FT(1e-4), FT(0.9), a_min, a_max, FT(5000), FT(0), FT(0), FT(0),
+        ) === d_c(FT(1e-4), FT(0.9))
+        a_rmin = (FT(1000) / H)^2
+        @test ClimaAtmos.pressure_drag_coefficient(
+            α_d, H, FT(1e-4), FT(0.9), a_min, a_max,
+            FT(6000), FT(0), FT(0.25), FT(1000),
+        ) ≈ d_c(a_rmin, FT(0.9))
+        @test ClimaAtmos.pressure_drag_coefficient(
+            α_d, H, FT(1e-4), FT(0.9), a_min, a_max,
+            FT(6000), FT(0), FT(2.0), FT(1e5),
+        ) ≈ d_c(a_max, FT(0.9))
     end
 end
