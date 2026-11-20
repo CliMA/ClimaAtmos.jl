@@ -307,44 +307,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         is_dg_horizontal(axes(Y.c)) &&
         p.atmos.numerics.dg_equation_form === Val(:fddg) &&
         p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
-    fddg_wflux = fddg_vflux
-    if isnothing(ᶠf¹²)
-        # shallow atmosphere
-        if fddg_vflux
-            @. Yₜ.c.uₕ -= (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        else
-            @. Yₜ.c.uₕ -=
-                ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-                (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        end
-        fddg_wflux || @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    else
-        # deep atmosphere
-        if fddg_vflux
-            @. Yₜ.c.uₕ -=
-                ᶜinterp(ᶠf¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-                (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        else
-            @. Yₜ.c.uₕ -=
-                ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-                (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        end
-        if fddg_wflux
-            @. Yₜ.f.u₃ -= ᶠf¹² × ᶠinterp(CT12(ᶜu))
-        else
-            @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        end
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    end
+
     # Full vertical advection of passive tracers (such as liq, rai, etc) with the
     # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
     # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
@@ -380,10 +343,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # In a deep atmosphere, the vorticity carries the horizontal Coriolis term.
         ᶠω¹²_tot = ᶠf¹² === () ? ᶠω¹² : (@. lazy(ᶠf¹² + ᶠω¹²))
         ᶜu¹² = @. CT12(ᶜu)
-        @. Yₜc.uₕ -=
-            ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × ᶜu¹²
-        @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
+        if fddg_vflux
+            @. Yₜc.uₕ -= (ᶜf³ + ᶜω³) × ᶜu¹²
+            if ᶠf¹² !== ()
+                @. Yₜc.uₕ -=
+                    ᶜinterp(ᶠf¹² × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ)
+                @. Yₜf.u₃ -= ᶠf¹² × ᶠinterp(ᶜu¹²)
+            end
+        else
+            @. Yₜc.uₕ -=
+                ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
+                (ᶜf³ + ᶜω³) × ᶜu¹²
+            @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
+        end
         MatrixFields.unrolled_foreach(drafts) do (ᶠω¹²ʲ, ᶜuʲ, ᶜKʲ, ᶠKᵥʲ, ᶠu₃ʲₜ)
             @inline
             ᶠω¹²ʲ_tot = ᶠf¹² === () ? ᶠω¹²ʲ : (@. lazy(ᶠf¹² + ᶠω¹²ʲ))
