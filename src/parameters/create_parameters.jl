@@ -777,6 +777,9 @@ function SGSQuadratureParameters(
         sgs_env_updraft_tail_truncation_coeff = FT(0),
         sgs_env_subsat_rh_transition = FT(0.03),
         sgs_env_subsat_gamma_crit = FT(0.0115),
+        # Height scale [m] over which `1 − edmf_tail_entr_fraction` and
+        # `edmf_buoyancy_clear_env_weight` decay above the surface (`0` = off).
+        edmf_shallow_support_height_scale = FT(0),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`floor_displacement_length`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],

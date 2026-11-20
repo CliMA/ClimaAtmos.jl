@@ -392,11 +392,15 @@ function set_updraft_reference_density_excess!(Y, p)
     end
     thermo_params = CAP.thermodynamics_params(p.params)
     f_ev = CAP.edmf_buoyancy_clear_env_weight(p.params)
+    H_sup = CAP.edmf_shallow_support_height_scale(p.params)
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜcloud_fraction⁰) = p.precomputed
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜf_ev = @. lazy(shallow_support_weight(f_ev, ᶜz, z_sfc, H_sup))
     @. ᶜρ_ref_excess = updraft_reference_density_excess(
-        thermo_params, f_ev, ᶜcloud_fraction⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰,
+        thermo_params, ᶜf_ev, ᶜcloud_fraction⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰,
         ᶜq_ice⁰, ᶜq_lcl⁰, ᶜq_icl⁰,
     )
     return nothing

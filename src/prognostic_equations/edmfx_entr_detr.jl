@@ -657,6 +657,30 @@ function tail_entrainment_fields(p, f_tail)
 end
 
 """
+    shallow_support_weight(w0, z, z_sfc, H_scale)
+
+Gaussian height-tapered weight `w0 exp(−((z − z_sfc) / H_scale)²)` [-]; returns
+`w0` unattenuated when `H_scale ≤ 0`.
+"""
+@inline function shallow_support_weight(w0, z, z_sfc, H_scale)
+    H_scale > zero(H_scale) || return w0
+    dz = z - z_sfc
+    r = max(zero(dz), dz) / H_scale
+    return w0 * exp(-r * r)
+end
+
+"""
+    shallow_support_fraction(f0, z, z_sfc, H_scale)
+
+Taper the tail fraction `f0 ∈ (0, 1]` toward the environment mean (`1`) above the
+surface by decaying its complement `1 − f0` with `shallow_support_weight`;
+returns `f0` unattenuated when `H_scale ≤ 0`.
+"""
+@inline shallow_support_fraction(f0, z, z_sfc, H_scale) =
+    H_scale > zero(H_scale) ?
+    one(f0) - shallow_support_weight(one(f0) - f0, z, z_sfc, H_scale) : f0
+
+"""
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
@@ -692,16 +716,19 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
+    H_sup = FT(CAP.edmf_shallow_support_height_scale(p.params))
     (; dt) = p
     tail_fields = tail_entrainment_fields(p, f_tail)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     # One fused column loop for every draft and scalar.
     DataLayouts.foreach_column(
         Yₜ.c, Y.c, Fields.local_geometry_field(Y.c), ᶜK, ᶜh_tot,
         (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-        ᶜarea_bounding_entr_detrʲs, tail_fields,
+        ᶜarea_bounding_entr_detrʲs, tail_fields, ᶜz, z_sfc,
     ) do Yₜc, Yc, ᶜlg, ᶜK, ᶜh_tot,
     (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-    ᶜarea_bounding_entr_detrʲs, tail_fields
+    ᶜarea_bounding_entr_detrʲs, tail_fields, ᶜz, z_sfc
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜmse⁰ = @. specific_env_mse(
             Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model,
@@ -733,9 +760,12 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             # exchange outside the ρa equation, mixes the environment and updraft means.
             if !isempty(tail_fields)
                 (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = tail_fields
+                ᶜf_tail = @inline @. lazy(
+                    shallow_support_fraction(f_tail, ᶜz, z_sfc, H_sup),
+                )
                 ᶜρaʲ = ᶜsgsʲ.ρa
                 ᶜtailʲ = @. tail_entrainment_increments(
-                    thermo_params, f_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                    thermo_params, ᶜf_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
                     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
                 )
                 @. ᶜsgsʲₜ.mse += ᶜentrʲ * ᶜtailʲ.mse

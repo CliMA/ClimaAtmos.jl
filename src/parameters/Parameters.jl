@@ -317,8 +317,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     is the excess reconstruction; `1` treats the species uniform at every node [-].
   - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
     that is confined to the precipitation shaft of the SGS PDF
-    (`sgs_precip_shaft_threshold`) instead of being
-    spread over all nodes, in `[0, 1]`; default `1`; `0` is the uniform placement [-].
+    (`sgs_precip_shaft_threshold`, `sgs_placement_factor`), in `[0, 1]`; sets
+    both the in-shaft concentration that scales cloud–precipitation accretion
+    and the `1 − β_p` share exposed to clear-node evaporation; default `1`; `0`
+    is the uniform placement [-].
   - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
     maximum-random overlap recursion that diagnoses the precipitation fraction
     `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`
@@ -389,6 +391,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `_env_subsat_cu_switch`, evaluated at the larger of the cell's two bounding
     face gradients `ᶠ∂θli∂z` so that the subsaturated-cumulus switch vanishes
     across strong stratocumulus inversions; default `0.0115` [K/m].
+  - `edmf_shallow_support_height_scale`: Height scale `H_sup` [m] above the
+    surface over which `1 − edmf_tail_entr_fraction` and
+    `edmf_buoyancy_clear_env_weight` decay via `exp(−((z − z_sfc) / H_sup)²)`;
+    `0` (default) applies both weights uniformly at all heights [m].
   - `cloud_condensate_relative_variance_floor`: Relative variance of an
     unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
     truncated-Gaussian in-cloud distribution in the radiative
@@ -430,6 +436,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_env_updraft_tail_truncation_coeff::FT
     sgs_env_subsat_rh_transition::FT
     sgs_env_subsat_gamma_crit::FT
+    edmf_shallow_support_height_scale::FT
     cloud_condensate_relative_variance_floor::FT
 end
 

@@ -1150,8 +1150,11 @@ NVTX.@annotate function _sweep_sgs_updraft_tracers!(
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
     thermo_params = CAP.thermodynamics_params(p.params)
     f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
+    H_sup = FT(CAP.edmf_shallow_support_height_scale(p.params))
     (; dt) = p
     tail_fields = tail_entrainment_fields(p, f_tail)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
         sgs_tracers,
@@ -1169,8 +1172,10 @@ NVTX.@annotate function _sweep_sgs_updraft_tracers!(
         DataLayouts.foreach_column(
             Y.c.sgsʲs.:($j), Y.c, ᶜenv_sgsʲs, Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j),
             ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK, ᶜh_tot, rates, sfc, tail_fields,
+            ᶜz, z_sfc,
         ) do ᶜsgsʲ, Yc, ᶜenv_sgsʲs, ᶠu₃ʲ, ᶜρʲ, ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK,
-        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc), tail_fields
+        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc), tail_fields,
+        ᶜz, z_sfc
             (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜarea_bounding_entr_detrʲ, ᶜturb_entrʲ) =
                 rates
             ᶠw = @. ᶠu₃ʲ.components.data.:1 / ᶠdz
@@ -1195,10 +1200,13 @@ NVTX.@annotate function _sweep_sgs_updraft_tracers!(
                 (zero_FT, zero_FT)
             else
                 (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = tail_fields
+                ᶜf_tail = @inline @. lazy(
+                    shallow_support_fraction(f_tail, ᶜz, z_sfc, H_sup),
+                )
                 ᶜρa⁰ = @. ρa⁰(Yc.ρ, ᶜenv_sgsʲs, turbconv_model)
                 ᶜρaʲ = ᶜsgsʲ.ρa
                 ᶜtailʲ = @. tail_entrainment_increments(
-                    thermo_params, f_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                    thermo_params, ᶜf_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
                     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
                 )
                 (
