@@ -52,11 +52,10 @@ known_dependencies = Set([
     "ClimaUtilities",
     "CloudMicrophysics",
     "Dates",
-    "Flux", # for machine learning based parameterizations
     "ForwardDiff", # for automatic differentiation in the implicit solver
     "Insolation",
     "Interpolations",
-    "JLD2", # for loading Flux models
+    "JLD2", # for loading Flux models in the ClimaAtmosFlux extension
     "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
     "LazyArtifacts",
     "LinearAlgebra",
