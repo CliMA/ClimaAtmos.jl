@@ -128,7 +128,8 @@ Fill `p.precomputed.sfc_conditions` with placeholder values and return
 
 All fluxes are set to zero, with nonzero placeholders for the quantities that
 downstream consumers divide by or take logs of (`T_sfc = 300` K,
-`ustar = 0.2` m/s, `obukhov_length = 1e-4` m). Used when the flux scheme is
+`ustar = 0.2` m/s, `obukhov_length = 1e-4` m), and the screen-level air
+temperature `T_2m` is `NaN` until the external driver writes it. Used when the flux scheme is
 `nothing`, so that the first `set_precomputed_quantities!` call does not expose
 uninitialized memory to consumers such as RRTMGP and diagnostic EDMF before the
 external driver writes the real surface fields.
@@ -142,6 +143,10 @@ function init_sfc_conditions_zero!(p)
     @. sfc_conditions.ustar = FT(0.2)
     @. sfc_conditions.obukhov_length = FT(1e-4)
     @. sfc_conditions.buoyancy_flux = FT(0)
+    # The 2 m air temperature is a diagnostic that no tendency reads. The
+    # external driver writes it with the other surface fields; until it does,
+    # it is NaN, and `tas` reports the temperature of the bottom cell center.
+    @. sfc_conditions.T_2m = FT(NaN)
     if !(atmos.microphysics_model isa DryModel)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
@@ -171,7 +176,9 @@ over liquid water unless `overrides.q_vap` says otherwise. The
 [`MoninObukhov`](@ref) supplies roughness lengths (and gustiness) when no fluxes
 are prescribed, or the prescribed `shf`/`lhf` and `ustar` when they are. A
 [`θAndQFluxes`](@ref) closure is converted here to `shf`/`lhf` using the local
-`ρ_sfc`, `cp_m`, and latent heat of vaporization.
+`ρ_sfc`, `cp_m`, and latent heat of vaporization. The screen-level air
+temperature `T_2m` is reconstructed from the same solve (see
+[`screen_level_temperature`](@ref)).
 
 # Arguments
 
@@ -293,19 +300,73 @@ function surface_state_to_conditions(
         end
     end
 
+    inputs = SF.build_surface_flux_inputs(T_int, q_tot_int, q_liq_int, q_ice_int,
+        ρ_int, T_sfc, q_vap, Φ_sfc, Δz, 0, uv_int, uv_sfc, config, nothing,
+        ifelsenothing(flux_specs, SF.FluxSpecs{FT}()), nothing, nothing)
+    surface_conditions = SF.surface_fluxes(
+        surface_fluxes_params, inputs, UF.PointValueScheme(), nothing,
+    )
+    T_2m = screen_level_temperature(
+        parameterization, surface_fluxes_params, surface_conditions, inputs, T_int,
+    )
+
     return atmos_surface_conditions(
         surface_fluxes_params,
-        SF.surface_fluxes(surface_fluxes_params, T_int, q_tot_int, q_liq_int, q_ice_int,
-            ρ_int, T_sfc, q_vap, Φ_sfc, Δz, 0, uv_int, uv_sfc, nothing, config,
-            UF.PointValueScheme(), nothing, flux_specs),
+        surface_conditions,
         ρ_sfc,
         surface_local_geometry,
+        T_2m,
     )
 end
 
 """
+    SCREEN_HEIGHT
+
+Height [m] of the screen level, the WMO standard height of near-surface air
+temperature measurements, above the apparent sink for heat.
+"""
+const SCREEN_HEIGHT = 2
+
+"""
+    ANEMOMETER_HEIGHT
+
+Height [m] of the WMO standard anemometer above the apparent sink for momentum.
+Only passed through to `SurfaceFluxes.screen_level_values`, which also
+reconstructs the wind speed.
+"""
+const ANEMOMETER_HEIGHT = 10
+
+"""
+    screen_level_temperature(
+        parameterization, surface_fluxes_params, surface_conditions, inputs, T_int,
+    )
+
+Return the air temperature [K] at the screen level, `SCREEN_HEIGHT` (2 m)
+above the apparent sink for heat, at one surface point.
+
+For [`MoninObukhov`](@ref), the temperature is reconstructed from the
+Monin-Obukhov profiles of the flux solve that returned `surface_conditions` for
+`inputs`, with `SurfaceFluxes.screen_level_values`: the dry static energy is
+interpolated between the surface and the first interior level with the heat
+profile, at the stability of the solve. Screen levels at or above the first
+interior level take its temperature.
+
+[`ExchangeCoefficients`](@ref) prescribe the transfer coefficients, not the
+profiles, so no profile is available to reconstruct and the temperature of the
+first interior level, `T_int`, is returned.
+"""
+screen_level_temperature(
+    ::MoninObukhov, surface_fluxes_params, surface_conditions, inputs, T_int,
+) = SF.screen_level_values(
+    surface_fluxes_params, surface_conditions, inputs, SCREEN_HEIGHT,
+    ANEMOMETER_HEIGHT,
+).T
+screen_level_temperature(::ExchangeCoefficients, _, _, _, T_int) = T_int
+
+"""
     atmos_surface_conditions(
         surface_fluxes_params, surface_conditions, ρ_sfc, surface_local_geometry,
+        T_2m,
     )
 
 Convert a `SurfaceFluxes.SurfaceFluxConditions` struct into the NamedTuple of
@@ -315,11 +376,12 @@ The scalar fluxes returned by `SurfaceFluxes` are given a direction here: the
 energy and moisture fluxes are projected onto the surface normal, and the
 momentum fluxes `ρτxz`, `ρτyz` are assembled into a tensor. Only the horizontal
 part of the momentum flux is kept (`ρ_flux_uₕ`). The buoyancy flux is computed
-from `shf`, `lhf`, and `ρ_sfc`.
+from `shf`, `lhf`, and `ρ_sfc`. The screen-level air temperature `T_2m` (see
+[`screen_level_temperature`](@ref)) is passed through.
 
 # Returns
 
-`(; T_sfc, q_vap_sfc, ustar, obukhov_length, buoyancy_flux, ρ_flux_uₕ, ρ_flux_h_tot, ρ_flux_q_tot)`, with temperature [K], specific humidity [kg/kg],
+`(; T_sfc, q_vap_sfc, ustar, obukhov_length, buoyancy_flux, T_2m, ρ_flux_uₕ, ρ_flux_h_tot, ρ_flux_q_tot)`, with temperatures [K], specific humidity [kg/kg],
 friction velocity [m/s], Obukhov length [m], buoyancy flux [m²/s³], and
 the energy [W/m²] and moisture [kg/m²/s] fluxes as `C3` vectors, positive
 upward. `ρ_flux_q_tot` is always present, even for a `DryModel`.
@@ -329,6 +391,7 @@ function atmos_surface_conditions(
     surface_conditions,
     ρ_sfc,
     surface_local_geometry,
+    T_2m,
 )
     (; ustar, L_MO, ρτxz, ρτyz, shf, lhf, evaporation, T_sfc, q_vap_sfc) =
         surface_conditions
@@ -349,6 +412,7 @@ function atmos_surface_conditions(
         ustar,
         obukhov_length = L_MO,
         buoyancy_flux = buoy_flux,
+        T_2m,
         # This drops the C3 component of ρ_flux_u, need to add ρ_flux_u₃
         ρ_flux_uₕ = tensor_from_components(ρτxz, ρτyz, surface_local_geometry, z),
         energy_flux...,
@@ -391,11 +455,11 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
     moisture_flux_names = (:ρ_flux_q_tot,)
-    names = (:T_sfc, :q_vap_sfc, :ustar, :obukhov_length, :buoyancy_flux, :ρ_flux_uₕ,
-        energy_flux_names..., moisture_flux_names...,
+    names = (:T_sfc, :q_vap_sfc, :ustar, :obukhov_length, :buoyancy_flux, :T_2m,
+        :ρ_flux_uₕ, energy_flux_names..., moisture_flux_names...,
     )
     type_tuple = Tuple{
-        FT, FT, FT, FT, FT,
+        FT, FT, FT, FT, FT, FT,
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,

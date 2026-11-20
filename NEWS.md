@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The `tas` diagnostic (near-surface air temperature)
+  is the air temperature 2 m above the apparent sink for heat, reconstructed
+  from the Monin-Obukhov profiles of the surface flux solve with
+  `SurfaceFluxes.screen_level_values` and stored as `sfc_conditions.T_2m`. It
+  was the temperature at the bottom cell center. With `ExchangeCoefficients`,
+  which define no profile, it is still the bottom cell center temperature. When
+  the coupler provides the surface (`flux_scheme === nothing`), the coupler
+  writes `T_2m`; until it does (at the initial time, or with a coupler that
+  does not), `tas` is the bottom cell center temperature. Requires
+  SurfaceFluxes 1.5.
 - ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
   In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
   temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice
