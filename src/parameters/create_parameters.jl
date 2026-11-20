@@ -672,6 +672,12 @@ function TurbulenceConvectionParameters(
         # reference density (`set_updraft_reference_density_excess!`): 0 = the
         # grid-mean density, 1 = the clear-fraction blend.
         edmf_buoyancy_clear_env_weight = FT(0),
+        # Free-tropospheric subsaturation dynamical entrainment in `InvZEntrainment`
+        # (`0` = off).
+        entr_subsat_coeff = FT(0),
+        entr_subsat_power = FT(2),
+        entr_subsat_height_min = FT(0.2),
+        entr_subsat_height_width = FT(0.1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
