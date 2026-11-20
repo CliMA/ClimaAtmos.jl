@@ -163,7 +163,7 @@ inside a flux divergence is numerically fragile [Weller2019](@cite).
 !!! note "TODO: not yet implemented"
 
     One term of this equation is missing from the draft mass tendency, which
-    includes horizontal advection, the analytic vertical solve with the
+    includes horizontal advection, the implicit vertical transport with the
     sedimentation mass flux, and the microphysics and hyperdiffusion parts of
     ``\hat{S}_{q_t}^m``: the turbulent-diffusive part of ``\hat{S}_{q_t}^m``.
     The draft ``q_t^m`` receives the subdomain diffusive flux while
@@ -403,8 +403,8 @@ with the environment flux reconstructed as the residual of the grid-mean flux,
 ``\rho^0 W_\mu^0 = \max(\hat{\rho}^0 W_\mu^0 / (1 - a^m), 0)``. The sum of the
 condensate flux convergences
 ``S_{q_t,\mathrm{sed}}^m = \sum_\mu S_{q_\mu,\mathrm{sed}}^m`` is the
-sedimentation term of the draft mass equation, applied in the analytic
-``\hat{\rho}^m`` solve, and each intensive draft scalar receives both terms of
+sedimentation term of the draft mass equation, applied in the implicit
+``\hat{\rho}^m`` equation, and each intensive draft scalar receives both terms of
 ``D_\psi^m``: its own sedimentation source and the dilution
 ``-\psi^m S_{q_t,\mathrm{sed}}^m / \hat{\rho}^m`` by the sedimented mass. For
 ``h_s^m``, ``W_{h_s}^m = \sum_\mu q_\mu^m (h_\mu(T^m) + \Phi) w_\mu^m`` is

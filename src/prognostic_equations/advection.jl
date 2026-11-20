@@ -340,7 +340,7 @@ The fallback method is a no-op for turbulence-convection models other than
     microphysics species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and for 2M also `n_lcl`
     and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
     via `updraft_sedimentation`. The condensate mass tendencies are a source
-    of `ρaʲ` (`solve_sgs_ρa_implicit_stage_analytic!`), so `mse`, `q_tot`, and
+    of `ρaʲ` (via `sgs_ρa_implicit_tendency!` in Newton), so `mse`, `q_tot`, and
     every SGS tracer also receive the dilution `-χ Σ_μ vtt_μ / ρaʲ` by the
     sedimented mass. This path supports a single updraft.
 
@@ -470,7 +470,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
 
             # Sedimentation of the condensate masses. Each species' flux
-            # convergence `vtt` is a source of ρaʲ (in the analytic ρa solve), so an
+            # convergence `vtt` is a source of ρaʲ (in `sgs_ρa_implicit_tendency!`), so an
             # intensive updraft scalar χ receives its own source minus the dilution
             # χ Σ_μ vtt_μ / ρaʲ by the sedimented mass. The mse source is the flux
             # convergence of q_μ (h_μ(Tʲ) + Φ), with laterally entrained environment
@@ -717,7 +717,7 @@ regularized inverse `specific(1, ρa, 0, ρʲ, turbconv_model)`. `M_μ` is upper
 column is solved in one top-to-bottom sweep. The Newton solve takes the same
 linear step for the sedimentation of the condensate, so `r ρaʲ` is the
 sedimented mass that dilutes the updraft scalars there, at any Courant number.
-`solve_sgs_ρa_implicit_stage_analytic!` applies it in the `ρa` recurrence.
+`sgs_ρa_implicit_tendency!` applies it in the `ρa` Newton residual.
 
 Row `i` of the step is solved as `Δq_μ[i] = b_μ[i] + c_μ[i] Δq_μ[i+1]`. The
 species are taken in pairs: a column loop writes the offset `b` and the factor

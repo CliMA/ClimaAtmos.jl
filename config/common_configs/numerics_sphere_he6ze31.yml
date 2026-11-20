@@ -12,4 +12,4 @@ rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 1
+max_newton_iters_ode: 3

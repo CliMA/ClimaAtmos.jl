@@ -152,8 +152,9 @@ the rate is capped at `entr_detr_buoy_inv_tau_max` so a vanishing `Δwʲ` doesn'
 produce an unbounded rate.
 
 Extracted as a helper so it can be reused by `detrainment_rate` (the
-explicit detrainment closure) and the implicit ρa solve (where the same
-buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
+explicit detrainment closure) and the `ρa` Newton residual
+`sgs_ρa_implicit_tendency!` (where the same buoyancy-detrainment piece appears
+in `(ε − δ)`).
 """
 @inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
     FT = typeof(Δwʲ)
@@ -164,38 +165,25 @@ buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
 end
 
 """
-    compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel_rate,
-                        ᶜarea_bounding_entr_detr, ᶜwʲ)
+    compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel_rate, ᶜwʲ)
 
-Total entrainment rate [1/s], assembled from the three precomputed pieces:
+Total entrainment rate [1/s], assembled from the two precomputed pieces:
 
-    entr = entr_vel_scale * |wʲ|           # velocity-proportional  [1/m] * [m/s]
-         + entr_nonvel_rate                # buoyancy-driven + constant [1/s]
-         + max(0, area_bounding_entr_detr)  # area-bounding          [1/s]
+    entr = entr_vel_scale * |wʲ|  # velocity-proportional  [1/m] * [m/s]
+         + entr_nonvel_rate        # buoyancy-driven + constant [1/s]
 
-`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`,
-`entr_nonvel_rate` [1/s] by `entrainment_nonvel_rate`, and
-`area_bounding_entr_detr` [1/s] is the signed rate produced by
-`area_bounding_entr_detr` (positive ⇒ this entrainment branch,
-negative ⇒ the detrainment branch in `compute_detrainment`).
+`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale` and
+`entr_nonvel_rate` [1/s] by `entrainment_nonvel_rate`.
 `ᶜwʲ` is the physical updraft vertical velocity [m/s].
 
 TODO: scale the velocity-proportional term with the relative velocity
 `|wʲ - w⁰|`, as the formulation has it. Setting `w⁰ = 0` bounds the entrainment
-of a draft with `wʲ ≈ 0`, whose area would otherwise grow without limit; the
-analytic `ρa` stage solve holds the area fixed through the Newton iteration,
-which closes that path. The implicit `u₃` solve already assumes the
-relative-velocity form, so the two solves use rates that differ by `1/a⁰`.
+of a draft with `wʲ ≈ 0`, whose area would otherwise grow without limit. The
+implicit `u₃` residual already assumes the relative-velocity form, so the `u₃`
+and `ρa` residuals use rates that differ by `1/a⁰`.
 """
-compute_entrainment(
-    ᶜentr_vel_scale,
-    ᶜentr_nonvel_rate,
-    ᶜarea_bounding_entr_detr,
-    ᶜwʲ,
-) =
-    ᶜentr_vel_scale * abs(ᶜwʲ) +
-    ᶜentr_nonvel_rate +
-    max(zero(ᶜarea_bounding_entr_detr), ᶜarea_bounding_entr_detr)
+compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel_rate, ᶜwʲ) =
+    ᶜentr_vel_scale * abs(ᶜwʲ) + ᶜentr_nonvel_rate
 
 """
     entrainment_velocity_scale(
@@ -208,10 +196,8 @@ Velocity-scaling prefactor [1/m] for the model-specific entrainment rate.
 The total entrainment rate [1/s] is assembled by `compute_entrainment` as
 
     entr = entr_vel_scale * abs(wʲ) + entr_nonvel_rate
-         + max(0, area_bounding_entr_detr)
 
-where the second term comes from `entrainment_nonvel_rate` and the
-third from `area_bounding_entr_detr` (its positive branch).
+where the second term comes from `entrainment_nonvel_rate`.
 `model_option` selects the entrainment model:
 
   - `PiGroupsEntrainment`: `Π`-group closure
@@ -380,61 +366,11 @@ function entrainment_nonvel_rate(
 end
 
 """
-    area_bounding_entr_detr(turbconv_params, a)
-
-Signed velocity-independent rate [1/s] that smoothly relaxes the updraft
-area `a` back into `[a_min, a_max]`, applied unconditionally (no
-dispatch on the entrainment/detrainment model). The sign convention is
-
-    > 0  ⇒  acts as additional entrainment (drives the area up; a < a_min)
-    < 0  ⇒  acts as additional detrainment (drives the area down; a > a_max)
-    = 0  ⇒  inactive (a_min ≤ a ≤ a_max)
-
-The result is
-
-    +min_area_limiter_scale · (max(0, a_min − a)/a_min)^min_area_limiter_power
-    −max_area_limiter_scale · (max(0, a − a_max)/(1 − a_max))^max_area_limiter_power.
-
-The two ranges (`a < a_min` and `a > a_max`) are mutually exclusive, so
-exactly one term is non-zero outside `[a_min, a_max]` and both are zero
-inside it.
-
-The positive part is consumed by `compute_entrainment` via
-`max(0, area_bounding_entr_detr)`; the negative part is consumed by
-`compute_detrainment` via `max(0, -area_bounding_entr_detr)`.
-"""
-@inline function area_bounding_entr_detr(turbconv_params, a)
-    FT = typeof(a)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    min_scale = CAP.min_area_limiter_scale(turbconv_params)
-    min_power = CAP.min_area_limiter_power(turbconv_params)
-    max_scale = CAP.max_area_limiter_scale(turbconv_params)
-    max_power = CAP.max_area_limiter_power(turbconv_params)
-
-    # Extra entrainment for a < a_min (0 at a_min, min_scale at a = 0).
-    min_relax = min_scale * (max(FT(0), a_min - a) / a_min)^min_power
-    # Extra detrainment for a > a_max (0 at a_max, max_scale at a = 1).
-    max_relax = max_scale * (max(FT(0), a - a_max) / (1 - a_max))^max_power
-
-    return min_relax - max_relax
-end
-
-"""
     compute_detrainment(turbconv_params, aʲ, ρaʲ, buoy_inv_time_scale,
-                        massflux_vert_div, area_bounding_entr_detr, detr_model)
+                        massflux_vert_div, detr_model)
 
-Total detrainment rate [1/s] as the sum of the model-specific rate from
-`detrainment_rate` (which internally applies
-`lower_area_limiter_factor` so that detrainment is damped as
-`a → a_min`) with the negative part of the signed area-bounding rate:
-
-    detr = detrainment_rate(...) + max(0, -area_bounding_entr_detr)
-
-`area_bounding_entr_detr` is produced by `area_bounding_entr_detr`;
-its positive branch feeds `compute_entrainment` while the
-negative branch (the only one that contributes here) drives the area back
-below `a_max`.
+Total detrainment rate [1/s] from `detrainment_rate`, which internally applies
+`lower_area_limiter_factor` so that detrainment is damped as `a → a_min`.
 
 Arguments:
 
@@ -445,8 +381,6 @@ Arguments:
     `detr_buoy_inv_time_scale`. The caller chooses where to evaluate
     it (centers, or faces with subsequent `ᶜinterp`) to control smoothness.
   - `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
-  - `area_bounding_entr_detr`: Signed area-bounding rate [1/s] from
-    `area_bounding_entr_detr`.
   - `detr_model`: Object specifying the detrainment model.
 
 Returns the total detrainment rate [1/s].
@@ -457,11 +391,9 @@ function compute_detrainment(
     ρaʲ,
     buoy_inv_time_scale,
     massflux_vert_div,
-    area_bounding_entr_detr,
     detr_model,
 )
-
-    detr = detrainment_rate(
+    return detrainment_rate(
         turbconv_params,
         aʲ,
         ρaʲ,
@@ -469,8 +401,6 @@ function compute_detrainment(
         massflux_vert_div,
         detr_model,
     )
-
-    return detr + max(zero(area_bounding_entr_detr), -area_bounding_entr_detr)
 end
 
 """
@@ -644,7 +574,7 @@ end
 
 The environment fields that `tail_entrainment_increments` reads,
 `(ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)`, for the
-column loops of the entrainment tendency and the Picard tracer predictor, or
+column loops of the entrainment tendency, or
 an empty tuple when tail entrainment is off: for `f_tail = 1`, and without the
 SGS covariance cache (`uses_covariances`), where the environment has no subgrid
 variance and its tail is its mean.
@@ -662,13 +592,11 @@ end
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
 `q_tot`, and the microphysics tracers carried by the updraft).
 
-Detrainment is **not** applied here because it is absorbed into the
-analytic implicit ρa solve (see
-`solve_sgs_ρa_implicit_stage_analytic!`); scalars are detrained
-implicitly through the area divergence of the mass flux.
+Detrainment is **not** applied here; scalars are detrained implicitly through
+the area divergence of the mass flux in `sgs_ρa_implicit_tendency!`.
 
 The entrainment rate is assembled lazily from the precomputed
-`ᶜentr_vel_scaleʲs`, `ᶜentr_nonvel_rateʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
+`ᶜentr_vel_scaleʲs`, `ᶜentr_nonvel_rateʲs`, and the updraft physical
 velocity via `compute_entrainment`, and the turbulent entrainment
 `ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
 scalar `χʲ` is relaxed toward its **environment** value,
@@ -686,8 +614,7 @@ edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
     (; ᶜK, ᶜh_tot, ᶜturb_entrʲs, ᶜuʲs) = p.precomputed
-    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
-        p.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs) = p.precomputed
     χ_names = sgs_tracer_names(Y)
     FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -698,10 +625,10 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     DataLayouts.foreach_column(
         Yₜ.c, Y.c, Fields.local_geometry_field(Y.c), ᶜK, ᶜh_tot,
         (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-        ᶜarea_bounding_entr_detrʲs, tail_fields,
+        tail_fields,
     ) do Yₜc, Yc, ᶜlg, ᶜK, ᶜh_tot,
     (ᶜturb_entrʲs, ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs),
-    ᶜarea_bounding_entr_detrʲs, tail_fields
+    tail_fields
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜmse⁰ = @. specific_env_mse(
             Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model,
@@ -717,7 +644,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             ᶜentrʲ = @. compute_entrainment(
                 ᶜentr_vel_scaleʲs.:($$j),
                 ᶜentr_nonvel_rateʲs.:($$j),
-                ᶜarea_bounding_entr_detrʲs.:($$j),
                 get_physical_w(ᶜuʲ, ᶜlg),
             )
             ᶜentr_totʲ = @. ᶜentrʲ + ᶜturb_entrʲs.:($$j)

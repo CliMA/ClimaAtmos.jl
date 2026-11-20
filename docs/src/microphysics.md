@@ -98,39 +98,27 @@ number), rain, snow, and rain-number sedimentation Jacobians retain the running
 column-maximum terminal velocity `w_jac` across empty and negative cells
 (including level 1, where `dz_bottom` gives the largest sedimentation Courant
 number in the column) so multi-cell falls at Courant numbers above one traverse
-them in a single stage. In one Newton step, a cell's linearized outflow is
-therefore `w_base max(0, ρq^g) + w_jac (ρq* - ρq^g)` (nonzero out of a negative
-cell whenever `w_jac > 0` and `ρq* ≠ ρq^g`). Across the implicit stages of each
-step, `surface_rain_flux`, `surface_snow_flux`, and
-`col_integrated_precip_energy_tendency` are accumulated with the IMEX tableau
-`b_imp` weights from those linearized stage bottom-face fluxes (and a
-`SlabOceanTemperature` surface receives the matching post-Newton increment per
-stage when the accumulator is active). Both the accumulated surface diagnostic
-and `SlabOceanTemperature` conservation match the discrete column sedimentation
-sink under four conditions: direct Newton solve without Krylov or line search,
-with the Jacobian updated at the final Newton iterate
-(`update_jacobian_every = "solve"`, or `"stage"` when
-`max_newton_iters_ode == 1`); `ManualSparseJacobian` (Krylov, line search,
-`update_jacobian_every = "dt"`, `"stage"` with `max_newton_iters_ode > 1`, and
-autodiff Jacobians disable the `w_jac` accumulator and leave a slab ocean on the
-pointwise stage flux, with a one-time warning in `build_cache`); direct
-inversion of the block-lower-triangular scalar submatrix
-(`ApproximateBlockArrowheadIterativeSolve` approximates only the velocity Schur
-complement, whose `ᶜadvdivᵥ` columns integrate to zero over each column); and
-`constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
-`update_constrain_state_every = "dss"` under condensate warm-starting preserves
-conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
-the stage flux upward). On tableaus with an explicit-diagonal stage that carries
-nonzero `b_imp` (`SSP`, `IMKG` with `β ≠ 0`), redistributing that weight across
-the implicit stages is approximate for the surface diagnostic. A stage flux is
-upward whenever `|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from a negative
-bottom cell with a net implicit sink and `w_jac > 0` (from condensate aloft, the
-1M `10⁻⁸` rain terminal-velocity floor, or `FixedTerminalVelocity`), or a
-positive bottom cell drained below `(1 - w_base / w_jac) ρq^g` in one stage
-(such as subcloud evaporation at linearized dimensionless rate
-`dtγ λ > w_base / (w_jac - w_base)`) — and negative `b_imp` weights (`ARS343`
-has `b_imp[3] ≈ -0.644`) can make the step sum upward even when every stage flux
-is downward; in each case the accumulated value equals the discrete column sink.
+them in a single stage. The residual keeps the physical flux, so a converged
+Newton solve is independent of `w_jac`.
+
+Across the implicit stages of each step, `surface_rain_flux`,
+`surface_snow_flux`, and `col_integrated_precip_energy_tendency` are
+accumulated with the IMEX tableau `b_imp` weights from the bottom-face
+sedimentation fluxes `F(U*)` of each stage, evaluated directly from the
+Newton-solved stage state and its terminal velocities
+(`accumulate_stage_precipitation_surface_fluxes!`). The accumulator samples the
+`cache!` call at each Newton-solved stage, so it is built only for
+`ManualSparseJacobian` with non-equilibrium precipitation and
+`update_cache_every = "stage"`; other configurations use the pointwise surface
+flux of the current state. The timestepper takes the implicit stage tendency as
+`(U* - temp) / (γ Δt)`, which equals the residual tendency at `U*` only when
+the Newton solve has converged, so the accumulated flux matches the discrete
+column sedimentation sink to within the Newton residual of the last iterate.
+`SlabOceanTemperature` receives the flux `F(U^g)` at the last Newton iterate
+`U^g`, so the slab-plus-atmosphere water and energy budgets close to within the
+last Newton increment `U* - U^g`.
+Negative `b_imp` weights (`ARS343` has `b_imp[3] ≈ -0.644`) can make the step
+sum upward even when every stage flux is downward.
 
 !!! note
 
@@ -175,8 +163,7 @@ options from `microphysics_1m_params` (bulk) to
 every other process `nothing`. `set_microphysics_tendency_cache!` then
 calls `microphysics_tendencies_1m` twice — once with each parameter set —
 and stores the results in `ᶜmp_tendency` and `ᶜmp_tendency_implicit`
-(and the EDMFX siblings). The tendency function and the EDMFX Picard
-predictor read both caches; the Newton solve attaches a
+(and the EDMFX siblings). The tendency function reads both caches; the Newton solve attaches a
 `-\Delta t_{\gamma} / \tau_{cond}` diagonal on `(ρq_lcl, ρq_lcl)` and
 `(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)`, and a
 `-\Delta t_{\gamma} / \tau_{subl}` diagonal on the matching `q_icl`
@@ -215,8 +202,8 @@ fully-coupled implicit microphysics solver.
 `update_implicit_microphysics_jacobian!` builds piecewise analytical Jacobian
 entries for cloud condensation/sublimation, rain evaporation, and snow
 sublimation/deposition, plus their `PrognosticEDMFX` off-diagonal couplings.
-With the default `max_newton_iters_ode = 1`, these entries set the single-step
-Newton increment directly (whereas multi-iteration or Krylov solves converge to
+With the default `max_newton_iters_ode = 3`, these entries serve as the
+preconditioner for each Newton iteration (whereas Krylov solves converge to
 the SGS-integrated residual of `update_implicit_1m_tendency!`):
 
   - **Cell-mean evaluation of `τ`, `C`, and `Γ`.** `τ`, the ventilation

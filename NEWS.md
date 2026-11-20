@@ -3,6 +3,24 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The implicit stage is solved as one Newton problem
+  with a residual that matches the ODE. `energy_humidity_upwinding` is applied
+  in the residual, and the post-Newton advection correction
+  (`post_newton_stage_update!`) and `compensate_explicit_scalar_advection` are
+  removed. The `PrognosticEDMFX` updraft `u₃` and `ρa` are Newton unknowns with
+  physical right-hand sides and manual Jacobian blocks, instead of closed-form
+  stage solves with cached tendencies. `max_newton_iters_ode` defaults to 3
+  instead of 1. Changes the output of every job with implicit vertical
+  advection or `PrognosticEDMFX`.
+- ![][badge-🔥behavioralΔ] The `edmfx_updraft_picard_rounds` option and the
+  `min_area_limiter_scale` and `max_area_limiter_scale` parameters are removed.
+  The updraft area is kept in `[0, ρʲ a_max]` by a 1 s⁻¹ bounds-restoring term
+  in its residual, and `edmfx_filter` clamps `ρa` to `ρʲ a_max` instead of `ρʲ`.
+- ![][badge-🔥behavioralΔ] With `ManualSparseJacobian`, non-equilibrium
+  precipitation, and `update_cache_every = "stage"`, the stage-weighted surface
+  precipitation fluxes are evaluated directly at each Newton-solved stage state,
+  independent of `update_jacobian_every`, Krylov, and line search, and the slab
+  ocean's post-Newton precipitation increment is removed.
 
 0.43.0
 ------

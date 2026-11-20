@@ -169,11 +169,7 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     `(1 - a)^c` [-].
   - `detr_massflux_vertdiv_coeff`: Coefficient of the mass-flux
     vertical-divergence term in the detrainment closure [-].
-  - `min_area_limiter_scale`: Rate coefficient of the minimum-area limiter in
-    entrainment [1/s].
   - `min_area_limiter_power`: Exponent of the minimum-area limiter [-].
-  - `max_area_limiter_scale`: Rate coefficient of the maximum-area limiter in
-    detrainment [1/s].
   - `max_area_limiter_power`: Exponent of the maximum-area limiter [-].
   - `cloud_fraction_param_vec`: Data-driven cloud-fraction parameter vector [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
@@ -231,9 +227,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     turb_entr_param_vec::VFT2
     entr_mult_limiter_coeff::FT
     detr_massflux_vertdiv_coeff::FT
-    min_area_limiter_scale::FT
     min_area_limiter_power::FT
-    max_area_limiter_scale::FT
     max_area_limiter_power::FT
     cloud_fraction_param_vec::VTF3
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).

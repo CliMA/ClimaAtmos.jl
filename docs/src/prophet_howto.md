@@ -222,7 +222,8 @@ Later `--config_file` arguments win on conflicting keys; see
 **The draft never develops.** Check the surface buoyancy flux. The surface mass
 source vanishes with the positive part of ``z_i \overline{w'b'}_s``, so it is
 identically zero in a stable boundary layer, by construction, and `arup` should
-then stay near `EDMF_min_area`, held there by the area-bounding rate. If the
+then decay to about `EDMF_min_area`, where the lower area limiter switches
+detrainment off. If the
 surface buoyancy flux is positive and `arup` still does not grow, look at `entr`
 and `detr` in the lowest cells.
 

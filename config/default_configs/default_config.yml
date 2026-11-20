@@ -76,7 +76,7 @@ use_dynamic_krylov_rtol:
   value: false
 max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
-  value: 1
+  value: 3
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `ARS222`, `SSP333`, `IMKG343a`, etc.]. The explicit tableau of `ARS222` amplifies undamped oscillatory modes (`|R(iy)| > 1`), so it suits 1D column setups (which have no horizontal modes) and 3D configurations whose horizontal damping per step is strong, such as `amip_target.yml` and the aquaplanet setups that select it."
   value: "ARS343"
@@ -105,7 +105,7 @@ update_cache_every:
   help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
   value: "stage"
 update_constrain_state_every:
-  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]. With `PrognosticEDMFX`, 1M microphysics, and `updraft_picard_rounds > 0`, `dss` re-clamps the warm-started grid-mean condensates of the Newton initial guess after the stage-entering state is copied, which can produce an upward surface precipitation flux."
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]."
   value: "stage"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
@@ -535,9 +535,6 @@ edmfx_sgs_diffusive_flux:
 edmfx_sgs_horizontal_diffusive_flux:
   help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
-edmfx_updraft_picard_rounds:
-  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `initialize_implicit_stage_problem!` before the final u₃/ρa analytic solves. `0` reproduces the single-pass behavior.  [non-negative integer; default `2`]"
-  value: 2
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1

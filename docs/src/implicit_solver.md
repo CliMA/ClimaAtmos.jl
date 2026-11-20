@@ -61,22 +61,17 @@ differences and uses the Jacobian below as a left preconditioner.
 Two stage hooks surround the Newton solve on each implicit stage:
 
   - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
-    resets the stage-weighted precipitation accumulator at the start of a step
-    and, for prognostic PROPHET (`PrognosticEDMFX`), runs the closed-form
-    updraft predictor and warm-starts ``Y[0]``; see
+    opens the stage for the stage-weighted precipitation accumulator and, for
+    prognostic PROPHET (`PrognosticEDMFX`), clamps the draft area and
+    warm-starts the draft velocity with its closed-form column solve; see
     [PROPHET Discretization and Time Stepping](prophet_numerics.md).
-  - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
-    stage-weighted surface precipitation fluxes, applies
-    `correct_implicit_advection_tendency!` — which performs the implicit
-    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
-    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
-    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
-    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
-    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
-    microphysics tracers at the solved velocity — and updates a prognostic
-    slab ocean with the post-Newton precipitation increment when the
-    `ManualSparseJacobian` stage accumulator is active; see
-    [Discretization and Operators](discretization.md).
+  - After the solve, the `cache!` call at the Newton-solved state ``U^*``
+    (`set_precomputed_quantities!`) adds the stage-weighted surface
+    precipitation flux ``F(U^*)`` to the accumulator.
+
+Upwinding of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting condensates is
+handled directly in the Newton residual via `add_energy_transport!` and
+`add_vertical_transport!`; see [Discretization and Operators](discretization.md).
 
 ## Jacobian algorithms
 

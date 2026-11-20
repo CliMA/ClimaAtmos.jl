@@ -186,11 +186,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     # thermodynamic state.
     for j in 1:n
         DataLayouts.foreach_column(
-            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j), ᶜTʲs.:($j),
-            ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j), ᶜρʲs.:($j),
-            Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
-        ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
-        ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠKᵥʲs.:($j),
+            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
+            ᶜρʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, Y.c.uₕ, ᶠuₕ³, ᶜΦ,
+            ᶜp,
+        ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
+        ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
             set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
             @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
             set_draft_thermo_column!(
@@ -275,11 +276,8 @@ floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
 partition come from a pressure-enthalpy saturation adjustment. `ᶜρʲ` is
 diagnosed at the shared `ᶜp`.
 
-Called from the Picard loop of `initialize_implicit_stage_problem!` after each
-tracer sweep, and from `solve_sgs_updraft_tracers_implicit_stage_analytic!`
-after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
-computes the same thermodynamics (`set_draft_thermo_column!`) in its fused
-column loop.
+`set_prognostic_edmf_precomputed_quantities_draft!` computes the same
+thermodynamics (`set_draft_thermo_column!`) in its fused column loop.
 """
 function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
@@ -458,8 +456,7 @@ mean (`set_updraft_reference_density_excess!`), then, in one fused column loop,
 the entrainment velocity scale `ᶜentr_vel_scaleʲs` [1/m], which multiplies a
 velocity to give a rate, the non-velocity entrainment rate
 `ᶜentr_nonvel_rateʲs` [1/s], the turbulent entrainment rate `ᶜturb_entrʲs`
-[1/s], the signed area-bounding entrainment/detrainment rate
-`ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess
+[1/s], and the relative density excess
 `ᶜρ_diffʲs = (ρʲ − ρ − Δρ) / ρʲ` [-] of each draft, with the buoyancy taken
 against `ρ + Δρ` (`Δρ` = `ᶜρ_ref_excess`). Returns `nothing`.
 
@@ -495,7 +492,6 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
         ᶜρʲs,
         ᶜentr_vel_scaleʲs,
         ᶜentr_nonvel_rateʲs,
-        ᶜarea_bounding_entr_detrʲs,
         ᶜturb_entrʲs,
         ᶜρ_diffʲs,
     ) = p.precomputed
@@ -511,13 +507,13 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
         @inline
         (
             ᶜentr_vel_scaleʲs.:($j), ᶜentr_nonvel_rateʲs.:($j), ᶜturb_entrʲs.:($j),
-            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j),
+            ᶜρ_diffʲs.:($j), Y.c.sgsʲs.:($j),
             ᶜρʲs.:($j), ᶜuʲs.:($j), ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j),
             ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
         )
     end
-    # The entrainment velocity scale, non-velocity entrainment rate, and signed
-    # area-bounding rate of each draft in one fused column loop.
+    # The entrainment velocity scale, non-velocity entrainment rate, and
+    # turbulent entrainment of each draft in one fused column loop.
     DataLayouts.foreach_column(
         drafts, Y.c, ᶜz, z_sfc, ᶜp, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰,
         ᶜq_ice⁰, ᶜtke, ᶜρ_ref_excess,
@@ -527,7 +523,6 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
                 ᶜentr_vel_scaleʲ,
                 ᶜentr_nonvel_rateʲ,
                 ᶜturb_entrʲ,
-                ᶜarea_bounding_entr_detrʲ,
                 ᶜρ_diffʲ,
                 ᶜsgsʲ,
                 ᶜρʲ,
@@ -584,9 +579,6 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
                 entr_model,
             )
             @. ᶜturb_entrʲ = turbulent_entrainment(turbconv_params, ᶜaʲ)
-
-            @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
-
             @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ - ᶜρ_ref_excess) / ᶜρʲ
         end
     end
