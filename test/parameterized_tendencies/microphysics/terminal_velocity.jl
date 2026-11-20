@@ -86,11 +86,14 @@ import ClimaCore.MatrixFields: @name
                     @test w(stokes, @name(q_lcl), ρ, q) ==
                           CMNe.terminal_velocity(cmc.liquid, cmc.stokes, FT(ρ), FT(q))
                     @test w(chen, @name(q_icl), ρ, q) ==
-                          CMNe.terminal_velocity(
-                        cmc.ice,
-                        cmc.Ch2022.small_ice,
-                        FT(ρ),
-                        FT(q),
+                          CA._bounded_fall_speed(
+                        CMNe.terminal_velocity(
+                            cmc.ice,
+                            cmc.Ch2022.small_ice,
+                            FT(ρ),
+                            FT(q),
+                        ),
+                        FT(1.5),
                     )
                     @test w(blk, @name(q_rai), ρ, q) == CM1.terminal_velocity(
                         cmp.precip.rain,
@@ -118,6 +121,65 @@ import ClimaCore.MatrixFields: @name
                         FT(q),
                     )
                 end
+                @test zero(FT) < w(chen, @name(q_icl), 0.1, 0.05) < FT(1.5)
+                @test zero(FT) < w(chen, @name(q_rai), 0.1, 0.05) < FT(10)
+                @test zero(FT) < w(chen, @name(q_sno), 0.1, 0.05) < FT(3)
+                @test w(chen, @name(q_sno), 1.0, -1e-5) == zero(FT)
+            end
+
+            @testset "In-cloud ice sedimentation floor" begin
+                (; water, params) = make_water(
+                    Dict("cloud_ice_terminal_velocity" => "Chen2022"),
+                )
+                @test CAP.sgs_ice_sedimentation_cf_floor(params) == one(FT)
+                @test_throws ArgumentError CA.SGSQuadratureParameters(
+                    FT,
+                    (; sgs_ice_sedimentation_cf_floor = zero(FT)),
+                )
+                @test_throws ArgumentError CA.SGSQuadratureParameters(
+                    FT,
+                    (; sgs_ice_sedimentation_cf_floor = FT(-0.1)),
+                )
+                @test_throws ArgumentError CA.SGSQuadratureParameters(
+                    FT,
+                    (; sgs_ice_sedimentation_cf_floor = FT(1.1)),
+                )
+                sgs_ic = CA.SGSQuadratureParameters(
+                    FT,
+                    (; sgs_ice_sedimentation_cf_floor = FT(0.02)),
+                )
+                @test CAP.sgs_ice_sedimentation_cf_floor(sgs_ic) == FT(0.02)
+
+                mm = water.microphysics_model
+                chen = CA.Chen2022TerminalVelocity()
+                ρ = FT(0.35)
+                q_gm = FT(2e-5)
+                cf_floor = FT(0.02)
+                w_ic(cf) = CA.incloud_ice_terminal_velocity(
+                    mm,
+                    chen,
+                    @name(q_icl),
+                    params,
+                    ρ,
+                    q_gm,
+                    FT(cf),
+                    cf_floor,
+                )
+                @test w_ic(1.0) ==
+                      CA._1m_terminal_velocity(mm, chen, @name(q_icl), params, ρ, q_gm)
+                @test w_ic(1.0) < w_ic(0.5) < w_ic(0.15) < w_ic(0.02) < FT(1.5)
+                @test w_ic(0.005) == w_ic(0.02)
+                @test w_ic(0.0) == w_ic(0.02)
+                @test CA.incloud_ice_terminal_velocity(
+                    mm,
+                    chen,
+                    @name(q_icl),
+                    params,
+                    ρ,
+                    FT(-1e-5),
+                    FT(0.15),
+                    cf_floor,
+                ) == zero(FT)
             end
         end
     end
