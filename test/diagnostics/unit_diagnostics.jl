@@ -54,6 +54,7 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
 
   :dry            — DryModel + SlabOceanSST, column
   :multicolumn    — DryModel + SlabOceanSST, multicolumn (three columns)
+  :dry_mo         — DryModel + SlabOceanSST + MoninObukhov, column (tas)
   :sphere         — DryModel + SlabOceanSST, sphere (also used for rv, orog, energyo)
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
@@ -171,6 +172,16 @@ model_dry = (;
 
 ## The column fixture on independent columns
 (Y_multicolumn, p_multicolumn) = build_state_cache(FT, model_dry; grid = multicolumn);
+
+## Dry model with a Monin-Obukhov surface flux scheme, for the screen-level
+## temperature (`tas`) reconstructed from the flux solve; `model_dry` uses
+## `ExchangeCoefficients`, for which `tas` is the bottom cell center temperature
+model_dry_mo = (;
+    microphysics_model = CA.DryModel(),
+    temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
+    flux_scheme = CA.SurfaceConditions.MoninObukhov(; z0 = FT(0.05)),
+)
+(Y_dry_mo, p_dry_mo) = build_state_cache(FT, model_dry_mo; grid = column);
 
 ## Sphere with dry model
 (Y_sphere, p_sphere) = build_state_cache(FT, model_dry; grid = sphere);
@@ -357,6 +368,7 @@ model_dwh = (;
 states = Dict(
     :dry            => (Y_dry,            p_dry),
     :multicolumn    => (Y_multicolumn,    p_multicolumn),
+    :dry_mo         => (Y_dry_mo,         p_dry_mo),
     :sphere         => (Y_sphere,         p_sphere),
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
@@ -416,6 +428,8 @@ VALID_CASES = [
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
     ), (:dry, :multicolumn))...,
+    # tas from the Monin-Obukhov flux solve (`:dry` uses ExchangeCoefficients)
+    case("tas", :dry_mo),
     # sphere-only (DSS / hypsography)
     cases(("rv", "orog"), :sphere)...,
     # MoistMicrophysics, single path
@@ -655,4 +669,59 @@ end
     @test gs(R, R) ≈ FT(4)   # (2R/R)² = 4
     @test gs(FT(10_000), R) > FT(1)
     @test isfinite(gs(FT(30_000), R))
+end
+
+@testset "tas: screen-level temperature of the surface flux solve" begin
+    SC = CA.SurfaceConditions
+    params = p_dry_mo.params
+    thermo_params = CAP.thermodynamics_params(params)
+    sf_params = CAP.surface_fluxes_params(params)
+    surface_temp_params = CAP.surface_temp_params(params)
+    grav = SC.SFP.grav(sf_params)
+    cp_d = SC.TD.Parameters.cp_d(thermo_params)
+    z_screen = FT(SC.SCREEN_HEIGHT)
+
+    # The dry static energy s = cp_d T + g z (relative to the surface) at the
+    # screen level, z0 + z_screen above the surface, lies between its surface
+    # and first interior level values, at the fraction
+    # r = (s_2m - s_sfc) / (s_int - s_sfc) ∈ [0, 1] of the heat profile.
+    r(T_2m, T_sfc, T_int, z_int, z0) =
+        (cp_d * (T_2m - T_sfc) + grav * (z0 + z_screen)) /
+        (cp_d * (T_int - T_sfc) + grav * z_int)
+
+    # On the full state, `tas` is the stored screen-level temperature
+    (; sfc_conditions, ᶜT) = p_dry_mo.precomputed
+    tas = vec(field_data(compute_diag(getdiag("tas"), Y_dry_mo, p_dry_mo)))
+    @test tas == vec(parent(sfc_conditions.T_2m))
+    T_sfc = vec(parent(sfc_conditions.T_sfc))
+    T_int = vec(parent(Fields.level(ᶜT, 1)))
+    z_int = vec(parent(Fields.level(Fields.coordinate_field(Y_dry_mo.c).z, 1)))
+    @test all(0 .<= r.(tas, T_sfc, T_int, z_int, FT(0.05)) .<= 1)
+
+    # Single surface points
+    sfc_local_geometry = Fields.field_values(
+        Fields.local_geometry_field(Fields.level(Y_dry_mo.f, Fields.half)),
+    )[]
+    T_2m(scheme; T_sfc = FT(290), T_int = FT(285), z_int = FT(20)) =
+        SC.surface_state_to_conditions(
+            SC.SurfaceBoundaryOverrides(), scheme, T_sfc, sfc_local_geometry,
+            T_int, FT(1.2), FT(0), FT(0), FT(0), FT(5), FT(0), z_int,
+            thermo_params, sf_params, surface_temp_params, CA.DryModel(), FT(0),
+        ).T_2m
+    mo(z0) = SC.MoninObukhov(; z0 = FT(z0))
+    r_at(z0; T_sfc, T_int = FT(285), z_int = FT(20)) =
+        r(T_2m(mo(z0); T_sfc, T_int, z_int), T_sfc, T_int, z_int, FT(z0))
+
+    # The profile fraction grows with instability: below the neutral
+    # logarithmic value in stable conditions, above it in unstable conditions
+    r_neutral = log((FT(0.05) + z_screen) / FT(0.05)) / log(FT(20) / FT(0.05))
+    @test 0 < r_at(0.05; T_sfc = FT(280)) < r_neutral < r_at(0.05; T_sfc = FT(290)) < 1
+    # A roughness length beyond the screen height (tall forest) still gives a
+    # screen-level temperature between the surface and the interior
+    @test 0 < r_at(3; T_sfc = FT(290), z_int = FT(30)) < 1
+    @test 0 < r_at(3; T_sfc = FT(280), z_int = FT(30)) < 1
+    # At or below the screen level, the first interior level temperature
+    @test T_2m(mo(0.05); z_int = FT(1.5)) ≈ FT(285)
+    # Exchange coefficients define no profile: the first interior level
+    @test T_2m(SC.ExchangeCoefficients(; Cd = FT(1e-3), Ch = FT(1e-3))) == FT(285)
 end

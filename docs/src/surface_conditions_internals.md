@@ -147,7 +147,9 @@ it.
  2. **Handle it in `surface_state_to_conditions`**: extend the
     `parameterization isa …` branch that maps the scheme onto the `SurfaceFluxes`
     call (building the appropriate `FluxSpecs`/`SurfaceFluxConfig`). This is the
-    one place flux schemes are interpreted.
+    one place flux schemes are interpreted. Also add a
+    [`screen_level_temperature`](@ref ClimaAtmos.SurfaceConditions.screen_level_temperature)
+    method, which gives the 2 m air temperature (`tas`) from the solve.
 
  3. **(Optional) Add a `resolve_flux_scheme` method** if the scheme varies in
     time, mirroring how `MoninObukhov` resolves a callable `fluxes`. It runs once
@@ -177,7 +179,8 @@ ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!
 ## Debugging checklist
 
   - **`sfc_conditions` NaN/uninitialized under the coupler**: `init_sfc_conditions_zero!`
-    only fires when `isnothing(flux_scheme)`.
+    only fires when `isnothing(flux_scheme)`. `T_2m` stays `NaN` until the
+    coupler writes it, and `tas` reports the bottom cell center temperature.
   - **`T_sfc` uniform when it should vary**: the temperature must return per-cell
     values, or be an `AnalyticTemperature` whose `f` reads `coordinates`.
   - **Space-mismatch error in `update_surface_conditions!`**: something returned a
