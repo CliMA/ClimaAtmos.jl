@@ -71,6 +71,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Consistent energy and water transport" begin @time include("prognostic_equations/consistent_transport_tests.jl") end
+    @safetestset "Deferred 1M tendencies" begin @time include("prognostic_equations/deferred_1m_tendency_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
 
     # Conservation tests

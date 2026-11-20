@@ -40,6 +40,7 @@ import ..explicit_vertical_advection_tendency!
 import ..hyperdiffusion_tendency!
 import ..additional_tendency!
 import ..microphysics_tendency!
+import ..ensure_1m_tendencies!
 import ..edmfx_sgs_vertical_advection_tendency!
 import ..vertical_diffusion_boundary_layer_tendency!
 import ..edmfx_sgs_diffusive_flux_tendency!
@@ -100,9 +101,14 @@ end
 
 _additional_wrap!(Yₜ, Y, p, t) = additional_tendency!(Yₜ, Y, p, t)
 
-_microphys_wrap!(Yₜ, Y, p, t) = microphysics_tendency!(
-    Yₜ, Y, p, t, p.atmos.microphysics_model, p.atmos.turbconv_model,
-)
+function _microphys_wrap!(Yₜ, Y, p, t)
+    # The microphysics tendency reads the 1M tendencies that the stage hooks
+    # deferred.
+    ensure_1m_tendencies!(Y, p)
+    return microphysics_tendency!(
+        Yₜ, Y, p, t, p.atmos.microphysics_model, p.atmos.turbconv_model,
+    )
+end
 
 _sgs_vadv_wrap!(Yₜ, Y, p, t) = edmfx_sgs_vertical_advection_tendency!(
     Yₜ, Y, p, t, p.atmos.turbconv_model,

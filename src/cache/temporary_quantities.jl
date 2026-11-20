@@ -193,6 +193,13 @@ function temporary_quantities(
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_data = Fields.field_values(Fields.Field(FT, center_space)),
+        # Whether the deferred 1M quantities are out of date: `ᶜsgs_moments`,
+        # the implicit tendency `ᶜmp_tendency_implicit*`, and the updraft
+        # tendency `ᶜmp_tendencyʲs`. The stage hooks set the flags and the
+        # readers reset them (`ensure_1m_tendencies!`).
+        sgs_moments_are_stale = Base.RefValue(false),
+        implicit_1m_tendency_is_stale = Base.RefValue(false),
+        updraft_1m_tendency_is_stale = Base.RefValue(false),
         # DSS buffer for the element-filtered gradient invariant of the geometric SGS
         # variance (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
         ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?

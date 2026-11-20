@@ -38,19 +38,21 @@ with Zalesak flux-corrected transport for `vanleer_limiter`) are applied to
 
 Reads the precomputed quantities set by `set_implicit_precomputed_quantities!`
 (`ᶠu³`, `ᶜp`, `ᶜh_tot`, sedimentation and precipitation terminal velocities, and
-the EDMFX subdomain states). Returns `nothing`.
+the EDMFX subdomain states), and first evaluates the 1M tendencies that the
+stage hooks deferred (`ensure_1m_tendencies!`). Returns `nothing`.
 
 See [Implicit Solver](@ref) for the IMEX formulation.
 """
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
+    ensure_1m_tendencies!(Y, p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     # Microphysics tendencies are always applied here. `implicit_microphysics`
     # only decides whether cond/subl flows through `ᶜmp_tendency_implicit`
-    # (refreshed per Newton iter via `set_implicit_precomputed_quantities!`
-    # with a `-dtγ/τ` Jacobian) or stays in the frozen bulk `ᶜmp_tendency`.
+    # (refreshed per Newton iter via `ensure_1m_tendencies!` with a `-dtγ/τ`
+    # Jacobian) or stays in the frozen bulk `ᶜmp_tendency`.
     microphysics_tendency!(
         Yₜ,
         Y,

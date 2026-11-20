@@ -848,6 +848,22 @@ substep-averaged tendency, `Instantaneous` for the implicit path).
             return zero_1m_tendency(FT)
         end
     end
+    # A cell without cloud condensate has none at any node. Where the rates of
+    # its rain and snow also vanish up to the warmest node, CloudMicrophysics
+    # returns zero at every node (`BMT.no_rates`). The node temperatures lie
+    # within `8 √T′T′` of `T`: a node farther out lies more than 7.6 standard
+    # deviations into the tail of the saturation excess and has less than
+    # `1e-13` of the weight. The precipitation placement gives the nodes
+    # multiples of the cell means, so with it rain and snow are absent only at
+    # zero.
+    if isempty(args)
+        T_hi = T + 8 * sqrt(max(FT(T′T′), zero(FT)))
+        ϵ_precip = ifelse(β_precip > zero(FT), zero(FT), ϵ_numerics(FT))
+        BMT.no_rates(
+            scheme, _unwrapped(cmp), _unwrapped(thp), T_hi,
+            q_lcl, q_icl, q_rai, q_sno, ϵ_precip,
+        ) && return zero_1m_tendency(FT)
+    end
     return _sum_over_conditional_sgs(
         (λ_scaled, α_scaled, shaft_frac) -> Microphysics1MEvaluator(
             mode, scheme, cmp, thp, ρ, w,

@@ -59,6 +59,21 @@ main
   rule within `σ_T |S′| / σ_S` of the mean. With `σ_S` collapsed to its floor,
   nodes reached the temperature floor and formed cloud ice in warm clouds. The
   variance fidelity `ᶜα` takes its `σ_S` from `_sgs_linear_sigma_S`.
+- [#4995](https://github.com/CliMA/ClimaAtmos.jl/pull/4995)
+  ![][badge-🚀performance] 1M: the time-stepper hooks defer the tendencies that
+  only the implicit solve reads. The SGS moments and the implicit 1M tendency
+  were evaluated at every `cache_imp!` and `cache!` call (three times per
+  implicit stage), and the updraft tendency of `PrognosticEDMFX` at every
+  `cache!` call. `implicit_tendency!` and `update_jacobian!` now evaluate them
+  at the same state when they read them (`ensure_1m_tendencies!`), so results
+  are unchanged. `set_precomputed_quantities!` and
+  `set_implicit_precomputed_quantities!` evaluate everything.
+- [#4995](https://github.com/CliMA/ClimaAtmos.jl/pull/4995)
+  ![][badge-🚀performance] 1M: cells without cloud condensate in which every
+  process rate of the bulk parameter set vanishes at all quadrature nodes
+  (`BMT.no_rates`) skip the node rule. With `implicit_microphysics: true`,
+  whose bulk set holds no vapor exchange, those cells hold only rain, or only
+  snow at or below freezing.
 - ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` and
   `toml/prognostic_edmfx_1M_mlcloud.toml` set the turbulent lateral entrainment
   `turb_entr_param_vec = [c₁, c₂] = [0.007, 400.0]` (was `[0.001, 1e5]`), so the
