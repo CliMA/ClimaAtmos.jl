@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.43.0
+------
 - ![][badge-🔥behavioralΔ] ![][badge-🚀performance] Update to CloudMicrophysics 0.50.
   1-moment snow deposition defaults to `DepositionWithoutCloudCondensate` (no snow
   deposition where cloud liquid or cloud ice is present; sublimation is unchanged), and
