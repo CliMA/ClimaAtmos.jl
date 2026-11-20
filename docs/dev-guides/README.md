@@ -26,8 +26,9 @@ Every guide applies across the CliMA ecosystem unless it says otherwise.
 ### Code Quality
 
 - [getting_started.md](code-quality/getting_started.md): orienting newcomers to writing pointwise code compatible with ClimaCore `Field`s and broadcasting.
-- [code_style.md](code-quality/code_style.md): formatting, variable locality, Git workflow, feature removal, naming conventions.
-- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, minimally viable documentation.
+- [code_style.md](code-quality/code_style.md): JuliaFormatter and pre-commit hooks, variable locality, file organization, naming conventions.
+- [code_comments.md](code-quality/code_comments.md): inline comments and prose style across comments, docstrings, and docs — what earns a comment, never describing a previous state, stating what is the case, words to cut, sweeping a branch.
+- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, README and badge conventions, LICENSE/NOTICE and copyright notices, minimally viable documentation.
 - [changelogs_and_versions.md](code-quality/changelogs_and_versions.md): `NEWS.md` format, SemVer rules, and the release/tagging flow.
 - [variable_list.md](code-quality/variable_list.md): standardized CliMA variable naming conventions.
 - [glossary.md](code-quality/glossary.md): general CliMA software and simulation terminology.
@@ -40,7 +41,7 @@ Every guide applies across the CliMA ecosystem unless it says otherwise.
 
 ### Workflow
 
-- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, first PR loop.
+- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, Git workflow, first PR loop, feature removal.
 - [running_on_gpu.md](workflow/running_on_gpu.md): run a model on GPU — install Julia, add `CUDA.jl`, CUDA runtime compatibility, `CLIMACOMMS_DEVICE`, verify the device.
 - [agent_autonomy.md](workflow/agent_autonomy.md): actions that require explicit user approval.
 - [debugging.md](workflow/debugging.md): interactive debugging recipes for numerical instabilities, dispatch, and `Field` plotting.
@@ -73,14 +74,14 @@ git subtree pull --prefix docs/dev-guides \
 > **Subtree pitfalls.**
 >
 > - `git subtree add --prefix docs/dev-guides ...` nests all of DeveloperGuides, including its own `AGENTS.md`, `LICENSE`, and `README.md`, under that prefix. It does not touch the consumer's root files, so the initial add does not conflict with them.
-> - The real risk is editing the vendored copy under `docs/dev-guides/` directly instead of upstream (see "Contributing" below). A later `git subtree pull` merges upstream changes into that path, so a local edit there can produce a genuine merge conflict. Resolve it like any merge conflict: fix the conflicting file, `git add`, `git commit`. Subtree operations use merge, not rebase, so `git rebase --continue` does not apply.
-> - When there are no new upstream commits the monthly run is a clean no-op. The workflow now fails loudly on a genuine `git subtree pull` error instead of masking it, so a red run means something actually needs attention.
+> - Editing the vendored copy under `docs/dev-guides/` (see "Contributing" below) collides with the next `git subtree pull`, which merges upstream changes into that path and can produce a merge conflict. Resolve it like any merge conflict: fix the conflicting file, `git add`, `git commit`. Subtree operations use merge, not rebase, so `git rebase --continue` does not apply.
+> - When there are no new upstream commits, the monthly run is a no-op. The workflow fails on a `git subtree pull` error, so a red run needs attention.
 
 ### Fixing a broken subtree sync
 
-The monthly sync breaks in one of two ways: a dev-guides PR was squash-merged — which discards the `git subtree` metadata the next pull relies on — or the workflow lacks the write permissions it needs to open a PR. If a repo's sync stopped producing PRs, apply whichever fix below it needs; most repos only need the first.
+The monthly sync breaks in one of two ways: a sync PR was squash-merged, which discards the `git subtree` metadata the next pull relies on, or the workflow lacks the write permissions it needs to open a PR. If a repo's sync stopped producing PRs, apply whichever fix below it needs; most repos only need the first.
 
-**1. Update the workflow file (do this on every consumer repo).** Replace the old workflow with the current template rather than hand-editing it:
+**1. Update the workflow file (do this on every consumer repo).** Replace the workflow file with the current template:
 
 ```bash
 git checkout -b update-dev-guides-workflow
@@ -104,7 +105,7 @@ git subtree add --prefix docs/dev-guides \
     https://github.com/CliMA/DeveloperGuides.git main --squash
 ```
 
-Open a PR for this branch and **merge it with a merge commit, not squash** — squash-merging here immediately re-breaks the metadata. Any local edits to files under `docs/dev-guides/` are discarded, which is correct: that copy is vendored and should only be changed upstream.
+Open a PR for this branch and **merge it with a merge commit, not squash** — squash-merging here immediately re-breaks the metadata. Local edits under `docs/dev-guides/` are discarded; that copy is vendored and changes only upstream.
 
 ### Contributing
 

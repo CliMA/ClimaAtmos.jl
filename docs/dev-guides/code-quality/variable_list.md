@@ -4,7 +4,7 @@ This document unifies the naming conventions used across the CliMA codebase. It 
 
 ## Type parameters
 
-The Julia code typically uses `T` as a type parameter, however this conflicts with the typical usage for temperature. Instead, good choices are:
+Julia code conventionally uses `T` as a type parameter, which conflicts with `T` for temperature. Use instead:
 
 - `FT` for floating point values
 
@@ -85,7 +85,7 @@ Microphysical tendencies [kg/kg/s]. Sign convention: positive means a *source* f
 - `L_s` = latent heat of sublimation [J/kg]
 - `L_f` = latent heat of fusion [J/kg]
 
-Note: in CliMA tendency-style signatures `f!(Yₜ, Y, p, t, …)`, the local name `p` refers to the cache, not pressure.
+In CliMA tendency-style signatures `f!(Yₜ, Y, p, t, …)`, the local name `p` is the cache, not pressure.
 
 ## Prognostic variable conventions
 
@@ -96,12 +96,12 @@ CliMA models typically integrate density-weighted forms as prognostic variables 
 
 ## Field Prefixes (ClimaCore-based repos)
 
-In repos that use ClimaCore for spatial discretization, functions that *return fields* are prefixed by their staggered-grid location:
+In repos that use ClimaCore for spatial discretization, a name that holds or returns a field is prefixed by the field's staggered-grid location:
 
 - `ᶜ<name>` (typed `\^c<TAB>`) = field at cell *centers*
 - `ᶠ<name>` (typed `\^f<TAB>`) = field at cell *faces*
 
-For example, `ᶜρ(Y, p)` is a cell-center density field. The prefix lives on the *function*, not on the stored field: state-vector fields like `Y.c.ρ` are themselves cell-centered but do not carry the prefix.
+For example, `ᶜρ(Y, p)` returns a cell-center density field. State-vector fields such as `Y.c.ρ` have no prefix. See [ecosystem_conventions.md §3](../architecture/ecosystem_conventions.md) for the full convention.
 
 ## Self-correction
 

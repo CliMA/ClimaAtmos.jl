@@ -325,13 +325,52 @@ method_table_for(::DeviceOptPass, world::UInt) =
 CC.method_table(analyzer::JET.OptAnalyzer) =
     method_table_for(JET.ReportPass(analyzer), JET.get_inference_world(analyzer))
 
+# Known false positive of the overlay-table pass: inference under an overlay
+# method table does not concrete-fold `eltype(::Type{<:NamedTuple})` inside the
+# `Base.pairs` call of a kwargs-slurping method's Core.kwcall prologue, so
+# `typejoin` shows up as runtime dispatch even for fully concrete NamedTuples.
+# Native-table JET on the same signature reports nothing, and GPUCompiler's own
+# pipeline folds the call away (its IR validation passes), so these reports are
+# noise specific to DeviceOptPass. Verified on JET 0.9 / CUDA 5.11 with
+# `g(x, args...; kwargs...) = ...; h(x) = g(x, 1; a = A(), b = Val(true))`.
+function is_device_kwargs_eltype_fold_miss(report)
+    frames = report.vst
+    isempty(frames) && return false
+    last_def = frames[end].linfo.def
+    last_def isa Method || return false
+    # Direct form: the typejoin inside eltype(::Type{<:NamedTuple}), reached
+    # from Base.pairs in a Core.kwcall prologue.
+    if last_def.name === :typejoin
+        return any(frames) do frame
+            def = frame.linfo.def
+            def isa Method && def.name === :pairs && def.module === Base.Iterators
+        end
+    end
+    # Downstream form: a call is "dynamic" only because its kwargs Pairs object
+    # kept the unfolded eltype as an abstract value-type parameter. The data
+    # NamedTuple parameter must be concrete, so that genuinely widened kwargs
+    # (abstract NamedTuple data) are still reported.
+    report isa JET.RuntimeDispatchReport || return false
+    return any(report.sig._sig) do x
+        # Union{} is a subtype of every type, but Tuple{Union{}} cannot be
+        # constructed (it appears as the return type of calls that must throw).
+        x isa Type && x !== Union{} && x <: Base.Pairs &&
+            !Base.isdispatchtuple(Tuple{x}) || return false
+        params = Base.unwrap_unionall(x).parameters
+        return length(params) == 4 &&
+               params[4] isa Type &&
+               Base.isconcretetype(params[4])
+    end
+end
+
 function add_jet_report!(reports, stage, label, sig; device = false, jetconfigs...)
     result =
         device ?
         JET.report_opt(sig; report_pass = DeviceOptPass(), jetconfigs...) :
         JET.report_opt(sig; jetconfigs...)
-    isempty(JET.get_reports(result)) ||
-        push!(reports, JETStageReport(stage, label, result))
+    jet_reports = JET.get_reports(result)
+    device && (jet_reports = filter(!is_device_kwargs_eltype_fold_miss, jet_reports))
+    isempty(jet_reports) || push!(reports, JETStageReport(stage, label, result))
     return reports
 end
 
@@ -342,12 +381,15 @@ const PTX_ISA = v"7.8"
 
 # Missing symbols that only resolve during a real kernel launch: libdevice
 # math functions, GPU runtime helpers, and the kernel state intrinsic.
+# NOT all "gpu_" symbols: gpu_gc_pool_alloc/gpu_malloc mean the kernel
+# ALLOCATES, which real CUDA compilation also rejects.
 is_benign_ir_error(e) =
     e[1] == GPUC.UNKNOWN_FUNCTION &&
     e[3] isa AbstractString &&
     (
         startswith(e[3], "__nv") ||
-        startswith(e[3], "gpu_") ||
+        startswith(e[3], "gpu_report_exception") ||
+        startswith(e[3], "gpu_signal_exception") ||
         occursin("state_getter", e[3])
     )
 

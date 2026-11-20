@@ -68,6 +68,10 @@ end
 
 do_nothing(x) = nothing
 
+# A call with no applicable method, which inference types as `::Union{}`.
+only_float32(x::Float32) = x
+no_method_call(x) = (only_float32(x); nothing)
+
 # Dummy singleton types for the type_replacements keyword.
 abstract type AbstractDummyDevice end
 struct DummyCPUDevice <: AbstractDummyDevice end
@@ -163,6 +167,11 @@ end
         # NOTE: `occursin(x)` curries the haystack, not the needle.
         @test any(m -> occursin("whole call as kernel body", m), messages)
         @test any(m -> occursin("dynamic", m), messages)
+    end
+
+    @testset "kernel stage reports calls with no applicable method" begin
+        reports = failing_reports(no_method_call, (one(FT),); stages = (:kernel,))
+        @test any(r -> occursin("only_float32", sprint(show, r)), reports)
     end
 
     @testset "pointer stage catches arrays that Adapt leaves on the host" begin

@@ -1,6 +1,6 @@
 # Testing and Validation Guide
 
-This guide covers testing patterns for CliMA code: type-stability verification, allocation regression testing, and test group organization.
+This guide covers testing patterns for CliMA code: type-stability and allocation regression checks, Aqua and AD tests, GPU test entry points, test isolation, and scientifically meaningful tests.
 
 ## Type-stability checks
 
@@ -12,13 +12,13 @@ The canonical home for type-stability tooling (`@inferred`, `JET.@report_opt`, `
 
 ## Allocation regression tests
 
-After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression pattern documented in [allocation_debugging.md §1](../performance/allocation_debugging.md). Allocation benchmarks in `perf/` are not run in CI; allocation regressions must be caught at review time.
+After implementing or modifying hot-path code, verify zero allocations with the warm-up + `@allocated == 0` regression pattern documented in [allocation_debugging.md §1](../performance/allocation_debugging.md).
 
 ## Aqua.jl quality checks
 
 All CliMA packages run `Aqua.jl` tests in CI. These checks catch common package quality issues:
 
-- `test_stale_deps`: fails if a package in `[deps]` is not used in source code. This is the most common failure, usually caused by adding a dev tool to `[deps]` instead of `[extras]` (see [Dependency Management](../architecture/dependency_management.md)).
+- `test_stale_deps`: fails if a package in `[deps]` is not used in source code. This is the most common failure, usually caused by adding a dev tool to `[deps]` instead of `test/Project.toml` or `[extras]` (see [Dependency Management](../architecture/dependency_management.md)).
 - `test_deps_compat`: fails if `[compat]` entries are missing for dependencies.
 - `test_undefined_exports`: fails if an exported symbol is not defined.
 - `test_unbound_args`: detects methods with unbound type parameters (can cause ambiguities).
@@ -49,7 +49,7 @@ end
 end
 ```
 
-Note: `test_ambiguities` is separated from `test_all` because most repos filter ambiguities to their own module, excluding upstream dependency ambiguities that are not their responsibility.
+`test_ambiguities` is separated from `test_all` because most repos filter ambiguities to their own module; upstream dependency ambiguities are not their responsibility.
 
 ## AD compatibility tests
 
@@ -118,7 +118,7 @@ end
 
 ### 2. Round-trip (inverse) tests
 
-When a function has a mathematical inverse, verify that composing them recovers the original input. This catches subtle sign errors, off-by-one factors, and incorrect formula transcriptions.
+When a function has a mathematical inverse, verify that composing them recovers the original input. This catches sign errors, off-by-one factors, and incorrect formula transcriptions.
 
 ```julia
 # Thermodynamics: internal_energy → air_temperature round-trip
@@ -165,7 +165,7 @@ dlog_es_dT_cc = L / (R_v * T^2)
 
 ### 4. Physical consistency tests
 
-Verify thermodynamic identities, conservation laws, and monotonicity constraints that must hold regardless of the specific input values.
+Verify thermodynamic identities, conservation laws, and monotonicity constraints that hold for every input.
 
 ```julia
 # Thermodynamic identities (Thermodynamics.jl)
@@ -206,7 +206,7 @@ fd_deriv = (rate(q + Δq) - rate(q - Δq)) / (2Δq)
 - **Dual-precision**: run scientific tests for both `Float32` and `Float64` to catch type-promotion bugs.
 - **Tolerances**: use `rtol` for scale-invariant comparisons and `atol` only when a value can be exactly zero. Use `eps(FT)` as a baseline for zero-comparison tolerances.
 - **Name the law**: annotate each consistency test with the physical identity it verifies (e.g., "Clausius-Clapeyron", "ideal gas law", "Lₛ = Lᵥ + L_f") so that failures map directly to physics.
-- **Fixed-iteration solvers**: when a hot-path solver uses a fixed iteration count (to stay branchless on GPUs), ship the offline test that *justifies* that count: sweep the full physical envelope, compare against a high-iteration or analytic reference, and assert a physically-meaningful tolerance. See [Branchless Code Guide §5](../performance/branchless_code.md) and the `Thermodynamics.jl` saturation-adjustment tests it cites.
+- **Fixed-iteration solvers**: when a hot-path solver uses a fixed iteration count (to stay branchless on GPUs), ship the offline test that *justifies* that count: sweep the full physical envelope, compare against a high-iteration or analytic reference, and assert a physically meaningful tolerance. See [Branchless Code Guide §5](../performance/branchless_code.md) and the `Thermodynamics.jl` saturation-adjustment tests it cites.
 
 ## Self-correction
 

@@ -9,7 +9,7 @@ In consumer repos, these guides live at `docs/dev-guides/` and are supplied by a
 Local, reversible work (editing files, running tests, formatting, committing to the current branch) needs no permission. Get explicit user approval before any irreversible, externally visible, or scientifically consequential action:
 
 - **Git/GitHub**: `git push`, force-push, rebasing or amending pushed commits, `git reset --hard` or `git clean` with uncommitted changes, deleting branches, opening/merging/closing PRs, commenting on issues or PRs, tagging or pushing releases.
-- **Versioning and dependencies**: bumping `version` in `Project.toml`, editing `Manifest.toml`, changing `[compat]` or `[deps]`, `Pkg.update()`.
+- **Versioning and dependencies**: bumping `version` in `Project.toml`, editing `Manifest.toml`, changing `[compat]`, adding `[deps]` for an unrelated capability, `Pkg.update()`.
 - **Reproducibility data**: editing reference counters, MSE tolerances, or checksum/golden files in reproducibility-test directories. Change these only for a user-confirmed output change.
 - **CI and infrastructure**: editing `.buildkite/pipeline.yml` or `.github/workflows/*`, adding or removing CI jobs, disabling tests, skipping hooks (`--no-verify`).
 - **Public API and user-visible behavior**: renaming or removing exported symbols, renaming diagnostics or changing their units, changing or removing user-visible config keys.
@@ -38,8 +38,9 @@ The full enumeration and the allowed-without-approval list are in [workflow/agen
 ### Code Quality
 
 - [getting_started.md](code-quality/getting_started.md): orienting newcomers to writing pointwise code compatible with ClimaCore `Field`s and broadcasting.
-- [code_style.md](code-quality/code_style.md): formatting, variable locality, Git workflow, feature removal, naming conventions.
-- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, minimally viable documentation.
+- [code_style.md](code-quality/code_style.md): JuliaFormatter and pre-commit hooks, variable locality, file organization, naming conventions.
+- [code_comments.md](code-quality/code_comments.md): inline comments and prose style across comments, docstrings, and docs — what earns a comment, never describing a previous state, stating what is the case, words to cut, sweeping a branch.
+- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, README and badge conventions, LICENSE/NOTICE and copyright notices, minimally viable documentation.
 - [changelogs_and_versions.md](code-quality/changelogs_and_versions.md): `NEWS.md` format, SemVer rules, and the release/tagging flow.
 - [variable_list.md](code-quality/variable_list.md): standardized CliMA variable naming conventions.
 - [glossary.md](code-quality/glossary.md): general CliMA software and simulation terminology.
@@ -52,7 +53,7 @@ The full enumeration and the allowed-without-approval list are in [workflow/agen
 
 ### Workflow
 
-- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, first PR loop.
+- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, Git workflow, first PR loop, feature removal.
 - [running_on_gpu.md](workflow/running_on_gpu.md): run a model on GPU — install Julia, add `CUDA.jl`, CUDA runtime compatibility, `CLIMACOMMS_DEVICE`, verify the device.
 - [agent_autonomy.md](workflow/agent_autonomy.md): actions that require explicit user approval.
 - [debugging.md](workflow/debugging.md): interactive debugging recipes for numerical instabilities, dispatch, and `Field` plotting.

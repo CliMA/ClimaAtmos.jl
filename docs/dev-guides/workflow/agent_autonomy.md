@@ -1,6 +1,6 @@
 # Agent Autonomy Boundaries
 
-This guide lists actions that an automated agent must **not** perform without an explicit, in-context instruction from the user. Local, reversible work (editing files, running tests, formatting) needs no special permission. The actions below are different: they are irreversible, externally visible, or scientifically consequential.
+This guide lists actions that an automated agent performs only on an explicit, in-context instruction from the user: actions that are irreversible, externally visible, or scientifically consequential. Local, reversible work (editing files, running tests, formatting) needs no permission.
 
 ## Always require explicit user approval
 
@@ -19,14 +19,15 @@ This guide lists actions that an automated agent must **not** perform without an
 ### Versioning and dependencies
 
 - Bumping `version` in `Project.toml`. Version bumps belong to release PRs and are owned by maintainers.
-- Editing `Manifest.toml`. Treat the manifest as derived state. Most CliMA repos do not commit it; if a repo does, do not modify it without explicit instruction.
+- Renaming the `main` section of `NEWS.md` to a version number (part of cutting a release; see [changelogs_and_versions.md §3](../code-quality/changelogs_and_versions.md)).
+- Editing `Manifest.toml` in a repo that commits it. Treat the manifest as derived state.
 - Adding, removing, or relaxing `[compat]` entries in `Project.toml`.
 - Adding new entries to `[deps]` for an unrelated capability.
 - `Pkg.update()` against the project environment.
 
 ### Reproducibility and reference data
 
-- Editing reference counters or reference data in any reproducibility-test directory (e.g., `reproducibility_tests/` in ClimaAtmos). These reference values gate scientific reproducibility; only update them in response to a deliberate, user-confirmed output change.
+- Editing reference counters or reference data in any reproducibility-test directory (e.g., `reproducibility_tests/` in ClimaAtmos). These values gate scientific reproducibility; update them only for a user-confirmed output change.
 - Editing MSE tolerance thresholds.
 - Editing recorded checksums or golden output files.
 
@@ -47,7 +48,7 @@ This guide lists actions that an automated agent must **not** perform without an
 
 ## Allowed without prior approval
 
-For contrast, the following are routine and do not require permission:
+The following are routine:
 
 - Reading any file in the repository.
 - Editing source under `src/`, `test/`, `docs/`, `ext/`.
@@ -59,7 +60,7 @@ For contrast, the following are routine and do not require permission:
 
 ## When in doubt
 
-If an action could be visible to other contributors, change scientific output, or be hard to reverse, ask. The cost of a one-line confirmation is small; the cost of an unwanted force-push or a silently shifted reference value is large.
+If an action could be visible to other contributors, change scientific output, or be hard to reverse, ask.
 
 ## Self-correction
 

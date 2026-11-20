@@ -4,32 +4,34 @@ Standards for repository-level documentation and docstrings across CliMA reposit
 
 ## 1. Goal
 
-CliMA is committed to producing high-quality, well-documented software so that knowledge is shared and not siloed. Documentation should explain the **design, purpose, and behavior** of code rather than its mechanical implementation. Aim for "minimally viable documentation": enough for a technically capable reader who is not a subject-matter expert to understand and use the code.
+CliMA documents its software so that knowledge is shared across the project. Documentation explains the **design, purpose, and behavior** of code. Aim for "minimally viable documentation": enough for a technically capable reader who is not a subject-matter expert to understand and use the code.
 
 - **Do** document interfaces, expected behavior, and short examples.
 - **Do not** narrate what the code does line by line; the code itself should be self-explanatory.
+
+This guide covers the structure and rendering of docstrings and repository-level documentation. For inline `#` comments and shared prose style across comments, docstrings, and `docs/src/` pages — stating what is the case, words to cut, and sweeping a branch — see [code_comments.md](code_comments.md).
 
 ## 2. Repository documentation
 
 Every repository must include the following pages (typically under `docs/src/` or in `README.md`):
 
 1. **Home**: a brief description with links to important subcomponents.
-2. **Examples**: simple runnable examples covering the main uses.
+2. **Examples**: short runnable examples covering the main uses.
 3. **API reference**: interface concepts, purpose, and function signatures.
 4. **Contribution guidelines**: how to contribute (PRs, style, CI).
 
-All repositories must also include a `LICENSE` file (Apache 2.0) and a `NOTICE` file in the repository root.
+Every repository must also include a `README.md`, a `LICENSE`, and — for Apache-licensed repos — a `NOTICE` in the root. See §2.3 and §2.4.
 
 ### 2.1 Organizing documentation by user need
 
-The [Diátaxis](https://diataxis.fr/) framework distinguishes four documentation modes; each page should have a clear primary mode:
+The [Diátaxis](https://diataxis.fr/) framework distinguishes four documentation modes; each page has one primary mode:
 
-- **Tutorials**: learning-oriented walkthroughs. State the goal up front, deliver visible results at every step, and minimize digressions. Test tutorials in CI (e.g. via Literate.jl) so they cannot silently break.
+- **Tutorials**: learning-oriented walkthroughs. State the goal up front, deliver visible results at every step, and minimize digressions. Test tutorials in CI (e.g. via Literate.jl) so that a broken tutorial fails the build.
 - **How-to guides**: task-oriented directions for someone who already knows what they want. Title as verb phrases ("How to add a parameterization"), not nouns ("Parameterizations").
 - **Reference**: API docs, configuration options, data formats. Documenter's [`@autodocs`](https://documenter.juliadocs.org/stable/man/syntax/#@autodocs-block) blocks are convenient for fast-moving internal modules; prefer **manual `@docs` curation** for the public API so you control symbol ordering, separation of public from internal, and stable URL anchors.
 - **Explanation**: derivations, design rationale, trade-offs. This is the right place for mathematical formulations and theory.
 
-These modes are guides, not strict partitions: CliMA repos commonly interleave theory and worked examples (e.g. Thermodynamics.jl pairs a *Mathematical Formulation* page with a *How-To Guide*). What matters is that each page has one primary purpose and the reader can find what they need.
+These modes are guides, not strict partitions: CliMA repos commonly interleave theory and worked examples (e.g. Thermodynamics.jl pairs a *Mathematical Formulation* page with a *How-To Guide*).
 
 ### 2.2 Tools
 
@@ -38,9 +40,117 @@ These modes are guides, not strict partitions: CliMA repos commonly interleave t
 - Sources live in `docs/src/`; tutorials in `tutorials/` if present.
 - For local iteration, use `LiveServer.servedocs()` (see [onboarding.md §9](../workflow/onboarding.md)).
 
+### 2.3 README
+
+The README is the first thing most users and agents see. Keep it short and current; depth belongs in `docs/src/`. Use this section order, omitting what does not apply:
+
+1. **Logo** (if the repo has one), centered, then the package name as an `#` heading.
+2. **One-sentence tagline**, then one short paragraph on what the package does and what it is built on.
+3. **Badge table** (below).
+4. **Features**: a handful of bullets, each naming a capability rather than an implementation detail.
+5. **Installation**: `Pkg.add("<PackageName>")` for a registered package.
+6. **Quick Example**: the shortest runnable snippet that produces something.
+7. **Documentation**: links to the stable and dev docs, plus any high-value pages.
+8. **Integration with CliMA models**: which ecosystem packages this one uses or is used by, with links.
+9. **Contributing**: point at `docs/dev-guides/` and the repo's `AGENTS.md`.
+
+**Run the Quick Example before committing it.** Execute it against the repo environment, or copy it verbatim from a docs page whose Documenter `@example` block runs on every docs build, so the two cannot drift. A README snippet that only *looks* right is worse than none: it is the first thing a new user pastes into a REPL. Verify the comments too — a snippet that runs but whose comment misstates the result is still wrong.
+
+**Badge table.** Use reference-style link definitions, keep the label column right-aligned and the badge column left-aligned, and place the definitions immediately below the table:
+
+~~~markdown
+|||
+|------------------:|:------------------------------------------------------------|
+| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] |
+| **Version**       | [![version][version-img]][version-url]                      |
+| **License**       | [![license][license-img]][license-url]                      |
+| **Tests**         | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] |
+| **Code Coverage** | [![codecov][codecov-img]][codecov-url]                      |
+| **Downloads**     | [![Downloads][dlt-img]][dlt-url]                            |
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://CliMA.github.io/<Package>.jl/stable/
+
+[version-img]: https://img.shields.io/github/v/release/CliMA/<Package>.jl
+[version-url]: https://github.com/CliMA/<Package>.jl/releases
+~~~
+
+Row conventions:
+
+- **Omit rows that do not apply.** Drop the Buildkite badge in a repo with no Buildkite pipeline (or one that does not build `main` — see below); otherwise it reads `unknown`.
+- **Add rows where warranted.** A repo with a Zenodo DOI or a JOSS paper gets a **DOI** and/or **JOSS** row; keep the existing DOI identifier when reformatting a table.
+- **Version** points at the shields.io GitHub release badge, `https://img.shields.io/github/v/release/CliMA/<Package>.jl`, which shows the latest tag, and links to the repo's releases page.
+
+**Badges must track `main`, and must be able to.** A badge that misreports status trains everyone to ignore it. Two independent requirements:
+
+1. *The workflow has to run on `main`.* A workflow triggered only by `pull_request` never produces a `main` run, so its badge falls back to the most recent run on **any** branch — one failing PR turns the badge red while `main` is green. Add a push trigger:
+
+   ~~~yaml
+   on:
+     push:
+       branches: [main]
+       tags: '*'
+     pull_request:
+   ~~~
+
+   A `tags:` filter under `pull_request` does nothing; tag filters only take effect under `push`.
+
+2. *The badge URL has to be pinned to `main`.* Append `?branch=main` to the badge image and filter the link target:
+
+   ~~~markdown
+   [gha-ci-img]: https://github.com/CliMA/<Package>.jl/actions/workflows/ci.yml/badge.svg?branch=main
+   [gha-ci-url]: https://github.com/CliMA/<Package>.jl/actions/workflows/ci.yml?query=branch%3Amain
+   ~~~
+
+Pinning a badge to `main` for a workflow that never runs there yields `no status`; a `main`-running workflow with an unpinned badge reports other branches. See [ci_triage.md §13](../workflow/ci_triage.md) for diagnosing a badge that reads `failing`, `unknown`, or `no status`.
+
+**Markdown is formatted in some repos.** Where `format_markdown = true` is enabled (for example, ClimaAtmos runs JuliaFormatter over `types_or: [julia, markdown]`), the formatter inlines reference-style links in the README and owns list markers (`  - `, `      + `) and table alignment in `docs/src/`, without reflowing prose. Rewrap paragraphs by hand, let the formatter win on list markers and tables, and run the repo's pinned formatter before pushing — see [code_style.md §1](code_style.md).
+
+### 2.4 License, NOTICE, and copyright
+
+**Which license.** Apache 2.0 is the default across CliMA. Repos in the Oceananigans lineage — [Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl) and [ClimaOcean.jl](https://github.com/CliMA/ClimaOcean.jl) — are **MIT**. Never "standardize" a repo's license as part of unrelated work: relicensing is a legal decision for the maintainers and copyright holders. Read the existing `LICENSE` before touching anything near it.
+
+| | Apache 2.0 (most repos) | MIT (Oceananigans, ClimaOcean) |
+|:---|:---|:---|
+| `LICENSE` | Full Apache text; copyright notice in the appendix | MIT text with the copyright line inline |
+| `NOTICE` | Present, mirroring the `LICENSE` copyright line | Not used |
+| Badge | `license-Apache%202.0-blue` | `license-MIT-blue` |
+
+**Copyright notice.** The Apache boilerplate ships with a placeholder that often gets committed unfilled:
+
+~~~text
+Copyright [yyyy] [name of copyright owner]
+~~~
+
+Replace it with the year range and holder. CliMA repos use:
+
+~~~text
+Copyright 2021-2026 California Institute of Technology (Climate Modeling Alliance)
+~~~
+
+MIT repos put the line inside the license text, in the form that license expects:
+
+~~~text
+Copyright (c) 2018 Climate Modeling Alliance
+~~~
+
+Conventions:
+
+- **The start year is the repo's first commit**, not the year the file was written. Find it with `git log --reverse --format=%ci | head -1`.
+- **Keep `NOTICE` and `LICENSE` in agreement.** Where both exist they should name the same holder and the same range; they drift because they are edited separately.
+- **A stale end year is not urgent.** Refresh it when you are already touching the file; a year-only bump is not worth a standalone PR.
+
+### 2.5 GitHub repository metadata
+
+The About line and topics are how a repo is found and understood from outside; they are part of its documentation.
+
+- **About**: one sentence, no trailing period, naming what the package *is* and its most distinguishing property — for example, "GPU-capable cloud microphysics and aerosol parameterizations for the CliMA Earth System Model". Avoid bare restatements of the name ("Clima's Land Model") and internal shorthand.
+- **Topics**: 8–12 lowercase, hyphenated tags. Cover the language (`julia`), the domain (`climate-modeling`, `atmospheric-physics`), the methods (`spectral-elements`, `ode-solvers`), and the platform (`gpu`).
+- Both are set through the repo settings UI or `gh repo edit --description ... --add-topic ...`. Neither lives in the git history, so a change takes effect immediately and is not reviewable in a PR — mention it in the PR description when it accompanies one.
+
 ## 3. Docstrings
 
-Every docstring lives next to the code it describes and is the first thing a future reader (human or AI) sees. Docstrings should be useful, not decorative.
+Every docstring lives next to the code it describes and is the first thing a future reader (human or AI) sees.
 
 This section follows [Julia's documentation conventions](https://docs.julialang.org/en/v1/manual/documentation/) and uses [Documenter.jl](https://documenter.juliadocs.org/) features for rendering.
 
@@ -74,11 +184,12 @@ end
 
 Universal rules:
 
-- **Signature line is indented 4 spaces** on the first line after `"""`. Julia's `?` and Documenter render this as the call signature; do not omit it.
+- **Signature line is indented 4 spaces** on the first line after `"""`. Julia's `?` and Documenter render this as the call signature.
 - **One-line summary** follows after a blank line, in imperative mood ("Compute…", not "Computes…").
 - **Backtick `code`** for variable names, type names, and option strings.
 - **Sentences end with periods**, including in bullet items.
 - **Be concise.** Names and formulas do the work; a docstring is not a tutorial.
+- **Follow the shared prose style** ([code_comments.md §2](code_comments.md)): write in the present, state what is the case rather than what is not, and cut filler adverbs, weak adjectives, and machine-sounding phrasing.
 
 ### 3.3 Section headings
 
@@ -88,7 +199,7 @@ Use these headings, in this order, with a single `#`. Include only what you need
 |:-----------------------|:--------------------------------------------------------------------------------------------------------------|
 | `# Arguments`          | Positional arguments. Skip if the signature is self-explanatory and there are ≤ 2 args.                       |
 | `# Keyword Arguments`  | Keyword arguments. Document defaults in the bullet, not just in the signature.                                |
-| `# Returns`            | When the return value is non-obvious or has structure (`NamedTuple`, multiple values, a `Field` with non-obvious units). |
+| `# Returns`            | When the return value is not implied by the signature or has structure (`NamedTuple`, multiple values, a `Field` whose units the name does not give). |
 | `# Fields`             | For struct types (see §3.5).                                                                                  |
 | `# Constructor`        | When an abstract or parametric type has a meaningful outer constructor.                                       |
 | `# Examples`           | At least one short example for any user-facing function, type, or setup.                                      |
@@ -104,17 +215,18 @@ Use the plural form (`# Arguments`, `# Examples`), Julia's official convention. 
   Continuation lines indented two spaces under the bullet.
 ~~~
 
-Each bullet starts with the backticked identifier. For complex options, list valid values as a nested bullet list.
+Each bullet starts with the backticked identifier. For an option with a fixed set of values, list them as a nested bullet list.
 
 ### 3.4 Units, math, references
 
-**Units.** Atmospheric and physics code is dimensional; units carry meaning. Use SI unless the underlying library exposes another unit (then match it and say so). Put units in square brackets at the end of the description: `[K]`, `[kg/m³]`, `[m/s²]`, `[W/m²]`, `[kg/kg]` for specific humidities. Dimensionless quantities: `[-]`. Be consistent within a docstring. Do **not** follow `[...]` with `(...)`; Documenter parses `[text](text)` as a markdown link and will error. This applies even when whitespace separates them — Documenter's parser accepts a space, several spaces, or a line break between `]` and `(` — so `Density [kg/m³] (at cloud base)` fails just as `Density [kg/m³](at cloud base)` does. Separate them with punctuation (`[kg/m³], at cloud base`) or wrap the units in backticks (`` `[kg/m³]` (at cloud base) ``). See §4.
+**Units.** Use SI unless the underlying library exposes another unit (then match it and say so). Put units in square brackets at the end of the description: `[K]`, `[kg/m³]`, `[m/s²]`, `[W/m²]`, `[kg/kg]` for specific humidities. Dimensionless quantities: `[-]`. Be consistent within a docstring. Do **not** follow `[...]` with `(...)`, even across whitespace or a line break: Documenter parses it as a markdown link and errors. See §4 for the failing forms and the fixes.
 
 **Math.** Documenter renders math with [KaTeX](https://katex.org/).
 
-- **Prefer Unicode for simple expressions**: α, β, ρ, ∂, ∇, ≤, ∈ all render inline and read more naturally than `\alpha`, `\beta`, etc., matching the variable names in the code.
-- **Use LaTeX for complex layout**: fractions, integrals with bounds, multi-line alignment.
+- **Prefer Unicode for short expressions**: α, β, ρ, ∂, ∇, ≤, ∈ render inline and match the variable names in the code.
+- **Use LaTeX for layout**: fractions, integrals with bounds, multi-line alignment.
 - **Inline:** double backticks, ``` ``α · β`` ```. **Display:** fenced ` ```math ` block.
+- **Accents:** use `\widehat` and `\widetilde`, never `\hat` or `\tilde`. The narrow forms do not render in the docs build.
 
 ~~~markdown
 ```math
@@ -132,7 +244,7 @@ Described in [Smith2020](@cite). The scheme of [Stevens2005](@cite) is extended 
 
 Add the BibTeX entry before citing; the docs build fails otherwise.
 
-**Cross-references.** Every function, type, or method name you mention should be linked, not just backticked. The `@ref` form costs one extra `(@ref)` and gives the reader a click-through:
+**Cross-references.** Link every function, type, or method name you mention with `@ref`, so the reader can click through:
 
 ~~~markdown
 See also [`compute_strain_rate_face_full!`](@ref) for the face-centered version.
@@ -144,7 +256,7 @@ The target must be documented and registered on a docs page (or exported). For c
 Wraps [`Thermodynamics.air_temperature`](@extref).
 ~~~
 
-Without DocumenterInterLinks configured, fall back to fully qualified names in backticks so the reader at least sees the package qualifier, but prefer to set up DocumenterInterLinks.
+Without DocumenterInterLinks, use fully qualified names in backticks so the reader sees the package qualifier.
 
 ### 3.5 Structs
 
@@ -196,7 +308,7 @@ Abstract types are the entry point for understanding a hierarchy. The docstring 
 1. State the role in one sentence.
 2. Enumerate concrete subtypes with a one-line description of each.
 3. Document the outer constructor if there is one.
-4. Note any interface methods subtypes must implement.
+4. List any interface methods subtypes must implement.
 
 ~~~julia
 """
@@ -214,9 +326,9 @@ abstract type CloudModel end
 
 ### 3.7 Mutating functions, multiple methods, structured returns
 
-A few patterns recur often enough to call out:
+Recurring patterns:
 
-- **In-place / cache-mutating functions** (`f!(Yₜ, Y, p, t, ...)`): state explicitly that the function mutates its first argument; state the return value (`nothing` by convention); for each model-selector argument list the concrete subtypes it dispatches on; mention which precomputed quantities it reads from the cache.
+- **In-place / cache-mutating functions** (`f!(Yₜ, Y, p, t, ...)`): state that the function mutates its first argument; state the return value (`nothing` by convention); for each model-selector argument list the concrete subtypes it dispatches on; mention which precomputed quantities it reads from the cache.
 - **Multiple methods sharing a docstring**: list each signature on its own indented line, then write one body that covers them all.
 - **Structured returns** (`NamedTuple`, composite): use a `-> ReturnType` annotation in the signature line and sketch the shape under `# Returns`.
 
@@ -224,9 +336,9 @@ See the cheat sheet (§3.10) for the full skeleton.
 
 ### 3.8 Examples and admonitions
 
-**Examples**: at least one for any user-facing API; optional for internal helpers. Use a plain fenced ` ```julia ` block; examples should be runnable in a fresh REPL after `using YourPackage` (spell out non-trivial setup). One short example is better than three sprawling ones.
+**Examples**: at least one for any user-facing API; optional for internal helpers. Use a plain fenced ` ```julia ` block; examples should be runnable in a fresh REPL after `using YourPackage` (include any setup). One short example is better than three sprawling ones.
 
-**Admonitions** ([Documenter syntax](https://documenter.juliadocs.org/stable/showcase/#Admonitions)): use sparingly for genuinely important caveats. Kinds: `note`, `warning`, `tip`, `info`, `compat`, `danger`.
+**Admonitions** ([Documenter syntax](https://documenter.juliadocs.org/stable/showcase/#Admonitions)): use sparingly. Kinds: `note`, `warning`, `tip`, `info`, `compat`, `danger`.
 
 ~~~markdown
 !!! warning
@@ -234,11 +346,11 @@ See the cheat sheet (§3.10) for the full skeleton.
     values. Run after `set_implicit_precomputed_quantities_part1!`.
 ~~~
 
-Keep to 1–3 sentences. If you find yourself writing more than two admonitions in one docstring, the docstring is doing too much: split it or move content into `docs/src/`.
+Keep to 1–3 sentences. More than two admonitions in one docstring means the docstring is doing too much: split it or move content into `docs/src/`.
 
 ### 3.9 `# Extended help`
 
-Documenter and the Julia REPL recognize `# Extended help` as a special trailing section: `?function_name` shows everything before it; `??function_name` shows the full docstring. Use it for long boundary cases, implementation notes for maintainers, or detailed cross-cutting `See also` lists. It must appear last. Long derivations belong on a *Mathematical Formulation* page in `docs/src/`, not in extended help.
+Documenter and the Julia REPL recognize `# Extended help` as a special trailing section: `?function_name` shows everything before it; `??function_name` shows the full docstring. Use it for long boundary cases, implementation notes for maintainers, or detailed cross-cutting `See also` lists. It must appear last. Long derivations belong on a *Mathematical Formulation* page in `docs/src/`.
 
 ### 3.10 Cheat sheet
 
@@ -316,7 +428,7 @@ abstract type Foo end
 
 ### 3.11 What we don't use, and other anti-patterns
 
-- **`DocStringExtensions`** (`$(TYPEDEF)`, `$(FIELDS)`, `$(SIGNATURES)`, …). Spell out signatures, field lists, and types by hand. Readability in source matters more than DRY. Some existing repos (e.g. CloudMicrophysics.jl's parameter structs) use `$(FIELDS)` from before this guidance; don't introduce new uses, but migrating old ones is not required on its own.
+- **`DocStringExtensions`** (`$(TYPEDEF)`, `$(FIELDS)`, `$(SIGNATURES)`, …). Spell out signatures, field lists, and types by hand. Readability in source matters more than DRY. Some repos (e.g. CloudMicrophysics.jl's parameter structs) still use `$(FIELDS)`; do not add new uses, and migrating old ones is optional.
 - **`jldoctest`** blocks. Most CliMA repos don't run doctests in CI, so jldoctests silently rot. Use plain ` ```julia ` blocks.
 - **Long mathematical derivations inline.** The docstring should give the reader enough to use the function; derivations belong on an *Explanation* page or in the source paper. Link to it.
 - **Generated docstrings via metaprogramming** (macros that splice docstrings into `@eval`'d definitions) unless unavoidable: hard to grep, hard to read, easy to break.
@@ -353,13 +465,17 @@ Density [kg/m³]. (At cloud base.)
 Density `[kg/m³]` (at cloud base).
 ~~~
 
-Because `checkdocs = :exports` leaves most docstrings unrendered, a broken link can sit latent until its symbol is added to a docs page, at which point an unrelated PR fails. A syntactic pre-commit check is worthwhile; ClimaAtmos.jl uses `.dev/check_markdown_link_ambiguity.py` for this.
+Because `checkdocs = :exports` leaves most docstrings unrendered, a broken link stays hidden until its symbol is added to a docs page, at which point an unrelated PR fails. A syntactic pre-commit check catches it earlier; ClimaAtmos.jl uses `.dev/check_markdown_link_ambiguity.py` for this.
 
-Do not attempt to escape brackets with backslashes in Julia string literals; that causes invalid-escape-sequence errors during precompilation.
+Backslash-escaping the brackets in a Julia string literal is not a fix: it raises invalid-escape-sequence errors during precompilation.
 
 **Missing docstrings.** If `makedocs` fails with "Missing docstrings", ensure every exported symbol with a docstring is included on a documentation page via `@docs` or `@autodocs`.
 
 **Undefined cross-package symbols.** Use fully qualified names (`Thermodynamics.ThermodynamicsParameters`) so Documenter's link generator can resolve them across package boundaries. For cross-repo `@ref`-style links, configure DocumenterInterLinks (§3.4).
+
+**Admonition titles are plain text.** Documenter does not parse markdown or math inside `!!! note "…"` titles: backticks and ``math`` show literally. Name the quantity in words there.
+
+**List items opening with inline math.** A markdown bullet that starts with inline math (`- ``I^c`` is…`, `- $λ$ is…`) renders the symbol centered on its own line. Lead with the noun: `- The face-to-center interpolation ``I^c`` is…`, `- the wavelength $λ$…`.
 
 ## Self-correction
 
