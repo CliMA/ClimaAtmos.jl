@@ -101,6 +101,22 @@ const T2 = 290
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
     sfc_T = p_overwritten.precomputed.sfc_conditions.T_sfc
     @test all(isequal(T2), parent(sfc_T))
+
+    # The atmosphere computes the fluxes from the coupler's surface
+    # temperature, and the screen-level temperature from the same solve: its
+    # dry static energy lies between the surface and first interior level ones
+    (; sfc_conditions, ᶜT) = p_overwritten.precomputed
+    sf_params = CAP.surface_fluxes_params(p.params)
+    grav = SF.Parameters.grav(sf_params)
+    cp_d = TD.Parameters.cp_d(thermo_params)
+    T_int = parent(Fields.level(ᶜT, 1))
+    z_int = parent(Fields.level(Fields.coordinate_field(Y.c).z, 1))
+    z_sfc = parent(Fields.coordinate_field(sfc_conditions.T_sfc).z)
+    s_sfc = @. cp_d * T2 + grav * z_sfc
+    s_int = @. cp_d * T_int + grav * z_int
+    z_2m = @. z_sfc + z0b + CA.SurfaceConditions.SCREEN_HEIGHT
+    s_2m = @. cp_d * $parent(sfc_conditions.T_2m) + grav * z_2m
+    @test all(@. min(s_sfc, s_int) <= s_2m <= max(s_sfc, s_int))
 end
 
 @testset "Coupler Initialization" begin
@@ -127,4 +143,12 @@ end
         job_id = "coupler_compatibility3",
     )
     simulation = CA.get_simulation(config)
+    # The screen-level temperature is missing until the coupler writes it, and
+    # `tas` reports the bottom cell center temperature
+    (; u, p, t) = simulation.integrator
+    (; ᶜT, sfc_conditions) = p.precomputed
+    @test all(isnan, parent(sfc_conditions.T_2m))
+    tas_diagnostic = CA.Diagnostics.get_diagnostic_variable("tas")
+    tas = Base.materialize(tas_diagnostic.compute(u, p, t))
+    @test parent(tas) == parent(Fields.level(ᶜT, 1))
 end
