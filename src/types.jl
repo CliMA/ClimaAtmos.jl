@@ -83,27 +83,27 @@ it.
 Any process that is not passed keeps its default, so
 `NonEquilibriumMicrophysics1M()` turns every process on with these variants:
 
-| Process                         | Default variant                   |
-|:------------------------------- |:--------------------------------- |
-| `cloud_liquid_formation`        | `CloudLiquidFormation()`          |
-| `cloud_ice_formation`           | `TemperatureDependentIceNumber()` |
-| `cloud_ice_melt`                | `CloudIceMelt()`                  |
-| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`   |
-| `rain_autoconversion`           | `Kessler1M()`                     |
-| `snow_autoconversion`           | `NoSupersaturation()`             |
-| `rain_condensation_evaporation` | `RainEvaporation()`               |
-| `snow_deposition_sublimation`   | `DepositionAndSublimation()`      |
-| `snow_melt`                     | `SnowMelt()`                      |
-| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`      |
-| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`      |
-| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`         |
-| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`         |
-| `rain_snow_accretion`           | `RainSnowAccretion()`             |
+| Process                         | Default variant                      |
+|:------------------------------- |:------------------------------------ |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`             |
+| `cloud_ice_formation`           | `TemperatureDependentIceNumber()`    |
+| `cloud_ice_melt`                | `CloudIceMelt()`                     |
+| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`      |
+| `rain_autoconversion`           | `Kessler1M()`                        |
+| `snow_autoconversion`           | `NoSupersaturation()`                |
+| `rain_condensation_evaporation` | `RainEvaporation()`                  |
+| `snow_deposition_sublimation`   | `DepositionWithoutCloudCondensate()` |
+| `snow_melt`                     | `SnowMelt()`                         |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`         |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`         |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`            |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`            |
+| `rain_snow_accretion`           | `RainSnowAccretion()`                |
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` overrides the
-`CMP.Microphysics1MOptions` default.
+`get_microphysics_1m_options`). `cloud_ice_formation` and
+`snow_deposition_sublimation` override the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 
@@ -141,7 +141,8 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # Override CM's `ConstantTimescale` ice formation default to match
+        # Override CM's `ConstantTimescale` ice formation and
+        # `DepositionAndSublimation` snow defaults to match
         # `default_config.yml`. `create_parameters.jl` splits
         # `cloud_liquid_formation`, `cloud_ice_formation`,
         # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
@@ -150,6 +151,7 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
+            snow_deposition_sublimation = CMP.DepositionWithoutCloudCondensate(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)

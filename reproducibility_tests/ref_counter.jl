@@ -1,4 +1,4 @@
-476
+477
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+477
+- Switching off snow deposition growth when in clouds
+
 476
 - `toml/default_parameters.toml` sets `cloud_fraction_eps_rel = 0.05`, the
   floor of the cloud-fraction width at 5% of the subsaturation deficit, which
