@@ -841,6 +841,9 @@ function SGSQuadratureParameters(
         # and describes it as the scale of a `q_sat` term; update the default
         # and the description there when this default moves to ClimaParams.
         cloud_fraction_eps_rel = FT(0),
+        # Estimated Inversion Strength sensitivity of liquid-cloud shortwave
+        # subgrid inhomogeneity (`solve_fluxes!`): off (`0`) by default.
+        cloud_inhomogeneity_eis_coeff = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
