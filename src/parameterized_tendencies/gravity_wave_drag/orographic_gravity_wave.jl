@@ -866,12 +866,19 @@ function calc_nonpropagating_forcing!(
     #   first cell above it: top face = z_start              -> drag (lowest blocked cell)
     #   ...
     #   cell below z_ref:    top face = z_ref                -> drag (highest blocked cell)
-    # So a cell gets drag if its top face is at or above z_start (ᶜtop_bias) and its
-    # bottom face is below z_ref (ᶜbottom_bias). z_start is copied from a face height,
-    # so the ≥ comparison is exact.
+    # So a cell gets drag if `ᶠp_ref` is finite, its top face is at or above
+    # `z_start` (`ᶜtop_bias`), and its bottom face is below `z_ref`
+    # (`ᶜbottom_bias`). `z_start` is copied from a face height, so `>=` is
+    # exact.
     @. ᶜmask =
-        isone(ᶜtop_bias.((ᶠz .>= ᶠz_start))) .&& isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
-    @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
+        (!isnan(ᶠp_ref)) .&&
+        isone(ᶜtop_bias.((ᶠz .>= ᶠz_start))) .&&
+        isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
+    @. ᶜweights = ifelse(
+        ᶜmask,
+        ᶜinterp.(ᶠp .- ifelse(isnan(ᶠp_ref), FT(0), ᶠp_ref)),
+        FT(0),
+    )
     # Each cell's own pressure thickness (GFDL topo_drag: dp = phalf(k+1) - phalf(k))
     @. ᶜdiff = ᶜbottom_bias(ᶠp) - ᶜtop_bias(ᶠp)
 
@@ -884,7 +891,7 @@ function calc_nonpropagating_forcing!(
     # Column stress sum wtsum = Σ Δp·weight (GFDL topo_drag: `wtsum += dp*weight`).
     # The forcing below divides by wtsum, so the column-integrated blocked stress
     # Σ (du/dt)·Δp/g equals τ_x·τ_np/τ_l.
-    input = @. lazy(ifelse(ᶜmask == true, ᶜdiff * ᶜweights, FT(0)))
+    input = @. lazy(ifelse(ᶜmask, ᶜdiff * ᶜweights, FT(0)))
 
     Operators.column_reduce!(ᶜwtsum, input; init = FT(0)) do acc, wtsum_field
         return acc + wtsum_field
@@ -894,17 +901,20 @@ function calc_nonpropagating_forcing!(
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
-    # Zero the tendency in columns where the mask is empty (wtsum == 0: no cell above
-    # the PBL-top cell) or wtsum is NaN.
+    # Zero the tendency in columns where the mask is empty (wtsum == 0: no cell
+    # above the PBL-top cell) or wtsum is NaN, using a finite denominator so
+    # the unchosen branch of `ifelse` never evaluates `0 / 0`.
+    ᶜsafe_wtsum =
+        @. lazy(ifelse(iszero(ᶜwtsum) || isnan(ᶜwtsum), FT(1), ᶜwtsum))
     @. ᶜuforcing += ifelse(
         iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
-        grav * τ_x * τ_np / τ_l / ᶜwtsum * ᶜweights,
+        grav * τ_x * τ_np / τ_l / ᶜsafe_wtsum * ᶜweights,
     )
     @. ᶜvforcing += ifelse(
         iszero(ᶜwtsum) || isnan(ᶜwtsum),
         FT(0),
-        grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
+        grav * τ_y * τ_np / τ_l / ᶜsafe_wtsum * ᶜweights,
     )
 
 end
