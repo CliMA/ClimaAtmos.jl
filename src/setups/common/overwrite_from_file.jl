@@ -101,6 +101,97 @@ function hydrostatic_pressure(
 end
 
 """
+    rebalance_hydrostatic_pressure(ᶜp_anchor, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜΦ, thermo_params)
+
+Center pressure [Pa] in discrete hydrostatic balance with the model's Exner-split
+vertical pressure gradient,
+
+```math
+∇ᵥΦ - ∇ᵥΦ_r(p) + c_{p,d}\\,\\overline{(θ_v - θ_{vr}(p))}\\,∇ᵥΠ(p) = 0,
+```
+
+at every interior face, with `ᶜT` and the moisture partition held fixed. The
+first level takes `ᶜp_anchor`. Above it, each face between centers `k` and `k+1`
+solves
+
+```math
+F(x) = ΔΦ - (Φ_r(p) - Φ_r(p_k))
+     + \\tfrac{c_{p,d}}{2}\\,(θ_v'_k + θ_v'(p))\\,(Π(p) - Π(p_k)) = 0,
+     \\quad p = e^x,
+```
+
+with `θ_v' = θ_v - θ_{vr}`, by 8 Newton iterations in `x = ln p`.
+"""
+function rebalance_hydrostatic_pressure(
+    ᶜp_anchor, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜΦ, thermo_params,
+)
+    FT = eltype(ᶜT)
+    R_d = TD.TP.R_d(thermo_params)
+    cp_d = TD.TP.cp_d(thermo_params)
+    ᶜp_bal = similar(ᶜT)
+    input = Base.broadcasted(tuple, ᶜΦ, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜp_anchor)
+    # Carry: (p, Φ, θ_v′) of the level below; NaN marks "below the first level".
+    init = (FT(NaN), FT(NaN), FT(NaN))
+    Operators.column_accumulate!(
+        ᶜp_bal,
+        input;
+        init,
+        transform = first,
+    ) do (p_prev, Φ_prev, θvp_prev), (Φ, T, q, q_liq, q_ice, p_anchor)
+        p = if isnan(p_prev)
+            p_anchor
+        else
+            R_m = TD.gas_constant_air(thermo_params, q, q_liq, q_ice)
+            # Naive hydrostatic step as the initial guess (error O((Δz/H)²)).
+            x = log(p_prev) - (Φ - Φ_prev) / (R_m * T)
+            Π_prev = TD.exner_given_pressure(thermo_params, p_prev)
+            Φr_prev = phi_r(thermo_params, p_prev)
+            for _ in 1:8
+                pn = exp(x)
+                Π = TD.exner_given_pressure(thermo_params, pn)
+                θvp =
+                    theta_v(thermo_params, T, pn, q, q_liq, q_ice) -
+                    theta_vr(thermo_params, pn)
+                F =
+                    (Φ - Φ_prev) - (phi_r(thermo_params, pn) - Φr_prev) +
+                    cp_d / 2 * (θvp_prev + θvp) * (Π - Π_prev)
+                # dF/dx up to an O(ΔΠ/Π) term: −dΦ_r/dx = R_d T_r and
+                # cp_d κ_d Π θ̄_v′ = R_d Π θ̄_v′; together ≈ R_d T̄_v > 0.
+                T_r = air_temperature_reference(thermo_params, pn)
+                dFdx = R_d * T_r + R_d * Π * (θvp_prev + θvp) / 2
+                x -= F / dFdx
+            end
+            exp(x)
+        end
+        θvp =
+            theta_v(thermo_params, T, p, q, q_liq, q_ice) -
+            theta_vr(thermo_params, p)
+        return (p, Φ, θvp)
+    end
+    return ᶜp_bal
+end
+
+"""
+    initial_center_pressure(ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, hydrostatic_rebalance)
+
+Center pressure [Pa] for initializing density: the log-mean of the face pressure
+`ᶠp`, or, with `hydrostatic_rebalance = true`, the
+[`rebalance_hydrostatic_pressure`](@ref) column anchored at that value on the
+first level.
+"""
+function initial_center_pressure(
+    ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, hydrostatic_rebalance,
+)
+    # Log-mean, since face-to-center arithmetic interpolation overestimates p
+    ᶜp = exp.(ᶜinterp.(log.(ᶠp)))
+    hydrostatic_rebalance || return ᶜp
+    ᶜΦ = geopotential.(thermo_params.grav, Fields.coordinate_field(Y.c).z)
+    return rebalance_hydrostatic_pressure(
+        ᶜp, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜΦ, thermo_params,
+    )
+end
+
+"""
     assign_velocity_energy!(
         Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶠp, thermo_params, file_path, svi_kwargs,
     )
@@ -348,11 +439,13 @@ end
 
 """
     overwrite_from_file!(file_path, extrapolation_bc, Y, thermo_params;
-                         regridder_type=nothing, interpolation_method=nothing)
+                         regridder_type=nothing, interpolation_method=nothing,
+                         hydrostatic_rebalance=false)
 
 Overwrite the prognostic state `Y` with data regridded from a NetCDF file.
 Recomputes vertical pressure levels assuming hydrostatic balance from
-surface pressure.
+surface pressure. With `hydrostatic_rebalance = true`, density is initialized
+from [`rebalance_hydrostatic_pressure`](@ref) instead.
 
 Expected variables in the file:
 
@@ -372,6 +465,7 @@ function overwrite_from_file!(
     thermo_params;
     regridder_type = nothing,
     interpolation_method = nothing,
+    hydrostatic_rebalance = false,
 )
     regridder_kwargs = filter(!isnothing, (; extrapolation_bc, interpolation_method))
     svi_kwargs =
@@ -427,11 +521,10 @@ function overwrite_from_file!(
         thermo_params,
     )
 
-    # Density. Interpolate face pressure to centers in log space to avoid
-    # overestimating center pressure.
-    Y.c.ρ .= TD.air_density.(
-        thermo_params, ᶜT, exp.(ᶜinterp.(log.(ᶠp))), ᶜq_tot, ᶜq_liq, ᶜq_ice,
+    ᶜp = initial_center_pressure(
+        ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, hydrostatic_rebalance,
     )
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice)
 
     # Velocity and energy
     e_pot = assign_velocity_energy!(

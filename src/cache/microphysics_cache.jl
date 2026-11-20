@@ -242,9 +242,7 @@ function set_precipitation_velocities!(
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
-            @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(
-                χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰),
-            )
+            @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
             unrolled_foreach(draft_indices) do j

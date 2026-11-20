@@ -21,8 +21,9 @@ then overwrites the whole prognostic state with ERA5 data located by
   - `use_full_pressure = false`: Whether to read the 3D pressure from the file
     instead of integrating it hydrostatically.
   - `hydrostatic_rebalance = false`: Whether to rebalance the column pressure
-    against the model's discrete Exner-split vertical pressure gradient after
-    the hydrostatic integration (see `rebalance_hydrostatic_pressure`).
+    against the model's discrete Exner-split vertical pressure gradient,
+    anchored at the first level of the integrated or file pressure (see
+    `rebalance_hydrostatic_pressure`).
 
 # Fields
 
@@ -55,6 +56,33 @@ end
 function center_initial_condition(setup::WeatherModel, local_geometry, params)
     FT = eltype(params)
     return physical_state(; T = FT(NaN), p = FT(NaN))
+end
+
+"""
+    temperature_below_surface(T₁, z, z_sfc)
+
+Temperature [K] at height `z` [m]: `T₁` at or above the source surface height
+`z_sfc` [m], and `T₁ + Γ (z_sfc - z)` below it, with the standard lapse rate
+`Γ = 0.0065` K/m.
+"""
+function temperature_below_surface(T₁, z, z_sfc)
+    Γ = oftype(T₁, 0.0065)
+    return T₁ + Γ * max(z_sfc - z, zero(z))
+end
+
+"""
+    pressure_below_surface(thermo_params, T₁, p₁, q_vap, z, z_sfc)
+
+Pressure [Pa] at height `z` [m]: `p₁` at or above the source surface height
+`z_sfc` [m], and below it the hydrostatic profile `p₁ (T / T₁)^(g / (R_m Γ))`
+of the temperature from [`temperature_below_surface`](@ref), with `R_m` the gas
+constant of air with vapor specific humidity `q_vap`.
+"""
+function pressure_below_surface(thermo_params, T₁, p₁, q_vap, z, z_sfc)
+    Γ = oftype(T₁, 0.0065)
+    T = temperature_below_surface(T₁, z, z_sfc)
+    R_m = TD.gas_constant_air(thermo_params, q_vap, zero(q_vap), zero(q_vap))
+    return p₁ * (T / T₁)^(thermo_params.grav / (R_m * Γ))
 end
 
 function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
@@ -114,14 +142,36 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     (; ᶜq_tot, ᶜq_liq, ᶜq_ice) =
         thermodynamic_partition(Y, ᶜq_vap, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno)
 
-    use_p3d = NC.NCDataset(file_path) do ds
-        haskey(ds, "p_3d")
+    use_p3d, has_z_sfc = NC.NCDataset(file_path) do ds
+        haskey(ds, "p_3d"), haskey(ds, "z_sfc")
     end
+    use_p3d && !has_z_sfc &&
+        error(
+            "Full-pressure initialization needs `z_sfc` in $(file_path) to extend the " *
+            "column below the ERA5 surface.",
+        )
     ᶠp = if use_p3d
         @info "Using full 3D pressure from file variable `p_3d` (use_full_pressure=true)"
-        SpaceVaryingInputs.SpaceVaryingInput(
+        ᶠp_3d = SpaceVaryingInputs.SpaceVaryingInput(
             file_path, "p_3d", face_space; svi_kwargs...,
         )
+        # Below the ERA5 surface the file repeats the lowest-level values, which
+        # leaves no vertical pressure gradient to hold the layer up.
+        read_face =
+            name -> SpaceVaryingInputs.SpaceVaryingInput(
+                file_path, name, face_space; svi_kwargs...,
+            )
+        ᶜz_sfc = SpaceVaryingInputs.SpaceVaryingInput(
+            file_path, "z_sfc", center_space; svi_kwargs...,
+        )
+        ᶠz_sfc, ᶠT_file, ᶠq_vap = read_face("z_sfc"), read_face("t"), read_face("q")
+        ᶠz = Fields.coordinate_field(face_space).z
+        ᶜz = Fields.coordinate_field(center_space).z
+        @. ᶠp_3d = pressure_below_surface(
+            thermo_params, ᶠT_file, ᶠp_3d, ᶠq_vap, ᶠz, ᶠz_sfc,
+        )
+        @. ᶜT = temperature_below_surface(ᶜT, ᶜz, ᶜz_sfc)
+        ᶠp_3d
     else
         @warn "Requested full pressure initialization, but variable `p_3d` " *
               "is missing in $(file_path). Falling back to hydrostatic " *
@@ -153,11 +203,10 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         )
     end
 
-    # Density. Interpolate face pressure to centers in log space to avoid
-    # overestimating center pressure.
-    Y.c.ρ .= TD.air_density.(
-        thermo_params, ᶜT, exp.(ᶜinterp.(log.(ᶠp))), ᶜq_tot, ᶜq_liq, ᶜq_ice,
+    ᶜp = initial_center_pressure(
+        ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, setup.hydrostatic_rebalance,
     )
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice)
 
     # Velocity and energy
     e_pot = assign_velocity_energy!(
