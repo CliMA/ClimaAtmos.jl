@@ -506,6 +506,12 @@ VALID_CASES = [
     cases(vec("mp1m_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1)...,
     cases(vec("mp1mup_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
     cases(vec("mp1men_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
+    cases(vec("mp1m_la_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1)...,
+    cases(vec("mp1mup_la_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
+    cases(vec("mp1men_la_" .* string.(first.(CA.Diagnostics.MP1M_SOURCE_TERMS))), :m1_pedmfx)...,
+    cases(vec("mp1m_" .* string.(first.(CA.Diagnostics.MP1M_SPECIES_TENDENCIES))), (:m1, :m1_pedmfx))...,
+    cases(vec("mp1mup_" .* string.(first.(CA.Diagnostics.MP1M_SPECIES_TENDENCIES))), :m1_pedmfx)...,
+    cases(vec("mp1men_" .* string.(first.(CA.Diagnostics.MP1M_SPECIES_TENDENCIES))), :m1_pedmfx)...,
 ]
 #! format: on
 #
@@ -668,9 +674,12 @@ end
         "S_acnv_icl_sno",
         "S_accr_lcl_rai",
         "S_accr_icl_sno",
+        "S_accr_rai_sno_cold",
         "S_phase_change_vap_rai",
         "S_phase_change_vap_sno",
+        "S_freeze_lcl_icl",
     )
+    sp_terms = ("dq_lcl_dt", "dq_icl_dt", "dq_rai_dt", "dq_sno_dt")
     process_names = (
         "detr_q_tot",
         "detr_q_lcl",
@@ -678,6 +687,12 @@ end
         ("mp1m_" .* mp_terms)...,
         ("mp1mup_" .* mp_terms)...,
         ("mp1men_" .* mp_terms)...,
+        ("mp1m_la_" .* mp_terms)...,
+        ("mp1mup_la_" .* mp_terms)...,
+        ("mp1men_la_" .* mp_terms)...,
+        ("mp1m_" .* sp_terms)...,
+        ("mp1mup_" .* sp_terms)...,
+        ("mp1men_" .* sp_terms)...,
     )
     for name in process_names
         f = getdiag(name).compute
@@ -701,4 +716,57 @@ end
         @. expected = ρa_1 * detr_1 * q_1 / ρ_gm
         @test parent(out_c) ≈ parent(expected)
     end
+    # Verify applied species tendencies:
+    # 1. Grid-mean mp1m_dq_*_dt ==
+    #    (ρa⁰ * mp1men_dq_*_dt + ρa¹ * mp1mup_dq_*_dt) / ρ
+    tm = p_1m_pedmfx.atmos.turbconv_model
+    gm_sp = copy(out_c)
+    en_sp = copy(out_c)
+    up_sp = copy(out_c)
+    expected_gm = copy(out_c)
+    for sp in sp_terms
+        mat_into!(gm_sp, getdiag("mp1m_$(sp)").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        mat_into!(en_sp, getdiag("mp1men_$(sp)").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        mat_into!(up_sp, getdiag("mp1mup_$(sp)").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        @. expected_gm =
+            (CA.ρa⁰(ρ_gm, Y_1m_pedmfx.c.sgsʲs, tm) * en_sp + ρa_1 * up_sp) / ρ_gm
+        @test parent(gm_sp) ≈ parent(expected_gm)
+    end
+    # 2. Updraft LinearizedAverageVerbose sum matches applied mp1mup_dq_*_dt
+    eval_up_la(term) = begin
+        tmp = copy(out_c)
+        mat_into!(tmp, getdiag("mp1mup_la_$(term)").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        vec(Array(parent(tmp)))
+    end
+    eval_up_sp(sp) = begin
+        tmp = copy(out_c)
+        mat_into!(tmp, getdiag("mp1mup_$(sp)").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        vec(Array(parent(tmp)))
+    end
+    dql_la =
+        eval_up_la("S_phase_change_vap_lcl") .- eval_up_la("S_acnv_lcl_rai") .-
+        eval_up_la("S_accr_lcl_rai") .- eval_up_la("S_accr_lcl_sno_cold") .-
+        eval_up_la("S_accr_lcl_sno_warm") .+ eval_up_la("S_melt_icl_lcl") .-
+        eval_up_la("S_freeze_lcl_icl")
+    dqi_la =
+        eval_up_la("S_phase_change_vap_icl") .- eval_up_la("S_acnv_icl_sno") .-
+        eval_up_la("S_accr_icl_rai") .- eval_up_la("S_accr_melt_icl_rai") .-
+        eval_up_la("S_accr_icl_sno") .- eval_up_la("S_melt_icl_lcl") .+
+        eval_up_la("S_freeze_lcl_icl")
+    dqr_la =
+        eval_up_la("S_acnv_lcl_rai") .+ eval_up_la("S_accr_lcl_rai") .+
+        eval_up_la("S_accr_lcl_sno_warm") .+ eval_up_la("S_accr_melt_lcl_sno") .-
+        eval_up_la("S_accr_freeze_icl_rai") .- eval_up_la("S_accr_rai_sno_cold") .+
+        eval_up_la("S_accr_melt_icl_rai") .+ eval_up_la("S_accr_melt_rai_sno") .+
+        eval_up_la("S_phase_change_vap_rai") .+ eval_up_la("S_melt_sno_rai")
+    dqs_la =
+        eval_up_la("S_acnv_icl_sno") .+ eval_up_la("S_accr_lcl_sno_cold") .-
+        eval_up_la("S_accr_melt_lcl_sno") .+ eval_up_la("S_accr_icl_rai") .+
+        eval_up_la("S_accr_freeze_icl_rai") .+ eval_up_la("S_accr_icl_sno") .+
+        eval_up_la("S_accr_rai_sno_cold") .- eval_up_la("S_accr_melt_rai_sno") .+
+        eval_up_la("S_phase_change_vap_sno") .- eval_up_la("S_melt_sno_rai")
+    @test isapprox(dql_la, eval_up_sp("dq_lcl_dt"); atol = 1e-14, rtol = 1e-12)
+    @test isapprox(dqi_la, eval_up_sp("dq_icl_dt"); atol = 1e-14, rtol = 1e-12)
+    @test isapprox(dqr_la, eval_up_sp("dq_rai_dt"); atol = 1e-14, rtol = 1e-12)
+    @test isapprox(dqs_la, eval_up_sp("dq_sno_dt"); atol = 1e-14, rtol = 1e-12)
 end

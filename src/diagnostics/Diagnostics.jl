@@ -26,6 +26,7 @@ import ClimaCore.MatrixFields: @name
 import Thermodynamics as TD
 
 # compute lazily to reduce allocations
+import ..ClimaAtmos
 import ..lazy
 
 import ..AtmosModel
