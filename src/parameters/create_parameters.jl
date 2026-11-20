@@ -762,6 +762,21 @@ function SGSQuadratureParameters(
         # `sublimation_deposition_timescale`; zero uses the per-cell 1M
         # relaxation times (`cloud_species_relaxation_time`).
         sgs_cloud_species_constant_timescales = FT(0),
+        # Updraft mass-flux velocity weight [-] and detrained-condensate
+        # reference velocity [m/s] in the environment autoconversion velocity
+        # (`set_environment_1m_tendency!`): both 0 use the environment
+        # vertical velocity.
+        sgs_env_autoconversion_updraft_velocity_weight = FT(0),
+        sgs_env_autoconversion_detrained_velocity = FT(0),
+        # Subsaturated-environment tail partitioning
+        # (`_materialize_env_tail_partition!`, `_env_subsat_cu_switch`):
+        # upper-tail truncation at the updraft quantile (`c_tail = 0` disables
+        # truncation), fourth-order relative-subsaturation transition scale
+        # `ΔRH_trans` [-], and static-stability scale `γ_crit` [K/m] of the
+        # inversion gate.
+        sgs_env_updraft_tail_truncation_coeff = FT(0),
+        sgs_env_subsat_rh_transition = FT(0.03),
+        sgs_env_subsat_gamma_crit = FT(0.0115),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`floor_displacement_length`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],

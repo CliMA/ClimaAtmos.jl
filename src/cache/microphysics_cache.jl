@@ -1060,6 +1060,100 @@ saturation-excess mean `mu_S` are first materialized in scratch fields by one
 column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
 arguments of `microphysics_tendencies_1m`.
 """
+@inline function _set_env_mp_velocity_column!(
+    ᶜw⁰_mp,
+    ᶜu⁰,
+    Yc,
+    ᶜρʲs,
+    ᶜuʲs,
+    ᶜT⁰,
+    ᶜρ⁰,
+    ᶜq_tot_nonneg⁰,
+    ᶜq_lcl⁰,
+    ᶜq_icl⁰,
+    ᶜq_rai⁰,
+    ᶜq_sno⁰,
+    ᶜsgs_moments,
+    ᶠ∂θli∂z,
+    thp,
+    c_w,
+    w_d,
+    a_min,
+    rh_trans,
+    gamma_crit,
+    draft_indices,
+    ::Val{use_gamma},
+) where {use_gamma}
+    FT = eltype(ᶜw⁰_mp)
+    zero_FT = zero(FT)
+    @. ᶜw⁰_mp = w_component(WVec(ᶜu⁰))
+    ᶜa_up = @. zero_FT + zero(Yc.ρ)
+    ᶜaw_up = @. zero_FT + zero(Yc.ρ)
+    for j in draft_indices
+        ᶜaʲ = @. max(zero_FT, draft_area(Yc.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+        @. ᶜa_up += ᶜaʲ
+        @. ᶜaw_up += ᶜaʲ * max(zero_FT, w_component(WVec(ᶜuʲs.:($$j))))
+    end
+    ᶜw_conv_vel = @inline @. lazy($(c_w) * ᶜaw_up / max(ᶜa_up, $(a_min)) + $(w_d))
+    ᶜq_cloud⁰ = @inline @. lazy(
+        max(
+            zero_FT,
+            ᶜq_tot_nonneg⁰ - max(zero_FT, ᶜq_rai⁰) - max(zero_FT, ᶜq_sno⁰),
+        ),
+    )
+    if use_gamma
+        nc = Spaces.nlevels(axes(ᶜw⁰_mp))
+        ᶜθ_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(
+                Fields.level(ᶠ∂θli∂z, 1 + Fields.half),
+            ),
+        )
+        ᶜθ_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+        )
+        @. ᶜw⁰_mp = max(
+            ᶜw⁰_mp,
+            max(
+                env_detrained_condensate_fraction(
+                    ᶜq_lcl⁰,
+                    ᶜq_icl⁰,
+                    ᶜsgs_moments.sigma_S,
+                    ᶜsgs_moments.λ_eq,
+                ),
+                _env_subsat_cu_switch(
+                    $(thp),
+                    ᶜT⁰,
+                    ᶜρ⁰,
+                    ᶜq_cloud⁰,
+                    $(rh_trans),
+                    max(ᶜθ_below(ᶠ∂θli∂z), ᶜθ_above(ᶠ∂θli∂z)),
+                    $(gamma_crit),
+                ),
+            ) * ᶜw_conv_vel,
+        )
+    else
+        @. ᶜw⁰_mp = max(
+            ᶜw⁰_mp,
+            max(
+                env_detrained_condensate_fraction(
+                    ᶜq_lcl⁰,
+                    ᶜq_icl⁰,
+                    ᶜsgs_moments.sigma_S,
+                    ᶜsgs_moments.λ_eq,
+                ),
+                _env_subsat_switch(
+                    $(thp),
+                    ᶜT⁰,
+                    ᶜρ⁰,
+                    ᶜq_cloud⁰,
+                    $(rh_trans),
+                ),
+            ) * ᶜw_conv_vel,
+        )
+    end
+    return nothing
+end
+
 function set_environment_1m_tendency!(
     ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
 )
@@ -1104,7 +1198,58 @@ function set_environment_1m_tendency!(
         end
     end
 
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
+    # Vertical velocity of the environment warm-rain autoconversion. The
+    # environment descends by mass continuity wherever updrafts rise, so its own
+    # velocity puts `Kessler1M` at the quiescent (stratiform) threshold and
+    # timescale everywhere, including where environment condensate was detrained
+    # from convective updrafts. In convective regimes, marked by the larger of
+    # the non-equilibrium condensate excess fraction `f_neq`
+    # (`env_detrained_condensate_fraction`) and the subsaturated-cumulus switch
+    # `w_cu` (`_env_subsat_cu_switch`), environment condensate sees the velocity
+    # of the drafts that formed it,
+    #
+    #     w_conv = c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d,
+    #     w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_conv),
+    #
+    # the mass-flux-weighted updraft velocity of the cell with weight `c_w`,
+    # plus the reference velocity `w_d` of drafts whose detrained condensate has
+    # outlived them. In a stratocumulus deck the condensate is in equilibrium
+    # (`f_neq ≈ 0`) and the subsaturation/stability switch vanishes
+    # (`w_cu ≈ 0`), so the environment stays stratiform; under cumulus the
+    # detrained condensate rains at convective rates. `ᶜtemp_scalar_7` holds
+    # `ᶜw⁰_mp` so `ᶜλ⁰` (`_6`) and `ᶜmu_S⁰` (`temp_data`) stay intact for
+    # quadrature.
+    FT = eltype(p.params)
+    c_w = FT(CAP.sgs_env_autoconversion_updraft_velocity_weight(p.params))
+    w_d = FT(CAP.sgs_env_autoconversion_detrained_velocity(p.params))
+    ᶜw⁰_air =
+        if isempty(mode_args) &&
+           (c_w > zero(FT) || w_d > zero(FT)) &&
+           !not_quadrature(sgs_quad)
+            (; ᶜsgs_moments, ᶜρʲs, ᶜuʲs) = p.precomputed
+            ᶜw⁰_mp = p.scratch.ᶜtemp_scalar_7
+            a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
+            rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
+            gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+            use_gamma = gamma_crit > zero(FT) && hasproperty(p.precomputed, :ᶠ∂θli∂z)
+            ᶠ∂θli∂z_or_dummy = use_gamma ? p.precomputed.ᶠ∂θli∂z : Y.c.ρ
+            draft_indices = StaticOneTo(n_mass_flux_subdomains(tm))
+            DataLayouts.foreach_column(
+                ᶜw⁰_mp, ᶜu⁰, Y.c, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰,
+                ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜsgs_moments, ᶠ∂θli∂z_or_dummy,
+            ) do ᶜw⁰_mp, ᶜu⁰, Yc, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜsgs_moments, ᶠ∂θli∂z
+                _set_env_mp_velocity_column!(
+                    ᶜw⁰_mp, ᶜu⁰, Yc, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰,
+                    ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜsgs_moments, ᶠ∂θli∂z,
+                    thp, c_w, w_d, a_min, rh_trans, gamma_crit, draft_indices,
+                    Val(use_gamma),
+                )
+            end
+            ᶜw⁰_mp
+        else
+            @. lazy(w_component(WVec(ᶜu⁰)))
+        end
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
@@ -1540,6 +1685,61 @@ end
 ###
 ### 1 Moment Microphysics
 ###
+
+"""
+    env_detrained_condensate_fraction(
+        thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, sigma_S, c,
+    )
+    env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+
+Fraction `f_neq ∈ [0, 1]` of the environment cloud condensate
+`q_c = q_lcl + q_icl` in excess of the equilibrium condensate `q_c_eq` that the
+environment's own saturation-excess PDF supports:
+
+    f_neq = clamp((q_c − q_c_eq) / q_c, 0, 1),
+
+and `0` without condensate. The 10-argument method evaluates
+`q_c_eq = equilibrium_condensate(μ_S, σ_S, 0, 0, c)` directly from the
+cloud-available mean excess `μ_S = q_tot − q_rai − q_sno − q_sat(T, ρ)`; the
+4-argument method reconstructs `q_c_eq` from the precomputed equilibrium
+Lagrange multiplier `λ_eq` (`ᶜsgs_moments.λ_eq`, which includes
+subsaturated-environment tail truncation and curvature). Condensate in excess
+of equilibrium was detrained from updrafts or left behind by them, so `f_neq`
+marks environment condensate of convective origin.
+"""
+@inline function env_detrained_condensate_fraction(
+    thp,
+    ρ,
+    T,
+    q_tot,
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+    sigma_S,
+    c,
+)
+    FT = typeof(ρ)
+    q_c = max(FT(0), q_lcl) + max(FT(0), q_icl)
+    q_c > FT(0) || return FT(0)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    mu_S = q_tot - max(FT(0), q_rai) - max(FT(0), q_sno) - q_sat
+    q_c_eq = equilibrium_condensate(mu_S, FT(sigma_S), FT(0), FT(0), c)
+    return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
+end
+
+@inline function env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+    FT = typeof(sigma_S)
+    q_c = max(FT(0), FT(q_lcl)) + max(FT(0), FT(q_icl))
+    q_c > FT(0) || return FT(0)
+    λ_eq_finite = ifelse(isfinite(λ_eq), FT(λ_eq), zero(FT))
+    q_c_eq = ifelse(
+        isfinite(λ_eq),
+        truncated_gaussian_condensate(λ_eq_finite, FT(sigma_S)),
+        zero(FT),
+    )
+    return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
+end
 
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
