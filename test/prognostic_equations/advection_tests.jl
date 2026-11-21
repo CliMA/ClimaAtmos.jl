@@ -60,6 +60,9 @@ include("../test_helpers.jl")
     # ρa solve.
     fill!(Y.f.sgsʲs.:(1).u₃, Geometry.Covariant3Vector(FT(0)))
     fill!(p.precomputed.ᶠu³ʲs.:(1), Geometry.Contravariant3Vector(FT(0)))
+    # The Jacobian advects the updraft equations with `ᶠwʲ_maxs`, which
+    # `update_jacobian!` fills and the tests below bypass.
+    fill!(p.precomputed.ᶠwʲ_maxs.:(1), FT(0))
     for name in (
         :ᶜρ_diffʲs,
         :ᶜentr_vel_scaleʲs,
