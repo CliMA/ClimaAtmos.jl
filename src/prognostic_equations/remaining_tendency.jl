@@ -7,12 +7,14 @@ Calls `prep_tracer_hyperdiffusion_tendency!` and `prep_hyperdiffusion_tendency!`
 to fill the `∇²` cache fields, DSSes them (via `dss_hyperdiffusion_tendency_pairs`)
 when the space requires DSS and hyperdiffusion is active, and then calls
 `apply_tracer_hyperdiffusion_tendency!` and `apply_hyperdiffusion_tendency!`.
+Does nothing on column spaces, which have no horizontal discretization.
 
 Tracer tendencies accumulate into `Yₜ_lim`, which is subject to the tracer
 limiters, while momentum, energy, and TKE tendencies accumulate into `Yₜ`. Called
 from `remaining_tendency!`.
 """
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    iscolumn(axes(Y.c)) && return nothing
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if do_dss(axes(Y.c)) && !isnothing(p.atmos.hyperdiff)
@@ -168,19 +170,21 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     viscous_sponge_tendency!(Yₜ, Y, p)
 
-    # Held Suarez tendencies
-    @. Yₜ.c.uₕ += hs_tendency_uₕ
-    @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
+    # Held Suarez tendencies. The tendency of an inactive forcing is a
+    # `NullBroadcasted`, whose sum with a field is a broadcast of the field onto
+    # itself, so it is skipped.
+    hs_tendency_uₕ isa NullBroadcasted || @. Yₜ.c.uₕ += hs_tendency_uₕ
+    hs_tendency_ρe_tot isa NullBroadcasted || @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
 
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
 
-    @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
+    bc_lsa_tend_ρe_tot isa NullBroadcasted || @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
     if microphysics_model isa MoistMicrophysics
         bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
-        @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
+        bc_lsa_tend_ρq_tot isa NullBroadcasted || @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
     end
 
-    @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
+    edmf_cor_tend_uₕ isa NullBroadcasted || @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
