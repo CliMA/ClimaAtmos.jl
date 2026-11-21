@@ -657,8 +657,10 @@ detrainment, mass source of sedimentation, and bounds restoring are left to
 Newton. With `u³ = max(0, ᶠuₕ³ + u₃)` on the faces and `f` the detrainment
 prefactor, backward Euler reads
 
-    ρa[i] (1/dtγ + f[i] J⁺u³⁺ / J[i])
-        = ρa_old[i]/dtγ + δ_{i,1} S_sfc + f[i] J⁻u³⁻ / J[i] ρa[i−1],
+```
+ρa[i] (1/dtγ + f[i] J⁺u³⁺ / J[i])
+    = ρa_old[i]/dtγ + δ_{i,1} S_sfc + f[i] J⁻u³⁻ / J[i] ρa[i−1],
+```
 
 which is swept bottom-to-top with `Operators.column_accumulate!`, with no
 inflow through the surface. The prefactor and the area limiters inside it are
