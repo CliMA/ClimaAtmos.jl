@@ -1,4 +1,4 @@
-478
+479
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+479
+- Parameter values are constant-folded during compilation (`ClimaParams.@params`),
+  which changes the deep convection column (TRMM) at the level of roundoff on
+  x86 CPUs; it is bitwise unchanged on ARM CPUs.
+
 478
 - Update to CloudMicrophysics 0.51: 1-moment rain collisions ramp rain freezing below freezing (`temperature_rain_collision_snow`), melt collected cloud ice above freezing (`S_accr_melt_icl_rai`), and melt snow in rain collisions only thermally; the other 1-moment tendencies change by roundoff.
 

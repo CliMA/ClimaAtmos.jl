@@ -49,3 +49,5 @@ runs:
         restore-keys: |
           ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}-
           ${{ inputs.prefix }}-${{ inputs.cpu-target }}-
+    - shell: bash
+      run: julia --color=yes -e 'using Pkg; Pkg.Registry.update()'

@@ -53,7 +53,7 @@ the protocol's three prescribed SSTs.
     the final state of the small-domain run. RCEMIP-I has no such staging — all
     domains are initialized directly from the sounding.
 """
-struct RCEMIPProfile{E <: RCEMIPExperiment, FT}
+CP.@params struct RCEMIPProfile{E <: RCEMIPExperiment, FT}
     experiment::E
     temperature::FT
     humidity::FT
