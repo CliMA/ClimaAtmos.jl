@@ -74,32 +74,22 @@ Return `(b_imp_stages, n_imp_stages)`: a fixed-size `SVector{8, FT}` containing
 the implicit Butcher tableau stage weights `FT(b_imp[i])` for every implicit stage
 `i` (`a_imp[i, i] ≠ 0`) of `ode_algo` padded with zeros, and the count `n_imp_stages::Int`
 of implicit stages. Returns `(zero(SVector{8, FT}), 0)` when `ode_algo` is not
-an `IMEXAlgorithm`. Used by `build_cache` to accumulate stage-weighted surface
+an `IMEXAlgorithm` or has no Newton method. Used by `build_cache` to accumulate stage-weighted surface
 precipitation fluxes across implicit stages with a solver-invariant scratch layout.
 
 A stage with `a_imp[i, i] == 0` and `b_imp[i] ≠ 0` (the first stage of the
-`SSP` tableaus) evaluates its implicit tendency explicitly, outside the
-`T_post_imp!` hook that samples the sedimentation flux. Its weight is
+`SSP` tableaus) evaluates its implicit tendency explicitly, so it is not
+sampled by `accumulate_stage_precipitation_surface_fluxes!`. Its weight is
 redistributed over the sampled stages in proportion to their own weights, so the
 diagnosed flux keeps the step's total weight, and a warning names the
 approximation.
 """
 imex_b_imp_stages(_, ::Type{FT}) where {FT} = (zero(SVector{8, FT}), 0)
 function imex_b_imp_stages(alg::CTS.IMEXAlgorithm, ::Type{FT}) where {FT}
-    nm = alg.newtons_method
-    if isnothing(nm) ||
-       !isnothing(nm.krylov_method) ||
-       !isnothing(nm.line_search) ||
-       isnothing(imex_gamma(alg)) ||
-       !(
-           nm.update_j == CTS.UpdateEvery(CTS.NewNewtonIteration) ||
-           (
-               nm.update_j == CTS.UpdateEvery(CTS.NewNewtonSolve) &&
-               nm.max_iters == 1
-           )
-       )
-        return (zero(SVector{8, FT}), 0)
-    end
+    # The accumulator evaluates F(U*) directly at each Newton-solved stage
+    # value, so it does not depend on how the Jacobian is updated or how the
+    # linear system is solved; it only needs implicit stages.
+    isnothing(alg.newtons_method) && return (zero(SVector{8, FT}), 0)
     a = alg.tableau.a_imp.coeffs
     b = alg.tableau.b_imp.coeffs
     s = size(a, 1)
@@ -283,11 +273,9 @@ Passes the tendency and stage hooks to a `ClimaODEFunction`: the explicit and
 limited tendencies, the implicit tendency with its Jacobian (both replaced by
 `fully_explicit_tendency!` when `prescribed_flow` is set, so sound waves are not
 treated implicitly), the implicit-stage initializer
-(`initialize_implicit_stage_problem!`), the post-Newton stage hook
-(`post_newton_stage_update!`, skipped when `T_imp!` is absent or
-`p.dtγ == 0`), the cache and
-implicit-cache updates, the limiter, DSS, and the state constraints. The cache
-and constraint update frequencies come from `update_cache_signal_handler` and
+(`initialize_implicit_stage_problem!`), the cache and implicit-cache updates,
+the limiter, DSS, and the state constraints. The cache and constraint update
+frequencies come from `update_cache_signal_handler` and
 `update_constrain_state_signal_handler`.
 
 # Returns
@@ -324,51 +312,6 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             )
         end
     end
-    # With "dss", `constrain_state!` runs both before `temp .= U` and after
-    # `initialize_imp!`; when `warm_start_grid_mean_tracers!` moves the
-    # grid-mean condensates of the guess (`PrognosticEDMFX`, 1M, Picard rounds
-    # > 0), the second pass moves `temp + Δ` when negative, altering `R(U^g)`
-    # relative to `temp` so a single-iteration Newton solve drains the excess.
-    if update_constrain_state_every == "dss" &&
-       isnothing(prescribed_flow) &&
-       !iszero(p.dtγ) &&
-       atmos.turbconv_model isa PrognosticEDMFX &&
-       atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
-       atmos.edmfx_model.updraft_picard_rounds > 0
-        @warn(
-            "`update_constrain_state_every = dss` re-clamps the warm-started \
-             grid-mean condensates of the Newton guess after the \
-             stage-entering state is copied, which can produce an upward \
-             surface precipitation flux; use `stage` or `step`."
-        )
-    end
-    if isnothing(prescribed_flow) && !iszero(p.dtγ)
-        if atmos.numerics.energy_humidity_upwinding == Val(:none) &&
-           atmos.diff_mode != Implicit()
-            @warn(
-                "`energy_humidity_upwinding = none` skips the post-Newton \
-                 dissipation, leaving vertical advection of `e_tot - Φ`, \
-                 `q_tot`, and any condensates forward-Euler central."
-            )
-        end
-        if atmos.numerics.energy_humidity_upwinding != Val(:none) &&
-           ode_algo isa CTS.IMEXAlgorithm &&
-           !isnothing(ode_algo.newtons_method)
-            nm = ode_algo.newtons_method
-            if (
-                jacobian isa ManualSparseJacobian &&
-                isnothing(nm.krylov_method) &&
-                nm.max_iters > 1
-            )
-                @warn(
-                    "With `ManualSparseJacobian` and `max_newton_iters_ode > 1`, \
-                     additional Newton iterations iterate the explicit central \
-                     scalar step while the `+2 C_γ` dissipation weight is \
-                     disabled (`compensate_explicit_scalar_advection = false`)."
-                )
-            end
-        end
-    end
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
@@ -389,18 +332,8 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # `T_post_imp!` applies the implicit upwind dissipation and the
-        # high-order correction of the vertical transport at the solved
-        # velocity, provided `T_imp!` is active and the tableau has a single-γ
-        # implicit stage (`p.dtγ > 0`); otherwise `nothing`, so CTS skips the
-        # post-Newton path (and its `cache_imp!` refresh) at every stage. Fully
-        # explicit tableaus such as `SSP33ShuOsher` have no implicit stage to
-        # correct.
-        T_post_imp! =
-            (isnothing(T_imp!) || iszero(p.dtγ)) ? nothing :
-            post_newton_stage_update!
         tendency_function = CTS.ClimaODEFunction(;
-            T_exp_T_lim!, T_imp!, T_post_imp!,
+            T_exp_T_lim!, T_imp!,
             cache! = set_precomputed_quantities_deferred!, cache_imp!,
             lim! = limiters_func!,
             dss!, constrain_state!,

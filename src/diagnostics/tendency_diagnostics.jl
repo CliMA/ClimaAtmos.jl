@@ -33,7 +33,6 @@ import ClimaCore.Operators
 
 # Tendency functions live in the parent ClimaAtmos module.
 import ..implicit_vertical_advection_tendency!
-import ..correct_implicit_advection_tendency!
 import ..horizontal_dynamics_tendency!
 import ..horizontal_tracer_advection_tendency!
 import ..explicit_vertical_advection_tendency!
@@ -48,8 +47,6 @@ import ..edmfx_entr_detr_tendency!
 import ..edmfx_sgs_mass_flux_tendency!
 import ..edmfx_boundary_condition_tendency!
 import ..pressure_work_tendency!
-# Used by the aggregate ρa diagnostic below: this function reads the
-# analytically pre-aggregated `ᶜρa_tendencyʲs` from `p.precomputed`.
 import ..sgs_ρa_implicit_tendency!
 import ..do_dss
 
@@ -78,9 +75,6 @@ end
 # contribution into `Yₜ`. The caller is responsible for zeroing `Yₜ` first.
 
 _iva_wrap!(Yₜ, Y, p, t) = implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-
-_corrimp_wrap!(Yₜ, Y, p, t) =
-    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
 _hor_dyn_wrap!(Yₜ, Y, p, t) = horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
@@ -138,10 +132,8 @@ _pwork_wrap!(Yₜ, Y, p, t) = pressure_work_tendency!(
     Yₜ, Y, p, t, p.atmos.turbconv_model,
 )
 
-# Aggregate wrapper for updraft ρa: `sgs_ρa_implicit_tendency!` reads the
-# analytically pre-aggregated `ᶜρa_tendencyʲs` from `p.precomputed`, which is
-# not populated at `t = 0` (would give huge spurious values). We treat that
-# initial sample as zero.
+# Aggregate wrapper for updraft ρa: skip the t = 0 sample (before the implicit
+# cache is populated) and treat it as zero.
 function _aggregate_wrap!(Yₜ, Y, p, t)
     iszero(t) && return Yₜ
     return sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
@@ -149,7 +141,6 @@ end
 
 const _PROCESS_WRAPPERS = (
     iva = _iva_wrap!,
-    corrimp = _corrimp_wrap!,
     hor_dyn = _hor_dyn_wrap!,
     hor_tracer_adv = _hor_tracer_adv_wrap!,
     exp_vadv = _exp_vadv_wrap!,
@@ -225,11 +216,11 @@ const _GRID_FIELDS = (
             :additional)),
     (name = :ρe_tot, short = "rhoe", units = "W m^-3",
         long = "total air energy",
-        processes = (:iva, :corrimp, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
+        processes = (:iva, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
             :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_tot, short = "rhoqt", units = "kg m^-3 s^-1",
         long = "total air water",
-        processes = (:iva, :corrimp, :hor_tracer_adv, :exp_vadv, :vdiff,
+        processes = (:iva, :hor_tracer_adv, :exp_vadv, :vdiff,
             :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_lcl, short = "rhoqlcl", units = "kg m^-3 s^-1",
         long = "cloud liquid mass",
@@ -275,8 +266,7 @@ const _SGS_FIELDS = (
         processes = (:sgs_vadv, :entrdetr, :edmf_diff, :edmf_bc, :microphys,
             :additional)),
     # Aggregate updraft ρa tendency — the single `:aggregate` "process"
-    # wraps `sgs_ρa_implicit_tendency!`, which reads the analytically
-    # pre-aggregated `ᶜρa_tendencyʲs` from `p.precomputed`.
+    # wraps `sgs_ρa_implicit_tendency!`.
     (name = :ρa, short = "sgsrhoa", units = "kg m^-3 s^-1",
         long = "updraft ρa",
         processes = (:aggregate,)),

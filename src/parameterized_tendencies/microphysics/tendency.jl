@@ -100,11 +100,8 @@ updated: `ρaʲ` loses the removed mass, `qₜʲ` receives the `(1 - qₜʲ)` co
 from the mass-removal rate to a specific-humidity tendency, and `mseʲ` receives
 `dq_tot_dt (e_tot_hlpr - mseʲ)`. The removed condensate carries `e_tot_hlpr`,
 its enthalpy plus `Φ`, so the updraft loses the static energy that the grid mean
-loses, and `Tʲ` is unchanged when the condensate leaves at `Tʲ`. Under implicit
-microphysics tendencies, `sgs_ρa_implicit_tendency!` overwrites the `ρaʲ`
-tendency with the cached stage tendency, and
-`solve_sgs_ρa_implicit_stage_analytic!` removes the mass at the rate
-`dq_tot_dt`.
+loses, and `Tʲ` is unchanged when the condensate leaves at `Tʲ`. Under implicit microphysics tendencies, `sgs_ρa_implicit_tendency!` removes
+the mass at the rate `dq_tot_dt` through the `r_mass` term.
 """
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,

@@ -41,7 +41,7 @@ include("../test_helpers.jl")
             "z_stretch" => false,
             "dt" => "10secs",
             "t_end" => "10secs",
-            "ode_algo" => "SSP333",
+            "ode_algo" => "ARS343",
             "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
@@ -60,11 +60,13 @@ include("../test_helpers.jl")
     # ρa solve.
     fill!(Y.f.sgsʲs.:(1).u₃, Geometry.Covariant3Vector(FT(0)))
     fill!(p.precomputed.ᶠu³ʲs.:(1), Geometry.Contravariant3Vector(FT(0)))
+    # The Jacobian advects the updraft equations with `ᶠwʲ_maxs`, which
+    # `update_jacobian!` fills and the tests below bypass.
+    fill!(p.precomputed.ᶠwʲ_maxs.:(1), FT(0))
     for name in (
         :ᶜρ_diffʲs,
         :ᶜentr_vel_scaleʲs,
         :ᶜentr_nonvel_rateʲs,
-        :ᶜarea_bounding_entr_detrʲs,
         :sfc_mass_flux_sourceʲs,
     )
         fill!(getproperty(p.precomputed, name).:(1), FT(0))
@@ -253,15 +255,13 @@ include("../test_helpers.jl")
         end
         sedimentation_mass_source!(S)
 
-        # The analytic ρa solve applies the rate at the stage-start area, so
-        # the stage source is r ρa_new.
-        ρa_old = copy(sgsʲ.ρa)
-        CA.updraft_sedimentation_rate!(r, Y, p, 1, dtγ)
-        r_old = copy(arr(r))
-        CA.solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
-        @test (arr(sgsʲ.ρa) .- arr(ρa_old)) ./ dtγ ≈ r_old .* arr(sgsʲ.ρa) rtol =
-            1e-8
-        @. sgsʲ.ρa = ρa_old
+        # With every other ρa process zeroed, the ρa tendency is the
+        # sedimentation mass source r ρa over the stage window p.dtγ.
+        CA.updraft_sedimentation_rate!(r, Y, p, 1, p.dtγ)
+        fill!(Yₜ, FT(0))
+        CA.sgs_ρa_implicit_tendency!(Yₜ, Y, p, FT(0), turbconv_model)
+        @test maximum(abs, arr(r)) > 0
+        @test arr(Yₜ.c.sgsʲs.:(1).ρa) ≈ arr(r) .* arr(sgsʲ.ρa) rtol = 1e-10
 
         # The (mse, mse), (mse, q_μ), and (q_tot, q_μ) blocks match central
         # differences of the tendencies in a smooth direction, with Tʲ
@@ -433,7 +433,6 @@ end
         :ᶜρ_diffʲs,
         :ᶜentr_vel_scaleʲs,
         :ᶜentr_nonvel_rateʲs,
-        :ᶜarea_bounding_entr_detrʲs,
         :sfc_mass_flux_sourceʲs,
     )
         fill!(getproperty(p.precomputed, name).:(1), FT(0))

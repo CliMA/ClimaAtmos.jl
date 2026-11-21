@@ -340,7 +340,7 @@ The fallback method is a no-op for turbulence-convection models other than
     microphysics species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and for 2M also `n_lcl`
     and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
     via `updraft_sedimentation`. The condensate mass tendencies are a source
-    of `ρaʲ` (`solve_sgs_ρa_implicit_stage_analytic!`), so `mse`, `q_tot`, and
+    of `ρaʲ` (via `sgs_ρa_implicit_tendency!` in Newton), so `mse`, `q_tot`, and
     every SGS tracer also receive the dilution `-χ Σ_μ vtt_μ / ρaʲ` by the
     sedimented mass. This path supports a single updraft.
 
@@ -470,7 +470,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
 
             # Sedimentation of the condensate masses. Each species' flux
-            # convergence `vtt` is a source of ρaʲ (in the analytic ρa solve), so an
+            # convergence `vtt` is a source of ρaʲ (in `sgs_ρa_implicit_tendency!`), so an
             # intensive updraft scalar χ receives its own source minus the dilution
             # χ Σ_μ vtt_μ / ρaʲ by the sedimented mass. The mse source is the flux
             # convergence of q_μ (h_μ(Tʲ) + Φ), with laterally entrained environment
@@ -717,11 +717,15 @@ regularized inverse `specific(1, ρa, 0, ρʲ, turbconv_model)`. `M_μ` is upper
 column is solved in one top-to-bottom sweep. The Newton solve takes the same
 linear step for the sedimentation of the condensate, so `r ρaʲ` is the
 sedimented mass that dilutes the updraft scalars there, at any Courant number.
-`solve_sgs_ρa_implicit_stage_analytic!` applies it in the `ρa` recurrence.
+`sgs_ρa_implicit_tendency!` applies it in the `ρa` Newton residual.
 
-Row `i` of the step is solved as `Δq_μ[i] = b_μ[i] + c_μ[i] Δq_μ[i+1]`. The
-species are taken in pairs: a column loop writes the offset `b` and the factor
-`c` of both species of a pair, and one sweep solves both and adds their `Δq / dtγ` to `ᶜr`, in the order of `sedimenting_sgs_mass_names`. Writes
+The step is linear, so it is solved for the rate `r_μ = Δq_μ / dtγ` directly,
+`(I - ρ̂⁻¹ M_μ) r_μ = ρ̂⁻¹ vtt_μ`, which also holds at `dtγ = 0` (explicit
+schemes), where `M_μ` vanishes and `r_μ = ρ̂⁻¹ vtt_μ`. Row `i` is solved as
+`r_μ[i] = b_μ[i] + c_μ[i] r_μ[i+1]`. The species are taken in pairs: a column
+loop writes the offset `b` and the factor `c` of both species of a pair, and
+one sweep solves both and adds their `r_μ` to `ᶜr`, in the order of
+`sedimenting_sgs_mass_names`. Writes
 `ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `ᶜtemp_scalar_4` in
 `p.scratch`, and the running column max of the terminal velocity of cloud ice,
 rain, and snow (the face flux velocity of `M_μ`) of the first and second species
@@ -791,9 +795,9 @@ function sedimentation_rate_pair!(
         ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, pair, pair_coefficients,
     ) do ᶜρaʲ, ᶜρʲ, ᶠ∂ξ³∂x³, pair, pair_coefficients
         # The offset `rhs / diagonal` and the factor `-superdiagonal / diagonal` of row i
-        # of the backward-Euler sedimentation step of each species, with right-hand side
-        # `dtγ ρ̂⁻¹ vtt`, diagonal `1 - ρ̂⁻¹ M[i, i]`, and superdiagonal `-ρ̂⁻¹ M[i, i+1]`,
-        # written to its coefficients
+        # of the backward-Euler sedimentation step of each species, solved for the rate
+        # Δq / dtγ, with right-hand side `ρ̂⁻¹ vtt`, diagonal `1 - ρ̂⁻¹ M[i, i]`, and
+        # superdiagonal `-ρ̂⁻¹ M[i, i+1]`, written to its coefficients
         ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
         ᶠJ = Fields.local_geometry_field(axes(ᶠ∂ξ³∂x³)).J
         ᶜρaʲ = register_copy(ᶜρaʲ)
@@ -843,12 +847,12 @@ function sedimentation_rate_pair!(
                 -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
             ) + DiagonalMatrixRow(ᶜlateral_coeff)
             ᶜdiagonal = @. 1 - ᶜinv_ρ̂ * getindex(ᶜM, 0)
-            @. ᶜoffset = dtγ * ᶜinv_ρ̂ * ᶜvtt / ᶜdiagonal
+            @. ᶜoffset = ᶜinv_ρ̂ * ᶜvtt / ᶜdiagonal
             @. ᶜfactor = ᶜinv_ρ̂ * getindex(ᶜM, 1) / ᶜdiagonal
         end
     end
-    # One top-to-bottom sweep for the species of the pair, starting with Δq = 0 above the
-    # top cell, that writes `ᶜr_prev + Σ_μ Δq_μ / dtγ` to `ᶜr`
+    # One top-to-bottom sweep for the species of the pair, starting with a zero rate
+    # above the top cell, that writes `ᶜr_prev + Σ_μ r_μ` to `ᶜr`
     rows = unrolled_map(c -> (@. lazy(tuple(c...))), pair_coefficients)
     input = @. lazy(tuple(tuple(rows...), $(something(ᶜr_prev, zero_FT))))
     Operators.column_accumulate!(
@@ -857,11 +861,11 @@ function sedimentation_rate_pair!(
         init = (unrolled_map(Returns(zero_FT), pair_coefficients), zero_FT),
         reverse = true,
         transform = last,
-    ) do (Δq_above, _), (rows, r_prev)
-        Δq = unrolled_map(Δq_above, rows) do Δqμ_above, (offset, factor)
-            offset + factor * Δqμ_above
+    ) do (r_above, _), (rows, r_prev)
+        rμ = unrolled_map(r_above, rows) do rμ_above, (offset, factor)
+            offset + factor * rμ_above
         end
-        return (Δq, unrolled_reduce((r, Δqμ) -> r + Δqμ / dtγ, Δq, r_prev))
+        return (rμ, unrolled_reduce(+, rμ, r_prev))
     end
     return nothing
 end
