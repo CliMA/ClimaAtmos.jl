@@ -102,6 +102,10 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
+            # Implicit-solver scratch, written by update_jacobian! and at the
+            # start of each implicit stage (no step is taken in this case)
+            :ᶠwʲ_maxs,
+            :ᶜsgsʲs_stage_snapshot,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
