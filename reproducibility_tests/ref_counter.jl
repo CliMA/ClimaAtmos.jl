@@ -1,4 +1,4 @@
-477
+478
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+478
+- Update to CloudMicrophysics 0.51: 1-moment rain collisions ramp rain freezing below freezing (`temperature_rain_collision_snow`), melt collected cloud ice above freezing (`S_accr_melt_icl_rai`), and melt snow in rain collisions only thermally; the other 1-moment tendencies change by roundoff.
+
 477
 - Switching off snow deposition growth when in clouds
 

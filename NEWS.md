@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
+  In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
+  temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice
+  melts into rain at and above freezing, and snow melts only by the sensible heat of the
+  collected rain. In 1M process diagnostics (`mp1m_`, `mp1mup_`, `mp1men_`),
+  `*_S_accr_rai_sno_warm` is removed and `*_S_accr_melt_icl_rai` is added.
+- ![][badge-🚀performance] The parameter structs of CloudMicrophysics 0.51 are defined with
+  `ClimaParams.@params`, so that they hold their values in a type parameter and GPU kernels do
+  not allocate any registers or parameter memory for them. Its 1-moment tendencies do less work
+  per point.
 
 0.43.0
 ------
