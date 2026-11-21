@@ -1793,7 +1793,9 @@ Dispatch on `microphysics_model`:
     call of a pending stage and advances the counter, and skips every other
     `cache!` call (build_cache, init, explicit-diagonal stages, end of step,
     callbacks). Only after all implicit stages have been accumulated does the
-    guard check pass and the weighted sum is used.
+    guard check pass and the weighted sum is used; before the first step,
+    `seed_precip_stage_accumulator!` sets the counter and the accumulators to
+    the pointwise fluxes of the initial state, so the check passes with those.
   - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
     `ρq_rim`, and `ρb_rim` are not yet accounted for.
   - Default: no-op.
@@ -1866,6 +1868,41 @@ evaporation).
 function precipitation_evaporation_scale(sfc_flux, col_evap)
     production = max(-sfc_flux, zero(sfc_flux))
     return ifelse(col_evap > production, production / col_evap, one(sfc_flux))
+end
+
+"""
+    seed_precip_stage_accumulator!(p)
+
+Make a freshly built cache look like the cache at a step boundary: copy the
+surface precipitation fluxes of the initial state (`p.precomputed`, evaluated
+pointwise by the initial `set_precomputed_quantities!` call) into the
+stage-weighted accumulators and set `p.scratch.precip_stage_idx[]` to
+`n_imp_stages`, the value it holds at the end of every step. The accumulators
+then hold the fluxes of the last completed step, which at the initial time are
+the fluxes of the initial state, so every `cache!` call before the first
+implicit stage gives the same surface fluxes as the pointwise evaluation, and
+the first implicit stage resets the counter as usual. A checkpoint, which is
+taken at a step boundary, then holds the same counter as a freshly built cache,
+so a restart that checks the counter for consistency (as ClimaCoupler does)
+accepts it, and the restored accumulators give the surface fluxes of the
+checkpointed step. Called once by `build_cache`; a no-op when the accumulator is
+not active.
+"""
+function seed_precip_stage_accumulator!(p)
+    has_precip_stage_accumulator(p) || return nothing
+    (; surface_rain_flux, surface_snow_flux, col_integrated_precip_energy_tendency) =
+        p.precomputed
+    (;
+        surface_rain_flux_accum,
+        surface_snow_flux_accum,
+        col_integrated_precip_energy_tendency_accum,
+    ) = p.scratch
+    @. surface_rain_flux_accum = surface_rain_flux
+    @. surface_snow_flux_accum = surface_snow_flux
+    @. col_integrated_precip_energy_tendency_accum =
+        col_integrated_precip_energy_tendency
+    p.scratch.precip_stage_idx[] = p.scratch.n_imp_stages
+    return nothing
 end
 
 """

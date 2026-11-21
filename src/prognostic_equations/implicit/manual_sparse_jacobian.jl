@@ -2135,14 +2135,8 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     MatrixFields.has_field(Y, @name(f.sgsʲs.:(1).u₃)) || return nothing
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     sgs_u₃ʲ_col(χ_name) = matrix[sgs_state_name(χ_name), @name(f.sgsʲs.:(1).u₃)]
-    # The upwinded draft scalars (sedimenting tracers, q_tot, mse) and the
-    # passive tracers share the same block form.
-    u₃ʲ_names = (
-        sedimenting_sgs_tracer_names(Y)...,
-        @name(q_tot),
-        @name(mse),
-        passive_sgs_tracer_names(Y)...,
-    )
+    # All upwinded draft scalars share the same block form.
+    u₃ʲ_names = advected_sgs_scalar_names(Y)
     DataLayouts.foreach_column(
         Y.c,
         ᶠgⁱʲ,
@@ -2818,9 +2812,11 @@ The implicit mass flux is the difference-form correction
 `-∂ᵥ(ρʲaʲ(u³ʲ - u³)(χʲ - χ))`, so its derivatives with respect to the
 grid-mean thermodynamic state (through `χ`, `p`, and `h_tot`), with respect to
 the updraft scalars `mseʲ`, `q_totʲ`, and the updraft tracers, and with respect
-to `f.u₃` are all accumulated here. The derivatives are linearized with the
-central interpolant, and the environment contributions are neglected because
-they are `O(aʲ²)` while the updraft contributions are `O(aʲ)`.
+to `f.u₃` are all accumulated here. The environment flux is folded into the
+updraft one: eliminating the environment velocity and scalars with
+`ρ⁰a⁰(u³⁰ - u³) ≈ -ρaʲ(u³ʲ - u³)` and `ρa⁰(χ⁰ - χ) ≈ -ρaʲ(χʲ - χ)` makes the
+total flux `ρaʲ/(1 - aʲ)(u³ʲ - u³)(χʲ - χ)`, which both column loops linearize
+with the central interpolant.
 
 The `(ρe_tot, ρ)` and `(ρq_tot, ρ)` blocks are zeroed by
 `update_diffusion_jacobian!` when `diffusion_flag` is `UseDerivative()`, and
@@ -2892,13 +2888,12 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρ))
 
     # The implicit SGS tracer fluxes are difference-form corrections
-    # ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ), whose u₃ derivatives are added to the (ρχ, u₃)
-    # blocks that update_advection_jacobian! sets to the derivative of the
-    # grid-mean advection -∇·(ρ u³ χ). As for mse and q_tot, the derivatives are
+    # ρaʲ/(1 - aʲ)(u³ʲ - u³)(χʲ - χ) (updraft plus environment), whose u₃
+    # derivatives are added to the (ρχ, u₃) blocks that
+    # update_advection_jacobian! sets to the derivative of the grid-mean
+    # advection -∇·(ρ u³ χ). As for mse and q_tot, the derivatives are
     # linearized with the central interpolant (exact for the default :none
-    # upwinding), and the environment contributions are neglected: (χ⁰ - χ) and
-    # (u³⁰ - u³) are each O(aʲ), so every environment Jacobian entry is O(aʲ²)
-    # while the updraft entries are O(aʲ).
+    # upwinding).
     tracer_state_names = unrolled_map(center_state_name, ρχ_names)
     χ_names = unrolled_map(specific_tracer_name, ρχ_names)
 
@@ -2947,10 +2942,15 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
             @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
         end
+        # aʲ/(1 - aʲ): the updraft area with the environment flux folded in
+        ᶜaʲ_env = @inline @. lazy(
+            draft_area(Yc.sgsʲs.:(1).ρa, ᶜρʲ) /
+            (1 - draft_area(Yc.sgsʲs.:(1).ρa, ᶜρʲ)),
+        )
         ᶠmf = @inline @. lazy(
             DiagonalMatrixRow((ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ) * (ᶠu³ʲ - ᶠu³)) *
             ᶠinterp_matrix() *
-            DiagonalMatrixRow(draft_area(Yc.sgsʲs.:(1).ρa, ᶜρʲ)),
+            DiagonalMatrixRow(ᶜaʲ_env),
         )
         ᶜtridiag = @. dtγ * ᶜadvdivᵥ_matrix() * ᶠmf
 
@@ -3006,8 +3006,8 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             @. ∂ᶜρχ_diag += ᶜtridiag * ᶜinv_ρ
         end
         ᶜsgsʲ = Yc.sgsʲs.:(1)
-        # ρʲ aʲ J, the weight of every updraft flux
-        ᶜρʲaʲJ = @. ᶜρʲ * ᶜJ * draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+        # J ρaʲ/(1 - aʲ), the weight of every updraft flux, as in the second loop
+        ᶜρʲaʲJ = @. ᶜJ * ᶜsgsʲ.ρa / (1 - draft_area(ᶜsgsʲ.ρa, ᶜρʲ))
         @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
             dtγ *
             ᶜadvdivᵥ_matrix() *
@@ -3322,7 +3322,8 @@ function update_sgs_u₃_and_ρa_jacobian!(matrix, Y, p, dtγ)
         @inline
         (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ) = rates
         ᶠu₃_data = @. ᶠu₃ʲ.components.data.:1
-        ᶠw = @. ᶠu₃_data / ᶠdz
+        ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
+        ᶠw = @. get_physical_w(ᶠu₃ʲ, ᶠlg)
         ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
         ᶜa⁰ = @. clamp(one_FT - ᶜaʲ, one_FT - a_max, one_FT)
         ᶜa⁰_inv = @. one_FT / ᶜa⁰
@@ -3330,7 +3331,6 @@ function update_sgs_u₃_and_ρa_jacobian!(matrix, Y, p, dtγ)
             @. lower_area_limiter_factor(ᶜaʲ, turbconv_params)
         ᶜupper_limiter_factor =
             @. upper_area_limiter_factor(ᶜaʲ, turbconv_params)
-        ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
         ᶜbuoy_inv_time_scale = @. ᶜinterp(
             detr_buoy_inv_time_scale(
                 ᶠw,
@@ -3340,7 +3340,7 @@ function update_sgs_u₃_and_ρa_jacobian!(matrix, Y, p, dtγ)
         )
         ᶠρa_flux = @. ᶠupwind1(ᶠu³ʲ, ᶜρaʲ)
         ᶜone_minus_prefactor = @. ρa_mass_flux_detr_prefactor(
-            ᶜdivᵥ(ᶠρa_flux), ᶜupper_limiter_factor, ᶜlower_limiter_factor,
+            ᶜadvdivᵥ(ᶠρa_flux), ᶜupper_limiter_factor, ᶜlower_limiter_factor,
             detr_massflux_vertdiv_coeff,
         )
         ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
@@ -3443,6 +3443,13 @@ function update_sgs_u₃_and_ρa_jacobian!(matrix, Y, p, dtγ)
             dtγ * -(DiagonalMatrixRow(ᶜone_minus_prefactor) * ᶜadvdivᵥ_matrix()) *
             DiagonalMatrixRow(ᶠbottom_bias(ᶜρaʲ) * g³³(ᶠgⁱʲ))
     end
+    # `sgs_u₃_implicit_tendency!` zeroes the tendency on the boundary faces,
+    # where `cache_imp!` imposes the impenetrable velocity, so the boundary
+    # rows are -I and decouple from the interior.
+    zero_C3xACT3 = zero(one_C3xACT3)
+    ᶠboundary_row = TridiagonalMatrixRow(zero_C3xACT3, -one_C3xACT3, zero_C3xACT3)
+    Fields.level(∂ᶠu₃ʲ_diag, half) .= (ᶠboundary_row,)
+    Fields.level(∂ᶠu₃ʲ_diag, Spaces.nlevels(axes(Y.c)) + half) .= (ᶠboundary_row,)
     return nothing
 end
 

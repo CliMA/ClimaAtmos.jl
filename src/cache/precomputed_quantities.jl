@@ -67,7 +67,10 @@ velocity and thermodynamic quantities (`ᶜp` is shared across all subdomains):
     `ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`), plus the
     subdomain air densities `ᶜρʲs` [kg/m³] and `ᶠwʲ_maxs`, the velocity [m/s]
     that the implicit Jacobian advects each updraft's equations with, filled by
-    `fill_jacobian_updraft_velocity!` at each Jacobian update.
+    `fill_jacobian_updraft_velocity!` at each Jacobian update, and
+    `ᶜsgsʲs_stage_snapshot`, the stage-entering drafts `Y.c.sgsʲs` that the
+    Newton predictor of `initialize_implicit_stage_problem!` diagnoses the
+    environment from.
 
 For implicit microphysics, Dual-compatible copies are also allocated: the
 density-weighted 0M sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`, and (for all
@@ -129,6 +132,7 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜsgsʲs_stage_snapshot = similar(Y.c.sgsʲs),
         ) : (;)
     # Density-weighted 0M microphysics sources: rewritten from the current
     # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by

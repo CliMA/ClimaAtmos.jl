@@ -16,6 +16,16 @@ main
   `min_area_limiter_scale` and `max_area_limiter_scale` parameters are removed.
   The updraft area is kept in `[0, ρʲ a_max]` by a 1 s⁻¹ bounds-restoring term
   in its residual, and `edmfx_filter` clamps `ρa` to `ρʲ a_max` instead of `ρʲ`.
+- ![][badge-🔥behavioralΔ] `edmfx_filter` detrains stagnant `PrognosticEDMFX`
+  updraft cells, where the updraft `u₃` vanishes on both faces (the surface
+  counts as an inflow face of the first cell): it sets their `ρa` to zero and
+  resets their updraft scalars to the grid mean.
+- ![][badge-🔥behavioralΔ] The Newton initial guess of each implicit stage
+  transports the `PrognosticEDMFX` updraft `ρa` and scalars up the column with
+  the analytic `u₃` solve (`predict_sgs_ρa_advection!`,
+  `predict_sgs_tracer_advection!`) and shifts the grid mean so that the
+  environment keeps its stage-entering values. The `u₃` solve takes its buoyancy
+  from the cached `ᶜρ_diffʲs`.
 - ![][badge-🔥behavioralΔ] With `ManualSparseJacobian`, non-equilibrium
   precipitation, and `update_cache_every = "stage"`, the stage-weighted surface
   precipitation fluxes are evaluated directly at each Newton-solved stage state,

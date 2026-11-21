@@ -305,7 +305,7 @@ stage-entering state or a Newton iterate can carry an area outside that range.
 The prognostic variable is the
 covariant component ``u_3 = w \Delta z``, so the whole equation carries one
 factor of ``\Delta z`` relative to the equation for ``w``. For the warm start
-(`solve_sgs_u₃_implicit_stage_analytic!`), the stage equation at face ``i`` is
+(`predict_sgs_u₃!`), the stage equation at face ``i`` is
 then a quadratic, coupled to the face below through the advection term:
 
 ```math
