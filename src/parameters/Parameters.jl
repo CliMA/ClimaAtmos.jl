@@ -225,6 +225,14 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `pressure_drag_plume_radius_slope`, `pressure_drag_plume_radius_max`: Slope
     `c_R` [-] and cap `R_max` [m] of the minimum updraft radius
     `min(c_R (z − z_sfc), R_max)` in `plume_radius`; `0` (default) is off.
+  - `edmf_condensate_detr_coeff`:
+    Non-negative lateral shedding factor `c_detr,cond ≥ 0` on excess updraft
+    cloud liquid and cloud ice (`q_lcl`, `q_icl`) at fixed updraft mass; `0`
+    (default) disables condensate shedding [-].
+  - `edmf_precip_detr_coeff`:
+    Non-negative lateral shedding factor `c_detr,prec ≥ 0` on excess updraft
+    rain and snow (`q_rai`, `q_sno`) at fixed updraft mass; `0` (default)
+    disables precipitation shedding [-].
   - `edmf_detr_mix_coeff`:
     Non-negative base coefficient `c_mix,0 ≥ 0` for GP-gated non-buoyant
     lateral mixing detrainment in `GPBuoyancyDetrainment`; `0` (default) turns
@@ -285,6 +293,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3, GP} <: A
     turb_entr_tke_coeff::FT
     pressure_drag_plume_radius_slope::FT
     pressure_drag_plume_radius_max::FT
+    edmf_condensate_detr_coeff::FT
+    edmf_precip_detr_coeff::FT
     edmf_detr_mix_coeff::FT
     gp_entr_detr::GP
 end

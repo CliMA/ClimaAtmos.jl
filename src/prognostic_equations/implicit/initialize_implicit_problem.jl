@@ -863,8 +863,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
             ᶜexplicit_entr_minus_detr = @. ᶜarea_bounding_entr_detrʲ +
                ᶜentr_vel_scaleʲ * ᶜinterp(ᶠw) +
                ᶜentr_nonvel_rateʲ -
-               ᶜlower_limiter_factor *
-               (
+               ᶜlower_limiter_factor * (
                 detr_buoy_coeff * ᶜdetr_buoy_scaleʲ * ᶜbuoy_inv_time_scale +
                 ᶜdetr_nonbuoy_rateʲ
             )
@@ -1173,13 +1172,30 @@ NVTX.@annotate function _sweep_sgs_updraft_tracers!(
     (zero_FT, one_FT) = (zero(FT), one(FT))
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
     thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
     f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
+    c_detr_cond = FT(CAP.edmf_condensate_detr_coeff(turbconv_params))
+    c_detr_prec = FT(CAP.edmf_precip_detr_coeff(turbconv_params))
+    has_hyd_detr =
+        (c_detr_cond > zero_FT || c_detr_prec > zero_FT) &&
+        p.atmos.microphysics_model isa NonEquilibriumMicrophysics
     (; dt) = p
     tail_fields = tail_entrainment_fields(p, f_tail)
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
         sgs_tracers,
     )
+    if has_hyd_detr
+        return _sweep_sgs_updraft_tracers_with_hyd_detr!(
+            Y,
+            p,
+            dtγ,
+            χ_names,
+            ᶜsnapshot,
+            c_detr_cond,
+            c_detr_prec,
+        )
+    end
     ᶜenv_sgsʲs = isnothing(ᶜsnapshot) ? Y.c.sgsʲs : ᶜsnapshot
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         rates = (
@@ -1300,6 +1316,373 @@ NVTX.@annotate function _sweep_sgs_updraft_tracers!(
                 )
         end
         MatrixFields.unrolled_foreach(χ_names) do χ_name
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            input = @. lazy(tuple(ᶜχʲ, ᶜadvection_factor))
+            Operators.column_accumulate!(ᶜχʲ, input; init = zero_FT) do χ_prev, (b, a)
+                return b + a * χ_prev
+            end
+        end
+    end
+    return nothing
+end
+
+function _sweep_sgs_updraft_tracers_with_hyd_detr!(
+    Y,
+    p,
+    dtγ,
+    χ_names,
+    ᶜsnapshot,
+    c_detr_cond,
+    c_detr_prec,
+)
+    (; turbconv_model) = p.atmos
+    (;
+        ᶜK,
+        ᶜh_tot,
+        ᶜρʲs,
+        ᶜρ_diffʲs,
+        ᶜTʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜturb_entrʲs,
+        ᶜdetr_buoy_scaleʲs,
+        ᶜdetr_nonbuoy_rateʲs,
+        sfc_mass_flux_sourceʲs,
+        sfc_mse_buoyantʲs,
+        sfc_q_tot_buoyantʲs,
+    ) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    ᶜadvection_factor = p.scratch.ᶜtemp_scalar
+    ᶜdetrʲ = p.scratch.ᶜtemp_scalar_2
+    ᶜD_tot = p.scratch.ᶜtemp_scalar_3
+    ᶜD_mse = p.scratch.ᶜtemp_scalar_4
+    ᶜden = p.scratch.ᶜtemp_scalar_5
+    ᶜχ⁰_pos = p.scratch.ᶜtemp_scalar_6
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    ᶠdz = Fields.Δz_field(axes(Y.f))
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    FT = eltype(p.params)
+    (zero_FT, one_FT) = (zero(FT), one(FT))
+    turbconv_params = CAP.turbconv_params(p.params)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    a_min = CAP.min_area(turbconv_params)
+    detr_model = p.atmos.edmfx_model.detr_model
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
+    (; dt) = p
+    tail_fields = tail_entrainment_fields(p, f_tail)
+    ᶠbottom_bias_zero_bot =
+        Operators.BottomBiasedC2F(bottom = Operators.SetValue(zero_FT))
+    # Ensure `ᶜenv_sgsʲs` never aliases `Y.c.sgsʲs` while hydrometeors are
+    # overwritten in place before `q_tot` and `mse`.
+    ᶜenv_sgsʲs = if isnothing(ᶜsnapshot)
+        ᶜsnap = p.precomputed.ᶜsgsʲs_picard_snapshot
+        DataLayouts.foreach_point(ᶜsnap, Y.c) do ᶜsnap, Yc
+            for j in 1:n_mass_flux_subdomains(turbconv_model)
+                @. ᶜsnap.:($$j) = Yc.sgsʲs.:($$j)
+            end
+        end
+        ᶜsnap
+    else
+        ᶜsnapshot
+    end
+    hyd_specs = (
+        (@name(q_lcl), c_detr_cond, Val(false)),
+        (@name(q_icl), c_detr_cond, Val(true)),
+        (@name(q_rai), c_detr_prec, Val(false)),
+        (@name(q_sno), c_detr_prec, Val(true)),
+    )
+    non_qt_mse_names = unrolled_filter(
+        χ_name -> χ_name !== @name(mse) && χ_name !== @name(q_tot),
+        χ_names,
+    )
+    linear_sweep_names = unrolled_filter(
+        χ_name -> !(
+            χ_name === @name(q_lcl) ||
+            χ_name === @name(q_icl) ||
+            χ_name === @name(q_rai) ||
+            χ_name === @name(q_sno)
+        ),
+        χ_names,
+    )
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        rates = (
+            ᶜentr_vel_scaleʲs.:($j),
+            ᶜentr_nonvel_rateʲs.:($j),
+            ᶜarea_bounding_entr_detrʲs.:($j),
+            ᶜturb_entrʲs.:($j),
+            ᶜdetr_buoy_scaleʲs.:($j),
+            ᶜdetr_nonbuoy_rateʲs.:($j),
+        )
+        # Step 1: compute `ᶜden`, `ᶜadvection_factor`, `ᶜdetrʲ`, zero `ᶜD_tot`
+        # and `ᶜD_mse`, and write offsets `b_0,χ` for hydrometeors and passive
+        # tracers while leaving `q_tot` and `mse` at their pre-sweep values.
+        DataLayouts.foreach_column(
+            Y.c.sgsʲs.:($j),
+            Y.c,
+            ᶜenv_sgsʲs,
+            Y.f.sgsʲs.:($j).u₃,
+            (ᶜρʲs.:($j), ᶜρ_diffʲs.:($j)),
+            (ᶜadvection_factor, ᶜdetrʲ, ᶜD_tot, ᶜD_mse, ᶜden),
+            ᶜdz,
+            ᶠdz,
+            ᶠgradᵥ_ᶜΦ,
+            ᶠlg,
+            rates,
+        ) do ᶜsgsʲ,
+        Yc,
+        ᶜenv_sgsʲs,
+        ᶠu₃ʲ,
+        (ᶜρʲ, ᶜρ_diffʲ),
+        (ᶜadvection_factor, ᶜdetrʲ, ᶜD_tot, ᶜD_mse, ᶜden),
+        ᶜdz,
+        ᶠdz,
+        ᶠgradᵥ_ᶜΦ,
+        ᶠlg,
+        rates
+            (
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜturb_entrʲ,
+                ᶜdetr_buoy_scaleʲ,
+                ᶜdetr_nonbuoy_rateʲ,
+            ) = rates
+            ᶠw = @. ᶠu₃ʲ.components.data.:1 / ᶠdz
+            ᶜzero_first_cell =
+                Operators.SetBoundaryOperator(bottom = Operators.SetValue(zero_FT))
+            ᶜα = @. ᶜzero_first_cell(ᶜbottom_bias(ᶠw) / ᶜdz)
+            ᶜentrʲ = @. compute_entrainment(
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜinterp(ᶠw),
+            )
+            ᶜentr_tot = @. ᶜentrʲ + ᶜturb_entrʲ
+            @. ᶜden = 1 / dtγ + ᶜα + ᶜentr_tot
+            @. ᶜadvection_factor = ᶜα / ᶜden
+            ᶜρaʲ = ᶜsgsʲ.ρa
+            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            ᶜbuoy_inv_time_scale = @inline @. lazy(
+                ᶜinterp(
+                    detr_buoy_inv_time_scale(
+                        ᶠw,
+                        vertical_buoyancy_acceleration(
+                            ᶠinterp(ᶜρ_diffʲ),
+                            ᶠgradᵥ_ᶜΦ,
+                            ᶠlg,
+                        ),
+                        entr_detr_buoy_inv_tau_max,
+                    ),
+                ),
+            )
+            @. ᶜdetrʲ = compute_detrainment(
+                turbconv_params,
+                ᶜaʲ,
+                ᶜρaʲ,
+                ᶜbuoy_inv_time_scale,
+                ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu₃ʲ),
+                ᶜarea_bounding_entr_detrʲ,
+                detr_model,
+                ᶜdetr_buoy_scaleʲ,
+                ᶜdetr_nonbuoy_rateʲ,
+            )
+            @. ᶜD_tot = zero_FT
+            @. ᶜD_mse = zero_FT
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, ᶜenv_sgsʲs, turbconv_model)
+            MatrixFields.unrolled_foreach(non_qt_mse_names) do χ_name
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+                env_val =
+                    @inline (ρχ, ρ, env_sgsʲs, ρa⁰_val) -> specific_env_value(
+                        χ_name,
+                        ρχ,
+                        ρ,
+                        env_sgsʲs,
+                        ρa⁰_val,
+                        turbconv_model,
+                    )
+                @. ᶜχʲ =
+                    (
+                        max(zero_FT, ᶜχʲ) / dtγ +
+                        ᶜentr_tot * max(
+                            zero_FT,
+                            env_val(ᶜρχ, Yc.ρ, ᶜenv_sgsʲs, ᶜρa⁰),
+                        )
+                    ) / ᶜden
+            end
+        end
+
+        # Step 2: exact piecewise-linear implicit upward sweep for each
+        # hydrometeor species, accumulating realized water and enthalpy sinks.
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜρa⁰_env = @. lazy(ρa⁰(Y.c.ρ, ᶜenv_sgsʲs, turbconv_model))
+        MatrixFields.unrolled_foreach(hyd_specs) do (χ_name, c_χ, is_ice)
+            @inline
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+            env_val =
+                @inline (ρχ, ρ, env_sgsʲs, ρa⁰_val) -> specific_env_value(
+                    χ_name,
+                    ρχ,
+                    ρ,
+                    env_sgsʲs,
+                    ρa⁰_val,
+                    turbconv_model,
+                )
+            @. ᶜχ⁰_pos = max(
+                zero_FT,
+                env_val(ᶜρχ, Y.c.ρ, ᶜenv_sgsʲs, ᶜρa⁰_env),
+            )
+            input = @. lazy(tuple(ᶜχʲ, ᶜadvection_factor, ᶜden, ᶜdetrʲ, ᶜχ⁰_pos))
+            Operators.column_accumulate!(
+                ᶜχʲ,
+                input;
+                init = zero_FT,
+            ) do χ_prev,
+            (b, a, den, detr, χ0_pos)
+                χ_trial = b + a * χ_prev
+                δ_shed = c_χ * detr
+                return ifelse(
+                    χ_trial <= χ0_pos,
+                    χ_trial,
+                    (den * χ_trial + δ_shed * χ0_pos) / (den + δ_shed),
+                )
+            end
+            @. ᶜD_tot += c_χ * ᶜdetrʲ * max(zero_FT, ᶜχʲ - ᶜχ⁰_pos)
+            @. ᶜD_mse +=
+                _hydrometeor_enthalpy_diff(thermo_params, ᶜTʲ, is_ice) *
+                c_χ *
+                ᶜdetrʲ *
+                max(zero_FT, ᶜχʲ - ᶜχ⁰_pos)
+        end
+
+        # Step 3: build `q_tot` and `mse` offsets using the realized shedding
+        # sinks `ᶜD_tot` and `ᶜD_mse`.
+        sfc = (
+            sfc_mass_flux_sourceʲs.:($j),
+            sfc_mse_buoyantʲs.:($j),
+            sfc_q_tot_buoyantʲs.:($j),
+        )
+        DataLayouts.foreach_column(
+            Y.c.sgsʲs.:($j),
+            Y.c,
+            ᶜenv_sgsʲs,
+            Y.f.sgsʲs.:($j).u₃,
+            ᶜρʲs.:($j),
+            (ᶜD_tot, ᶜD_mse, ᶜden),
+            ᶜdz,
+            ᶠdz,
+            ᶜK,
+            ᶜh_tot,
+            rates,
+            sfc,
+            tail_fields,
+        ) do ᶜsgsʲ,
+        Yc,
+        ᶜenv_sgsʲs,
+        ᶠu₃ʲ,
+        ᶜρʲ,
+        (ᶜD_tot, ᶜD_mse, ᶜden),
+        ᶜdz,
+        ᶠdz,
+        ᶜK,
+        ᶜh_tot,
+        rates,
+        (mass_flux_source, mse_sfc, q_tot_sfc),
+        tail_fields
+            (
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜturb_entrʲ,
+                _,
+                _,
+            ) = rates
+            ᶠw = @. ᶠu₃ʲ.components.data.:1 / ᶠdz
+            ᶜone_first_cell =
+                Operators.SetBoundaryOperator(bottom = Operators.SetValue(one_FT))
+            ᶜr_sfc = @. ᶜone_first_cell(zero_FT * ᶜdz) *
+               edmfx_sfc_relaxation_rate(mass_flux_source, ᶜsgsʲ.ρa, ᶜρʲ, a_min)
+            ᶜentrʲ = @. compute_entrainment(
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜinterp(ᶠw),
+            )
+            ᶜentr_tot = @. ᶜentrʲ + ᶜturb_entrʲ
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, ᶜenv_sgsʲs, turbconv_model)
+            (ᶜtail_mse, ᶜtail_q_tot) = if isempty(tail_fields)
+                (zero_FT, zero_FT)
+            else
+                (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+                    tail_fields
+                ᶜρaʲ = ᶜsgsʲ.ρa
+                ᶜtailʲ = @. tail_entrainment_increments(
+                    thermo_params,
+                    f_tail,
+                    ᶜT⁰,
+                    ᶜq_tot⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
+                    ᶜT′T′,
+                    ᶜq′q′,
+                    ᶜcorr_Tq,
+                    ᶜρa⁰,
+                    ᶜρaʲ,
+                    ᶜentrʲ,
+                    dt,
+                )
+                (
+                    @inline(@. lazy(ᶜentrʲ * ᶜtailʲ.mse)),
+                    @inline(@. lazy(ᶜentrʲ * ᶜtailʲ.q_tot)),
+                )
+            end
+            ᶜmse⁰ = @. specific_env_mse(
+                Yc.ρ,
+                ᶜenv_sgsʲs,
+                ᶜh_tot,
+                ᶜK,
+                ᶜρa⁰,
+                turbconv_model,
+            )
+            env_qt =
+                @inline (ρχ, ρ, env_sgsʲs, ρa⁰_val) -> specific_env_value(
+                    @name(q_tot),
+                    ρχ,
+                    ρ,
+                    env_sgsʲs,
+                    ρa⁰_val,
+                    turbconv_model,
+                )
+            ᶜq_tot⁰ = @. max(
+                zero_FT,
+                env_qt(Yc.ρq_tot, Yc.ρ, ᶜenv_sgsʲs, ᶜρa⁰),
+            )
+            @. ᶜsgsʲ.mse =
+                (
+                    ᶜsgsʲ.mse / dtγ +
+                    ᶜentr_tot * ᶜmse⁰ +
+                    ᶜtail_mse -
+                    ᶜD_mse +
+                    ᶜr_sfc * mse_sfc
+                ) / (ᶜden + ᶜr_sfc)
+            @. ᶜsgsʲ.q_tot =
+                (
+                    max(
+                        zero_FT,
+                        max(zero_FT, ᶜsgsʲ.q_tot) / dtγ +
+                        ᶜentr_tot * ᶜq_tot⁰ +
+                        ᶜtail_q_tot -
+                        ᶜD_tot,
+                    ) + ᶜr_sfc * q_tot_sfc
+                ) / (ᶜden + ᶜr_sfc)
+        end
+
+        # Step 4: linear upward sweep for `mse`, `q_tot`, and passive tracers.
+        MatrixFields.unrolled_foreach(linear_sweep_names) do χ_name
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             input = @. lazy(tuple(ᶜχʲ, ᶜadvection_factor))
             Operators.column_accumulate!(ᶜχʲ, input; init = zero_FT) do χ_prev, (b, a)

@@ -2038,6 +2038,164 @@ function update_sgs_diffusion_and_entr_detr_jacobian!(matrix, Y, p, dtγ, diffus
             @. ∂ᶜχʲ_diag -= ᶜrelax_row
         end
     end
+
+    turbconv_params = CAP.turbconv_params(p.params)
+    FT = Spaces.undertype(axes(Y.c))
+    c_detr_cond = FT(CAP.edmf_condensate_detr_coeff(turbconv_params))
+    c_detr_prec = FT(CAP.edmf_precip_detr_coeff(turbconv_params))
+    has_hyd_detr =
+        (c_detr_cond > zero(FT) || c_detr_prec > zero(FT)) &&
+        p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+    if has_hyd_detr
+        (;
+            ᶜρʲs,
+            ᶜρ_diffʲs,
+            ᶜdetr_buoy_scaleʲs,
+            ᶜdetr_nonbuoy_rateʲs,
+            ᶠu³ʲs,
+            ᶜTʲs,
+            ᶜq_tot_nonnegʲs,
+            ᶜq_liqʲs,
+            ᶜq_iceʲs,
+        ) = p.precomputed
+        (; ᶠgradᵥ_ᶜΦ) = p.core
+        thermo_params = CAP.thermodynamics_params(p.params)
+        cp_d = TD.Parameters.cp_d(thermo_params)
+        cp_l = TD.Parameters.cp_l(thermo_params)
+        cp_i = TD.Parameters.cp_i(thermo_params)
+        detr_model = p.atmos.edmfx_model.detr_model
+        entr_detr_buoy_inv_tau_max =
+            CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+        ᶠlg = Fields.local_geometry_field(Y.f)
+        (zero_FT, one_FT) = (zero(FT), one(FT))
+        ᶠbottom_bias_zero_bot =
+            Operators.BottomBiasedC2F(bottom = Operators.SetValue(zero_FT))
+        ∂ᶜmseʲ_diag = matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
+        hyd_specs = (
+            (@name(q_lcl), c_detr_cond, Val(false)),
+            (@name(q_icl), c_detr_cond, Val(true)),
+            (@name(q_rai), c_detr_prec, Val(false)),
+            (@name(q_sno), c_detr_prec, Val(true)),
+        )
+        hyd_blocks = unrolled_map(hyd_specs) do (χ_name, _, _)
+            @inline
+            s_name = sgs_state_name(χ_name)
+            (
+                matrix[s_name, s_name],
+                matrix[@name(c.sgsʲs.:(1).q_tot), s_name],
+                matrix[@name(c.sgsʲs.:(1).mse), s_name],
+            )
+        end
+        DataLayouts.foreach_column(
+            Y.c,
+            ᶜρʲs.:(1),
+            ᶜρ_diffʲs.:(1),
+            ᶜarea_bounding_entr_detrʲs.:(1),
+            (ᶜdetr_buoy_scaleʲs.:(1), ᶜdetr_nonbuoy_rateʲs.:(1)),
+            ᶠu³ʲs.:(1),
+            (ᶜTʲs.:(1), ᶜq_tot_nonnegʲs.:(1), ᶜq_liqʲs.:(1), ᶜq_iceʲs.:(1)),
+            ᶠgradᵥ_ᶜΦ,
+            ᶠlg,
+            ∂ᶜmseʲ_diag,
+            hyd_blocks,
+        ) do Yc,
+        ᶜρʲ,
+        ᶜρ_diffʲ,
+        ᶜarea_bounding_entr_detrʲ,
+        (ᶜdetr_buoy_scaleʲ, ᶜdetr_nonbuoy_rateʲ),
+        ᶠu³ʲ,
+        (ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ),
+        ᶠgradᵥ_ᶜΦ,
+        ᶠlg,
+        ∂ᶜmseʲ_diag,
+        hyd_blocks
+            ᶜsgsʲ = Yc.sgsʲs.:(1)
+            ᶜρaʲ = ᶜsgsʲ.ρa
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+            ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            ᶜbuoy_inv_time_scale = @inline @. lazy(
+                ᶜinterp(
+                    detr_buoy_inv_time_scale(
+                        get_physical_w(ᶠu³ʲ, ᶠlg),
+                        vertical_buoyancy_acceleration(
+                            ᶠinterp(ᶜρ_diffʲ),
+                            ᶠgradᵥ_ᶜΦ,
+                            ᶠlg,
+                        ),
+                        entr_detr_buoy_inv_tau_max,
+                    ),
+                ),
+            )
+            ᶜdetrʲ = @inline @. lazy(
+                compute_detrainment(
+                    turbconv_params,
+                    ᶜaʲ,
+                    ᶜρaʲ,
+                    ᶜbuoy_inv_time_scale,
+                    ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu³ʲ),
+                    ᶜarea_bounding_entr_detrʲ,
+                    detr_model,
+                    ᶜdetr_buoy_scaleʲ,
+                    ᶜdetr_nonbuoy_rateʲ,
+                ),
+            )
+            ᶜf_env = @inline @. lazy(
+                env_relaxation_feedback(ᶜρaʲ, ᶜρa⁰, Yc.ρ, turbconv_model),
+            )
+            ᶜinv_cp_mʲ = @. 1 / TD.cp_m(
+                thermo_params,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+            )
+            ᶜdF_mse_dT = @. zero_FT * ᶜρaʲ
+            MatrixFields.unrolled_foreach(
+                hyd_specs,
+                hyd_blocks,
+            ) do (χ_name, c_χ, is_ice), (∂ᶜχʲ_diag, ∂ᶜq_totʲ_∂ᶜχʲ, ∂ᶜmseʲ_∂ᶜχʲ)
+                @inline
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχ⁰ = Base.materialize(
+                    ᶜspecific_env_value(χ_name, Yc, ᶜρa⁰, turbconv_model),
+                )
+                ᶜD_χ = @inline @. lazy(
+                    c_χ * ᶜdetrʲ * max(zero_FT, ᶜχʲ - max(zero_FT, ᶜχ⁰)),
+                )
+                Δcp = is_ice === Val(true) ? (cp_i - cp_d) : (cp_l - cp_d)
+                @. ᶜdF_mse_dT -= Δcp * ᶜD_χ
+                ᶜd_χ = @inline @. lazy(
+                    ifelse(
+                        ᶜχʲ > max(zero_FT, ᶜχ⁰),
+                        c_χ * ᶜdetrʲ * (one_FT + ifelse(ᶜχ⁰ > zero_FT, ᶜf_env, zero_FT)),
+                        zero_FT,
+                    ),
+                )
+                @. ∂ᶜχʲ_diag -= DiagonalMatrixRow(dtγ * ᶜd_χ)
+                @. ∂ᶜq_totʲ_∂ᶜχʲ -= DiagonalMatrixRow(dtγ * ᶜd_χ)
+                @. ∂ᶜmseʲ_∂ᶜχʲ -= DiagonalMatrixRow(
+                    dtγ *
+                    _hydrometeor_enthalpy_diff(thermo_params, ᶜTʲ, is_ice) *
+                    ᶜd_χ,
+                )
+            end
+            # Partial-`Tʲ` derivative of `-(h_{l/i}(Tʲ) - h_d(Tʲ)) D_χ` at
+            # fixed `(mseʲ, q_totʲ)` maps through `∂Tʲ/∂mseʲ = 1/cp_mʲ` and
+            # `∂Tʲ/∂q_νʲ = L_ν(Tʲ)/cp_mʲ`.
+            ᶜd_mse_T = @. dtγ * ᶜdF_mse_dT * ᶜinv_cp_mʲ
+            @. ∂ᶜmseʲ_diag += DiagonalMatrixRow(ᶜd_mse_T)
+            MatrixFields.unrolled_foreach(
+                hyd_specs,
+                hyd_blocks,
+            ) do (_, _, is_ice), (_, _, ∂ᶜmseʲ_∂ᶜχʲ)
+                @inline
+                L_ν =
+                    is_ice === Val(true) ? TD.latent_heat_sublim :
+                    TD.latent_heat_vapor
+                @. ∂ᶜmseʲ_∂ᶜχʲ +=
+                    DiagonalMatrixRow(ᶜd_mse_T * L_ν(thermo_params, ᶜTʲ))
+            end
+        end
+    end
     return nothing
 end
 

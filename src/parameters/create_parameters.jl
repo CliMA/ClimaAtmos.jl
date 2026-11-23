@@ -704,6 +704,8 @@ function TurbulenceConvectionParameters(
         turb_entr_tke_coeff = FT(0),
         pressure_drag_plume_radius_slope = FT(0),
         pressure_drag_plume_radius_max = FT(0),
+        edmf_condensate_detr_coeff = FT(0),
+        edmf_precip_detr_coeff = FT(0),
         edmf_detr_mix_coeff = FT(0),
         edmf_gp_entr_weights = zeros(FT, 10),
         edmf_gp_detr_buoy_weights = zeros(FT, 10),
@@ -741,6 +743,16 @@ function TurbulenceConvectionParameters(
     # the draft and environment humidities meet.
     entr_subsat_power >= 1 || throw(
         ArgumentError("entr_subsat_power must be at least 1; got $entr_subsat_power"),
+    )
+    parameters.edmf_condensate_detr_coeff >= 0 || throw(
+        ArgumentError(
+            "edmf_condensate_detr_coeff must be non-negative; got $(parameters.edmf_condensate_detr_coeff)",
+        ),
+    )
+    parameters.edmf_precip_detr_coeff >= 0 || throw(
+        ArgumentError(
+            "edmf_precip_detr_coeff must be non-negative; got $(parameters.edmf_precip_detr_coeff)",
+        ),
     )
     parameters.edmf_detr_mix_coeff >= 0 || throw(
         ArgumentError(

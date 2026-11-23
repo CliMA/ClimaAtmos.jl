@@ -91,6 +91,7 @@ if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
     @safetestset "EDMFX tail entrainment" begin @time include("prognostic_equations/edmfx_tail_entrainment_tests.jl") end
+    @safetestset "EDMFX GP entrainment/detrainment and hydrometeor shedding" begin @time include("prognostic_equations/edmfx_gp_entr_detr_tests.jl") end
 end
 
 # ============================================================================
