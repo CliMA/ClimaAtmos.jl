@@ -145,7 +145,10 @@ function setup_diagnostics_and_writers(
             if any(d -> get(d, "pressure_coordinates", false), dict_specs) &&
                length(writers) < 4
                 pressure_z_sampling = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
-                    p.precomputed.ᶜp, t_start,
+                    p.precomputed.ᶜp, t_start;
+                    pressure_intp_kwargs = (;
+                        method = ClimaCore.Remapping.LogLinearInPressure(),
+                    ),
                 )
                 pressure_space =
                     ClimaDiagnostics.Writers.pressure_space(pressure_z_sampling)
