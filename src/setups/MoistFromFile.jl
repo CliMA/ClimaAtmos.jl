@@ -24,9 +24,7 @@ The file is expected to carry:
   - `z_sfc`: Surface altitude, optional; enables the topographic pressure
     correction [m].
 
-A second field, `hydrostatic_rebalance`, selects the discrete rebalance of the
-column pressure against the model's vertical PGF operator (see
-`rebalance_hydrostatic_pressure`).
+`hydrostatic_rebalance` selects the discrete hydrostatic rebalance of the column pressure.
 """
 struct MoistFromFile
     file_path::String

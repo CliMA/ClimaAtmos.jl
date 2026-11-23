@@ -16,17 +16,8 @@ hydrostatic reference used in the Roe and LMARS wave amplitudes.
 """
     kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
 
-Kennedy-Gruber two-point flux of the advection, with momentum in global
-Cartesian components (Souza et al. 2023): `F_ρ = {ρ}{u_n}`,
-`F_ρe = ({ρ}{e} + {p}){u_n}`, `F_ρu_c = {ρ}{u_c}{u_n}`, with `{u_n}` the
-average of the nodal contravariant velocities. The momentum flux is `{u_c}`
-times a symmetric mass flux, so the advection is kinetic-energy preserving.
-It carries no pressure: the horizontal pressure force is the Exner-split
-gradient of the vector-invariant form, a gradient of scalars that is
-pointwise exact on constants, so over terrain it never invokes the metric
-identity `Σ_k ∂_ξk(Ja^k ⋅ ê_c) = 0` that a two-point pressure flux needs and
-that the horizontal collocation derivative and the vertical FD operator do
-not satisfy jointly. Volume flux of `dg_volume_flux = kg_exner`.
+Kennedy-Gruber two-point advective flux of (ρ, ρe, Cartesian ρu), without
+pressure. Volume flux of `dg_volume_flux = kg_exner`.
 """
 function kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
     ρ̄ = (y_a.ρ + y_b.ρ) / 2
@@ -48,19 +39,8 @@ end
 """
     divergence_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
 
-Divergence-form two-point flux for `dg_volume_flux = div_exner`: the mass
-flux is the average of the nodal contravariant mass fluxes,
-``F_ρ = {ρ u^ξ}`` (the scalar flux of the vector-invariant form, Ducros
-et al. 2000), and the momentum and energy ride it,
-``F_{ρu_c} = F_ρ {u_c}`` and ``F_E = F_ρ {h_{tot}}``. The momentum flux is
-``{u_c}`` times a symmetric mass flux, so the advection is
-kinetic-energy preserving; and because the mass flux is an average of
-nodal fluxes, the nodal gradients of ``κ`` and ``Φ`` with their central
-lifts exchange kinetic with potential energy exactly (the gradient--mass
-pairing of docs/dg_vi_entropy_interface.tex), which the Kennedy--Gruber
-mass flux ``{ρ}{u^ξ}`` does not. No pressure terms: the pressure force is
-the Exner-split gradient, as for `kg_exner`. Same state fields as
-[`kennedy_gruber_advective_cartesian_flux`](@ref).
+Two-point flux with mass flux `{ρ u^ξ}` (average of nodal mass fluxes) carrying
+`{u_c}` and `{h_tot}`, without pressure. Volume flux of `dg_volume_flux = div_exner`.
 """
 function divergence_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
     F = (y_a.ρ * (y_a.uv' * nvec_a) + y_b.ρ * (y_b.uv' * nvec_b)) / 2
@@ -77,25 +57,8 @@ end
 """
     KennedyGruberKPEPFlux(cp_d)
 
-Two-point flux of `dg_volume_flux = kg_kpep`, a callable
-`(nvec_a, nvec_b, y_a, y_b)`: [`kennedy_gruber_advective_cartesian_flux`](@ref)
-plus, in the momentum slots, the whole Exner force in the two-point form of
-Souza et al. (2023),
-
-    {ρ} [ (ψ_b − ψ_a)/2 + c_pd {θ_v′} (Π_b − Π_a)/2 ] × (ê_c ⋅ J∇ξ)_a,
-
-with the own-node metric. `ψ` is `Φ − Φ_r(p)`, plus the non-horizontal
-kinetic energy when the vertical exchange is vector-invariant; `θ` is
-`θ_v − θ_vr(p)` and `Π` the Exner function (state fields `ψ`, `θ`, `Π`).
-Per unit mass the pressure part is the split Exner gradient of the
-vector-invariant form. With the Kennedy--Gruber mass flux `{ρ}{u^ξ}` the
-geopotential part exchanges kinetic and potential energy exactly (KPEP),
-which the nodal gradient `−ρ_a ∇ψ_a` does not; weighting the pressure part
-by the same `{ρ}` keeps its cancellation with the geopotential part at the
-hydrostatic reference, so the rest state stays balanced. The term vanishes
-for `y_a == y_b`, so the boundary lifts of the flux-differencing kernel are
-unchanged; the interface part is [`KPEPFaceLift`](@ref), not the
-antisymmetric numerical flux.
+Kennedy-Gruber advective flux plus the `{ρ}`-weighted two-point Exner and
+geopotential force in the momentum slots. Volume flux of `dg_volume_flux = kg_kpep`.
 """
 struct KennedyGruberKPEPFlux{FT}
     cp_d::FT
@@ -119,11 +82,8 @@ end
 """
     KPEPFaceLift(cp_d)
 
-Face part of [`KennedyGruberKPEPFlux`](@ref), a callable
-`(normal, (ψ⁻, θ⁻, Π⁻, ρ⁻), (ψ⁺, θ⁺, Π⁺, ρ⁺))` applied on each side as a
-lifting: `{ρ} [ (ψ⁺ − ψ⁻)/2 + c_pd {θ} (Π⁺ − Π⁻)/2 ] n̂`, the central gradient
-lift of the vector-invariant form with `{ρ}` in place of the own-side
-density. Returns a `UVVector`.
+Face lifting of the `KennedyGruberKPEPFlux` force,
+`{ρ} [⟦ψ⟧/2 + c_pd {θ} ⟦Π⟧/2] n̂`, as a `UVVector`.
 """
 struct KPEPFaceLift{FT}
     cp_d::FT
@@ -137,9 +97,7 @@ end
 """
     CentralMinusDissipation(central, dissipation)
 
-Interface flux `central(normal, normal, y⁻, y⁺) − dissipation(normal, y⁻, y⁺)/2`
-for a two-point `central` flux and a dissipation `(normal, y⁻, y⁺) -> D`
-over the slots (ρ, ρe, ρu1, ρu2, ρu3).
+Interface flux `central − dissipation/2` over the slots (ρ, ρe, ρu1, ρu2, ρu3).
 """
 struct CentralMinusDissipation{C, D}
     central::C
@@ -162,9 +120,7 @@ rusanov_dissipation_cartesian(normal, y⁻, y⁺) =
 """
     kennedy_gruber_advective_rusanov_cartesian(normal, argvals⁻, argvals⁺)
 
-[`kennedy_gruber_advective_cartesian_flux`](@ref) as the central part plus
-the Rusanov penalty `λ⟦q⟧/2` on the conserved variables
-([`rusanov_dissipation_cartesian`](@ref)).
+Kennedy-Gruber central flux minus half the Rusanov dissipation `λ⟦q⟧`.
 """
 function kennedy_gruber_advective_rusanov_cartesian(normal, (y⁻,), (y⁺,))
     F = kennedy_gruber_advective_cartesian_flux(normal, normal, y⁻, y⁺)
@@ -194,8 +150,7 @@ end
 """
     eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
 
-Pressure of the moist equation of state from Thermodynamics.jl at a fixed
-phase partition, `p = ρ R_m(q) T(e_int, q)`. Differentiable in every argument.
+Pressure [Pa] of the moist equation of state at a fixed phase partition.
 """
 @inline function eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
     T = TD.air_temperature(thermo_params, e_int, q_tot, q_liq, q_ice)
@@ -205,14 +160,8 @@ end
 """
     eos_pressure_derivatives(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
 
-`(; p, p_ρ, p_e, p_qt, p_ql, p_qi)`: [`eos_pressure`](@ref) and its partial
-derivatives with respect to density, specific internal energy, and the three
-water species at fixed phase partition, by forward-mode automatic
-differentiation (one dual-number evaluation per derivative). These are the
-only equation-of-state inputs the Roe eigenstructure needs: the sound speed
-is ``c² = p_ρ + p p_e / ρ²`` and ``κ = p_e / ρ`` replaces ``γ − 1`` in the
-energy component of the contact wave. For dry air with constant specific
-heats this recovers ``c² = γ p / ρ`` and ``κ = γ − 1``.
+`(; p, p_ρ, p_e, p_qt, p_ql, p_qi)`: `eos_pressure` and its partial derivatives
+in density, specific internal energy, and the water species, by forward-mode AD.
 """
 @inline function eos_pressure_derivatives(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
     p = eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
@@ -242,27 +191,8 @@ end
 """
     RoeEOSDissipation(thermo_params)
 
-Callable `(normal, y⁻, y⁺) -> D` giving the Roe-type dissipation
-`Σ_k |λ_k| α_k r_k` of (ρ, ρe, ρu⃗-Cartesian) across a face, with the acoustic
-waves damped at `|û_n ± ĉ|` and the contact and shear waves at
-`max(|û_n|, ĉ/20)` (a Harten-type floor that keeps a fraction of the Rusanov
-rate on contact jumps at near-stagnant faces), using the equation of state of
-the model: the sound speed, the contact-wave energy component
-``B = Ĥ − ĉ²/κ̂``, and the species waves come from
-[`eos_pressure_derivatives`](@ref) at the √ρ-averaged state and phase
-partition. A jump of a water species at fixed `ρ`, `p`, `u` changes the
-internal energy by ``−(p_q/p_e) Δq``; that energy, ``−ρ̂ (p_q/p_e) Δq`` per
-species, is dissipated in the `ρe` slot at the rate `λq` (the rate of the
-tracer penalty that moves the species mass, `λqc` for the prognostic
-condensates, zero when they are diagnostic), so the species mass and its
-energy move together across the face and a humidity front does not generate
-spurious temperature jumps. Additional state fields: `e_int`, `q_tot`,
-`q_liq`, `q_ice`, `λq`, `λqc`.
-
-The derivatives are taken at the face's diagnosed phase partition, so the
-sound speed is the frozen-composition one. Not a Roe-average in the sense of
-``ΔF = Â Δq``; for a dissipation term only consistency and the sign of ``|Â|``
-matter, and both hold at the averaged state.
+Roe-type wave dissipation `Σ |λ_k| α_k r_k` of (ρ, ρe, Cartesian ρu) at a face,
+with the sound speed and species waves from the model's equation of state.
 """
 struct RoeEOSDissipation{TP}
     thermo_params::TP
@@ -337,10 +267,8 @@ end
 """
     RoeEOSInterface(central, thermo_params)
 
-Interface flux `central(normal, normal, y⁻, y⁺) − D/2` with `D` the
-[`RoeEOSDissipation`](@ref); `central` is the central part of the volume
-flux family (`kennedy_gruber_advective_cartesian_flux` or
-`divergence_cartesian_flux`). Selected by `dg_interface_flux = roe_eos`.
+Interface flux `central − D/2` with `D` the `RoeEOSDissipation`
+(`dg_interface_flux = roe_eos`).
 """
 struct RoeEOSInterface{C, TP}
     central::C
@@ -364,27 +292,8 @@ end
 """
     LMARSDissipation(ε)
 
-Callable `(normal, y⁻, y⁺) -> D` giving the dissipation of the low-Mach
-approximate Riemann solver (LMARS; Chen et al. 2013) relative to the
-Kennedy--Gruber central flux, for [`CentralMinusDissipation`](@ref). With
-`ρ̄ = {ρ}`, `c̄ = {c}` and the interface velocity
-`u* = {u_n} − ⟦p_m⟧/(2ρ̄c̄)`, the interface mass flux is the upwind
-`F*_ρ = ρ̄u* − s⟦ρ_m⟧/2` at the contact speed `s = max(|u*|, ε c̄)`; every
-carried quantity is upwinded by it at the rate
-[`lmars_carried_rate`](@ref) `r`; and the interface pressure
-`p* = {p} − ρ̄c̄⟦u_n⟧/2` damps the normal velocity jump:
-
-    D_ρ    = ⟦p_m⟧/c̄ + s⟦ρ_m⟧,
-    D_ρu_c = D_ρ{u_c} + r⟦u_c⟧ + ρ̄c̄⟦u_n⟧ n̂_c,
-    D_ρe   = D_ρ{h} + r⟦h⟧,
-
-with `h = e + p/ρ` the specific total enthalpy, which includes `Φ`. The
-`D_ρ{u_c}` part exchanges no kinetic energy, the other two are kinetic-energy
-sinks, and `D_ρ{h}` moves the potential energy of the mass it moves. At low
-Mach number the acoustic part equals that of [`RoeEOSDissipation`](@ref); the
-contact and shear waves are damped advectively. `ε = 0` is pure LMARS. State
-fields: `ρ`, `e`, `p`, `pm`, `ρm`, `uv`, `u1`, `u2`, `u3`, `E1`, `E2`, `E3`,
-`c` (sound speed).
+Dissipation of the low-Mach approximate Riemann solver (Chen et al. 2013),
+with contact speed floor `ε c` (`dg_interface_flux = lmars`).
 """
 struct LMARSDissipation{FT}
     ε::FT
@@ -393,9 +302,8 @@ end
 """
     lmars_carried_rate(F, y⁻, y⁺, ε)
 
-Rate `r = max(|F|, ε {ρ}{c})` [kg m⁻² s⁻¹] at which a specific quantity `χ`
-carried by the LMARS interface mass flux `F` is upwinded: `F{χ} − r⟦χ⟧/2`,
-which is `F χ^up` for `ε = 0`.
+Upwind rate `max(|F|, ε {ρ}{c})` [kg m⁻² s⁻¹] of quantities carried by the
+LMARS interface mass flux `F`.
 """
 @inline lmars_carried_rate(F, y⁻, y⁺, ε) =
     max(abs(F), ε * (y⁻.ρ + y⁺.ρ) / 2 * (y⁻.c + y⁺.c) / 2)
@@ -428,10 +336,8 @@ end
 """
     carried_upwind_rate(interface, F, y⁻, y⁺)
 
-Rate [kg m⁻² s⁻¹] at which the specific quantities carried by the interface
-mass flux `F` of `interface` are upwinded at a face: `lmars_carried_rate` for
-the LMARS dissipation, zero for the others, whose carried quantities are
-penalized at their own rates.
+Upwind rate [kg m⁻² s⁻¹] of quantities carried by the interface mass flux `F`:
+the LMARS rate for `lmars`, zero otherwise.
 """
 carried_upwind_rate(interface, F, y⁻, y⁺) = zero(F)
 carried_upwind_rate(
@@ -449,15 +355,8 @@ const moist_entropy_q_min = 1e-10
 """
     moist_math_entropy(thermo_params, q, q_liq, q_ice, Φ)
 
-Mathematical entropy ``U = −ρ s`` of the moist equation of state as a
-function of the conserved vector `q = (ρ, ρu₁, ρu₂, ρu₃, ρe, [ρq_tot])`
-(`SVector` of length 5 or 6), with the condensate partition `(q_liq, q_ice)`
-and the geopotential `Φ` held fixed. `s` is Thermodynamics.jl's
-`entropy` at the pressure and temperature the model diagnoses from
-`(ρ, e_int, q)`. Thermodynamic stability makes `U` convex in `q`, so the
-entropy variables ``v = ∂U/∂q`` and the Hessian ``∂²U/∂q²`` (symmetric
-positive definite) exist and can be taken by forward-mode autodiff. Used to
-verify the entropy-sink property of [`MoistESDissipation`](@ref).
+Mathematical entropy `−ρ s` of the moist equation of state as a function of the
+conserved vector `q = (ρ, ρu₁, ρu₂, ρu₃, ρe, [ρq_tot])`.
 """
 @inline function moist_math_entropy(
     thermo_params,
@@ -482,26 +381,8 @@ end
 """
     MoistESDissipation{N}(thermo_params)
 
-Callable `(normal, y⁻, y⁺) -> D` giving the Lax-Friedrichs dissipation
-``D = λ Δq`` on the conserved vector `q = (ρ, ρu⃗, ρe[, ρq_tot])` of the moist
-system (`N = 5` dry, `N = 6` with total water). For any convex entropy
-``U(q)`` with entropy variables ``v = ∂U/∂q``, monotonicity of the gradient
-gives ``Δvᵀ D = λ Δvᵀ Δq ≥ 0``, so every face is a sink of every convex
-entropy of the system at once, in particular of the moist physical entropy
-[`moist_math_entropy`](@ref) with its latent heat and vapor mixing terms
-(verified with autodiff entropy variables in
-`test/prognostic_equations/dg_moist_es_tests.jl`). Because ρ, ρe and ρq_tot
-are dissipated at one rate, a humidity front at uniform temperature,
-pressure and velocity is damped toward the mixture of the two states, which
-has the same temperature and pressure: the water mass and the energy it
-carries cross the face together. The ρq_tot slot replaces the generic
-tracer penalty of total water; the condensates keep theirs.
-
-The entropy-variable form ``λ H Δv`` with ``H = (∂²U/∂q²)⁻¹`` (the dry `es`
-form) is sign-definite for the same reason but needs the inverse Hessian,
-which is singular in the water direction as ``q_tot → 0`` (the mixing
-entropy has infinite curvature there) and cannot be solved in `Float32`;
-the two agree to second order in the jump.
+Lax-Friedrichs dissipation `λ Δq` on the conserved vector `(ρ, ρu⃗, ρe[, ρq_tot])`
+(`N = 5` dry, `N = 6` with total water).
 """
 struct MoistESDissipation{N, TP}
     thermo_params::TP
@@ -525,10 +406,8 @@ end
 """
     MoistESInterface{N}(central, thermo_params)
 
-Interface flux `central − D/2` with `D` the [`MoistESDissipation`](@ref);
-with `N = 6` the returned tuple has a `ρq_tot` slot holding the water
-dissipation alone (its central flux stays in the tracer completion).
-Selected by `dg_interface_flux = moist_es`.
+Interface flux `central − D/2` with `D` the `MoistESDissipation`
+(`dg_interface_flux = moist_es`).
 """
 struct MoistESInterface{N, C, TP}
     central::C

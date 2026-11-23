@@ -45,8 +45,8 @@ Create an ExtrudedCubedSphereGrid with topography support.
   - `mesh_warp_type = SLEVEWarp{FT}()`: mesh warping type ([`SLEVEWarp`](@ref) or
     [`LinearWarp`](@ref))
   - `topo_smoothing = false`: apply topography smoothing
-  - `curl_form_metric = false`: replace the vertical metric terms with the
-    curl form of [`curl_form_metric`](@ref); requires `deep_atmosphere = true`
+  - `curl_form_metric = false`: use the curl-form vertical metric; requires
+    `deep_atmosphere = true`
 """
 function SphereGrid(
     ::Type{FT};
@@ -112,23 +112,9 @@ const DeepExtrudedGrid =
 """
     curl_form_metric(grid)
 
-Return `grid` with the contravariant metric `J ∂ξ³/∂x` at cell centers and faces
-replaced by the conservative curl form of Kopriva (2006),
-
-    J a³ = D₁(Q G₂) - D₂(Q G₁) + Jₕ x̂,
-
-where `D₁` and `D₂` are the spectral element derivatives, `Gₖ = r x̂ × ∂x̂/∂ξᵏ` with
-`x̂` the radial unit vector and `r` the planet radius, `Jₕ` is the Jacobian of the
-horizontal grid on the sphere of radius `r`, and `Q ≈ (R² - r²) / (2r)` with
-`R = r + z`. `Q` is accumulated up each column so that its vertical difference
-across a cell is `R Δz / r` at the cell center, matching the horizontal metric
-`J ∂ξʰ/∂x` already in `grid`. The term `Jₕ x̂` is the curl of `r G / 2`, which
-is constant along each column and so leaves the discrete identity intact. In
-Cartesian components, the discrete divergence of a uniform vector field then
-vanishes to round-off for any terrain. `J`, `WJ`, and the horizontal rows of the
-metric are unchanged.
-
-See also [`SphereGrid`](@ref).
+Return `grid` with the vertical contravariant metric `J ∂ξ³/∂x` replaced by the
+curl form of Kopriva (2006), so a uniform vector field has zero discrete divergence
+over terrain.
 """
 function curl_form_metric(grid::DeepExtrudedGrid)
     global_geometry = grid.global_geometry

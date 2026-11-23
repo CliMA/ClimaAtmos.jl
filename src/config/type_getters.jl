@@ -93,9 +93,8 @@ Build the `AtmosNumerics` group from the numerics config keys.
 
 Reads the upwinding schemes (`energy_q_tot_upwinding`, `tracer_upwinding`,
 `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
-converted to a `Symbol`), the limiter (`apply_zhang_shu_limiter`, with its floors
-`zhang_shu_rho_min` and `zhang_shu_p_min`, or `apply_sem_quasimonotone_limiter`;
-the two are mutually exclusive), the `test_dycore_consistency` and
+converted to a `Symbol`), the limiter (`apply_zhang_shu_limiter` or
+`apply_sem_quasimonotone_limiter`), the `test_dycore_consistency` and
 `reproducible_restart` switches, `implicit_diffusion`
 (which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
 `get_hyperdiffusion_model`. `vanleer_limiter` upwinding falls back to `:none` with a
@@ -564,9 +563,8 @@ end
 """
     get_horizontal_discretization(parsed_args)
 
-Map the `horizontal_discretization` config key to a `ClimaCore.Grids`
-discretization: `"CG"` → `Grids.CG()`, `"DG"` → `Grids.DG()`. `nothing`
-(key absent or `~`) follows the quadrature default (CG for GLL).
+Return `Grids.CG()`, `Grids.DG()`, or `nothing` (the default) for the
+`horizontal_discretization` config key.
 """
 function get_horizontal_discretization(parsed_args)
     val = get(parsed_args, "horizontal_discretization", nothing)
@@ -591,9 +589,7 @@ topography keys `topography`, `topography_damping_factor`, `mesh_warp_type`, and
 `topo_smoothing`. The sphere reads `h_elem`, `nh_poly`, `bubble`, and
 `deep_atmosphere`, with the planet radius taken from `params`; the box and plane read
 `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`) and are periodic in the
-horizontal. When `horizontal_discretization` is `"DG"`, the
-horizontal spectral-element grid is discontinuous and interface coupling moves from
-DSS to the tendencies' numerical-flux completions.
+horizontal. `horizontal_discretization` selects a CG or DG horizontal grid.
 """
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)

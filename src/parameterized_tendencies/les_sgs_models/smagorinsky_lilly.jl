@@ -66,9 +66,8 @@ Lilly stratification correction from `lilly_stratification_correction`.
 
 Mutates the following fields of `p.precomputed`:
 
-  - `ᶜS`, `ᶠS`: strain rate tensor on centers and faces [1/s]; on DG spaces the
-    horizontal gradients are completed by the central lifting of the velocity
-    jumps across element faces (`complete_dg_strain_rate!`).
+  - `ᶜS`, `ᶠS`: strain rate tensor on centers and faces [1/s], with face
+    liftings on DG spaces.
   - `ᶜS_norm_h`, `ᶜS_norm_v`: horizontal and vertical strain rate norms on centers [1/s].
   - `ᶜνₜ_h`, `ᶜνₜ_v`: horizontal and vertical eddy viscosities on centers [m²/s].
   - `ᶜD_h`, `ᶜD_v`: horizontal and vertical eddy diffusivities on centers [m²/s].
@@ -149,10 +148,7 @@ tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`. Reads `ᶜS`, `ᶠS`, `ᶜν�
 `ᶜD_h`, and `ᶜT` from `p.precomputed` (set by
 `set_smagorinsky_lilly_precomputed_quantities!`) and writes `p.scratch` scalar fields.
 
-On DG spaces the momentum stress divergence is `dg_horizontal_stress_divergence!`
-(central interface flux, Cartesian momentum) and the scalar fluxes are the SIPG
-Laplacian (`diffusionₕ`), so the elements are coupled without the DSS that
-completes `wdivₕ` on CG spaces.
+On DG spaces the fluxes are completed with interface terms.
 
 This tendency is always applied explicitly. It is a no-op unless the model's axes include
 the horizontal directions (`is_smagorinsky_horizontal`); the `::Nothing` method is a

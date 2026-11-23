@@ -103,24 +103,9 @@ end
 """
     rebalance_hydrostatic_pressure(ᶜp_anchor, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜΦ, thermo_params)
 
-Center pressure [Pa] in discrete hydrostatic balance with the model's Exner-split
-vertical pressure gradient,
-
-```math
-∇ᵥΦ - ∇ᵥΦ_r(p) + c_{p,d}\\,\\overline{(θ_v - θ_{vr}(p))}\\,∇ᵥΠ(p) = 0,
-```
-
-at every interior face, with `ᶜT` and the moisture partition held fixed. The
-first level takes `ᶜp_anchor`. Above it, each face between centers `k` and `k+1`
-solves
-
-```math
-F(x) = ΔΦ - (Φ_r(p) - Φ_r(p_k))
-     + \\tfrac{c_{p,d}}{2}\\,(θ_v'_k + θ_v'(p))\\,(Π(p) - Π(p_k)) = 0,
-     \\quad p = e^x,
-```
-
-with `θ_v' = θ_v - θ_{vr}`, by 8 Newton iterations in `x = ln p`.
+Return the center pressure [Pa] in discrete hydrostatic balance with the model's
+Exner-split vertical pressure gradient at fixed `ᶜT` and moisture, anchored at
+`ᶜp_anchor` on the first level.
 """
 function rebalance_hydrostatic_pressure(
     ᶜp_anchor, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶜΦ, thermo_params,
@@ -174,10 +159,8 @@ end
 """
     initial_center_pressure(ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, hydrostatic_rebalance)
 
-Center pressure [Pa] for initializing density: the log-mean of the face pressure
-`ᶠp`, or, with `hydrostatic_rebalance = true`, the
-[`rebalance_hydrostatic_pressure`](@ref) column anchored at that value on the
-first level.
+Return the center pressure [Pa] for initializing density: the log-mean of `ᶠp`,
+rebalanced hydrostatically when `hydrostatic_rebalance = true`.
 """
 function initial_center_pressure(
     ᶠp, Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, thermo_params, hydrostatic_rebalance,
@@ -444,8 +427,7 @@ end
 
 Overwrite the prognostic state `Y` with data regridded from a NetCDF file.
 Recomputes vertical pressure levels assuming hydrostatic balance from
-surface pressure. With `hydrostatic_rebalance = true`, density is initialized
-from [`rebalance_hydrostatic_pressure`](@ref) instead.
+surface pressure, rebalanced discretely when `hydrostatic_rebalance = true`.
 
 Expected variables in the file:
 

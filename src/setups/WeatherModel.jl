@@ -21,9 +21,7 @@ then overwrites the whole prognostic state with ERA5 data located by
   - `use_full_pressure = false`: Whether to read the 3D pressure from the file
     instead of integrating it hydrostatically.
   - `hydrostatic_rebalance = false`: Whether to rebalance the column pressure
-    against the model's discrete Exner-split vertical pressure gradient,
-    anchored at the first level of the integrated or file pressure (see
-    `rebalance_hydrostatic_pressure`).
+    against the model's discrete vertical pressure gradient.
 
 # Fields
 
@@ -61,9 +59,8 @@ end
 """
     temperature_below_surface(T₁, z, z_sfc)
 
-Temperature [K] at height `z` [m]: `T₁` at or above the source surface height
-`z_sfc` [m], and `T₁ + Γ (z_sfc - z)` below it, with the standard lapse rate
-`Γ = 0.0065` K/m.
+Return the temperature [K] at height `z` [m], extended below `z_sfc` [m] at
+6.5 K/km from `T₁`.
 """
 function temperature_below_surface(T₁, z, z_sfc)
     Γ = oftype(T₁, 0.0065)
@@ -73,10 +70,8 @@ end
 """
     pressure_below_surface(thermo_params, T₁, p₁, q_vap, z, z_sfc)
 
-Pressure [Pa] at height `z` [m]: `p₁` at or above the source surface height
-`z_sfc` [m], and below it the hydrostatic profile `p₁ (T / T₁)^(g / (R_m Γ))`
-of the temperature from [`temperature_below_surface`](@ref), with `R_m` the gas
-constant of air with vapor specific humidity `q_vap`.
+Return the pressure [Pa] at height `z` [m], extended hydrostatically below
+`z_sfc` [m] along the 6.5 K/km temperature profile.
 """
 function pressure_below_surface(thermo_params, T₁, p₁, q_vap, z, z_sfc)
     Γ = oftype(T₁, 0.0065)

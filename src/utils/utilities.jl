@@ -292,10 +292,7 @@ end
 
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
 
-On DG spaces the gradient of each velocity component is the strong gradient
-completed by its central face lift (`Operators.central_gradient_lift`), the
-DG gradient that the SIPG horizontal diffusion is built on; the element-local
-strong gradient alone misses the velocity jumps at element faces.
+On DG spaces the gradients include the central face lifting.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
     axis_uvw = (Geometry.UVWAxis(),)

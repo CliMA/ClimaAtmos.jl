@@ -1,11 +1,7 @@
 """
     ReferenceProfile()
 
-A resting atmosphere on the hydrostatic reference state (`T_r(p)` of
-`air_temperature_reference`, `p_r(z)` from inverting `phi_r`):
-`pm = p − p_ref ≡ 0` pointwise, so the reference-deviation amplitudes of the
-flux-form DG interface dissipation vanish and the terrain C-property of the
-discretization can be verified directly.
+A resting atmosphere on the hydrostatic reference state, `p = p_ref(z)`.
 """
 struct ReferenceProfile end
 

@@ -818,7 +818,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     if use_prognostic_tke(turbconv_model)
         (; ᶜu) = p.precomputed
         ᶜρtkeₜ_diffusion = p.scratch.ᶜtemp_scalar_3
-        Operators.scalar_laplacian!(
+        horizontal_scalar_laplacian!(
             ᶜρtkeₜ_diffusion,
             ᶜtke;
             weight = (@. lazy(ᶜρ * ᶜK_u_h)),
@@ -835,11 +835,8 @@ end
 """
     edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
 
-Momentum part of [`edmfx_sgs_horizontal_diffusive_flux_tendency!`](@ref): the
-horizontal weak divergence of the SGS stress `τ = -2 K_u S` with the full
-center strain rate `ᶜS` (overwritten with `τ`), for `uₕ` at centers and `u₃`
-at faces. On DG spaces, the Laplacian form of
-[`dg_sgs_horizontal_momentum_diffusion!`](@ref) instead.
+Add the horizontal divergence of the SGS stress `τ = -2 K_u S` to `uₕ` and `u₃`
+(overwrites `ᶜS` with `τ`); the Laplacian form on DG spaces.
 """
 function edmfx_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p, ᶜS)
     is_dg_horizontal(axes(Y.c)) &&
@@ -865,14 +862,8 @@ end
 """
     dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
 
-Horizontal SGS momentum diffusion on DG spaces, in Laplacian form: the SIPG
-Laplacian `∇ₕ⋅(ρ K_u ∇ₕuᵢ) / ρ` (`Operators.scalar_laplacian!`) of each
-Cartesian component `uᵢ` of the horizontal velocity at centers, projected onto
-the local horizontal plane, and of the vertical velocity `w` at interior faces,
-with the weight `ρ K_u` interpolated to faces. Unlike the stress divergence on CG spaces,
-it omits the transpose part `(∇u)ᵀ` of the strain rate, which vanishes for
-uniform `K_u` and nondivergent flow, and the vertical-shear part of the face
-stress.
+Add the SIPG Laplacian `∇ₕ⋅(ρ K_u ∇ₕuᵢ) / ρ` of each Cartesian velocity
+component at centers and of `w` at interior faces (DG spaces).
 """
 function dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
     (; ᶜK_u_h, ᶜu) = p.precomputed
@@ -882,7 +873,7 @@ function dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
     ᶜuv = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜu))
     ᶜ∇²uᵢ = p.scratch.ᶜtemp_scalar_3
     for i in 1:3
-        Operators.scalar_laplacian!(
+        horizontal_scalar_laplacian!(
             ᶜ∇²uᵢ,
             (@. lazy(cartesian_velocity_component(ᶜuv, ᶜcoord, i)));
             weight = ᶜρK_u,
@@ -895,7 +886,7 @@ function dg_sgs_horizontal_momentum_diffusion!(Yₜ, Y, p)
     @. ᶠρ = ᶠinterp(ᶜρ)
     @. ᶠρK_u = ᶠρ * ᶠinterp(ᶜK_u_h)
     ᶠ∇²w = p.scratch.ᶠtemp_scalar_3
-    Operators.scalar_laplacian!(
+    horizontal_scalar_laplacian!(
         ᶠ∇²w,
         (@. lazy(w_component(Geometry.WVector(Y.f.u₃))));
         weight = ᶠρK_u,
@@ -910,8 +901,7 @@ end
 """
     horizontal_unit_vectors(coord)
 
-The eastward and northward unit vectors at `coord` as Cartesian `SVector`s:
-geocentric on the sphere, `x̂` and `ŷ` on a plane.
+Return the eastward and northward unit vectors at `coord` as Cartesian `SVector`s.
 """
 function horizontal_unit_vectors(coord::Geometry.LatLongZPoint)
     (; lat, long) = coord
@@ -925,8 +915,7 @@ horizontal_unit_vectors(coord) = (SA.SVector(1, 0, 0), SA.SVector(0, 1, 0))
 """
     cartesian_velocity_component(uv, coord, i)
 
-The `i`-th Cartesian component of the horizontal velocity `uv` (`UVVector`) at
-`coord`.
+Return the `i`-th Cartesian component of the horizontal velocity `uv` at `coord`.
 """
 function cartesian_velocity_component(uv, coord, i)
     e_east, e_north = horizontal_unit_vectors(coord)
@@ -936,8 +925,7 @@ end
 """
     horizontal_velocity_of_cartesian(uᵢ, coord, i)
 
-The `UVVector` projection onto the horizontal plane at `coord` of the vector
-whose only nonzero Cartesian component is the `i`-th, `uᵢ`.
+Return the horizontal `UVVector` at `coord` of the Cartesian vector `uᵢ ê_i`.
 """
 function horizontal_velocity_of_cartesian(uᵢ, coord, i)
     e_east, e_north = horizontal_unit_vectors(coord)

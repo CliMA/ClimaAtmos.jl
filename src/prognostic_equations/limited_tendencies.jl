@@ -3,22 +3,8 @@ import ClimaCore: Limiters
 """
     ZhangShuPressureBound(R_d, cv_d, cv_v, T_0, e_int_v0, κ_min)
 
-Constraint `g(U, off)` of the Zhang–Shu limiter: a lower bound on the pressure
-of one node's conserved state `U = (; ρ, ρe_tot, ρu1, ρu2[, ρq_tot, ...])`,
-with `off` the specific energy held unscaled (see `zhang_shu_limiter!`).
-
-With all water taken as vapor, the Thermodynamics internal energy
-`e_int = cv_m (T − T_0) + q e_int_v0 − (1 − q) R_d T_0` gives the thermal energy
-
-    ρ cv_m T = ρe_int − ρq e_int_v0 + (ρ − ρq)(R_d + cv_d) T_0 + ρq cv_v T_0,
-
-with `ρe_int = ρe_tot − |ρuₕ|²/(2ρ) − ρ off`. It is linear in `(ρ, ρe_tot, ρq)`
-minus the convex `|ρuₕ|²/(2ρ)`, so concave in `U`, as the limiter's bisection
-requires. Since `p = (R_m/cv_m) ρ cv_m T` and
-`R_m/cv_m ≥ κ_min = min(R_d/cv_d, R_v/cv_v)`, `g = κ_min ρ cv_m T ≤ p` wherever
-`T > 0`, so `g ≥ p_min` implies `p ≥ p_min`. Taking condensate as vapor only lowers the
-estimate of `T` (by the latent heat of the condensate; phase differences in
-heat capacity are neglected), which keeps the bound on the admissible side.
+Concave lower bound [Pa] on the pressure of one node's conserved state `U`,
+with all water taken as vapor and `off` the specific energy held unscaled.
 """
 struct ZhangShuPressureBound{FT}
     R_d::FT
@@ -49,9 +35,8 @@ end
 """
     ZhangShuAdmissibility(pressure_bound, ρ_min, p_min)
 
-Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smaller
-of `ρ − ρ_min` and `pressure_bound(U, off) − p_min`, with `pressure_bound` a
-[`ZhangShuPressureBound`](@ref).
+Concave admissibility constraint
+`min(ρ − ρ_min, pressure_bound(U, off) − p_min) ≥ 0`.
 """
 struct ZhangShuAdmissibility{G, FT}
     pressure_bound::G
@@ -64,11 +49,8 @@ end
 """
     ZhangShuLimiterCache(Y, params, FT, ρ_min, p_min)
 
-Cache of `zhang_shu_limiter!` for the state `Y`: the ClimaCore
-`PositivityLimiter` of the tracer floors (`nothing` without tracers), the one
-of the density floor `ρ_min` [kg/m³] and pressure floor `p_min` [Pa], and,
-with water, the vapor density `ρq_vap` and its value `ρq_vap_prev` before the
-floors (`nothing` otherwise).
+Cache of `zhang_shu_limiter!`: the ClimaCore positivity limiters for the tracer
+floors and the density [kg/m³] and pressure [Pa] floors, and the vapor density.
 """
 struct ZhangShuLimiterCache{L1, L2, V}
     tracer_limiter::L1
@@ -103,9 +85,8 @@ condensate_names(Y) =
 """
     zhang_shu_floor_states(Y, ρq_vap)
 
-`NamedTuple` of the fields the Zhang–Shu floors act on: every grid-mean tracer
-of `Y.c` other than the water species, plus the vapor density `ρq_vap`
-(`nothing` without water).
+`NamedTuple` of the fields the Zhang–Shu floors act on: the non-water grid-mean
+tracers and the vapor density.
 """
 zhang_shu_floor_states(Y, ρq_vap) =
     isnothing(ρq_vap) ? zhang_shu_tracers(Y) :
@@ -120,33 +101,9 @@ zhang_shu_floor_states(Y, ρq_vap) =
 """
     zhang_shu_limiter!(Y, p, lim)
 
-Apply the Zhang–Shu (2010) positivity limiter to the grid-mean state, in
-place; a no-op when `lim` is `nothing`.
-
-In each element:
-
- 1. Each negative condensate density is raised to zero at its node. The
-    thermodynamics diagnoses a negative condensate as zero
-    (`set_precomputed_quantities!`), so this changes no diagnosed quantity
-    and nothing else is changed: total water, energy, `T` and `u` are
-    untouched, and the condensate mass as a species grows by the undershoot.
- 2. The vapor density `ρq_tot − Σ ρq_cond` and each grid-mean tracer other
-    than the water species is scaled toward its WJ-weighted element mean by
-    the largest `θ₁ ∈ [0, 1]` keeping it nonnegative at every node. The vapor
-    increment `δ` is added to `ρq_tot`, to `ρ` and, times the element-mean
-    velocity, to `ρuₕ`, and `ρe_tot` receives `δ` times the element mean of
-    `I_v(T) + K + Φ`, with `T`, `K` from `p.precomputed`.
- 3. The conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean
-    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min` and `p ≥ p_min` at every node
-    ([`ZhangShuAdmissibility`](@ref)).
-
-The horizontal momentum is staged in scratch as the orthonormal components
-ρu1/ρu2 and written back to `uₕ`; the face vertical velocity is left unscaled.
-The auxiliary field `off = K − (u1² + u2²)/2 + Φ` carries the rest of the
-specific energy, with `K` the model's kinetic energy (`compute_kinetic`).
-
-Called from `constrain_state!` on every stage value, so
-`update_constrain_state_every` must be `"stage"` or `"dss"`.
+Apply the Zhang–Shu (2010) positivity limiter to the grid-mean state in place,
+keeping condensates, vapor, and tracers nonnegative and `ρ ≥ ρ_min`, `p ≥ p_min`
+at every node while conserving element means. No-op when `lim` is `nothing`.
 """
 zhang_shu_limiter!(Y, p, ::Nothing) = nothing
 NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::ZhangShuLimiterCache)
@@ -211,8 +168,7 @@ end
 """
     zhang_shu_tracers(Y)
 
-`NamedTuple` of the grid-mean tracer fields of `Y.c` (every name for which
-`is_tracer_var` holds), which the Zhang–Shu limiter keeps nonnegative.
+`NamedTuple` of the grid-mean tracer fields of `Y.c`.
 """
 function zhang_shu_tracers(Y)
     names = filter(is_tracer_var, propertynames(Y.c))

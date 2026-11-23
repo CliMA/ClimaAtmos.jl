@@ -1807,19 +1807,9 @@ struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMono
 """
     ZhangShuLimiter{FT}(ρ_min, p_min)
 
-Marker selecting the Zhang–Shu (2010) positivity limiter (`zhang_shu_limiter!`),
-applied in `constrain_state!` to every stage value: the vapor and each
-grid-mean tracer other than the water species is scaled at every node toward
-its WJ-weighted element mean to keep it nonnegative, the mass and energy of the
-vapor this moves going with it; a negative condensate, which the
-thermodynamics diagnoses as zero, is raised to zero at its node; then the grid-mean conserved vector
-(ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean by one θ ∈ [0, 1]
-enforcing ρ ≥ ρ_min and p ≥ p_min — mean-preserving convex combinations, not pointwise clamps; the pointwise
-grid-mean microphysics constraints are skipped. Intended for DG horizontal discretizations,
-whose transport is not sign-preserving at nodes. Selected by
-`apply_zhang_shu_limiter: true` (with `update_constrain_state_every` `"stage"`
-or `"dss"`), with the floors from `zhang_shu_rho_min` [kg/m³] and
-`zhang_shu_p_min` [Pa].
+Marker selecting the Zhang–Shu (2010) positivity limiter for DG horizontal
+discretizations, with density floor `ρ_min` [kg/m³] and pressure floor `p_min`
+[Pa]. Selected by `apply_zhang_shu_limiter: true`.
 """
 struct ZhangShuLimiter{FT}
     ρ_min::FT
@@ -1893,25 +1883,13 @@ symbols or strings.
   - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for
     vertical diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
-  - `dg_vi_velocity_penalty`: `Val(:rusanov)` or `Val(:wave_selective)`, the
-    velocity jump penalty of the vector-invariant horizontal DG form.
-  - `dg_vi_shear_floor`: floor ε of the wave-selective shear speed
-    `max(|u_n|, ε c)`.
-  - `dg_lmars_floor`: floor ε of the LMARS contact speed `max(|u*|, ε c)` and
-    of its upwind rate `max(|F*_ρ|, ε ρ c)`; zero is pure LMARS.
-  - `dg_vi_interface_flux`: `Val(:rusanov)`, `Val(:rusanov_moist)`, or
-    `Val(:es)`, the variables the vector-invariant DG face penalties act on
-    (conserved `ρe_tot` and `u`; the energy at fixed composition with the
-    water flux carrying its mass and energy; or the entropy variables).
-  - `dg_tracer_penalty`: `Val(:acoustic)` or `Val(:advective)`, the rate of
-    the DG tracer jump penalties, `|u| + c` or `max(|u|, ε c)`.
-  - `dg_fddg_vertical`: `Val(:vi)` or `Val(:full_flux)`, the vertical
-    momentum transport in the flux-form DG dynamics (the vector-invariant
-    exchange terms, or the staggered flux form for `uₕ` and `w`).
-  - `dg_vertical_cross_term`: `Val(:gcl)` or `Val(:kpep)`, the horizontal-
-    velocity part of the vertical mass flux on DG horizontal spaces (the
-    free-stream-preserving commutator form, or the interpolated form that
-    pairs with the kinetic energy).
+  - `dg_vi_velocity_penalty`: vector-invariant DG velocity jump penalty.
+  - `dg_vi_shear_floor`: floor ε of the shear speed `max(|u_n|, ε c)`.
+  - `dg_lmars_floor`: floor ε of the LMARS contact speed and upwind rate.
+  - `dg_vi_interface_flux`: variables of the vector-invariant DG face penalties.
+  - `dg_tracer_penalty`: rate of the DG tracer jump penalties.
+  - `dg_fddg_vertical`: vertical momentum transport of the flux-form DG dynamics.
+  - `dg_vertical_cross_term`: horizontal-velocity part of the DG vertical mass flux.
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -2036,21 +2014,13 @@ types for compile-time dispatch.
   - `hyperdiff`: Hyperdiffusion model; defaults to a `Float32` `Hyperdiffusion`
     with the CAM-SE vorticity coefficient, `divergence_damping_factor = 5`, and
     `prandtl_number = 1.0`. Pass `nothing` to disable hyperdiffusion.
-  - `dg_vi_velocity_penalty = :rusanov`: Velocity jump penalty of the
-    vector-invariant horizontal DG form, `:rusanov` or `:wave_selective`.
-  - `dg_vi_shear_floor = 0.05`: Floor ε of the wave-selective shear speed
-    `max(|u_n|, ε c)`.
-  - `dg_lmars_floor = 0`: Floor ε of the LMARS contact speed `max(|u*|, ε c)`;
-    zero is pure LMARS.
-  - `dg_vi_interface_flux = :rusanov`: Variables of the vector-invariant DG
-    face penalties, `:rusanov` (conserved), `:rusanov_moist` (energy at fixed
-    composition) or `:es` (entropy variables).
-  - `dg_tracer_penalty = :acoustic`: Rate of the DG tracer jump penalties,
-    `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
-  - `dg_fddg_vertical = :vi`: Vertical momentum transport in the flux-form
-    DG dynamics, `:vi` or `:full_flux`.
-  - `dg_vertical_cross_term = :gcl`: Horizontal-velocity part of the vertical
-    mass flux on DG horizontal spaces, `:gcl` or `:kpep`.
+  - `dg_vi_velocity_penalty = :rusanov`: `:rusanov` or `:wave_selective`.
+  - `dg_vi_shear_floor = 0.05`: floor ε of the shear speed `max(|u_n|, ε c)`.
+  - `dg_lmars_floor = 0`: floor ε of the LMARS contact speed.
+  - `dg_vi_interface_flux = :rusanov`: `:rusanov`, `:rusanov_moist`, or `:es`.
+  - `dg_tracer_penalty = :acoustic`: `:acoustic` or `:advective`.
+  - `dg_fddg_vertical = :vi`: `:vi` or `:full_flux`.
+  - `dg_vertical_cross_term = :gcl`: `:gcl` or `:kpep`.
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 

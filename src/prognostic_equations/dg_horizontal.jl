@@ -11,13 +11,67 @@ The vorticity liftings act on the same fields as their volume curls
 written.
 =#
 
-import ClimaCore: Grids
+import ClimaCore: Grids, Quadratures
+
+"""
+    horizontal_scalar_laplacian!(out, χ; weight)
+
+Write the horizontal Laplacian `∇ₕ⋅(weight ∇ₕχ)` into `out`. On DG spaces, the
+SIPG Laplacian with penalty `τ = weight Nq² / h_elem`, `h_elem` the smaller
+element width; `Operators.scalar_laplacian!` otherwise.
+"""
+function horizontal_scalar_laplacian!(out, χ; weight)
+    is_dg_horizontal(axes(χ)) ||
+        return Operators.scalar_laplacian!(out, χ; weight)
+    space = axes(χ)
+    FT = Spaces.undertype(space)
+    q = Operators._dg_scalar_argument(space, χ)
+    q === out && (q = Operators._aliased_argument_copy(out))
+    T = eltype(q)
+    G_uv = Operators._laplacian_scratch_field(
+        space,
+        Geometry.UVVector{T},
+        :scalar_laplacian_gradient,
+    )
+    R_uv = Operators._laplacian_scratch_field(
+        space,
+        Geometry.UVVector{T},
+        :scalar_laplacian_lifting,
+    )
+    τ = Operators._laplacian_scratch_field(space, FT, :scalar_laplacian_penalty)
+    hspace = Spaces.horizontal_space(space)
+    Nq = Quadratures.degrees_of_freedom(Spaces.quadrature_style(hspace))
+    C = FT(Nq^2)
+    lg = Fields.local_geometry_field(space)
+    @. τ = weight * C / element_width(lg)
+    return Operators.sipg_laplacian_tendency!(
+        out,
+        G_uv,
+        R_uv,
+        q,
+        weight,
+        one(FT),
+        τ,
+    )
+end
+
+"""
+    element_width(lg)
+
+Return the smaller horizontal width [m] of the element containing the node
+with local geometry `lg`.
+"""
+@inline function element_width(lg)
+    ∂x∂ξ = lg.∂x∂ξ
+    h₁ = hypot(∂x∂ξ[1, 1], ∂x∂ξ[2, 1])
+    h₂ = hypot(∂x∂ξ[1, 2], ∂x∂ξ[2, 2])
+    return 2 * min(h₁, h₂)
+end
 
 """
     is_dg_horizontal(space)
 
-Whether the horizontal part of `space` is a discontinuous (`Grids.DG`)
-spectral-element space.
+Whether the horizontal part of `space` is a DG spectral-element space.
 """
 function is_dg_horizontal(space::Spaces.AbstractSpace)
     h_space = Spaces.horizontal_space(space)
@@ -31,8 +85,7 @@ end
 """
     central_curl12_lift(normal, (w⁻,), (w⁺,))
 
-Central lifting for the horizontal components of ``∇ × (w r̂)``:
-``n̂ × r̂ (w^* − w_side)``, returned as a `UVVector`.
+Central face lifting of the horizontal curl of `w r̂`, as a `UVVector`.
 """
 central_curl12_lift(normal, (w⁻,), (w⁺,)) =
     ((w⁺ - w⁻) / 2) *
@@ -41,11 +94,7 @@ central_curl12_lift(normal, (w⁻,), (w⁺,)) =
 """
     rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺, λ⁺, β⁺))
 
-λ-jump penalty ``max(λ)/2 ({ρ}{β}/ρ⁻β⁻) ⟦q⟧`` with own-side ρβ weighting.
-With ``β ≡ 1`` the face kinetic-energy production is ``−max(λ)/2 {ρ}⟦u⟧² ≤ 0``
-and momentum is conserved exactly; with ``β = ρ/p`` (``ρβu`` is the entropy
-variable of ``u`` at fixed ρ, ρe_tot) the face entropy production is
-``−max(λ)/2 {ρ}{β}⟦u⟧² ≤ 0`` exactly.
+Face jump penalty ``max(λ)/2 ({ρ}{β}/ρ⁻β⁻) ⟦q⟧`` on the scalar `q`.
 """
 rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺, λ⁺, β⁺)) =
     max(λ⁻, λ⁺) / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * ((β⁻ + β⁺) / 2 / β⁻) * (q⁺ - q⁻)
@@ -59,13 +108,9 @@ rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺
 """
     wave_selective_jump_penalty_lift(normal, (uv⁻, ρ⁻, c⁻, β⁻, ε), (uv⁺, ρ⁺, c⁺, β⁺, _))
 
-ρ-weighted jump penalty on the orthonormal horizontal velocity with separate
-normal and tangential rates, ``({ρ}{β}/2ρ⁻β⁻) Λ ⟦u⟧`` with
-``Λ = λ_n n̂n̂ᵀ + λ_t (I − n̂n̂ᵀ)``, ``λ_n = max(|u_n| + c)`` (acoustic) and
-``λ_t = max(|{u_n}|, ε max(c))`` (shear). With ``β ≡ 1`` the face
-kinetic-energy production is ``−{ρ}(λ_n⟦u_n⟧² + λ_t⟦u_t⟧²)/2 ≤ 0`` and
-``ρ⁻ℓ⁻ + ρ⁺ℓ⁺ = 0``; with ``β = ρ/p`` the face entropy production is
-``−({ρ}{β}/2)⟦u⟧·Λ⟦u⟧ ≤ 0``. Returns a `UVVector`.
+ρ-weighted face jump penalty on the horizontal velocity, at the acoustic speed
+`|u_n| + c` for the normal component and the shear speed `max(|{u_n}|, ε c)` for
+the tangential one. Returns a `UVVector`.
 """
 function wave_selective_jump_penalty_lift(
     normal,
@@ -91,9 +136,8 @@ end
 """
     shear_jump_penalty_lift(normal, (w⁻, ρ⁻, uv⁻, c⁻, β⁻, ε), (w⁺, ρ⁺, uv⁺, c⁺, β⁺, _))
 
-ρ-weighted jump penalty on the vertical velocity `w` across a horizontal
-interface, where `w` is a tangential component and is damped at the shear
-speed ``λ_t = max(|{u_n}|, ε max(c))``: ``λ_t/2 ({ρ}{β}/ρ⁻β⁻) ⟦w⟧``.
+ρ-weighted face jump penalty on the vertical velocity `w` at the shear speed
+`max(|{u_n}|, ε c)`.
 """
 function shear_jump_penalty_lift(
     normal,
@@ -123,10 +167,8 @@ end
 """
     dg_scalars_interface(normal, argvals⁻, argvals⁺)
 
-Interface flux for (ρ, ρe_tot): central part matched to `split_divₕ`
-(`F_ρ = {ρ uv·n̂}`, `F_ρe = F_ρ {h}`) plus a λ-Rusanov penalty on the
-ρ-weighted jump of the specific total energy, `−(λ/2) {ρ} ⟦e⟧`; a density
-jump at uniform `e` moves no energy. State fields: `ρ`, `e`, `h`, `uv`, `λ`.
+Interface flux of (ρ, ρe_tot): central mass and enthalpy flux plus a Rusanov
+penalty `−(λ/2) {ρ} ⟦e_tot⟧`.
 """
 function dg_scalars_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
@@ -139,14 +181,8 @@ end
 """
     dg_scalars_es_interface(normal, (y⁻,), (y⁺,))
 
-Interface flux for (ρ, ρe_tot) with the central part of
-[`dg_scalars_interface`](@ref) and a λ-penalty on the jump of the entropy
-variable ``v = ∂(ρs)/∂(ρe)|_{ρ,u,q} = 1/T`` of the physical entropy ``ρs``:
-``F_ρe = F_ρ {h} − (λ/2) ŵ (1/T⁻ − 1/T⁺)``, ``ŵ = {ρ}{c_v}{T}²``, so that
-``ŵ (1/T⁻ − 1/T⁺) ≈ {ρ}{c_v}⟦T⟧ ≈ ⟦ρe⟧`` at fixed ρ, u and composition. The
-face production of ``ρs`` is ``+(λ/2) ŵ ⟦1/T⟧² ≥ 0``, and the penalty
-vanishes at uniform ``T`` whatever the humidity. State fields: `ρ`, `T`, `cv`
-(moist heat capacity ``c_{vm}``), `h`, `uv`, `λ`.
+Interface flux of (ρ, ρe_tot) with a penalty on the jump of the entropy
+variable `1/T`.
 """
 function dg_scalars_es_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
@@ -161,16 +197,8 @@ end
 """
     dg_scalars_moist_interface(normal, argvals⁻, argvals⁺)
 
-Interface flux for (ρ, ρe_tot) of `dg_vi_interface_flux = rusanov_moist`:
-the central part of [`dg_scalars_interface`](@ref) and a λ-penalty on the
-ρ-weighted jump of the specific total energy at fixed composition,
-``{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`` (Φ is single-valued at the face). For dry air
-``c_v,d ⟦T⟧ + ⟦K⟧ = ⟦e_tot⟧`` exactly, so this is the `rusanov` penalty;
-across a humidity front at uniform temperature and velocity it vanishes,
-whereas ``⟦e_tot⟧`` carries the latent and heat-capacity difference of the
-water, which the water flux moves together with the water's mass
-([`dg_water_es_interface`](@ref)). State fields: `ρ`, `T`, `cv`, `K`, `h`,
-`uv`, `λ`.
+Interface flux of (ρ, ρe_tot) with a penalty on the energy jump at fixed
+composition, `{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`.
 """
 function dg_scalars_moist_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
@@ -185,12 +213,8 @@ end
 """
     dg_tracer_interface(normal, argvals⁻, argvals⁺)
 
-Interface flux for a tracer ρχ advected by the same mass flux as continuity:
-`F_ρχ = {ρ uv·n̂}{χ}` plus a λ-Rusanov penalty on the ρ-weighted jump of the
-specific quantity, `−(λ/2) {ρ} ⟦χ⟧`. With χ uniform the penalty vanishes and
-`F_ρχ = χ F_ρ` exactly, so a uniform tracer stays uniform across a density
-jump. The flux is monotone in (χ⁻, χ⁺) for `λ ≥ |uv·n̂|` on both sides, as the
-Zhang–Shu positivity argument requires. State fields: `ρ`, `uv`, `λ`, `χ`.
+Interface flux of a tracer `ρχ`: `{ρ uv⋅n̂}{χ}` plus a Rusanov penalty
+`−(λ/2) {ρ} ⟦χ⟧`.
 """
 function dg_tracer_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
@@ -203,17 +227,8 @@ end
 """
     dg_water_es_interface(normal, (y⁻,), (y⁺,))
 
-[`dg_tracer_interface`](@ref) for total water under
-`dg_vi_interface_flux = es`: the penalty `d = −(λ/2){ρ}⟦q_tot⟧` also moves
-the mass of the water, `F_ρ = d`, and the energy of the water's actual
-phases. With the diagnostic condensate partition `q_liq`, `q_ice` (so the
-vapor is `q_tot − q_liq − q_ice`) and the per-phase penalties
-`d_s = −(λ/2){ρ}⟦q_s⟧`, the energy flux is
-`F_ρe = d {e_vap} + d_liq {e_liq} + d_ice {e_ice}` with `e_vap = I_v + K + Φ`,
-`e_liq = I_l − I_v` and `e_ice = I_i − I_v`, which equals
-`Σ_s d_s {I_s} + d {K + Φ}` over vapor, liquid and ice: the moved water carries
-the energy of its phases. State fields: `ρ`, `uv`, `λ`, `χ` (= q_tot),
-`q_liq`, `q_ice`, `e_vap`, `e_liq`, `e_ice`.
+Interface flux of total water whose penalty also moves the mass of the water
+and the energy of its vapor, liquid, and ice phases.
 """
 function dg_water_es_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
@@ -232,10 +247,7 @@ end
 """
     moist_sound_speed(thermo_params, ρ, p, q_tot, q_liq, q_ice)
 
-Sound speed ``sqrt(γ_m p / ρ)`` with ``γ_m = c_p,m / c_v,m`` at the given
-composition (the frozen-composition value, equal to
-`Thermodynamics.soundspeed_air` since ``p = ρ R_m T``); reduces to
-``sqrt(γ_d p / ρ)`` for dry air.
+Moist-air sound speed `sqrt(γ_m p / ρ)` [m/s], with `γ_m = c_p,m / c_v,m`.
 """
 @inline function moist_sound_speed(thermo_params, ρ, p, q_tot, q_liq, q_ice)
     γ =
@@ -283,10 +295,7 @@ end
 """
     dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
 
-Wave-selective velocity jump penalties (`dg_vi_velocity_penalty = wave_selective`): [`wave_selective_jump_penalty_lift`](@ref) on uₕ and
-[`shear_jump_penalty_lift`](@ref) on the face vertical velocity, with the
-shear floor `p.atmos.numerics.dg_vi_shear_floor` and the own-side weight `ᶜβ`
-(a center field, or `1`).
+Add the wave-selective face jump penalties on `uₕ` and `u₃` to `Yₜ`.
 """
 function dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
     FT = Spaces.undertype(axes(Y.c))
@@ -363,16 +372,9 @@ end
 """
     dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
 
-Interface completion of `horizontal_dynamics_tendency!` on DG spaces: scalar
-(ρ, ρe_tot) interface fluxes, central liftings of the PGF/K `gradₕ` terms,
-and ρ-weighted velocity jump penalties — uniform λ on uₕ (`rusanov`), or
-wave-selective on uₕ and u₃ (`wave_selective`, see
-[`dg_wave_selective_velocity_penalty!`](@ref)), plus the updraft `u₃` penalty.
-With `dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
-jump ⟦1/T⟧ (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties
-carry the own-side weight {β}/β, β = 1/T; with `rusanov_moist` it acts on
-the energy jump at fixed composition (see
-[`dg_scalars_moist_interface`](@ref)). No-op on CG spaces.
+Add the DG interface terms of `horizontal_dynamics_tendency!`: (ρ, ρe_tot)
+interface fluxes, pressure-gradient liftings, and velocity jump penalties.
+No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -476,11 +478,8 @@ end
 """
     dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
 
-Central interface liftings of the Exner-split horizontal pressure-gradient
-force, `gradₕ(ᶜKΦ) + cp_d (θ_v′ gradₕ Π + gradₕ(θ_v′ Π) − Π gradₕ θ_v′) / 2`
-with `θ_v′ = θ_v − θ_vr(p)`: the same scalars as the `gradₕ` volume terms,
-with `ᶜKΦ` the scalar of the plain gradient (`K + Φ − Φ_r` for the
-vector-invariant form, `Φ − Φ_r` when the flux-form advection carries ∇K).
+Subtract the central face liftings of the Exner-split horizontal pressure
+gradient, with `ᶜKΦ` the scalar of its plain gradient term, from `Yₜ.c.uₕ`.
 """
 function dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
     FT = Spaces.undertype(axes(Y.c))
@@ -577,15 +576,8 @@ end
 """
     dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
 
-Interface completion of `horizontal_tracer_advection_tendency!` on DG spaces:
-the tracer interface flux for every grid-mean tracer. With the VI form and
-`dg_vi_interface_flux = es`, total water uses [`dg_water_es_interface`](@ref):
-its penalty also moves ρ and the energy of the water's phases, taken from the
-diagnostic partition `ᶜq_liq`, `ᶜq_ice` (saturation adjustment for 0M; cloud
-liquid + rain and cloud ice + snow for 1M), so a water exchange leaves T and u
-unchanged to first order in the jumps with either scheme. The 1M condensate
-species are plain tracers; their energy enters through that partition. No-op
-on CG spaces.
+Add the DG interface fluxes of the grid-mean tracers to `Yₜ_lim`. No-op on CG
+spaces.
 """
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -609,11 +601,8 @@ end
 """
     dg_ρtke_interface_completion!(Yₜ, Y, p)
 
-Interface completion of the element-local `split_divₕ` horizontal advection of
-prognostic TKE on DG spaces. `ρtke` is excluded from `is_tracer_var`, so the
-grid-mean tracer completion does not cover it; it is advected by the grid-mean
-mass flux with the same interface flux as the grid-mean tracers. No-op on CG
-spaces.
+Add the DG interface flux of the horizontal `ρtke` advection to `Yₜ`. No-op on
+CG spaces.
 """
 function dg_ρtke_interface_completion!(Yₜ, Y, p)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -625,12 +614,8 @@ end
 """
     dg_fddg_tke_advection!(Yₜ, Y, p)
 
-Horizontal advection of prognostic TKE on DG spaces for the `:fddg` path.
-`horizontal_dynamics_tendency!` returns early for fddg (its `Yₜ.c.ρtke`
-split-divₕ term is skipped) and `dg_fddg_horizontal_dynamics!` only carries
-(ρ, ρe_tot, uₕ), so this adds the transport of `ρtke` by the density flux of
-the dynamics ([`dg_carried_tracer_residual`](@ref)), like the grid-mean
-tracers ([`dg_fddg_tracer_transport!`](@ref)).
+Add the horizontal advection of `ρtke` by the flux-form DG density flux to
+`Yₜ`.
 """
 function dg_fddg_tke_advection!(Yₜ, Y, p)
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
@@ -663,12 +648,8 @@ end
 """
     central_velocity_gradient_lift(normal, (u⁻, lg⁻), (u⁺, lg⁺))
 
-Central lifting that completes the strong-form DG gradient of the velocity `u`
-(any `Geometry` vector, converted to `UVW` with the local geometry `lg` of
-its side), the tensor counterpart of `Operators.central_gradient_lift`:
-`n̂ ⊗ (u⁺ − u⁻)/2` on the minus side, with the derivative direction first, as
-in `gradₕ(UVW(u))`. The `UVW` frame is single-valued at shared nodes, including
-cubed-sphere panel edges, where covariant components are not.
+Central face lifting `n̂ ⊗ (u⁺ − u⁻)/2` of the DG gradient of the velocity `u`,
+in `UVW` components.
 """
 function central_velocity_gradient_lift(normal, (u⁻, lg⁻), (u⁺, lg⁺))
     n₁ = normal.components.data.:1
@@ -712,18 +693,8 @@ end
 """
     complete_dg_strain_rate!(S, u)
 
-Complete on a DG space the strain rate `S` (`UVW × UVW`, from
-`compute_strain_rate_center_full!` or `compute_strain_rate_face_full!` on the
-same space as `u`), and return `S`. The horizontal velocity gradient gets the
-central lifting of the jumps of `u` across element faces
-([`central_velocity_gradient_lift`](@ref)), and on the sphere the turning of
-the local frame (`add_dg_frame_turning_strain!`). The completed horizontal
-gradient is the BR1 gradient, the negative adjoint of the central-flux weak
-divergence of [`dg_horizontal_stress_divergence!`](@ref), so a stress
-`τ = −2ν S` built from it removes resolved kinetic energy at the rate
-`∫ 2ρν ∇u:S` over the horizontal derivatives (Gassner et al. 2018). The
-element-local gradient alone misses the face jumps, which are the
-discontinuities a DG subgrid model has to see. No-op on CG spaces.
+Add the face-jump liftings of `u` (and, on the sphere, the frame turning) to
+the strain rate `S`, and return `S`. No-op on CG spaces.
 """
 function complete_dg_strain_rate!(S, u)
     space = axes(S)
@@ -747,15 +718,9 @@ end
 """
     dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ, ᶠτ, ᶠρ)
 
-Subtract the horizontal divergence of the density-weighted stress, `∇ₕ⋅(ρτ)/ρ`,
-from the momentum tendencies on a DG space: `uₕ` from the center stress `ᶜτ`
-and `u₃` from the face stress `ᶠτ` (`UVW × UVW`, both overwritten with `ρτ`),
-with the face density `ᶠρ`. The divergence is
-`Operators.cartesian_tensor_divergence!` with a central interface flux, the DG
-counterpart of `wdivₕ(ρτ)` on CG spaces: the momentum axis is rotated to global
-Cartesian components, so the face fluxes cancel pairwise and the stress
-conserves Cartesian momentum exactly, as the flux-differencing dynamics do,
-and the connection terms of the sphere are exact.
+Subtract the horizontal divergence `∇ₕ⋅(ρτ)/ρ` of the center stress `ᶜτ` and
+face stress `ᶠτ` from `uₕ` and `u₃` on a DG space; `ᶜτ` and `ᶠτ` are
+overwritten with `ρτ`.
 """
 function dg_horizontal_stress_divergence!(Yₜ, Y, p, ᶜτ, ᶠτ, ᶠρ)
     (; ᶜtemp_strain, ᶠtemp_strain, ᶜtemp_UVW, ᶠtemp_UVW) = p.scratch
@@ -789,26 +754,8 @@ end
 """
     set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, ᶜuₕ, ᶜρ)
 
-GCL-consistent (free-stream-preserving) replacement for `compute_ᶠuₕ³` on DG
-horizontal spaces. The chain-form cross-term `ᶠwinterp(ρJ, CT3(uₕ))` applies
-`u·∇Z` with the center `∇Z` and a wide vertical mean, which does not telescope
-against the horizontal operator's terrain metric (`J∇ξ^{1,2} = J_v ⊙ flat`
-with `J_v_c[v] = z_f[v+1] − z_f[v]` exactly): a divergence-free flow over
-terrain then produces a spurious mass source. The commutator form
-
-    F³[face] = −( T̂(z_f ⊙ ŝ) − z_f ⊙ T̂(ŝ) ),   T̂(X) = ᶠJ · hdiv(X ⊘ ᶠJv)
-
-with `ᶠJv = GradientC2F(ᶜz)` (bitwise the stored face `J_v`) telescopes
-exactly: `δ_v(F³)` cancels the horizontal terrain defect, reducing the 3D
-divergence over terrain to the flat-form horizontal divergence (verified to
-the flat baseline; see docs/dg_fd_gcl_crossterm.md and dg_campaign jobs
-37–41). On flat grids the commutator vanishes identically.
-
-The surface and top face levels keep the chain-form value: the vertical mass
-divergence never reads them (`ᶜadvdivᵥ` has zero-flux boundaries), they only
-feed the `u₃` impenetrability filter — where the pointwise `u·∇Z` is the
-consistent tangency condition — and the boundary-face `WJ_v = J_v/2` special
-case makes the commutator inconsistent by 2× there.
+Set `ᶠuₕ³`, the horizontal-velocity part of the vertical mass flux, in a
+free-stream-preserving form for DG horizontal spaces over terrain.
 """
 function set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, ᶜuₕ, ᶜρ)
     FT = Spaces.undertype(axes(ᶠuₕ³))
@@ -842,8 +789,7 @@ end
 """
     dg_ω³!(ᶜω³, Y)
 
-DG replacement for `ᶜω³ = wcurlₕ(uₕ)`: strong horizontal curl plus the
-central curl lifting.
+Set `ᶜω³` to the DG horizontal curl of `uₕ`.
 """
 function dg_ω³!(ᶜω³, Y)
     FT = Spaces.undertype(axes(Y.c))
@@ -862,10 +808,7 @@ end
 """
     dg_ω¹²_horizontal!(ᶠω¹², ᶠu₃)
 
-DG replacement for `ᶠω¹² += CT12(wcurlₕ(ᶠu₃))`: strong horizontal curl of the
-vertical velocity `ᶠu₃` (grid-mean or updraft) plus the central curl lifting.
-`project` (not `transform`): on warped grids the tangential correction has an
-O(slope) third contravariant component that belongs to the ω³ correction.
+Add the DG horizontal curl of `ᶠu₃` to `ᶠω¹²`.
 """
 function dg_ω¹²_horizontal!(ᶠω¹², ᶠu₃)
     FT = Spaces.undertype(axes(ᶠu₃))
@@ -893,14 +836,8 @@ end
 """
     dg_fddg_flux_setup(Y, p)
 
-State tuple and flux functions of the flux-form DG family selected by
-`dg_volume_flux` and `dg_interface_flux`, shared by the dynamics
-([`dg_fddg_horizontal_dynamics!`](@ref)) and the tracer transport
-([`dg_fddg_tracer_transport!`](@ref)), so the tracers ride exactly the
-density flux of the dynamics. Returns a `NamedTuple` of the state tuple `y`,
-the two-point `volume_flux`, the `interface` flux (with its mass
-dissipation), its central part `iface_central`, and the fields the dynamics
-reuses.
+Return the state tuple and the volume and interface flux functions of the
+flux-form DG dynamics.
 """
 function dg_fddg_flux_setup(Y, p)
     FT = Spaces.undertype(axes(Y.c))
@@ -1058,14 +995,8 @@ end
 """
     dg_carried_tracer_residual(volume_flux, mass_interface, y, ᶜχ, ᶜλχ)
 
-Mass-weighted residual of `ρχ` for a specific quantity `χ` carried by the
-mass flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with
-`F_ρ` the density slot of `volume_flux`, and the interface flux
-`F*_ρ {χ} − (r/2 + (λχ/2){ρ})(χ⁺ − χ⁻)` with `F*_ρ` the density slot of
-`mass_interface` (its mass dissipation included), `r` its upwind rate
-([`carried_upwind_rate`](@ref)), and the ρ-weighted tracer penalty at the
-rate `λχ`. For uniform `χ` the residual is `χ` times the density residual, so
-a uniform specific quantity stays uniform.
+Return the mass-weighted residual of `ρχ` for `χ` carried by the flux-form DG
+mass flux, with a tracer penalty at the rate `ᶜλχ`.
 """
 function dg_carried_tracer_residual(volume_flux, mass_interface, y, ᶜχ, ᶜλχ)
     FT = Spaces.undertype(axes(ᶜχ))
@@ -1089,18 +1020,8 @@ end
 """
     dg_fddg_tracer_transport!(Yₜ_lim, Y, p)
 
-Horizontal transport of the grid-mean tracers (into `Yₜ_lim`) on the
-flux-form DG path, with every tracer
-carried by the density flux of the dynamics
-([`dg_carried_tracer_residual`](@ref) with the volume and interface fluxes of
-[`dg_fddg_flux_setup`](@ref)), so that `F_{ρχ} = F_ρ {χ}` in the volume and
-`F*_{ρχ} = F*_ρ {χ} − λ_χ {ρ} ⟦χ⟧` at faces. The vector-invariant split
-divergence and central interface flux that tracers otherwise use carry
-`{ρ u^ξ}` and `{ρ u_n}`, which differ from the Kennedy--Gruber volume mass flux
-and from the dissipative interface mass flux, so a uniform specific quantity
-would not stay uniform across a density jump. With `moist_es`, total water
-is dissipated with the density in the moist system, so it rides the central
-part of the interface mass flux without a penalty.
+Add the horizontal transport of the grid-mean tracers by the flux-form DG
+density flux to `Yₜ_lim`.
 """
 function dg_fddg_tracer_transport!(Yₜ_lim, Y, p)
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
@@ -1125,11 +1046,8 @@ end
 """
     dg_fddg_mass_carrier(Y, p)
 
-The carried-residual map `χ ↦ R(χ)` of [`dg_carried_tracer_residual`](@ref)
-with the volume and interface fluxes of [`dg_fddg_flux_setup`](@ref) and the
-tracer penalty rate, together with `R(1)`, the density residual of the
-dynamics. Shared by the PrognosticEDMFX updraft transport on the flux-form DG
-path.
+Return the carried-residual map `χ ↦ R(χ)` of the flux-form DG mass flux and
+the density residual `R(1)`.
 """
 function dg_fddg_mass_carrier(Y, p)
     (; y, volume_flux, interface, ᶜλ_tracer) = dg_fddg_flux_setup(Y, p)
@@ -1154,15 +1072,8 @@ end
 """
     dg_fddg_sgs_dynamics!(Yₜ, Y, p)
 
-Horizontal transport of the PrognosticEDMFX updraft mass and moist static
-energy on the flux-form DG path, the counterpart of the `sgsʲ` `split_divₕ`
-terms of `horizontal_dynamics_tendency!`. The updrafts move with the
-grid-mean horizontal velocity, so `ρaʲ` rides the density flux of the
-dynamics as the specific quantity `ρaʲ/ρ` ([`dg_carried_tracer_residual`](@ref)),
-with `F_{ρa} = F_ρ {ρa/ρ}` in the volume and `F*_ρ {ρa/ρ} − λ_χ {ρ} ⟦ρa/ρ⟧`
-at faces, and a uniform updraft mass fraction stays uniform across the
-density jumps of the dynamics. `mseʲ` is advected in advective form by the
-same mass flux.
+Add the horizontal transport of the updraft `ρa` and `mse` by the flux-form DG
+density flux to `Yₜ`.
 """
 function dg_fddg_sgs_dynamics!(Yₜ, Y, p)
     n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -1185,11 +1096,8 @@ end
 """
     dg_fddg_sgs_tracer_transport!(Yₜ_lim, Y, p)
 
-Horizontal advection of the PrognosticEDMFX updraft total water and
-auto-discovered SGS tracers (into `Yₜ_lim`) on the flux-form DG path, the
-counterpart of the `sgsʲ` terms of `horizontal_tracer_advection_tendency!`:
-advective form by the density flux of the dynamics, as for `mseʲ` in
-[`dg_fddg_sgs_dynamics!`](@ref).
+Add the horizontal advection of the updraft `q_tot` and SGS tracers by the
+flux-form DG density flux to `Yₜ_lim`.
 """
 function dg_fddg_sgs_tracer_transport!(Yₜ_lim, Y, p)
     n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -1218,33 +1126,8 @@ end
 """
     dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
 
-Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
-ρe_tot) terms, the Exner-split PGF, and the ω³ horizontal momentum advection
-of `horizontal_dynamics_tendency!` with two-point flux-differencing volume
-terms and interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
-components. Coriolis and the vertical terms are unchanged; the tracers ride
-the same density flux ([`dg_fddg_tracer_transport!`](@ref)).
-
-With `dg_fddg_vertical = full_flux` the vertical transport of the horizontal
-momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)), and so is
-the advection of the vertical velocity ([`dg_fddg_w_flux!`](@ref)).
-
-With `dg_volume_flux = div_exner` the two-point flux is the divergence form
-[`divergence_cartesian_flux`](@ref): the mass flux is the average of the
-nodal mass fluxes, as in the vector-invariant form, so the nodal gradients of
-`κ` and `Φ` exchange kinetic with potential energy exactly (KPEP). With
-`kg_kpep` the Kennedy--Gruber mass flux is kept and the Exner force is
-written in its two-point form ([`KennedyGruberKPEPFlux`](@ref)).
-
-With `dg_volume_flux = kg_exner` only the advection is in flux form
-([`kennedy_gruber_advective_cartesian_flux`](@ref)); the horizontal pressure
-force is the Exner-split
-gradient of the vector-invariant form, `gradₕ(Φ − Φ_r) + cp_d [θ_v′ ∇Π]`
-with its central liftings ([`dg_exner_split_pgf_lift!`](@ref)). Gradients
-of scalars are pointwise exact on constants, so over terrain this form
-does not depend on the discrete metric identity that the two-point
-pressure flux `{p_m}{ê_c ⋅ Ja^k}` fails to satisfy across the horizontal
-collocation and vertical FD operators.
+Add the flux-form DG horizontal dynamics tendencies of (ρ, ρe_tot, uₕ), and of
+`u₃` with `dg_fddg_vertical = full_flux`, to `Yₜ`.
 """
 NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     FT = Spaces.undertype(axes(Y.c))
@@ -1428,14 +1311,8 @@ end
 """
     dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
 
-Mass-weighted center residuals of two scalars `χa`, `χb` carried by the mass
-flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with `F_ρ`
-the density slot of `volume_flux`, and the interface flux
-`F*_ρ {χ} − (r/2)⟦χ⟧` with `F*_ρ` the density slot of `interface`, including
-its mass dissipation, and `r` its upwind rate ([`carried_upwind_rate`](@ref),
-zero except for LMARS). This is the transport that makes `χ` kinetic-energy
-consistent with the density (the horizontal kinetic-energy lemma with
-`F_{ρχ} = {χ} F_ρ`); the upwind part is a kinetic-energy sink.
+Return the mass-weighted residuals of two scalars carried by the flux-form DG
+mass flux.
 """
 function dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
     FT = Spaces.undertype(axes(ᶜχa))
@@ -1462,13 +1339,8 @@ end
 """
     dg_w_horizontal_tendency(volume_flux, interface, y, ᶜdyρ, ᶠw, ᶜρWJ)
 
-Horizontal flux-form advection of the face vertical velocity `w` on the dual
-grid: the face two-point mass flux is the average of the two adjacent
-center-level ones, so the face residual of `ρ_f w` is
-`(R_k(w_{k+1/2}) + R_{k+1}(w_{k+1/2})) / 2` with `R_k(χ)` the carried-scalar
-residual of center level `k`, and the face mass residual is the average of
-the center ones, `ᶜdyρ`. Returns `ẇ` on the interior faces (zero on the
-bottom and top faces) in velocity form, `(R_{ρw} − w R_ρ) / I_f(ρ WJ)`.
+Return the horizontal flux-form advection tendency `ẇ` [m/s²] of the face
+vertical velocity, zero on the bottom and top faces.
 """
 function dg_w_horizontal_tendency(volume_flux, interface, y, ᶜdyρ, ᶠw, ᶜρWJ)
     ᶜspace = axes(ᶜdyρ)
@@ -1486,14 +1358,8 @@ end
 """
     dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ)
 
-Vertical flux-form advection of `w` on the dual grid, with
-`G = I_f(ρJ) u³` the face mass flux of the continuity equation (zero on the
-bottom and top faces): the dual-cell flux at center `k` is
-`I_c(G)_k I_c(w)_k`, and
-`I_f(ρJ) ẇ = −δ(I_c(G) I_c(w)) + w δ(I_c(G))`. Because
-`I_f(ρJ)` evolves by `−δ(I_c(G))` under the continuity equation, this is the
-two-point flux `{w} I_c(G)` on the dual grid and conserves `½ I_f(ρJ) w²`.
-Returns `ẇ` on the interior faces.
+Return the vertical flux-form advection tendency `ẇ` [m/s²] of the face
+vertical velocity, zero on the bottom and top faces.
 """
 function dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ)
     δ = Operators.GradientC2F(;
@@ -1511,37 +1377,8 @@ end
 """
     dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
 
-Flux-form momentum for the vertical velocity with
-`dg_fddg_vertical = full_flux`, replacing the vector-invariant advection
-`ω¹² × uₕ + ∇ᵥκ` of the `u₃` equation (the Coriolis term stays):
-
-  - the physical vertical velocity `w = u₃ / J_v` on faces is advected in
-    flux form on the dual grid, horizontally by
-    [`dg_w_horizontal_tendency`](@ref) and vertically by
-    [`dg_w_vertical_tendency`](@ref), both with mass fluxes whose dual-cell
-    divergence is the face average of the center mass tendency, so the
-    advection conserves `½ ρ_f w²`;
-
-  - on the deep-atmosphere grid, the metric pair of the momentum equation
-    in a radial frame, `−w uₕ / r` on centers and `+|uₕ|² / r` on faces, with
-    the face-to-center weights the adjoint of the center-to-face average, so
-    the pair exchanges kinetic energy exactly.
-
-  - a face dissipation of `w`, the `ρ_f`-weighted jump penalty
-    [`shear_jump_penalty_lift`](@ref) at the shear speed `max(|{u_n}|, ε c)`
-    with `ρ_f` the dual density: an exact kinetic-energy sink that conserves
-    momentum and moves no mass, so the KPEP gravity pairing is unchanged and
-    the removed kinetic energy is returned as internal energy. Without it
-    `w` has no face dissipation, since its advection no longer exchanges
-    energy with the Roe-damped `uₕ` through the vector-invariant terms.
-    With `dg_interface_flux = lmars` the horizontal advection upwinds `w` by
-    the interface mass flux instead, and this penalty is off.
-
-The physical vertical acceleration `a` is applied as `u₃ += J_v a` with the
-covariant horizontal compensation `uₕ += (I_c(J_v a) / J_v) e_z ⋅ e_i`, which
-cancels the horizontal velocity the `u₃` increment induces through the
-terrain tilt (zero on unwarped grids). The bottom and top faces are left to
-the impenetrability condition.
+Add the flux-form advection, deep-atmosphere metric terms, and face jump
+penalty of the vertical velocity to `Yₜ`, for `dg_fddg_vertical = full_flux`.
 """
 function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
     FT = Spaces.undertype(axes(Y.c))
@@ -1624,18 +1461,8 @@ end
 """
     dg_fddg_vertical_flux!(Yₜ, Y, p, (u1, u2, u3), (eE1, eE2, eE3), (eN1, eN2, eN3))
 
-Staggered flux-form vertical transport of the Cartesian horizontal momentum
-for `dg_fddg_vertical = full_flux` (replacing the `ω¹² × u³` term of
-`explicit_vertical_advection_tendency!`): advection by the face mass flux of
-the continuity equation,
-`m = ᶠinterp(ρJ) u³` (zero through the surface and the top), in velocity
-form `du_c = −(δ(m {u_c}) − u_c δ(m)) / (ρJ)`, with `{u_c} = ᶠinterp(u_c)`.
-This is the two-point Kennedy-Gruber momentum flux `{ρ}{u_c}{u³}` on the
-two-point vertical stencil, so the vertical advection produces no spurious
-kinetic energy (the summand `½ u_k·u_{k+1} m_{k+½}` telescopes).
-
-The Cartesian tendencies are projected onto the tangential (E, N) frame and
-converted to the covariant `uₕ` state like the horizontal flux-form terms.
+Add the flux-form vertical transport of the horizontal momentum to `Yₜ.c.uₕ`,
+for `dg_fddg_vertical = full_flux`.
 """
 function dg_fddg_vertical_flux!(
     Yₜ,

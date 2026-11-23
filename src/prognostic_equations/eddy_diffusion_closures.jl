@@ -1027,24 +1027,19 @@ add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscr
 """
     diffusionₕ(ᶜχ, ᶜw, p)
 
-Horizontal diffusion `∇ₕ⋅(ᶜw ∇ₕχ)` of the center scalar `ᶜχ` with the center
-weight `ᶜw`. On CG spaces it is the lazy weak divergence `wdivₕ(ᶜw gradₕ(ᶜχ))`,
-whose elements are coupled by the DSS of the tendency. On DG spaces it is the
-SIPG Laplacian (`Operators.scalar_laplacian!`), whose face terms couple the
-elements, written into `p.scratch.ᶜdg_diffusion` and valid until the next call.
+Return the horizontal diffusion `∇ₕ⋅(ᶜw ∇ₕχ)` of the center scalar `ᶜχ`: lazy
+on CG spaces, the SIPG Laplacian in `p.scratch.ᶜdg_diffusion` on DG spaces.
 """
 function diffusionₕ(ᶜχ, ᶜw, p)
     ᶜout = p.scratch.ᶜdg_diffusion
     return isnothing(ᶜout) ? Operators.scalar_laplacian(ᶜχ; weight = ᶜw) :
-           Operators.scalar_laplacian!(ᶜout, ᶜχ; weight = ᶜw)
+           horizontal_scalar_laplacian!(ᶜout, ᶜχ; weight = ᶜw)
 end
 
 """
     add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
 
-Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the horizontal
-diffusion `∇ₕ⋅(ᶜw (c_p ∇ₕT + ∇ₕΦ))` (`diffusionₕ`) to `ᶜρe_totₜ`, with the
-center weight `ᶜw`.
+Add the horizontal diffusion `∇ₕ⋅(ᶜw (c_p ∇ₕT + ∇ₕΦ))` to `ᶜρe_totₜ`.
 """
 function add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
     (; ᶜΦ) = p.core
@@ -1467,9 +1462,8 @@ cloud_species_phase(_) = nothing
         ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
     )
 
-Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the horizontal
-diffusion `∇ₕ⋅(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
-(`diffusionₕ`) to `ᶜρe_totₜ`, with the center weight `ᶜw`.
+Add the horizontal diffusion of the enthalpy carried by the water species,
+`∇ₕ⋅(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`, to `ᶜρe_totₜ`.
 """
 function add_water_enthalpy_diffusionₕ!(
     ᶜρe_totₜ,
