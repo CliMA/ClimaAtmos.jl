@@ -8,6 +8,14 @@ import CloudMicrophysics as CM
 import StaticArrays as SA
 
 """
+    atmos_default_toml_dict(FT)
+
+ClimaParams defaults for `FT`, overridden by `Parameters.DEFAULT_PARAMS_FILEPATH`.
+"""
+atmos_default_toml_dict(::Type{FT}) where {FT} =
+    CP.create_toml_dict(FT; override_file = CAP.DEFAULT_PARAMS_FILEPATH)
+
+"""
     ClimaAtmosParameters(::Type{FT})
     ClimaAtmosParameters(
         toml_dict;
@@ -22,7 +30,8 @@ import StaticArrays as SA
 Construct the parameter set for a ClimaAtmos configuration.
 
 Every value is read from a ClimaParams TOML dictionary. The `FT` method builds
-the default dictionary for that float type; the `toml_dict` method takes a
+the ClimaParams defaults for that float type, overridden by
+`Parameters.DEFAULT_PARAMS_FILEPATH`; the `toml_dict` method takes a
 dictionary that may already carry overrides, e.g. one created with
 `CP.create_toml_dict(FT; override_file)` from a run or calibration TOML. An
 override therefore reaches every parameter set through the same dictionary, and
@@ -69,7 +78,7 @@ params = CA.ClimaAtmosParameters(Float64)
 ```
 """
 ClimaAtmosParameters(::Type{FT}; kwargs...) where {FT <: AbstractFloat} =
-    ClimaAtmosParameters(CP.create_toml_dict(FT); kwargs...)
+    ClimaAtmosParameters(atmos_default_toml_dict(FT); kwargs...)
 
 function ClimaAtmosParameters(
     toml_dict::TD;
@@ -328,7 +337,7 @@ A `NamedTuple` with:
   - `activation`: `CloudMicrophysics` aerosol-activation parameters.
 """
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    cloud_parameters(CP.create_toml_dict(FT))
+    cloud_parameters(atmos_default_toml_dict(FT))
 
 cloud_parameters(toml_dict::CP.ParamDict) = (;
     liquid = CM.Parameters.CloudLiquid(toml_dict),
@@ -433,7 +442,7 @@ microphys_1m_parameters(
     ::Type{FT};
     options_kwargs...,
 ) where {FT <: AbstractFloat} =
-    microphys_1m_parameters(CP.create_toml_dict(FT); options_kwargs...)
+    microphys_1m_parameters(atmos_default_toml_dict(FT); options_kwargs...)
 
 microphys_1m_parameters(
     toml_dict::CP.ParamDict;
@@ -450,7 +459,7 @@ Build the `CloudMicrophysics` 2-moment warm-rain parameter set, without ice.
 See `get_microphysics_2m_p3_parameters` for the variant that includes P3 ice.
 """
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    microphys_2m_parameters(CP.create_toml_dict(FT))
+    microphys_2m_parameters(atmos_default_toml_dict(FT))
 
 function microphys_2m_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = false)
@@ -470,7 +479,7 @@ scheme.
     `ClimaParams.create_toml_dict`.
 """
 get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
+    get_microphysics_2m_p3_parameters(atmos_default_toml_dict(FT))
 
 function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)
@@ -610,7 +619,7 @@ TurbulenceConvectionParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    TurbulenceConvectionParameters(CP.create_toml_dict(FT), overrides)
+    TurbulenceConvectionParameters(atmos_default_toml_dict(FT), overrides)
 
 function TurbulenceConvectionParameters(
     toml_dict::CP.ParamDict,
@@ -740,7 +749,7 @@ SGSQuadratureParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    SGSQuadratureParameters(CP.create_toml_dict(FT), overrides)
+    SGSQuadratureParameters(atmos_default_toml_dict(FT), overrides)
 
 function SGSQuadratureParameters(
     toml_dict::CP.ParamDict,
@@ -925,7 +934,7 @@ SurfaceTemperatureParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    SurfaceTemperatureParameters(CP.create_toml_dict(FT), overrides)
+    SurfaceTemperatureParameters(atmos_default_toml_dict(FT), overrides)
 
 function SurfaceTemperatureParameters(
     toml_dict::CP.ParamDict,
@@ -954,7 +963,7 @@ NonOrographicGravityWaveParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    NonOrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+    NonOrographicGravityWaveParameters(atmos_default_toml_dict(FT), overrides)
 
 function NonOrographicGravityWaveParameters(
     toml_dict::CP.ParamDict,
@@ -1000,7 +1009,7 @@ OrographicGravityWaveParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    OrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+    OrographicGravityWaveParameters(atmos_default_toml_dict(FT), overrides)
 
 function OrographicGravityWaveParameters(
     toml_dict::CP.ParamDict,
@@ -1037,7 +1046,7 @@ BeresSourceParameters(
     ::Type{FT},
     overrides = NamedTuple(),
 ) where {FT <: AbstractFloat} =
-    BeresSourceParameters(CP.create_toml_dict(FT), overrides)
+    BeresSourceParameters(atmos_default_toml_dict(FT), overrides)
 
 function BeresSourceParameters(toml_dict::CP.ParamDict, overrides = NamedTuple())
     name_map = (;

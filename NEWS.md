@@ -39,6 +39,13 @@ main
   `PrognosticEDMFX` updraft MSE, and add the `Setups.MPACE` single-layer Arctic
   mixed-phase cloud setup (`MPACEForcing`, `prognostic_edmfx_isdac_column.yml`,
   and `prognostic_edmfx_mpace_column.yml`).
+- ![][badge-🔥behavioralΔ] ![][badge-✨feature/enhancement] `toml/default_parameters.toml`
+  is applied to every `AtmosConfig` as a default layer: ClimaParams defaults, then this
+  file, then the files under the `toml` config key. Its entries are not overrides, so
+  `strict_params` does not flag unused ones. `ClimaAtmosParameters(FT)` (and so
+  `AtmosModel`, `AtmosSimulation(model; ...)` and the presets) and the single-set `FT`
+  constructors such as `TurbulenceConvectionParameters(FT)` also apply it. Runs that did
+  not list it change results. Its path is `ClimaAtmos.Parameters.DEFAULT_PARAMS_FILEPATH`.
 - ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
   In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
   temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice

@@ -141,7 +141,7 @@ end
     # Defaults from ClimaParams (name_map) or the provisional block of
     # `SGSQuadratureParameters`.
     for FT in (Float32, Float64)
-        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        sq = CA.SGSQuadratureParameters(CP.create_toml_dict(FT))
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == FT(1.24)
         @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
         @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
@@ -178,7 +178,7 @@ end
         )
     end
     @test CAP.edmf_buoyancy_clear_env_weight(
-        CA.TurbulenceConvectionParameters(Float64),
+        CA.TurbulenceConvectionParameters(CP.create_toml_dict(Float64)),
     ) == 0
     for f_ev in (-0.1, 1.1)
         @test_throws ArgumentError CA.TurbulenceConvectionParameters(
@@ -211,7 +211,8 @@ end
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
         @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
         @test CAP.cloud_fraction_eps_rel(sq) == 0.25
-        @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
+        @test CAP.sgs_liquid_uniform_fraction(sq) ==
+              CAP.sgs_liquid_uniform_fraction(CA.SGSQuadratureParameters(Float32))
     end
     # The parameter log leaves out the superseded ClimaParams value of `c_Δx`,
     # so a rerun from the log keeps the code default, while an override equal
@@ -526,4 +527,46 @@ end
         @test CA.turbulent_entrainment(tc, FT(0.002), FT(5000), FT(0), tke, R) ≈
               e0 * exp(-(FT(5000) / FT(3500))^2)
     end
+end
+
+@testset "ClimaAtmos default parameters" begin
+    name = "zd_rayleigh"
+    defaults = CA.atmos_default_toml_dict(Float64)
+    atmos_default = defaults.data[name]["value"]
+    @test atmos_default != CP.create_toml_dict(Float64).data[name]["value"]
+
+    # The defaults file reaches `toml_dict` without being listed under `toml`
+    config = CA.AtmosConfig(Dict(); job_id = "parameter_test_atmos_defaults")
+    @test config.toml_dict.data[name]["value"] == atmos_default
+
+    # Every entry is read once every optional parameter set is built
+    CA.ClimaAtmosParameters(
+        config.toml_dict;
+        microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+        has_non_orographic_gw = true,
+        has_orographic_gw = true,
+        has_beres_source = true,
+    )
+    unread = filter(collect(keys(defaults.override_dict))) do key
+        !haskey(config.toml_dict.data[key], "used_in")
+    end
+    @test isempty(unread)
+
+    # `ClimaAtmosParameters(FT)`, used without a config, applies it as well
+    @test CAP.max_area(CA.ClimaAtmosParameters(Float64)) ==
+          defaults.data["EDMF_max_area"]["value"]
+
+    # A `toml` file overrides it, and only `toml` files are overrides
+    override_file = joinpath(mktempdir(), "override.toml")
+    write(override_file, "[$name]\nvalue = 12345.0\ntype = \"float\"\n")
+    config = CA.AtmosConfig(
+        Dict("toml" => [override_file]);
+        job_id = "parameter_test_atmos_defaults_override",
+    )
+    @test config.toml_dict.data[name]["value"] == 12345.0
+    @test collect(keys(config.toml_dict.override_dict)) == [name]
+
+    # `strict_params` does not flag unused defaults
+    CP.get_parameter_values(config.toml_dict, [name], "test")
+    @test isnothing(CP.check_override_parameter_usage(config.toml_dict, true))
 end

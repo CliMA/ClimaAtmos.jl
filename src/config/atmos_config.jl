@@ -9,8 +9,9 @@ A fully resolved ClimaAtmos configuration, used to build an `AtmosModel` and
 # Fields
 
   - `toml_dict`: the merged ClimaParams TOML parameter dictionary (built by
-    `ClimaParams.create_toml_dict` from the files listed under the `toml` config
-    key). It holds the physical parameter values (with units and defaults) that
+    `ClimaParams.create_toml_dict` from the ClimaParams defaults, then
+    `Parameters.DEFAULT_PARAMS_FILEPATH`, then the files listed under the `toml`
+    config key). It holds the physical parameter values (with units and defaults) that
     the model reads, as opposed to `parsed_args`, which holds the run/model
     configuration options. `eltype(toml_dict)` determines the float type `FT`.
   - `parsed_args`: the run configuration as a `key => value` dictionary, obtained
@@ -122,7 +123,8 @@ The dicts are merged (later ones override earlier ones), and the result override
 defaults from `default_config.yml` (see `override_default_config`). The float type `FT`
 is set by the `FLOAT_TYPE` key (`"Float64"` gives `Float64`; anything else gives
 `Float32`), the parameter files listed under the `toml` key are merged in order (later
-files override earlier ones) into the ClimaParams TOML dictionary, and `artifact"name"`
+files override earlier ones) over the ClimaParams and ClimaAtmos
+(`Parameters.DEFAULT_PARAMS_FILEPATH`) defaults, and `artifact"name"`
 strings in config values are resolved to local artifact paths.
 
 # Keyword Arguments
@@ -163,10 +165,11 @@ function AtmosConfig(
         isfile(joinpath(pkgdir(@__MODULE__), file)) ?
         joinpath(pkgdir(@__MODULE__), file) : error("Parameter file $file not found.")
     end
-    # Later files override earlier ones, so a case file lists only its
-    # differences from a shared base such as `toml/default_parameters.toml`.
+    # Later files override earlier ones.
     override_file = CP.merge_toml_files(atmos_toml; override = true)
-    toml_dict = CP.create_toml_dict(FT; override_file)
+    # Workaround because ClimaParams doesn't allow layering param dicts
+    defaults = atmos_default_toml_dict(FT).data
+    toml_dict = CP.create_toml_dict(FT; override_file, default_file = defaults)
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
     isempty(job_id) &&

@@ -99,17 +99,18 @@ configuration:
 toml: [parameters.toml]
 ```
 
-and run as usual. Three behaviors to know about:
+and run as usual. Four behaviors to know about:
 
+  - [`toml/default_parameters.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/default_parameters.toml)
+    is applied to every run, over the ClimaParams defaults and under the files
+    listed under `toml`. Its entries are defaults, not overrides, so
+    `strict_params` ignores the ones a run does not use.
   - The `toml` key accepts several files, merged in order: a parameter set in
     more than one file takes the value from the last one, and a warning names
     it with both values. The warning prints each entry's `type`, so give every
     entry of a parameter set in more than one file a `type` field; without it
     the warning is replaced by a logged `KeyError`, though the merge still
     succeeds.
-    [`toml/default_parameters.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/default_parameters.toml)
-    gives every entry a `type`, so a case file can list only its differences
-    from it: `toml: [toml/default_parameters.toml, my_case.toml]`.
   - A `toml:` key in a later configuration file *replaces* the earlier list
     rather than appending to it. Many shipped model configurations already
     carry one (e.g. `toml/default_parameters.toml` in the BOMEX example above),

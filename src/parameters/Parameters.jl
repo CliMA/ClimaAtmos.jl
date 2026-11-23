@@ -34,6 +34,19 @@ import CloudMicrophysics as CM
 import SurfaceFluxes as SF
 
 """
+    DEFAULT_PARAMS_FILEPATH
+
+Path to `toml/default_parameters.toml`, the ClimaAtmos defaults for
+atmosphere-only parameters.
+
+`AtmosConfig` layers this file over the ClimaParams defaults and under the
+files listed under the `toml` config key. Shared constants (thermodynamics,
+surface fluxes, radiation, planet) stay in ClimaParams.
+"""
+const DEFAULT_PARAMS_FILEPATH =
+    joinpath(pkgdir(Parameters), "toml", "default_parameters.toml")
+
+"""
     AbstractClimaAtmosParameters
 
 Supertype of the top-level ClimaAtmos parameter sets, aliased `ACAP`.
