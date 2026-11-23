@@ -44,7 +44,6 @@ function bomex_edmfx_config_dict(; extra...)
         "dt" => "1secs",
         "t_end" => "10secs",
         "ode_algo" => "ARS222",
-        "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
         "output_default_diagnostics" => false,
     )
     for (key, value) in extra

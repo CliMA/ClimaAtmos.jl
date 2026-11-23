@@ -21,6 +21,5 @@ x_elem: 2
 y_elem: 2
 dt: 120secs
 t_end: 6hours
-toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [8, 8, 64]
 ode_algo: "ARS222"

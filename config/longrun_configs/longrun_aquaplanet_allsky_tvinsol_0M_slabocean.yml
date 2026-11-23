@@ -9,4 +9,3 @@ rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
 microphysics_model: "0M"
-toml: [toml/default_parameters.toml]

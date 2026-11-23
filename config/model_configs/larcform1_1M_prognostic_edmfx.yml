@@ -34,9 +34,6 @@ ode_algo: ARS222
 # Model Components
 #==========================================================================================#
 
-# Parameters #
-toml: [toml/default_parameters.toml]
-
 # Radiation #
 rad: allskywithclear
 insolation: larcform1

@@ -27,5 +27,4 @@ dt: "10secs"
 t_end: "5hours"
 dt_save_state_to_disk: "30mins"
 perturb_initstate: false
-toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 11]

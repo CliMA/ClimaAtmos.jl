@@ -340,7 +340,6 @@ if MANYTESTS
                 "debug_tendency_diagnostics" => false,
                 "cloud_liquid_terminal_velocity" => "Stokes",
                 "toml" => [
-                    joinpath(@__DIR__, "../toml/default_parameters.toml"),
                     joinpath(
                         @__DIR__,
                         "../toml/cloud_sedimentation_restart_test.toml",
@@ -412,7 +411,6 @@ else
             "radiation_reset_rng_seed" => true,
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
-                joinpath(@__DIR__, "../toml/default_parameters.toml"),
                 joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),

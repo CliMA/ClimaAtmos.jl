@@ -20,7 +20,6 @@ dt: "1secs"
 # t_end: "1hours"
 t_end: "20mins"
 dt_save_state_to_disk: "1hours"
-toml: [toml/default_parameters.toml]
 check_nan_every: 1
 ## Diagnostics
 output_default_diagnostics: false

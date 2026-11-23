@@ -45,7 +45,8 @@ main
   `strict_params` does not flag unused ones. `ClimaAtmosParameters(FT)` (and so
   `AtmosModel`, `AtmosSimulation(model; ...)` and the presets) and the single-set `FT`
   constructors such as `TurbulenceConvectionParameters(FT)` also apply it. Runs that did
-  not list it change results. Its path is `ClimaAtmos.Parameters.DEFAULT_PARAMS_FILEPATH`.
+  not list it change results, and the shipped configs no longer list it. Its path is
+  `ClimaAtmos.Parameters.DEFAULT_PARAMS_FILEPATH`.
 - ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
   In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
   temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice
