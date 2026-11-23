@@ -456,11 +456,25 @@ add_diagnostic_variable!(short_name = "ts", units = "K",
 ###
 # Near-surface air temperature (2d)
 ###
+# The screen-level temperature of the surface flux solve, or the temperature of
+# the bottom cell center where there is none: `T_2m` is NaN in coupled runs
+# until the coupler first writes it (see `init_sfc_conditions_zero!`)
+function compute_tas(_, cache, _)
+    (; ᶜT, sfc_conditions) = cache.precomputed
+    (; T_2m) = sfc_conditions
+    T_bottom = Fields.Field(Fields.field_values(Fields.level(ᶜT, 1)), axes(T_2m))
+    return @. lazy(ifelse(isnan(T_2m), T_bottom, T_2m))
+end
+
 add_diagnostic_variable!(short_name = "tas", units = "K",
     long_name = "Near-Surface Air Temperature",
     standard_name = "air_temperature",
-    comments = "Temperature at the bottom cell center of the atmosphere",
-    compute = (_, cache, _) -> Fields.level(cache.precomputed.ᶜT, 1),
+    comments = "Air temperature 2 m above the surface, reconstructed from the \
+                Monin-Obukhov profiles of the surface flux solve (supplied by \
+                the coupler in coupled runs); the temperature of the bottom \
+                cell center where there is no such profile (exchange \
+                coefficients, or a coupled run before the coupler supplies it)",
+    compute = compute_tas,
 )
 
 ###
