@@ -452,6 +452,305 @@ add_diagnostic_variable!(short_name = "detr", units = "s^-1",
 )
 
 ###
+# Updraft detrainment of moisture and condensate (3d)
+###
+@inline _sum_lazy_tuple(t::Tuple{Any}) = t[1]
+@inline _sum_lazy_tuple(t::Tuple) =
+    @. lazy(t[1] + _sum_lazy_tuple(Base.tail(t)))
+
+@inline _updraft_q_tot(_, cache, ::MoistMicrophysics, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_tot_nonnegʲs, j)
+@inline _updraft_q_lcl(_, cache, ::EquilibriumMicrophysics0M, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_liqʲs, j)
+@inline _updraft_q_lcl(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_lcl
+@inline _updraft_q_icl(_, cache, ::EquilibriumMicrophysics0M, ::Val{j}) where {j} =
+    getproperty(cache.precomputed.ᶜq_iceʲs, j)
+@inline _updraft_q_icl(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_icl
+@inline _updraft_q_rai(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_rai
+@inline _updraft_q_sno(state, _, ::NonEquilibriumMicrophysics, ::Val{j}) where {j} =
+    getproperty(state.c.sgsʲs, j).q_sno
+
+function _hydrometeor_shed_rate(
+    χ_name,
+    c_χ,
+    state,
+    ᶜdetrʲ,
+    ᶜρa⁰,
+    tc_model::PrognosticEDMFX,
+    ::Val{j},
+) where {j}
+    zero_FT = zero(eltype(ᶜρa⁰))
+    ᶜχʲ = MatrixFields.get_field(getproperty(state.c.sgsʲs, j), χ_name)
+    ᶜχ⁰ = ᶜspecific_env_value(χ_name, state.c, ᶜρa⁰, tc_model)
+    return @. lazy(c_χ * ᶜdetrʲ * max(zero_FT, ᶜχʲ - max(zero_FT, ᶜχ⁰)))
+end
+
+function _compute_detr_q(
+    q_getter::F,
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX;
+    shed_spec = nothing,
+) where {F}
+    ᶜρ = state.c.ρ
+    FT = eltype(ᶜρ)
+    turbconv_params = CAP.turbconv_params(cache.params)
+    c_detr_cond = FT(CAP.edmf_condensate_detr_coeff(turbconv_params))
+    c_detr_prec = FT(CAP.edmf_precip_detr_coeff(turbconv_params))
+    has_shed =
+        !isnothing(shed_spec) &&
+        mp_model isa NonEquilibriumMicrophysics &&
+        (c_detr_cond > zero(FT) || c_detr_prec > zero(FT))
+    ᶜρa⁰ = has_shed ? (@. ρa⁰(ᶜρ, state.c.sgsʲs, tc_model)) : nothing
+    terms = ntuple(Val(n_mass_flux_subdomains(tc_model))) do j
+        @inline
+        ᶜρaʲ = getproperty(state.c.sgsʲs, j).ρa
+        ᶜdetrʲ = compute_detr(state, cache, time, tc_model, Val(j))
+        ᶜqʲ = q_getter(state, cache, mp_model, Val(j))
+        if !has_shed
+            @. lazy(ᶜρaʲ * ᶜdetrʲ * ᶜqʲ / ᶜρ)
+        elseif shed_spec === :tot
+            ᶜD_lcl = _hydrometeor_shed_rate(
+                @name(q_lcl),
+                c_detr_cond,
+                state,
+                ᶜdetrʲ,
+                ᶜρa⁰,
+                tc_model,
+                Val(j),
+            )
+            ᶜD_icl = _hydrometeor_shed_rate(
+                @name(q_icl),
+                c_detr_cond,
+                state,
+                ᶜdetrʲ,
+                ᶜρa⁰,
+                tc_model,
+                Val(j),
+            )
+            ᶜD_rai = _hydrometeor_shed_rate(
+                @name(q_rai),
+                c_detr_prec,
+                state,
+                ᶜdetrʲ,
+                ᶜρa⁰,
+                tc_model,
+                Val(j),
+            )
+            ᶜD_sno = _hydrometeor_shed_rate(
+                @name(q_sno),
+                c_detr_prec,
+                state,
+                ᶜdetrʲ,
+                ᶜρa⁰,
+                tc_model,
+                Val(j),
+            )
+            @. lazy(ᶜρaʲ * (ᶜdetrʲ * ᶜqʲ + ᶜD_lcl + ᶜD_icl + ᶜD_rai + ᶜD_sno) / ᶜρ)
+        else
+            (χ_name, is_prec) = shed_spec
+            c_χ = is_prec ? c_detr_prec : c_detr_cond
+            ᶜD_χ = _hydrometeor_shed_rate(
+                χ_name,
+                c_χ,
+                state,
+                ᶜdetrʲ,
+                ᶜρa⁰,
+                tc_model,
+                Val(j),
+            )
+            @. lazy(ᶜρaʲ * (ᶜdetrʲ * ᶜqʲ + ᶜD_χ) / ᶜρ)
+        end
+    end
+    return _sum_lazy_tuple(terms)
+end
+
+compute_detr_q_tot(state, cache, time) = compute_detr_q_tot(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_tot(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft total-water detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_tot(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(
+    _updraft_q_tot,
+    state,
+    cache,
+    time,
+    mp_model,
+    tc_model;
+    shed_spec = :tot,
+)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_tot",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Total Water",
+    comments = "Grid-mean mass-weighted updraft detrainment source of total \
+                specific humidity, sum_j (ρa^j * (detr^j * q_tot^j + D_tot^j)) / ρ",
+    compute = compute_detr_q_tot,
+)
+
+compute_detr_q_lcl(state, cache, time) = compute_detr_q_lcl(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_lcl(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft cloud-liquid detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_lcl(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(
+    _updraft_q_lcl,
+    state,
+    cache,
+    time,
+    mp_model,
+    tc_model;
+    shed_spec = (@name(q_lcl), false),
+)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_lcl",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Cloud Liquid Water",
+    comments = "Grid-mean mass-weighted updraft detrainment source of cloud \
+                liquid specific humidity, sum_j (ρa^j * (detr^j * q_lcl^j + D_lcl^j)) / ρ",
+    compute = compute_detr_q_lcl,
+)
+
+compute_detr_q_icl(state, cache, time) = compute_detr_q_icl(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_icl(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft cloud-ice detrainment with a moist model and \
+     with PrognosticEDMFX",
+)
+compute_detr_q_icl(
+    state,
+    cache,
+    time,
+    mp_model::MoistMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(
+    _updraft_q_icl,
+    state,
+    cache,
+    time,
+    mp_model,
+    tc_model;
+    shed_spec = (@name(q_icl), false),
+)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_icl",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Cloud Ice",
+    comments = "Grid-mean mass-weighted updraft detrainment source of cloud \
+                ice specific humidity, sum_j (ρa^j * (detr^j * q_icl^j + D_icl^j)) / ρ",
+    compute = compute_detr_q_icl,
+)
+
+compute_detr_q_rai(state, cache, time) = compute_detr_q_rai(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_rai(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft rain detrainment with non-equilibrium \
+     microphysics and with PrognosticEDMFX",
+)
+compute_detr_q_rai(
+    state,
+    cache,
+    time,
+    mp_model::NonEquilibriumMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(
+    _updraft_q_rai,
+    state,
+    cache,
+    time,
+    mp_model,
+    tc_model;
+    shed_spec = (@name(q_rai), true),
+)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_rai",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Rain",
+    comments = "Grid-mean mass-weighted updraft detrainment source of rain \
+                specific humidity, sum_j (ρa^j * (detr^j * q_rai^j + D_rai^j)) / ρ",
+    compute = compute_detr_q_rai,
+)
+
+compute_detr_q_sno(state, cache, time) = compute_detr_q_sno(
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_detr_q_sno(_, _, _, _, _) = error_diagnostic_variable(
+    "Can only compute updraft snow detrainment with non-equilibrium \
+     microphysics and with PrognosticEDMFX",
+)
+compute_detr_q_sno(
+    state,
+    cache,
+    time,
+    mp_model::NonEquilibriumMicrophysics,
+    tc_model::PrognosticEDMFX,
+) = _compute_detr_q(
+    _updraft_q_sno,
+    state,
+    cache,
+    time,
+    mp_model,
+    tc_model;
+    shed_spec = (@name(q_sno), true),
+)
+
+add_diagnostic_variable!(
+    short_name = "detr_q_sno",
+    units = "kg kg^-1 s^-1",
+    long_name = "Updraft Detrainment Source of Snow",
+    comments = "Grid-mean mass-weighted updraft detrainment source of snow \
+                specific humidity, sum_j (ρa^j * (detr^j * q_sno^j + D_sno^j)) / ρ",
+    compute = compute_detr_q_sno,
+)
+
+###
 # Environment area fraction (3d)
 ###
 compute_aren(state, cache, time) =

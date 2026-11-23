@@ -59,6 +59,7 @@ import ..DecayWithHeightDiffusion
 # turbconv_model
 import ..EDOnlyEDMFX
 import ..PrognosticEDMFX
+import ..n_mass_flux_subdomains
 
 # gravitywave_models
 import ..NonOrographicGravityWave

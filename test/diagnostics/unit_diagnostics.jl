@@ -476,7 +476,8 @@ VALID_CASES = [
     cases(("rhoaen", "taen", "thetaaen", "haen", "husen", "huren"), :m0_pedmfx)...,
     cases(("arup", "aren"), :m0_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
-    cases(("clwup", "cliup"), (:m0_pedmfx, :m1_pedmfx))...,
+    cases(("clwup", "cliup", "detr_q_tot", "detr_q_lcl", "detr_q_icl"), (:m0_pedmfx, :m1_pedmfx))...,
+    cases(("detr_q_rai", "detr_q_sno"), (:m1_pedmfx,))...,
     # 0M+PrognosticEDMFX
     case("prup", :m0_pedmfx),
     # 0M (grid mean), 0M+PrognosticEDMFX: below-cloud evaporation cache
@@ -655,4 +656,49 @@ end
     @test gs(R, R) ≈ FT(4)   # (2R/R)² = 4
     @test gs(FT(10_000), R) > FT(1)
     @test isfinite(gs(FT(30_000), R))
+end
+
+@testset "Zero-allocation 3D process-tendency diagnostics" begin
+    out_c = copy(p_1m_pedmfx.precomputed.ᶜT)
+    mat_into!(out, bc) = (Base.materialize!(out, bc); nothing)
+    mp_terms = (
+        "S_phase_change_vap_lcl",
+        "S_phase_change_vap_icl",
+        "S_acnv_lcl_rai",
+        "S_acnv_icl_sno",
+        "S_accr_lcl_rai",
+        "S_accr_icl_sno",
+        "S_phase_change_vap_rai",
+        "S_phase_change_vap_sno",
+    )
+    process_names = (
+        "detr_q_tot",
+        "detr_q_lcl",
+        "detr_q_icl",
+        ("mp1m_" .* mp_terms)...,
+        ("mp1mup_" .* mp_terms)...,
+        ("mp1men_" .* mp_terms)...,
+    )
+    for name in process_names
+        f = getdiag(name).compute
+        bc = f(Y_1m_pedmfx, p_1m_pedmfx, 0)
+        mat_into!(out_c, bc)
+        allocs = @allocated mat_into!(out_c, bc)
+        @test allocs == 0
+    end
+    # Verify grid-mean mass weighting: detr_q_* == (ρa¹ * detr¹ * q_*¹) / ρ
+    detr_1 = copy(out_c)
+    mat_into!(detr_1, getdiag("detr").compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+    ρa_1 = Y_1m_pedmfx.c.sgsʲs.:(1).ρa
+    ρ_gm = Y_1m_pedmfx.c.ρ
+    for (diag_name, q_1) in (
+        ("detr_q_tot", p_1m_pedmfx.precomputed.ᶜq_tot_nonnegʲs.:(1)),
+        ("detr_q_lcl", Y_1m_pedmfx.c.sgsʲs.:(1).q_lcl),
+        ("detr_q_icl", Y_1m_pedmfx.c.sgsʲs.:(1).q_icl),
+    )
+        mat_into!(out_c, getdiag(diag_name).compute(Y_1m_pedmfx, p_1m_pedmfx, 0))
+        expected = copy(out_c)
+        @. expected = ρa_1 * detr_1 * q_1 / ρ_gm
+        @test parent(out_c) ≈ parent(expected)
+    end
 end
