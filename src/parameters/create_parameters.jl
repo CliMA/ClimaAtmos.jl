@@ -722,6 +722,11 @@ function TurbulenceConvectionParameters(
         ArgumentError("entr_subsat_power must be at least 1; got $entr_subsat_power"),
     )
     parameters = to_svec(parameters)
+    # Held in the type, which keeps it out of GPU kernel arguments.
+    parameters = merge(
+        parameters,
+        (; cloud_fraction_param_vec = Val(parameters.cloud_fraction_param_vec)),
+    )
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VTF3 = typeof(parameters.cloud_fraction_param_vec)
