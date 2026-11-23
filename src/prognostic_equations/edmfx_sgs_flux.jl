@@ -601,12 +601,20 @@ grid-mean diffusion at the same `f_j K_h_h` (about 3.5 for `GLL{4}`) for every
 value of `ρaʲ`, and an element containing a draft-free node carries almost no
 updraft flux. The grid mean receives the same flux divergence as the updraft,
 so the environment receives no residual.
+
+On DG spaces the minimum also covers the face neighbors, whose weight the SIPG
+face terms use.
 """
 function ᶜupdraft_horizontal_diffusion_weight!(ᶜwʲ, ᶜρ, ᶜρaʲ, ᶜK_h_h, f_j)
     a_ε = horizontal_draft_area_floor(eltype(ᶜwʲ))
-    @. ᶜwʲ =
-        ᶜρ * f_j * ᶜK_h_h /
-        sqrt(sqrt(element_meanₕ(1 / max(ᶜρaʲ / ᶜρ, a_ε)^4)))
+    if is_dg_horizontal(axes(ᶜwʲ))
+        ᶜs = dg_face_neighbor_max(@. (a_ε / max(ᶜρaʲ / ᶜρ, a_ε))^4)
+        @. ᶜwʲ = ᶜρ * f_j * ᶜK_h_h * a_ε / sqrt(sqrt(element_meanₕ(ᶜs)))
+    else
+        @. ᶜwʲ =
+            ᶜρ * f_j * ᶜK_h_h /
+            sqrt(sqrt(element_meanₕ(1 / max(ᶜρaʲ / ᶜρ, a_ε)^4)))
+    end
     return ᶜwʲ
 end
 

@@ -25,6 +25,7 @@ Increments (all with a minus sign, i.e., flux divergences and gradients are sink
     temperature minus its reference profile and `Π` is the Exner function.
   - `Yₜ.c.sgsʲs.:(j).ρa` and `Yₜ.c.sgsʲs.:(j).mse` for each updraft `j`, when
     `p.atmos.turbconv_model isa PrognosticEDMFX` (advective form for `mse`).
+  - `Yₜ.f.sgsʲs.:(j).u₃` for each updraft `j` on DG spaces: a face jump penalty.
 
 Reads `Y.c` and, from the cache `p`, the precomputed fields `ᶜu`, `ᶜK`, `ᶜp`, `ᶜT`,
 `ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, `ᶜh_tot` (and `ᶜuʲs` for `PrognosticEDMFX`), the
@@ -43,8 +44,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         use_prognostic_tke(p.atmos.turbconv_model) &&
             dg_fddg_tke_advection!(Yₜ, Y, p)
         # the updraft ρaʲ and mseʲ ride the same density flux
-        p.atmos.turbconv_model isa PrognosticEDMFX &&
+        if p.atmos.turbconv_model isa PrognosticEDMFX
             dg_fddg_sgs_dynamics!(Yₜ, Y, p)
+            dg_updraft_w_penalty!(Yₜ, Y, p)
+        end
         return nothing
     end
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)

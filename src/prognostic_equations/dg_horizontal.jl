@@ -104,6 +104,22 @@ function shear_jump_penalty_lift(
     return λt / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * ((β⁻ + β⁺) / 2 / β⁻) * (w⁺ - w⁻)
 end
 
+face_max_lift(normal, (s⁻,), (s⁺,)) = max(s⁻, s⁺)
+face_unit_lift(normal, (s⁻,), _) = one(s⁻)
+
+"""
+    dg_face_neighbor_max(ᶜs)
+
+Return `ᶜs` with each face node raised to the larger of its value and the
+value across the face (averaged over faces at element corners).
+"""
+function dg_face_neighbor_max(ᶜs)
+    FT = Spaces.undertype(axes(ᶜs))
+    ᶜs_max = Operators.lifting_correction(face_max_lift, FT, ᶜs)
+    ᶜface_weight = Operators.lifting_correction(face_unit_lift, FT, ᶜs)
+    return @. ifelse(ᶜface_weight > 0, ᶜs_max / ᶜface_weight, ᶜs)
+end
+
 """
     dg_scalars_interface(normal, argvals⁻, argvals⁺)
 
@@ -311,14 +327,48 @@ function dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
 end
 
 """
+    dg_updraft_w_penalty!(Yₜ, Y, p)
+
+Add a ρ-weighted face jump penalty on each updraft `w` at the shear speed
+`max(|{u_n}|, ε c)`, on interior faces of DG spaces.
+"""
+function dg_updraft_w_penalty!(Yₜ, Y, p)
+    n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
+    (n == 0 || !is_dg_horizontal(axes(Y.c))) && return nothing
+    FT = Spaces.undertype(axes(Y.c))
+    ε = FT(p.atmos.numerics.dg_vi_shear_floor)
+    (ᶜuv, _) = dg_face_velocity_and_λ(Y, p)
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠρ = @. ᶠinterp(Y.c.ρ)
+    ᶠuv = @. ᶠinterp(ᶜuv)
+    ᶠc = @. ᶠinterp($(dg_sound_speed(Y, p)))
+    for j in 1:n
+        ᶠwʲ = @. Geometry.WVector(Y.f.sgsʲs.:($$j).u₃).components.data.:1
+        pen_w = Operators.lifting_correction(
+            shear_jump_penalty_lift,
+            FT,
+            ᶠwʲ,
+            ᶠρ,
+            ᶠuv,
+            ᶠc,
+            one(FT),
+            ε,
+        )
+        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+            C3(Geometry.WVector($(dg_zero_boundary_faces!(pen_w))), ᶠlg)
+    end
+    return nothing
+end
+
+"""
     dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
 
 Interface completion of `horizontal_dynamics_tendency!` on DG spaces: scalar
 (ρ, ρe_tot) interface fluxes, central liftings of the PGF/K `gradₕ` terms,
 and ρ-weighted velocity jump penalties — uniform λ on uₕ (`rusanov`), or
 wave-selective on uₕ and u₃ (`wave_selective`, see
-[`dg_wave_selective_velocity_penalty!`](@ref)). With
-`dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
+[`dg_wave_selective_velocity_penalty!`](@ref)), plus the updraft `u₃` penalty.
+With `dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
 jump ⟦1/T⟧ (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties
 carry the own-side weight {β}/β, β = 1/T; with `rusanov_moist` it acts on
 the energy jump at fixed composition (see
@@ -391,6 +441,7 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     # gradₕ volume terms in horizontal_dynamics_tendency!)
     ᶜKΦ = @. ᶜK + ᶜΦ - phi_r(thermo_params, ᶜp)
     dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
+    dg_updraft_w_penalty!(Yₜ, Y, p)
 
     if p.atmos.numerics.dg_vi_velocity_penalty === Val(:wave_selective)
         dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
