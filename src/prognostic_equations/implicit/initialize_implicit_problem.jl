@@ -743,8 +743,13 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
     (; turbconv_model) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
-        p.precomputed
+    (;
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜdetr_buoy_scaleʲs,
+        ᶜdetr_nonbuoy_rateʲs,
+    ) = p.precomputed
     FT = eltype(p.params)
     (zero_FT, one_FT, point_one) = (zero(FT), one(FT), FT(0.1))
 
@@ -791,8 +796,11 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
             nonequilibrium_mp ? ᶜmass_source_rate :
             implicit_0m_mp ? p.precomputed.ᶜmp_tendencyʲs.:($j).dq_tot_dt : ()
         rates = (
-            ᶜarea_bounding_entr_detrʲs.:($j), ᶜentr_vel_scaleʲs.:($j),
+            ᶜarea_bounding_entr_detrʲs.:($j),
+            ᶜentr_vel_scaleʲs.:($j),
             ᶜentr_nonvel_rateʲs.:($j),
+            ᶜdetr_buoy_scaleʲs.:($j),
+            ᶜdetr_nonbuoy_rateʲs.:($j),
         )
         # The source of the stage-start area `ρa_old`: the area tendency, which
         # the loop multiplies by `-dtγ` and clamps to `[0, a_max ρʲ]`, when
@@ -807,7 +815,13 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
             p.precomputed.sfc_mass_flux_sourceʲs.:($j), ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz,
         ) do ᶜoffset, ᶜfactor, ᶜρaʲ, (ᶜρa_tendencyʲ, ᶜρa_snapshotʲ), ᶠu₃ʲ, ᶜρʲ,
         ᶜρ_diffʲ, rates, ᶜr_mass_column, mass_flux_source, ᶠgradᵥ_ᶜΦ, ᶜdz, ᶠdz
-            (ᶜarea_bounding_entr_detrʲ, ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ) = rates
+            (
+                ᶜarea_bounding_entr_detrʲ,
+                ᶜentr_vel_scaleʲ,
+                ᶜentr_nonvel_rateʲ,
+                ᶜdetr_buoy_scaleʲ,
+                ᶜdetr_nonbuoy_rateʲ,
+            ) = rates
             ᶜr_massʲ = ᶜr_mass_column === () ? zero_FT : ᶜr_mass_column
             ᶜJ = Fields.local_geometry_field(axes(ᶜρaʲ)).J
             ᶠlg = Fields.local_geometry_field(axes(ᶠu₃ʲ))
@@ -849,7 +863,11 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ, ᶜsnapshot = Y.c.sg
             ᶜexplicit_entr_minus_detr = @. ᶜarea_bounding_entr_detrʲ +
                ᶜentr_vel_scaleʲ * ᶜinterp(ᶠw) +
                ᶜentr_nonvel_rateʲ -
-               ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+               ᶜlower_limiter_factor *
+               (
+                detr_buoy_coeff * ᶜdetr_buoy_scaleʲ * ᶜbuoy_inv_time_scale +
+                ᶜdetr_nonbuoy_rateʲ
+            )
 
             # Draft mass flux through each face, ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face
             ᶠmass_flux = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ * ᶠw

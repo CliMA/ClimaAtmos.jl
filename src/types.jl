@@ -1558,6 +1558,8 @@ Subtypes:
 
   - `PiGroupsEntrainment`: rate built from the nondimensional Π groups (`"PiGroups"`).
   - `InvZEntrainment`: rate proportional to `1/z` above the surface (`"Generalized"`).
+  - `GPInvZEntrainment`: `InvZEntrainment` modulated by a sparse Matérn-3/2 GP
+    over six nondimensional Π groups (`"GPInvZ"`).
 
 Subtypes dispatch `entrainment_velocity_scale`; the area-bounding relaxation in
 `area_bounding_entr_detr` is applied on top and does not dispatch on the model.
@@ -1583,6 +1585,16 @@ upper-area limiter. Selected by `edmfx_entr_model: "Generalized"`.
 struct InvZEntrainment <: AbstractEntrainmentModel end
 
 """
+    GPInvZEntrainment
+
+`InvZEntrainment` velocity scale multiplied by a bounded, OOD- and TTL-tapered
+sparse Matérn-3/2 GP factor over six nondimensional Π groups, using the GP
+table on `TurbulenceConvectionParameters`. Selected by
+`edmfx_entr_model: "GPInvZ"`.
+"""
+struct GPInvZEntrainment <: AbstractEntrainmentModel end
+
+"""
     AbstractDetrainmentModel
 
 Closure for the rate at which updraft air is detrained into the environment.
@@ -1592,11 +1604,13 @@ Subtypes:
 
   - `BuoyancyVelocityDetrainment`: rate from the inverse buoyancy time scale and
     the mass-flux divergence (`"Generalized"`).
+  - `GPBuoyancyDetrainment`: `BuoyancyVelocityDetrainment` with GP modulation of
+    the buoyancy term and a GP-gated non-buoyant lateral mixing term
+    (`"GPBuoyancy"`).
 
 Subtypes dispatch `detrainment_rate`, whose fallback for the abstract type
-returns zero. Only `BuoyancyVelocityDetrainment` currently defines a method, so
-the other subtypes give no dynamical detrainment; the area-bounding relaxation
-in `area_bounding_entr_detr` is applied regardless of the model.
+returns zero; the area-bounding relaxation in `area_bounding_entr_detr` is
+applied regardless of the model.
 """
 abstract type AbstractDetrainmentModel end
 
@@ -1608,6 +1622,16 @@ convergence of the updraft mass flux, multiplied by the lower-area limiter and
 clipped at zero. Selected by `edmfx_detr_model: "Generalized"`.
 """
 struct BuoyancyVelocityDetrainment <: AbstractDetrainmentModel end
+
+"""
+    GPBuoyancyDetrainment
+
+Detrainment model extending `BuoyancyVelocityDetrainment` with a sparse
+Matérn-3/2 GP multiplier on `detr_buoy_coeff` and a GP-gated non-buoyant
+lateral mixing rate active in positively buoyant cores, using the GP table on
+`TurbulenceConvectionParameters`. Selected by `edmfx_detr_model: "GPBuoyancy"`.
+"""
+struct GPBuoyancyDetrainment <: AbstractDetrainmentModel end
 
 """
     AbstractTendencyModel

@@ -69,6 +69,172 @@ function calculate_pi_groups(
 end
 
 """
+    calculate_pi_groups_6(elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
+                          ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke, ᶜq_condʲ, ᶜq_totʲ)
+
+Six local Galilean- and gauge-invariant nondimensional groups `(Π₁, …, Π₆)`
+for `GPInvZEntrainment` and `GPBuoyancyDetrainment`:
+
+  - `Π₁ = clamp(elev_above_sfc * Δb / (100 * Δw²), -1, 1)` (signed),
+  - `Π₂ = clamp(max(tke, 0) / (2 * Δw²), 0, 1)`,
+  - `Π₃ = sqrt(max(aʲ, 0))`,
+  - `Π₄ = clamp(RHʲ - RH⁰, -1, 1)` (signed),
+  - `Π₅ = elev_above_sfc / max(ref_H, eps(FT))`,
+  - `Π₆ = clamp(max(q_condʲ, 0) / max(q_totʲ, 1e-5), 0, 1)`.
+"""
+@inline function calculate_pi_groups_6(
+    elev_above_sfc,
+    ref_H,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke,
+    ᶜq_condʲ,
+    ᶜq_totʲ,
+)
+    FT = eltype(elev_above_sfc)
+    vel_diff_sq = (ᶜwʲ - ᶜw⁰)^2 + eps(FT)
+    Π₁ = clamp(
+        elev_above_sfc * (ᶜbuoyʲ - ᶜbuoy⁰) / (FT(100) * vel_diff_sq),
+        FT(-1),
+        FT(1),
+    )
+    Π₂ = clamp(max(ᶜtke, zero(FT)) / (FT(2) * vel_diff_sq), zero(FT), one(FT))
+    Π₃ = sqrt(max(ᶜaʲ, zero(FT)))
+    Π₄ = clamp(ᶜRHʲ - ᶜRH⁰, FT(-1), FT(1))
+    Π₅ = elev_above_sfc / max(ref_H, eps(FT))
+    Π₆ = clamp(
+        max(ᶜq_condʲ, zero(FT)) / max(ᶜq_totʲ, FT(1e-5)),
+        zero(FT),
+        one(FT),
+    )
+    return (Π₁, Π₂, Π₃, Π₄, Π₅, Π₆)
+end
+
+"""
+    gp_entr_detr_closures(thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ,
+                          ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke,
+                          ᶜq_condʲ, ᶜq_totʲ, entr_model, detr_model)
+
+Evaluate the shared-basis `SparseMultiHeadMaternGP32` entrainment and
+detrainment closures in one kernel pass and return
+`(entr_vel_scale, detr_buoy_scale, detr_nonbuoy_rate)`.
+"""
+@inline function gp_entr_detr_closures(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke,
+    ᶜq_condʲ,
+    ᶜq_totʲ,
+    entr_model,
+    detr_model,
+)
+    FT = eltype(thermo_params)
+    elev_above_sfc = ᶜz - z_sfc
+    g = TDP.grav(thermo_params)
+    ref_H = max(ᶜp / (ᶜρ * g), eps(FT))
+    Π = calculate_pi_groups_6(
+        max(elev_above_sfc, zero(FT)),
+        ref_H,
+        ᶜaʲ,
+        ᶜwʲ,
+        ᶜRHʲ,
+        ᶜbuoyʲ,
+        ᶜw⁰,
+        ᶜRH⁰,
+        ᶜbuoy⁰,
+        ᶜtke,
+        ᶜq_condʲ,
+        ᶜq_totʲ,
+    )
+    gp = CAP.gp_entr_detr(turbconv_params)
+    Π_f32 = (
+        Float32(Π[1]),
+        Float32(Π[2]),
+        Float32(Π[3]),
+        Float32(Π[4]),
+        Float32(Π[5]),
+        Float32(Π[6]),
+    )
+    (mu_entr, mu_detr_buoy, mu_detr_mix, var) = eval_gp_mu3_var(gp, Π_f32)
+    w_ood =
+        exp(-var * gp.inv_sigma_02) *
+        _gp_ttl_taper(Π_f32[5], gp.pi5_ttl_onset, gp.pi5_ttl_off)
+
+    entr_vel_scale = if entr_model isa GPInvZEntrainment
+        base_entr = entrainment_velocity_scale(
+            thermo_params,
+            turbconv_params,
+            ᶜz,
+            z_sfc,
+            ᶜp,
+            ᶜρ,
+            ᶜaʲ,
+            ᶜwʲ,
+            ᶜRHʲ,
+            ᶜbuoyʲ,
+            ᶜw⁰,
+            ᶜRH⁰,
+            ᶜbuoy⁰,
+            ᶜtke,
+            InvZEntrainment(),
+        )
+        u_entr = clamp(w_ood * mu_entr, -gp.u_max, gp.u_max)
+        base_entr * FT(exp(u_entr))
+    else
+        entrainment_velocity_scale(
+            thermo_params,
+            turbconv_params,
+            ᶜz,
+            z_sfc,
+            ᶜp,
+            ᶜρ,
+            ᶜaʲ,
+            ᶜwʲ,
+            ᶜRHʲ,
+            ᶜbuoyʲ,
+            ᶜw⁰,
+            ᶜRH⁰,
+            ᶜbuoy⁰,
+            ᶜtke,
+            entr_model,
+        )
+    end
+
+    if detr_model isa GPBuoyancyDetrainment
+        u_db = clamp(w_ood * mu_detr_buoy, -gp.u_max, gp.u_max)
+        detr_buoy_scale = FT(exp(u_db))
+        c_mix_0 = CAP.edmf_detr_mix_coeff(turbconv_params)
+        Δb = ᶜbuoyʲ - ᶜbuoy⁰
+        g_buoy_pos =
+            Δb >= zero(FT) ? one(FT) : exp(max(Δb / FT(5e-3), FT(-20)))
+        u_dm = clamp(w_ood * mu_detr_mix, -gp.u_max, gp.u_max)
+        sp_gate = c_mix_0 * FT(log1p(exp(u_dm)) / log(2.0f0))
+        detr_nonbuoy_rate = (abs(ᶜwʲ - ᶜw⁰) / ref_H) * g_buoy_pos * sp_gate
+    else
+        detr_buoy_scale = one(FT)
+        detr_nonbuoy_rate = zero(FT)
+    end
+
+    return (FT(entr_vel_scale), FT(detr_buoy_scale), FT(detr_nonbuoy_rate))
+end
+
+"""
     upper_area_limiter_factor(a, turbconv_params)
 
 Return a multiplicative limiter for the entrainment rate based on the
@@ -453,7 +619,7 @@ function entrainment_nonvel_rate(
     ᶜbuoyʲ,
     ᶜw⁰,
     ᶜbuoy⁰,
-    ::InvZEntrainment,
+    ::Union{InvZEntrainment, GPInvZEntrainment},
 )
     entr_buoy_coeff = CAP.entr_buoy_coeff(turbconv_params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
@@ -550,6 +716,8 @@ function compute_detrainment(
     massflux_vert_div,
     area_bounding_entr_detr,
     detr_model,
+    detr_buoy_scale = one(eltype(ρaʲ)),
+    detr_nonbuoy_rate = zero(eltype(ρaʲ)),
 )
 
     detr = detrainment_rate(
@@ -559,6 +727,8 @@ function compute_detrainment(
         buoy_inv_time_scale,
         massflux_vert_div,
         detr_model,
+        detr_buoy_scale,
+        detr_nonbuoy_rate,
     )
 
     return detr + max(zero(area_bounding_entr_detr), -area_bounding_entr_detr)
@@ -566,37 +736,23 @@ end
 
 """
     detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
-                     ᶜmassflux_vert_div, detr_model::AbstractDetrainmentModel)
-    detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
-                     ᶜmassflux_vert_div, detr_model::BuoyancyVelocityDetrainment)
+                     ᶜmassflux_vert_div, detr_model::AbstractDetrainmentModel,
+                     ᶜdetr_buoy_scale = one(eltype(ᶜρaʲ)),
+                     ᶜdetr_nonbuoy_rate = zero(eltype(ᶜρaʲ)))
 
 Model-specific detrainment rate [1/s] for a given detrainment model.
 
 The `AbstractDetrainmentModel` fallback returns zero. For
-`BuoyancyVelocityDetrainment` the rate is
+`BuoyancyVelocityDetrainment` and `GPBuoyancyDetrainment` the rate is
 
     detr = max(0, lower_area_limiter_factor(aʲ) ·
-                  (c_buoy τ⁻¹_buoy − c_div min(massflux_vert_div, 0) / ρaʲ)),
+                  (c_buoy s_buoy τ⁻¹_buoy + δ_mix −
+                   c_div min(massflux_vert_div, 0) / ρaʲ)),
 
-with `c_buoy = detr_buoy_coeff` and `c_div = detr_massflux_vertdiv_coeff`. Only
-a converging (negative) mass-flux divergence detrains, and
+with `c_buoy = detr_buoy_coeff`, `s_buoy = ᶜdetr_buoy_scale`,
+`δ_mix = ᶜdetr_nonbuoy_rate`, and `c_div = detr_massflux_vertdiv_coeff`. Only a
+converging (negative) mass-flux divergence detrains, and
 `lower_area_limiter_factor` damps the rate as `a → a_min`.
-
-# Arguments
-
-  - `turbconv_params`: Turbulence-convection parameters.
-  - `ᶜaʲ`: Updraft area fraction [-].
-  - `ᶜρaʲ`: Updraft area-weighted density `ρ a` [kg/m³].
-  - `ᶜbuoy_inv_time_scale`: Clipped inverse buoyancy time scale [1/s] from
-    `detr_buoy_inv_time_scale`.
-  - `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux
-    [kg/(m³ s)].
-  - `detr_model`: Detrainment model dispatch tag.
-
-# Returns
-
-The non-negative model-specific detrainment rate [1/s]; zero for the abstract
-fallback.
 """
 function detrainment_rate(
     turbconv_params,
@@ -605,6 +761,8 @@ function detrainment_rate(
     ᶜbuoy_inv_time_scale,
     ᶜmassflux_vert_div,
     ::AbstractDetrainmentModel,
+    ᶜdetr_buoy_scale = one(eltype(ᶜρaʲ)),
+    ᶜdetr_nonbuoy_rate = zero(eltype(ᶜρaʲ)),
 )
     return zero(eltype(ᶜρaʲ))
 end
@@ -615,7 +773,9 @@ function detrainment_rate(
     ᶜρaʲ,
     ᶜbuoy_inv_time_scale,
     ᶜmassflux_vert_div,
-    ::BuoyancyVelocityDetrainment,
+    ::Union{BuoyancyVelocityDetrainment, GPBuoyancyDetrainment},
+    ᶜdetr_buoy_scale = one(eltype(ᶜρaʲ)),
+    ᶜdetr_nonbuoy_rate = zero(eltype(ᶜρaʲ)),
 )
     FT = eltype(ᶜρaʲ)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
@@ -623,14 +783,17 @@ function detrainment_rate(
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
 
     area_limiter_factor = lower_area_limiter_factor(ᶜaʲ, turbconv_params)
+    detr_buoy_term =
+        detr_buoy_coeff * ᶜdetr_buoy_scale * ᶜbuoy_inv_time_scale +
+        ᶜdetr_nonbuoy_rate
     detr =
         area_limiter_factor *
         (
-            detr_buoy_coeff * ᶜbuoy_inv_time_scale -
+            detr_buoy_term -
             detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / max(eps(FT), ᶜρaʲ)
         )
 
-    return max(0, detr)
+    return max(zero(detr), detr)
 end
 
 """

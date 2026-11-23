@@ -160,8 +160,11 @@ Entrainment and detrainment closures:
 ClimaAtmos.AbstractEntrainmentModel
 ClimaAtmos.PiGroupsEntrainment
 ClimaAtmos.InvZEntrainment
+ClimaAtmos.GPInvZEntrainment
 ClimaAtmos.AbstractDetrainmentModel
 ClimaAtmos.BuoyancyVelocityDetrainment
+ClimaAtmos.GPBuoyancyDetrainment
+ClimaAtmos.SparseMultiHeadMaternGP32
 ```
 
 Buoyancy gradients, mixing-length blending, and tendency selection:

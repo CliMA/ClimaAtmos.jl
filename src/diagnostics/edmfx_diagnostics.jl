@@ -392,16 +392,27 @@ compute_detr(state, cache, time) =
     compute_detr(state, cache, time, cache.atmos.turbconv_model)
 compute_detr(_, _, _, turbconv_model) = error_diagnostic_variable("detr", turbconv_model)
 
-function compute_detr(state, cache, _, ::PrognosticEDMFX)
-    (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
+function compute_detr(state, cache, _, ::PrognosticEDMFX, ::Val{j} = Val(1)) where {j}
+    (;
+        ᶜρ_diffʲs,
+        ᶜρʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜdetr_buoy_scaleʲs,
+        ᶜdetr_nonbuoy_rateʲs,
+        ᶠu³ʲs,
+    ) = cache.precomputed
     (; ᶠgradᵥ_ᶜΦ) = cache.core
     turbconv_params = CAP.turbconv_params(cache.params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     detr_model = cache.atmos.edmfx_model.detr_model
     ᶠlg = Fields.local_geometry_field(state.f)
-    ᶠdz = Fields.Δz_field(axes(state.f))
-    ρaʲ = state.c.sgsʲs.:(1).ρa
-    u₃ʲ = state.f.sgsʲs.:(1).u₃
+    ρaʲ = getproperty(state.c.sgsʲs, j).ρa
+    ᶠu³ʲ = getproperty(ᶠu³ʲs, j)
+    ᶜρ_diffʲ = getproperty(ᶜρ_diffʲs, j)
+    ᶜρʲ = getproperty(ᶜρʲs, j)
+    ᶜarea_bounding_entr_detrʲ = getproperty(ᶜarea_bounding_entr_detrʲs, j)
+    ᶜdetr_buoy_scaleʲ = getproperty(ᶜdetr_buoy_scaleʲs, j)
+    ᶜdetr_nonbuoy_rateʲ = getproperty(ᶜdetr_nonbuoy_rateʲs, j)
     # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
     ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
@@ -409,9 +420,9 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     ᶜbuoy_inv_time_scale = @. lazy(
         ᶜinterp(
             detr_buoy_inv_time_scale(
-                u₃ʲ.components.data.:1 / ᶠdz,
+                get_physical_w(ᶠu³ʲ, ᶠlg),
                 vertical_buoyancy_acceleration(
-                    ᶠinterp(ᶜρ_diffʲs.:1),
+                    ᶠinterp(ᶜρ_diffʲ),
                     ᶠgradᵥ_ᶜΦ,
                     ᶠlg,
                 ),
@@ -422,12 +433,14 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     return @. lazy(
         compute_detrainment(
             turbconv_params,
-            draft_area(ρaʲ, ᶜρʲs.:1),
+            draft_area(ρaʲ, ᶜρʲ),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
-            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
-            ᶜarea_bounding_entr_detrʲs.:1,
+            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * ᶠu³ʲ),
+            ᶜarea_bounding_entr_detrʲ,
             detr_model,
+            ᶜdetr_buoy_scaleʲ,
+            ᶜdetr_nonbuoy_rateʲ,
         ),
     )
 end

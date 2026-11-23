@@ -512,10 +512,10 @@ edmfx_horizontal_diffusion:
   help: "If set to true, it switches on horizontal diffusion of prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
-  help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`]"
+  help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`, `GPInvZ`]"
   value: "Generalized"
 edmfx_detr_model:
-  help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. This is a placeholder for new detrainment models. For now only supports `Generalized`. [`Generalized` (default)]"
+  help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `GPBuoyancy`]"
   value: "Generalized"
 edmfx_mse_humidity_upwinding:
   help: "Eddy-diffusivity mass-flux upwinding mode for updraft moist static energy, total water, and condensate masses and numbers [`none`, `first_order` (default)]. Only `first_order` keeps the updraft condensates and number concentrations nonnegative."

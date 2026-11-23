@@ -1123,3 +1123,86 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
     q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end
+
+"""
+    SparseMultiHeadMaternGP32{D, M, DM, L}
+
+`isbits` `Float32` multi-head sparse Matérn-3/2 ARD Gaussian process table with
+`D` standardized inputs, `M` inducing points (`DM = D * M`), three output heads
+(`alpha_entr`, `alpha_detr_buoy`, `alpha_detr_mix`), and a row-packed
+upper-triangular Cholesky precision factor `R_upper` (`L = M * (M + 1) ÷ 2`,
+satisfying `R_mat' * R_mat = inv(K_ZZ)`).
+"""
+struct SparseMultiHeadMaternGP32{D, M, DM, L}
+    mu_x::NTuple{D, Float32}
+    inv_std_x::NTuple{D, Float32}
+    inv_ell::NTuple{D, Float32}
+    Z::NTuple{DM, Float32}
+    alpha_entr::NTuple{M, Float32}
+    alpha_detr_buoy::NTuple{M, Float32}
+    alpha_detr_mix::NTuple{M, Float32}
+    R_upper::NTuple{L, Float32}
+    sigma_f2::Float32
+    inv_sigma_02::Float32
+    u_max::Float32
+    pi5_ttl_onset::Float32
+    pi5_ttl_off::Float32
+end
+Base.broadcastable(gp::SparseMultiHeadMaternGP32) = tuple(gp)
+
+"""
+    _gp_ttl_taper(π5, onset, off)
+
+`C^1` cubic Hermite taper equal to `1` for `π5 ≤ onset`, `0` for `π5 ≥ off`,
+and smoothly decreasing between them.
+"""
+@inline function _gp_ttl_taper(π5::Float32, onset::Float32, off::Float32)
+    s = clamp((π5 - onset) / (off - onset), 0.0f0, 1.0f0)
+    return 1.0f0 - s * s * (3.0f0 - 2.0f0 * s)
+end
+
+"""
+    eval_gp_mu3_var(gp::SparseMultiHeadMaternGP32{D, M, DM, L}, x::NTuple{D, Float32})
+
+Evaluate the three posterior means `(mu_entr, mu_detr_buoy, mu_detr_mix)` and
+shared noiseless predictive variance `var` of `gp` at input `x` in a single
+kernel pass with zero heap allocations.
+"""
+@inline function eval_gp_mu3_var(
+    gp::SparseMultiHeadMaternGP32{D, M, DM, L},
+    x::NTuple{D, Float32},
+) where {D, M, DM, L}
+    z = ntuple(d -> @inbounds((x[d] - gp.mu_x[d]) * gp.inv_std_x[d]), Val(D))
+    k_vec = ntuple(Val(M)) do m
+        @inline
+        offset = (m - 1) * D
+        sq = 1.0f-12
+        @inbounds for d in 1:D
+            diff = (z[d] - gp.Z[offset + d]) * gp.inv_ell[d]
+            sq += diff * diff
+        end
+        sr3 = 1.7320508f0 * sqrt(sq)
+        gp.sigma_f2 * (1.0f0 + sr3) * exp(-sr3)
+    end
+    mu_entr = 0.0f0
+    mu_detr_buoy = 0.0f0
+    mu_detr_mix = 0.0f0
+    @inbounds for m in 1:M
+        k_m = k_vec[m]
+        mu_entr += k_m * gp.alpha_entr[m]
+        mu_detr_buoy += k_m * gp.alpha_detr_buoy[m]
+        mu_detr_mix += k_m * gp.alpha_detr_mix[m]
+    end
+    rk_norm2 = 0.0f0
+    idx = 0
+    @inbounds for i in 1:M
+        s = 0.0f0
+        for j in i:M
+            idx += 1
+            s += gp.R_upper[idx] * k_vec[j]
+        end
+        rk_norm2 += s * s
+    end
+    var = max(0.0f0, gp.sigma_f2 - rk_norm2)
+    return (mu_entr, mu_detr_buoy, mu_detr_mix, var)
+end

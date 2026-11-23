@@ -90,6 +90,8 @@ function edmfx_tke_sources!(Yₜ, Y, p)
             ᶜρʲs,
             ᶜρ_diffʲs,
             ᶜarea_bounding_entr_detrʲs,
+            ᶜdetr_buoy_scaleʲs,
+            ᶜdetr_nonbuoy_rateʲs,
             ᶜuʲs,
             ᶠu³ʲs,
             ᶜu⁰,
@@ -106,10 +108,14 @@ function edmfx_tke_sources!(Yₜ, Y, p)
 
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
-            ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+            ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs,
+            (ᶜdetr_buoy_scaleʲs, ᶜdetr_nonbuoy_rateʲs),
+            ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
             ᶠgradᵥ_ᶜΦ, ᶜz, z_sfc, ᶜlg, ᶠlg,
         ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
-        ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+        ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs,
+        (ᶜdetr_buoy_scaleʲs, ᶜdetr_nonbuoy_rateʲs),
+        ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
         ᶠgradᵥ_ᶜΦ, ᶜz, z_sfc, ᶜlg, ᶠlg
             add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
             # Pressure-drag return-to-isotropy for every updraft, then the
@@ -157,6 +163,8 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                         ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu³ʲs.:($$j)),
                         ᶜarea_bounding_entr_detrʲs.:($$j),
                         detr_model,
+                        ᶜdetr_buoy_scaleʲs.:($$j),
+                        ᶜdetr_nonbuoy_rateʲs.:($$j),
                     ),
                 )
                 @. Yₜc.ρtke += half_FT * ᶜdetr * ᶜρaʲ * ᶜΔw^2

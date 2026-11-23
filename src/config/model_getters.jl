@@ -992,6 +992,7 @@ Build the EDMFX entrainment closure selected by the `edmfx_entr_model` config ke
 
   - `"PiGroups"`: `PiGroupsEntrainment`.
   - `"Generalized"`: `InvZEntrainment`.
+  - `"GPInvZ"`: `GPInvZEntrainment`.
 
 Any other value raises an error.
 """
@@ -1001,8 +1002,12 @@ function get_entrainment_model(parsed_args)
         PiGroupsEntrainment()
     elseif entr_model == "Generalized"
         InvZEntrainment()
+    elseif entr_model == "GPInvZ"
+        GPInvZEntrainment()
     else
-        error("Invalid entr_model $(entr_model): expected \"Generalized\" or \"PiGroups\"")
+        error(
+            "Invalid entr_model $(entr_model): expected \"Generalized\", \"PiGroups\", or \"GPInvZ\"",
+        )
     end
 end
 
@@ -1012,6 +1017,7 @@ end
 Build the EDMFX detrainment closure selected by the `edmfx_detr_model` config key.
 
   - `"Generalized"`: `BuoyancyVelocityDetrainment`.
+  - `"GPBuoyancy"`: `GPBuoyancyDetrainment`.
 
 Any other value raises an error.
 """
@@ -1019,8 +1025,12 @@ function get_detrainment_model(parsed_args)
     detr_model = parsed_args["edmfx_detr_model"]
     return if detr_model == "Generalized"
         BuoyancyVelocityDetrainment()
+    elseif detr_model == "GPBuoyancy"
+        GPBuoyancyDetrainment()
     else
-        error("Invalid detr_model $(detr_model): expected \"Generalized\"")
+        error(
+            "Invalid detr_model $(detr_model): expected \"Generalized\" or \"GPBuoyancy\"",
+        )
     end
 end
 

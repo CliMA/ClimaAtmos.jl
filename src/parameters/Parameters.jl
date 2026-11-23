@@ -225,8 +225,15 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `pressure_drag_plume_radius_slope`, `pressure_drag_plume_radius_max`: Slope
     `c_R` [-] and cap `R_max` [m] of the minimum updraft radius
     `min(c_R (z − z_sfc), R_max)` in `plume_radius`; `0` (default) is off.
+  - `edmf_detr_mix_coeff`:
+    Non-negative base coefficient `c_mix,0 ≥ 0` for GP-gated non-buoyant
+    lateral mixing detrainment in `GPBuoyancyDetrainment`; `0` (default) turns
+    the mixing term off [-].
+  - `gp_entr_detr`:
+    Host-built `isbits` `SparseMultiHeadMaternGP32` parameter table shared by
+    `GPInvZEntrainment` and `GPBuoyancyDetrainment`.
 """
-Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
+Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3, GP} <: ATCP
     max_surface_area::FT
     max_area::FT
     min_area::FT
@@ -278,6 +285,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     turb_entr_tke_coeff::FT
     pressure_drag_plume_radius_slope::FT
     pressure_drag_plume_radius_max::FT
+    edmf_detr_mix_coeff::FT
+    gp_entr_detr::GP
 end
 
 """

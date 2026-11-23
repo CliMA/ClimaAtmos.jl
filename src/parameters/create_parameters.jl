@@ -704,6 +704,12 @@ function TurbulenceConvectionParameters(
         turb_entr_tke_coeff = FT(0),
         pressure_drag_plume_radius_slope = FT(0),
         pressure_drag_plume_radius_max = FT(0),
+        edmf_detr_mix_coeff = FT(0),
+        edmf_gp_entr_weights = zeros(FT, 10),
+        edmf_gp_detr_buoy_weights = zeros(FT, 10),
+        edmf_gp_detr_mix_weights = zeros(FT, 10),
+        edmf_gp_log_cap = FT(1.3862944),
+        edmf_gp_ood_scale = FT(0.35),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -736,6 +742,51 @@ function TurbulenceConvectionParameters(
     entr_subsat_power >= 1 || throw(
         ArgumentError("entr_subsat_power must be at least 1; got $entr_subsat_power"),
     )
+    parameters.edmf_detr_mix_coeff >= 0 || throw(
+        ArgumentError(
+            "edmf_detr_mix_coeff must be non-negative; got $(parameters.edmf_detr_mix_coeff)",
+        ),
+    )
+    parameters.edmf_gp_log_cap > 0 || throw(
+        ArgumentError(
+            "edmf_gp_log_cap must be positive; got $(parameters.edmf_gp_log_cap)",
+        ),
+    )
+    parameters.edmf_gp_ood_scale > 0 || throw(
+        ArgumentError(
+            "edmf_gp_ood_scale must be positive; got $(parameters.edmf_gp_ood_scale)",
+        ),
+    )
+    for (wname, wvec) in (
+        (:edmf_gp_entr_weights, parameters.edmf_gp_entr_weights),
+        (:edmf_gp_detr_buoy_weights, parameters.edmf_gp_detr_buoy_weights),
+        (:edmf_gp_detr_mix_weights, parameters.edmf_gp_detr_mix_weights),
+    )
+        length(wvec) == 10 || throw(
+            ArgumentError("$wname must have length 10; got $(length(wvec))"),
+        )
+    end
+    gp_entr_detr = _build_edmf_gp_entr_detr(
+        parameters.edmf_gp_entr_weights,
+        parameters.edmf_gp_detr_buoy_weights,
+        parameters.edmf_gp_detr_mix_weights,
+        parameters.edmf_gp_log_cap,
+        parameters.edmf_gp_ood_scale,
+    )
+    tc_keys = filter(
+        k -> !(
+            k in (
+                :edmf_gp_entr_weights,
+                :edmf_gp_detr_buoy_weights,
+                :edmf_gp_detr_mix_weights,
+                :edmf_gp_log_cap,
+                :edmf_gp_ood_scale,
+            )
+        ),
+        keys(parameters),
+    )
+    parameters =
+        merge(NamedTuple{tc_keys}(getproperty.(Ref(parameters), tc_keys)), (; gp_entr_detr))
     parameters = to_svec(parameters)
     # Held in the type, which keeps it out of GPU kernel arguments.
     parameters = merge(
@@ -745,7 +796,101 @@ function TurbulenceConvectionParameters(
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VTF3 = typeof(parameters.cloud_fraction_param_vec)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
+    GP = typeof(parameters.gp_entr_detr)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3, GP}(; parameters...)
+end
+
+# Standardized `Π`-space tables (`D = 6`, `M = 10` regime anchors) and
+# upper-triangular Cholesky precision factor `R_upper`
+# (`R_mat' * R_mat = inv(K_ZZ)`) for `GPInvZEntrainment` and
+# `GPBuoyancyDetrainment`.
+const _EDMF_GP_MU_PI_F32 = (
+    +0.101897f0,
+    +0.201252f0,
+    +0.170047f0,
+    +0.130899f0,
+    +0.269898f0,
+    +0.022867f0,
+)
+const _EDMF_GP_INV_STD_PI_F32 = (
+    2.378691f0,
+    3.727750f0,
+    10.484781f0,
+    6.045007f0,
+    2.484251f0,
+    33.054142f0,
+)
+const _EDMF_GP_INV_ELL_PI_F32 = (
+    0.800000f0,
+    0.800000f0,
+    0.800000f0,
+    0.734561f0,
+    0.800000f0,
+    0.800000f0,
+)
+const _EDMF_GP_Z_ANCHORS_STD_F32 = (
+    -0.474676f0, +2.461864f0, -0.478088f0, -0.208652f0, -0.516710f0, -0.748154f0,
+    -0.215807f0, -0.092512f0, +0.809542f0, -0.585782f0, -0.619993f0, -0.755857f0,
+    -0.164535f0, -0.420282f0, +0.211260f0, -0.677237f0, -0.473308f0, +0.585866f0,
+    -2.621072f0, +0.639661f0, -0.832489f0, +1.556116f0, -0.227621f0, -0.168702f0,
+    +0.051789f0, -0.635090f0, -0.759644f0, +0.160999f0, -0.238328f0, +0.274496f0,
+    +0.346324f0, +0.194767f0, -1.135969f0, -0.236739f0, +0.164217f0, -0.744438f0,
+    -0.204737f0, -0.468544f0, +0.676460f0, -0.506822f0, -0.379579f0, +1.468114f0,
+    +0.375703f0, -0.631912f0, -0.602386f0, +0.625127f0, +0.669951f0, +0.594624f0,
+    -1.220040f0, -0.512273f0, -1.026138f0, +1.169412f0, +0.669642f0, +0.038460f0,
+    -2.621072f0, +0.232220f0, -1.268938f0, +2.219472f0, +4.096638f0, +0.028685f0,
+)
+const _EDMF_GP_R_UPPER_ARD_F32 = (
+    +1.011765f0, -0.064934f0, -0.013090f0, -0.047108f0, +0.011941f0,
+    -0.115395f0, -0.003780f0, +0.004209f0, -0.007431f0, -0.000563f0,
+    +1.091798f0, -0.429145f0, -0.017694f0, -0.005104f0, -0.127292f0,
+    +0.068405f0, +0.015050f0, -0.014490f0, +0.000198f0, +1.348192f0,
+    -0.011221f0, -0.447180f0, -0.049177f0, -0.692930f0, +0.041040f0,
+    +0.016082f0, -0.000164f0, +1.025311f0, -0.009114f0, -0.012924f0,
+    -0.013699f0, +0.032391f0, -0.227599f0, -0.009775f0, +1.276227f0,
+    -0.316507f0, -0.167165f0, -0.543944f0, -0.129737f0, +0.004751f0,
+    +1.040677f0, -0.028107f0, -0.234866f0, -0.102756f0, +0.000426f0,
+    +1.018236f0, -0.184121f0, -0.023476f0, +0.000410f0, +1.042834f0,
+    -0.295969f0, -0.000263f0, +1.000360f0, -0.028644f0, +0.999950f0,
+)
+const _EDMF_GP_PI5_TTL_ONSET_F32 = 1.90f0
+const _EDMF_GP_PI5_TTL_OFF_F32 = 2.40f0
+
+function _gp_whiten_to_alpha(R_upper::NTuple{55, Float32}, ξ)
+    α = zeros(Float64, 10)
+    idx = 0
+    for i in 1:10
+        ξ_i = Float64(ξ[i])
+        for j in i:10
+            idx += 1
+            α[j] += Float64(R_upper[idx]) * ξ_i
+        end
+    end
+    return ntuple(j -> Float32(α[j]), Val(10))
+end
+
+function _build_edmf_gp_entr_detr(
+    ξ_entr,
+    ξ_detr_buoy,
+    ξ_detr_mix,
+    log_cap,
+    ood_scale,
+)
+    return SparseMultiHeadMaternGP32{6, 10, 60, 55}(
+        _EDMF_GP_MU_PI_F32,
+        _EDMF_GP_INV_STD_PI_F32,
+        _EDMF_GP_INV_ELL_PI_F32,
+        _EDMF_GP_Z_ANCHORS_STD_F32,
+        _gp_whiten_to_alpha(_EDMF_GP_R_UPPER_ARD_F32, ξ_entr),
+        _gp_whiten_to_alpha(_EDMF_GP_R_UPPER_ARD_F32, ξ_detr_buoy),
+        _gp_whiten_to_alpha(_EDMF_GP_R_UPPER_ARD_F32, ξ_detr_mix),
+        _EDMF_GP_R_UPPER_ARD_F32,
+        1.0f0,
+        Float32(1 / Float64(ood_scale)),
+        Float32(log_cap),
+        _EDMF_GP_PI5_TTL_ONSET_F32,
+        _EDMF_GP_PI5_TTL_OFF_F32,
+    )
 end
 
 """

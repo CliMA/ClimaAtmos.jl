@@ -536,6 +536,16 @@ function precomputed_quantities(Y, atmos)
             # Excess of the updraft reference density over the grid mean
             # (`set_updraft_reference_density_excess!`).
             ᶜρ_ref_excess = similar(Y.c, FT),
+            # Per-updraft buoyancy-detrainment scale factor (`1` when off).
+            ᶜdetr_buoy_scaleʲs = fill!(
+                similar(Y.c, NTuple{n, FT}),
+                ntuple(_ -> one(FT), Val(n)),
+            ),
+            # Per-updraft non-buoyant mixing detrainment rate (`0` when off).
+            ᶜdetr_nonbuoy_rateʲs = fill!(
+                similar(Y.c, NTuple{n, FT}),
+                ntuple(_ -> zero(FT), Val(n)),
+            ),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
             # Per-updraft surface conditions at level 1.

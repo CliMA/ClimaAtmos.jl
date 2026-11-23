@@ -474,9 +474,26 @@ call site for why.
 Reads `ᶜp`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`,
 `ᶜq_ice⁰`), and the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`).
 """
+@inline _gp_updraft_cloud_condensate(
+    ᶜsgsʲ,
+    _,
+    _,
+    ::NonEquilibriumMicrophysics,
+) = @inline @. lazy(
+    max(zero(ᶜsgsʲ.q_lcl), ᶜsgsʲ.q_lcl) + max(zero(ᶜsgsʲ.q_icl), ᶜsgsʲ.q_icl),
+)
+@inline _gp_updraft_cloud_condensate(
+    _,
+    ᶜq_liqʲ,
+    ᶜq_iceʲ,
+    ::EquilibriumMicrophysics0M,
+) = @inline @. lazy(max(zero(ᶜq_liqʲ), ᶜq_liqʲ) + max(zero(ᶜq_iceʲ), ᶜq_iceʲ))
+@inline _gp_updraft_cloud_condensate(_, ᶜq_liqʲ, _, ::AbstractMicrophysicsModel) =
+    zero(eltype(ᶜq_liqʲ))
+
 NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
     set_updraft_reference_density_excess!(Y, p)
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, microphysics_model) = p.atmos
     (; params) = p
     (; ᶜgradᵥ_ᶠΦ) = p.core
     thermo_params = CAP.thermodynamics_params(params)
@@ -512,7 +529,132 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
     R_max = CAP.pressure_drag_plume_radius_max(turbconv_params)
 
     entr_model = p.atmos.edmfx_model.entr_model
+    detr_model = p.atmos.edmfx_model.detr_model
     zero_FT = FT(0)
+    if entr_model isa GPInvZEntrainment || detr_model isa GPBuoyancyDetrainment
+        (; ᶜdetr_buoy_scaleʲs, ᶜdetr_nonbuoy_rateʲs) = p.precomputed
+        gp_drafts = unrolled_map(StaticOneTo(n)) do j
+            @inline
+            (
+                ᶜentr_vel_scaleʲs.:($j),
+                ᶜentr_nonvel_rateʲs.:($j),
+                ᶜturb_entrʲs.:($j),
+                ᶜarea_bounding_entr_detrʲs.:($j),
+                ᶜdetr_buoy_scaleʲs.:($j),
+                ᶜdetr_nonbuoy_rateʲs.:($j),
+                ᶜρ_diffʲs.:($j),
+                Y.c.sgsʲs.:($j),
+                ᶜρʲs.:($j),
+                ᶜuʲs.:($j),
+                ᶜTʲs.:($j),
+                ᶜq_tot_nonnegʲs.:($j),
+                ᶜq_liqʲs.:($j),
+                ᶜq_iceʲs.:($j),
+            )
+        end
+        DataLayouts.foreach_column(
+            gp_drafts, Y.c, ᶜz, z_sfc, ᶜp, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref_excess,
+        ) do gp_drafts, Yc, ᶜz, z_sfc, ᶜp, ᶜlg, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰,
+        ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke, ᶜρ_ref_excess
+            for (
+                    ᶜentr_vel_scaleʲ,
+                    ᶜentr_nonvel_rateʲ,
+                    ᶜturb_entrʲ,
+                    ᶜarea_bounding_entr_detrʲ,
+                    ᶜdetr_buoy_scaleʲ,
+                    ᶜdetr_nonbuoy_rateʲ,
+                    ᶜρ_diffʲ,
+                    ᶜsgsʲ,
+                    ᶜρʲ,
+                    ᶜuʲ,
+                    ᶜTʲ,
+                    ᶜq_tot_nonnegʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
+                ) in gp_drafts
+
+                ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+                ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
+                ᶜbuoyʲ = @. vertical_buoyancy_acceleration(
+                    Yc.ρ + ᶜρ_ref_excess, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg,
+                )
+                ᶜq_condʲ = _gp_updraft_cloud_condensate(
+                    ᶜsgsʲ, ᶜq_liqʲ, ᶜq_iceʲ, microphysics_model,
+                )
+                ᶜgp_out = @. gp_entr_detr_closures(
+                    thermo_params,
+                    turbconv_params,
+                    ᶜz,
+                    z_sfc,
+                    ᶜp,
+                    Yc.ρ,
+                    ᶜaʲ,
+                    ᶜwʲ,
+                    TD.relative_humidity(
+                        thermo_params,
+                        ᶜTʲ,
+                        ᶜp,
+                        ᶜq_tot_nonnegʲ,
+                        ᶜq_liqʲ,
+                        ᶜq_iceʲ,
+                    ),
+                    ᶜbuoyʲ,
+                    zero_FT,
+                    environment_relative_humidity_draft_phase(
+                        thermo_params,
+                        ᶜT⁰,
+                        ᶜp,
+                        ᶜq_tot_nonneg⁰,
+                        ᶜq_liq⁰,
+                        ᶜq_ice⁰,
+                        ᶜq_liqʲ,
+                        ᶜq_iceʲ,
+                    ),
+                    zero_FT,
+                    max(ᶜtke, 0),
+                    ᶜq_condʲ,
+                    ᶜq_tot_nonnegʲ,
+                    entr_model,
+                    detr_model,
+                )
+                @. ᶜentr_vel_scaleʲ = first(ᶜgp_out)
+                @. ᶜdetr_buoy_scaleʲ = getindex(ᶜgp_out, 2)
+                @. ᶜdetr_nonbuoy_rateʲ = getindex(ᶜgp_out, 3)
+                @. ᶜentr_nonvel_rateʲ = entrainment_nonvel_rate(
+                    turbconv_params,
+                    ᶜaʲ,
+                    ᶜwʲ,
+                    ᶜbuoyʲ,
+                    zero_FT,
+                    zero_FT,
+                    entr_model,
+                )
+                @. ᶜturb_entrʲ = turbulent_entrainment(
+                    turbconv_params,
+                    ᶜaʲ,
+                    ᶜz,
+                    z_sfc,
+                    ᶜtke,
+                    plume_radius(
+                        scale_height,
+                        ᶜaʲ,
+                        a_min,
+                        a_max,
+                        ᶜz,
+                        z_sfc,
+                        c_R,
+                        R_max,
+                    ),
+                )
+                @. ᶜarea_bounding_entr_detrʲ =
+                    area_bounding_entr_detr(turbconv_params, ᶜaʲ)
+                @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ - ᶜρ_ref_excess) / ᶜρʲ
+            end
+        end
+        return nothing
+    end
+
     drafts = unrolled_map(StaticOneTo(n)) do j
         @inline
         (
