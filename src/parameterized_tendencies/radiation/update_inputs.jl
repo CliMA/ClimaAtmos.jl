@@ -412,49 +412,73 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         aerosol_field =
             :prescribed_aerosols_field in propertynames(p.tracers) ?
             p.tracers.prescribed_aerosols_field : nothing
-        (; c₀_dust, c₀_seasalt, c₀_SO4) = cmc.aml
-        seasalt_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar,
-            aerosol_field,
-            (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05),
-            c₀_seasalt,
-        )
-        dust_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar_2,
-            aerosol_field,
-            (:DST01, :DST02, :DST03, :DST04, :DST05),
-            c₀_dust,
-        )
-        SO4_aero_conc = sum_aerosol_bins!(
-            p.scratch.ᶜtemp_scalar_3,
-            aerosol_field,
-            (:SO4,),
-            c₀_SO4,
-        )
         ᶜq_liq_in = @. lazy(
             max(zero_FT, cloud_liquid_water_content) /
             max(eps_FT, cloud_fraction),
         )
-
-        @. ᶜreliq = ifelse(
-            (cloud_liquid_water_content > zero_FT) &
-            (cloud_fraction > zero_FT),
-            CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
-                cmc_liquid,
+        if radiation_mode.aerosol_radiation_nd
+            M_0 = FT(4.0e-10)
+            ᶜM_ccn = weighted_aerosol_ccn_mass!(
+                p.scratch.ᶜtemp_scalar,
+                aerosol_field,
                 u.c.ρ,
-                ᶜq_liq_in,
-                ml_N_cloud_liquid_droplets(
-                    (cmc,),
-                    dust_aero_conc,
-                    seasalt_aero_conc,
-                    SO4_aero_conc,
+                M_0,
+            )
+            N_0 = cmc.aerosol_nd_reference_number
+            β_N = cmc.aerosol_nd_mass_exponent
+            @. ᶜreliq = ifelse(
+                (cloud_liquid_water_content > zero_FT) &
+                (cloud_fraction > zero_FT),
+                CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+                    cmc_liquid,
+                    u.c.ρ,
                     ᶜq_liq_in,
-                ),
+                    aerosol_N_cloud_liquid_droplets(ᶜM_ccn, N_0, β_N),
+                    zero_FT,
+                    zero_FT,
+                ) * m_to_um_factor,
                 zero_FT,
+            )
+        else
+            (; c₀_dust, c₀_seasalt, c₀_SO4) = cmc.aml
+            seasalt_aero_conc = sum_aerosol_bins!(
+                p.scratch.ᶜtemp_scalar,
+                aerosol_field,
+                (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05),
+                c₀_seasalt,
+            )
+            dust_aero_conc = sum_aerosol_bins!(
+                p.scratch.ᶜtemp_scalar_2,
+                aerosol_field,
+                (:DST01, :DST02, :DST03, :DST04, :DST05),
+                c₀_dust,
+            )
+            SO4_aero_conc = sum_aerosol_bins!(
+                p.scratch.ᶜtemp_scalar_3,
+                aerosol_field,
+                (:SO4,),
+                c₀_SO4,
+            )
+            @. ᶜreliq = ifelse(
+                (cloud_liquid_water_content > zero_FT) &
+                (cloud_fraction > zero_FT),
+                CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+                    cmc_liquid,
+                    u.c.ρ,
+                    ᶜq_liq_in,
+                    ml_N_cloud_liquid_droplets(
+                        (cmc,),
+                        dust_aero_conc,
+                        seasalt_aero_conc,
+                        SO4_aero_conc,
+                        ᶜq_liq_in,
+                    ),
+                    zero_FT,
+                    zero_FT,
+                ) * m_to_um_factor,
                 zero_FT,
-            ) * m_to_um_factor,
-            zero_FT,
-        )
+            )
+        end
 
         reice_um =
             CM.CloudDiagnostics.effective_radius_const(cmc.ice) * m_to_um_factor
@@ -586,6 +610,89 @@ reference values `c₀`, `q₀` come from `cmc.aml`; with the default ``α = 0``
 
     Δ_max = log(FT(3))
     return N₀ * exp(Δ_max * tanh(s / Δ_max))
+end
+
+"""
+    weighted_aerosol_ccn_mass!(ᶜM_ccn, aerosol_field, ᶜρ, M_0)
+
+Compute ambient submicron soluble CCN mass concentration `ᶜM_ccn` [kg/m³] from
+prescribed aerosol mixing ratios [kg/kg] and air density `ᶜρ` [kg/m³]:
+
+    M_ccn = ρ * (
+        q_SO4 + 0.50 * (q_OC2 + 0.20 * q_OC1) + q_SSLT01 + 0.25 * q_SSLT02
+    ).
+
+Supermicron sea salt (`SSLT03–05`) and dust are excluded. When `aerosol_field`
+is `nothing` or holds none of the five CCN species, `ᶜM_ccn` is filled with the
+reference concentration `M_0`.
+"""
+function weighted_aerosol_ccn_mass!(ᶜM_ccn, aerosol_field, ᶜρ, M_0)
+    FT = typeof(M_0)
+    zero_FT = zero(FT)
+    if isnothing(aerosol_field)
+        fill!(ᶜM_ccn, M_0)
+        return ᶜM_ccn
+    end
+    has_so4 = hasproperty(aerosol_field, :SO4)
+    has_oc2 = hasproperty(aerosol_field, :OC2)
+    has_oc1 = hasproperty(aerosol_field, :OC1)
+    has_ss1 = hasproperty(aerosol_field, :SSLT01)
+    has_ss2 = hasproperty(aerosol_field, :SSLT02)
+    if !(has_so4 || has_oc2 || has_oc1 || has_ss1 || has_ss2)
+        fill!(ᶜM_ccn, M_0)
+        return ᶜM_ccn
+    end
+    w_oc2 = FT(0.5)
+    w_oc1 = FT(0.1)
+    w_ss2 = FT(0.25)
+    fill!(ᶜM_ccn, zero_FT)
+    if has_so4
+        ᶜso4 = aerosol_field.SO4
+        @. ᶜM_ccn += max(zero_FT, ᶜso4)
+    end
+    if has_oc2
+        ᶜoc2 = aerosol_field.OC2
+        @. ᶜM_ccn += w_oc2 * max(zero_FT, ᶜoc2)
+    end
+    if has_oc1
+        ᶜoc1 = aerosol_field.OC1
+        @. ᶜM_ccn += w_oc1 * max(zero_FT, ᶜoc1)
+    end
+    if has_ss1
+        ᶜss1 = aerosol_field.SSLT01
+        @. ᶜM_ccn += max(zero_FT, ᶜss1)
+    end
+    if has_ss2
+        ᶜss2 = aerosol_field.SSLT02
+        @. ᶜM_ccn += w_ss2 * max(zero_FT, ᶜss2)
+    end
+    @. ᶜM_ccn *= ᶜρ
+    return ᶜM_ccn
+end
+
+"""
+    aerosol_N_cloud_liquid_droplets(M_ccn, N_0, β_N)
+
+Return the cloud liquid droplet number concentration [1/m³] diagnosed from
+ambient submicron CCN mass concentration `M_ccn` [kg/m³] via a C¹-bounded
+Boucher–Lohmann power law:
+
+    N_raw = N_0 * (max(M_ccn, 1e-13) / 4e-10)^β_N,
+    N_d   = N_mid * exp(Δ_max * tanh(log(N_raw / N_mid) / Δ_max)),
+
+with asymptotes `[2.5e7, 3.5e8]` m⁻³ (`[25, 350]` cm⁻³).
+"""
+@inline function aerosol_N_cloud_liquid_droplets(M_ccn, N_0, β_N)
+    FT = eltype(N_0)
+    M_0 = FT(4.0e-10)
+    M_floor = FT(1.0e-13)
+    N_min = FT(2.5e7)
+    N_max = FT(3.5e8)
+    N_mid = sqrt(N_min * N_max)
+    Δ_max = FT(0.5) * log(N_max / N_min)
+    M_eff = max(FT(M_ccn), M_floor)
+    N_raw = N_0 * (M_eff / M_0)^FT(β_N)
+    return N_mid * exp(Δ_max * tanh(log(N_raw / N_mid) / Δ_max))
 end
 
 """

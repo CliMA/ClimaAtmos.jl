@@ -150,6 +150,9 @@ add_isothermal_boundary_layer:
 aerosol_radiation:
   help: "Use aerosols in radiation [`false` (default)]"
   value: false
+aerosol_radiation_nd:
+  help: "Diagnose liquid cloud droplet number concentration from prescribed submicron aerosols in radiation [`false` (default), `true`]"
+  value: false
 config:
   help: "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
   value: "sphere"

@@ -349,24 +349,56 @@ A `NamedTuple` with:
   - `N_cloud_liquid_droplets`: Prescribed cloud droplet number concentration
     [1/m³].
   - `aml`: Aerosol-ML coefficients, see `aerosol_ml_parameters`.
+  - `aerosol_nd_reference_number`: Reference droplet number `N_0 > 0` [1/m³]
+    for `aerosol_N_cloud_liquid_droplets` (default `9.0e7`).
+  - `aerosol_nd_mass_exponent`: Power-law exponent `β_N ≥ 0` [-] on ambient
+    submicron CCN mass in `aerosol_N_cloud_liquid_droplets` (default `0.41`).
   - `activation`: `CloudMicrophysics` aerosol-activation parameters.
 """
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(create_toml_dict(FT))
 
-cloud_parameters(toml_dict::CP.ParamDict) = (;
-    liquid = CM.Parameters.CloudLiquid(toml_dict),
-    ice = CM.Parameters.CloudIce(toml_dict),
-    stokes = CM.Parameters.StokesRegimeVelType(toml_dict),
-    Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
-    N_cloud_liquid_droplets = CP.get_parameter_values(
-        toml_dict,
-        "prescribed_cloud_droplet_number_concentration",
-        "ClimaAtmos",
-    ).prescribed_cloud_droplet_number_concentration,
-    aml = aerosol_ml_parameters(toml_dict),
-    activation = CM.Parameters.AerosolActivationParameters(toml_dict),
-)
+function cloud_parameters(toml_dict::CP.ParamDict)
+    FT = CP.float_type(toml_dict)
+    nd_defaults = (
+        aerosol_nd_reference_number = FT(9.0e7),
+        aerosol_nd_mass_exponent = FT(0.41),
+    )
+    nd_present = filter(collect(keys(nd_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    nd_overrides =
+        isempty(nd_present) ? (;) :
+        CP.get_parameter_values(toml_dict, String.(nd_present), "ClimaAtmos")
+    nd_params = merge(nd_defaults, nd_overrides)
+    nd_params.aerosol_nd_reference_number > 0 || throw(
+        ArgumentError(
+            "aerosol_nd_reference_number must be positive; got " *
+            "$(nd_params.aerosol_nd_reference_number)",
+        ),
+    )
+    nd_params.aerosol_nd_mass_exponent >= 0 || throw(
+        ArgumentError(
+            "aerosol_nd_mass_exponent must be non-negative; got " *
+            "$(nd_params.aerosol_nd_mass_exponent)",
+        ),
+    )
+    return (;
+        liquid = CM.Parameters.CloudLiquid(toml_dict),
+        ice = CM.Parameters.CloudIce(toml_dict),
+        stokes = CM.Parameters.StokesRegimeVelType(toml_dict),
+        Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
+        N_cloud_liquid_droplets = CP.get_parameter_values(
+            toml_dict,
+            "prescribed_cloud_droplet_number_concentration",
+            "ClimaAtmos",
+        ).prescribed_cloud_droplet_number_concentration,
+        aml = aerosol_ml_parameters(toml_dict),
+        nd_params.aerosol_nd_reference_number,
+        nd_params.aerosol_nd_mass_exponent,
+        activation = CM.Parameters.AerosolActivationParameters(toml_dict),
+    )
+end
 
 """
     microphysics_0m_parameters(

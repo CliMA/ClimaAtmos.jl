@@ -343,3 +343,169 @@ end
     RRTMGPI.sum_aerosol_bins!(ᶜconc, nothing, seasalt_bins, c₀)
     @test all(==(c₀), parent(ᶜconc))
 end
+
+@testset "Prescribed-aerosol CCN droplet number closure" for FT in (Float32, Float64)
+    # Default-off flag leaves radiation mode unchanged.
+    @test !RRTMGPI.AllSkyRadiation().aerosol_radiation_nd
+    @test !RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics().aerosol_radiation_nd
+
+    cmc = CA.cloud_parameters(FT)
+    N_0 = cmc.aerosol_nd_reference_number
+    β_N = cmc.aerosol_nd_mass_exponent
+    @test N_0 === FT(9.0e7)
+    @test β_N === FT(0.41)
+
+    # Bounds and exact formula for clean marine vs polluted coastal states.
+    N_min = FT(2.5e7)
+    N_max = FT(3.5e8)
+    N_mid = sqrt(N_min * N_max)
+    Δ_max = FT(0.5) * log(N_max / N_min)
+    expected_nd(M) = begin
+        N_raw = N_0 * (max(FT(M), FT(1e-13)) / FT(4e-10))^β_N
+        N_mid * exp(Δ_max * tanh(log(N_raw / N_mid) / Δ_max))
+    end
+
+    (; cent_space) = get_cartesian_spaces(; FT)
+    ᶜρ = fill(FT(1.2), cent_space)
+    ᶜM_ccn = zeros(cent_space)
+    M_0 = FT(4.0e-10)
+
+    # Clean Southern Ocean state (supermicron SSLT03 & DST01 ignored).
+    names = (:SO4, :OC1, :OC2, :SSLT01, :SSLT02, :SSLT03, :DST01)
+    clean_field = similar(
+        Fields.coordinate_field(cent_space),
+        NamedTuple{names, NTuple{7, FT}},
+    )
+    fill!(clean_field.SO4, FT(1.0e-10))
+    fill!(clean_field.OC1, FT(5.0e-11))
+    fill!(clean_field.OC2, FT(4.0e-11))
+    fill!(clean_field.SSLT01, FT(5.0e-11))
+    fill!(clean_field.SSLT02, FT(1.2e-10))
+    fill!(clean_field.SSLT03, FT(1.0e-6))
+    fill!(clean_field.DST01, FT(1.0e-6))
+
+    # Polluted coastal Sc / continental state.
+    polluted_field = similar(
+        Fields.coordinate_field(cent_space),
+        NamedTuple{names, NTuple{7, FT}},
+    )
+    fill!(polluted_field.SO4, FT(1.0e-9))
+    fill!(polluted_field.OC1, FT(1.0e-9))
+    fill!(polluted_field.OC2, FT(1.0e-9))
+    fill!(polluted_field.SSLT01, FT(2.0e-10))
+    fill!(polluted_field.SSLT02, FT(4.0e-10))
+    fill!(polluted_field.SSLT03, FT(0))
+    fill!(polluted_field.DST01, FT(0))
+
+    M_clean_exp =
+        FT(1.2) * (
+            FT(1.0e-10) +
+            FT(0.5) * (FT(4.0e-11) + FT(0.2) * FT(5.0e-11)) +
+            FT(5.0e-11) +
+            FT(0.25) * FT(1.2e-10)
+        )
+    M_polluted_exp =
+        FT(1.2) * (
+            FT(1.0e-9) +
+            FT(0.5) * (FT(1.0e-9) + FT(0.2) * FT(1.0e-9)) +
+            FT(2.0e-10) +
+            FT(0.25) * FT(4.0e-10)
+        )
+
+    RRTMGPI.weighted_aerosol_ccn_mass!(ᶜM_ccn, clean_field, ᶜρ, M_0)
+    @test all(x -> isapprox(x, M_clean_exp; rtol = 10 * eps(FT)), parent(ᶜM_ccn))
+    N_clean = @inferred RRTMGPI.aerosol_N_cloud_liquid_droplets(
+        first(parent(ᶜM_ccn)),
+        N_0,
+        β_N,
+    )
+    @test N_clean ≈ expected_nd(M_clean_exp) rtol = 10 * eps(FT)
+    @test N_min <= N_clean < N_0
+
+    RRTMGPI.weighted_aerosol_ccn_mass!(ᶜM_ccn, polluted_field, ᶜρ, M_0)
+    @test all(
+        x -> isapprox(x, M_polluted_exp; rtol = 10 * eps(FT)),
+        parent(ᶜM_ccn),
+    )
+    N_polluted = @inferred RRTMGPI.aerosol_N_cloud_liquid_droplets(
+        first(parent(ᶜM_ccn)),
+        N_0,
+        β_N,
+    )
+    @test N_polluted ≈ expected_nd(M_polluted_exp) rtol = 10 * eps(FT)
+    @test N_0 < N_polluted <= N_max
+
+    # Extreme bounds & absent aerosol fallback.
+    N_low = RRTMGPI.aerosol_N_cloud_liquid_droplets(zero(FT), N_0, β_N)
+    N_high = RRTMGPI.aerosol_N_cloud_liquid_droplets(FT(1e-2), N_0, β_N)
+    @test N_min <= N_low < N_clean < N_polluted < N_high <= N_max
+    @test N_high ≈ N_max rtol = FT(1e-4)
+
+    RRTMGPI.weighted_aerosol_ccn_mass!(ᶜM_ccn, nothing, ᶜρ, M_0)
+    @test all(==(M_0), parent(ᶜM_ccn))
+
+    # Off path reproduces existing effective radius bitwise; on path alters r_e.
+    q_l = FT(5e-4)
+    r_e_off = CA.CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+        cmc.liquid,
+        FT(1.2),
+        q_l,
+        RRTMGPI.ml_N_cloud_liquid_droplets(cmc, zero(FT), zero(FT), zero(FT), q_l),
+        zero(FT),
+        zero(FT),
+    )
+    r_e_const = CA.CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+        cmc.liquid,
+        FT(1.2),
+        q_l,
+        cmc.N_cloud_liquid_droplets,
+        zero(FT),
+        zero(FT),
+    )
+    r_e_polluted = CA.CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+        cmc.liquid,
+        FT(1.2),
+        q_l,
+        N_polluted,
+        zero(FT),
+        zero(FT),
+    )
+    @test r_e_off === r_e_const
+    @test r_e_polluted < r_e_off
+
+    # Zero heap allocations on weighted_aerosol_ccn_mass! and pointwise closure.
+    alloc_fn!(ᶜout, af, ρ, m0) = RRTMGPI.weighted_aerosol_ccn_mass!(ᶜout, af, ρ, m0)
+    alloc_fn!(ᶜM_ccn, polluted_field, ᶜρ, M_0)
+    @test (@allocated alloc_fn!(ᶜM_ccn, polluted_field, ᶜρ, M_0)) == 0
+    @test (@allocated RRTMGPI.aerosol_N_cloud_liquid_droplets(M_polluted_exp, N_0, β_N)) ==
+          0
+
+    # TOML override and validation.
+    toml_override = Dict(
+        "aerosol_nd_reference_number" => Dict("value" => 1.05e8, "type" => "float"),
+        "aerosol_nd_mass_exponent" => Dict("value" => 0.35, "type" => "float"),
+    )
+    cmc_ov = CA.cloud_parameters(
+        CA.CP.create_toml_dict(FT; override_file = toml_override),
+    )
+    @test cmc_ov.aerosol_nd_reference_number === FT(1.05e8)
+    @test cmc_ov.aerosol_nd_mass_exponent === FT(0.35)
+    @test_throws ArgumentError CA.cloud_parameters(
+        CA.CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                "aerosol_nd_reference_number" =>
+                    Dict("value" => 0.0, "type" => "float"),
+            ),
+        ),
+    )
+    @test_throws ArgumentError CA.cloud_parameters(
+        CA.CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                "aerosol_nd_mass_exponent" =>
+                    Dict("value" => -0.1, "type" => "float"),
+            ),
+        ),
+    )
+end

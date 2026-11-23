@@ -660,11 +660,15 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
     end
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
     aerosol_radiation = parsed_args["aerosol_radiation"]
+    aerosol_radiation_nd = get(parsed_args, "aerosol_radiation_nd", false)
     reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
     deep_atmosphere = parsed_args["deep_atmosphere"]
     include_snow = parsed_args["radiation_include_snow"]
     if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
         @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
+    end
+    if !(radiation_name in ("allsky", "allskywithclear")) && aerosol_radiation_nd
+        @warn "aerosol_radiation_nd does not have any effect with $radiation_name radiation option"
     end
     if !(radiation_name in ("allsky", "allskywithclear")) && include_snow
         @warn "radiation_include_snow does not have any effect with $radiation_name radiation option"
@@ -696,6 +700,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             sw_cloud_inhomogeneity,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            aerosol_radiation_nd,
             include_snow,
             reset_rng_seed,
             deep_atmosphere,

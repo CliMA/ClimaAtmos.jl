@@ -116,6 +116,9 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
   - `add_isothermal_boundary_layer`: Whether RRTMGP appends an isothermal layer above the
     model top.
   - `aerosol_radiation`: Whether prescribed aerosols contribute to the shortwave optics.
+  - `aerosol_radiation_nd`: Whether liquid cloud droplet number concentration in
+    radiation is diagnosed from prescribed submicron CCN aerosols (`SO4`, `OC1`,
+    `OC2`, `SSLT01`, `SSLT02`).
   - `include_snow`: Whether snow is included in the cloud optics as an extra condensate
     species — a placeholder that reuses the ice lookup table (see RRTMGP's precipitation
     docs). When true, `center_cloud_snow_water_path` and
@@ -134,6 +137,7 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
     sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
+    aerosol_radiation_nd::Bool = false
     include_snow::Bool = false
     reset_rng_seed::Bool = false
     deep_atmosphere::Bool = true
@@ -155,6 +159,7 @@ The fields and their defaults are identical to `AllSkyRadiation`.
     sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
+    aerosol_radiation_nd::Bool = false
     include_snow::Bool = false
     reset_rng_seed::Bool = false
     deep_atmosphere::Bool = true
