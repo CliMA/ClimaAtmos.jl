@@ -1040,6 +1040,15 @@ function SGSQuadratureParameters(
         # SGP environment liquid, against the model's own BOMEX updraft (0.75
         # against the LES updraft). α_min is provisional.
         sgs_fidelity_updraft_coeff = FT(0.6),
+        # Stratiform-regime updraft fidelity coefficient (-1 equals
+        # `sgs_fidelity_updraft_coeff`), updraft condensate-share reference
+        # `φ_ref`, warm-ramp temperature bounds [K], and blend mode
+        # (0 = linear in `c_u`, 1 = linear in `1 / c_u`).
+        sgs_fidelity_updraft_coeff_stratiform = FT(-1),
+        sgs_fidelity_updraft_share_ref = FT(0.35),
+        sgs_fidelity_updraft_warm_ramp_start = FT(263.15),
+        sgs_fidelity_updraft_warm_ramp_end = FT(273.15),
+        sgs_fidelity_updraft_inv_blend = FT(0),
         sgs_fidelity_updraft_min = FT(0.05),
         # Precipitation-fraction placement of rain and snow over the quadrature:
         # all of the rain and snow on the precipitation shaft (0 = uniform). A
@@ -1124,6 +1133,43 @@ function SGSQuadratureParameters(
         ),
     )
         value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
+    end
+    c_u_strat = parameters.sgs_fidelity_updraft_coeff_stratiform
+    c_u_strat == -1 || c_u_strat >= 0 ||
+        throw(
+            ArgumentError(
+                "sgs_fidelity_updraft_coeff_stratiform must be -1 or " *
+                "non-negative; got $c_u_strat",
+            ),
+        )
+    φ_ref = parameters.sgs_fidelity_updraft_share_ref
+    φ_ref > 0 || throw(
+        ArgumentError(
+            "sgs_fidelity_updraft_share_ref must be positive; got $φ_ref",
+        ),
+    )
+    T_warm_start = parameters.sgs_fidelity_updraft_warm_ramp_start
+    T_warm_end = parameters.sgs_fidelity_updraft_warm_ramp_end
+    (T_warm_start > 0 && T_warm_end > T_warm_start) || throw(
+        ArgumentError(
+            "sgs_fidelity_updraft_warm_ramp_start and _end must satisfy " *
+            "0 < start < end; got ($T_warm_start, $T_warm_end)",
+        ),
+    )
+    inv_blend = parameters.sgs_fidelity_updraft_inv_blend
+    (inv_blend == 0 || inv_blend == 1) || throw(
+        ArgumentError(
+            "sgs_fidelity_updraft_inv_blend must be 0 or 1; got $inv_blend",
+        ),
+    )
+    if inv_blend == 1
+        c_u_conv = parameters.sgs_fidelity_updraft_coeff
+        (c_u_conv > 0 && (c_u_strat == -1 || c_u_strat > 0)) || throw(
+            ArgumentError(
+                "sgs_fidelity_updraft_inv_blend == 1 requires positive " *
+                "updraft fidelity coefficients; got ($c_u_conv, $c_u_strat)",
+            ),
+        )
     end
     w_eq = parameters.sgs_fidelity_equilibrium_weight
     0 <= w_eq <= 1 || throw(

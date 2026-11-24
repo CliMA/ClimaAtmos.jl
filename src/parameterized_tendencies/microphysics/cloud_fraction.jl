@@ -717,19 +717,27 @@ function set_covariance_cache!(
     has_α && set_updraft_variance_fidelity!(
         p.atmos.sgs_variance_fidelity_model, turbconv_model,
         p.atmos.microphysics_model,
-        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq,
+        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean,
+        ᶜq_lcl, ᶜq_icl, w_eq,
     )
     return nothing
 end
 
 """
-    set_updraft_variance_fidelity!(fidelity_model, turbconv_model, microphysics_model, Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq)
+    set_updraft_variance_fidelity!(
+        fidelity_model, turbconv_model, microphysics_model,
+        Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean,
+        ᶜq_lcl, ᶜq_icl, w_eq,
+    )
 
 With `UpdraftVarianceFidelity`, `PrognosticEDMFX` and non-equilibrium
 microphysics, blend the updraft rule (`updraft_variance_fidelity`) into the
 equilibrium variance fidelity `ᶜα`, with `σ_S` the linearized width
-(`_sgs_linear_sigma_S`) at the environment state `(ᶜρ_env, ᶜT_mean)`.
-Otherwise do nothing.
+(`_sgs_linear_sigma_S`) at the environment state `(ᶜρ_env, ᶜT_mean)`. When
+`sgs_fidelity_updraft_coeff_stratiform >= 0` differs from
+`sgs_fidelity_updraft_coeff`, the updraft coefficient blends between them via
+`_updraft_fidelity_coeff` using the environment cloud condensate
+`ᶜq_lcl + ᶜq_icl` and `ᶜT_mean`. Otherwise do nothing.
 """
 set_updraft_variance_fidelity!(
     fidelity_model,
@@ -741,10 +749,13 @@ set_updraft_variance_fidelity!(
 function set_updraft_variance_fidelity!(
     ::UpdraftVarianceFidelity, ::PrognosticEDMFX,
     microphysics_model::NonEquilibriumMicrophysics,
-    Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean, w_eq,
+    Y, p, thermo_params, ᶜα, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜρ_env, ᶜT_mean,
+    ᶜq_lcl, ᶜq_icl, w_eq,
 )
     FT = eltype(p.params)
-    c_u = FT(CAP.sgs_fidelity_updraft_coeff(p.params))
+    c_u_conv = FT(CAP.sgs_fidelity_updraft_coeff(p.params))
+    c_u_strat_raw = FT(CAP.sgs_fidelity_updraft_coeff_stratiform(p.params))
+    c_u_strat = c_u_strat_raw >= zero(FT) ? c_u_strat_raw : c_u_conv
     α_min = FT(CAP.sgs_fidelity_updraft_min(p.params))
     α_max = inv(one(FT) - FT(w_eq))  # `Inf` for `w_eq = 1`
     σ_abs = FT(CAP.cloud_fraction_sigma_abs(p.params))
@@ -753,11 +764,25 @@ function set_updraft_variance_fidelity!(
     ᶜsigma_S = @. lazy(
         _sgs_linear_sigma_S(thermo_params, ᶜρ_env, ᶜT_mean, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq),
     )
-    @. ᶜα = updraft_variance_fidelity(
-        ᶜα, Y.c.sgsʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs,
-        ᶜsigma_S, thermo_params, microphysics_model, turbconv_params, σ_abs,
-        c_u, α_min, α_max,
-    )
+    if c_u_strat == c_u_conv
+        @. ᶜα = updraft_variance_fidelity(
+            ᶜα, Y.c.sgsʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs,
+            ᶜsigma_S, thermo_params, microphysics_model, turbconv_params, σ_abs,
+            c_u_conv, α_min, α_max,
+        )
+    else
+        φ_ref = FT(CAP.sgs_fidelity_updraft_share_ref(p.params))
+        T_warm_start = FT(CAP.sgs_fidelity_updraft_warm_ramp_start(p.params))
+        T_warm_end = FT(CAP.sgs_fidelity_updraft_warm_ramp_end(p.params))
+        inv_blend = CAP.sgs_fidelity_updraft_inv_blend(p.params) > zero(FT)
+        ᶜq_c_env = @. lazy(ᶜq_lcl + ᶜq_icl)
+        @. ᶜα = updraft_variance_fidelity(
+            ᶜα, Y.c.sgsʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs,
+            ᶜsigma_S, thermo_params, microphysics_model, turbconv_params, σ_abs,
+            c_u_conv, α_min, α_max, c_u_strat, φ_ref, ᶜq_c_env, ᶜT_mean,
+            T_warm_start, T_warm_end, inv_blend,
+        )
+    end
     return nothing
 end
 
@@ -1561,21 +1586,71 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
 end
 
 """
+    _updraft_fidelity_coeff(
+        c_u_conv, c_u_strat, φ_ref, aq, a, q_c_env, T_mean,
+        [T_warm_start, T_warm_end, inv_blend],
+    )
+
+Effective updraft-fidelity coefficient with stratiform weight
+`w_st = (1 − min(1, φ_up / φ_ref)) w_warm`, updraft condensate share
+`φ_up = aq / (aq + (1 − a) q_c,env)`, and warm-cloud ramp
+`w_warm = clamp((T_mean − T_warm_start) / (T_warm_end − T_warm_start), 0, 1)`.
+Blends linearly in `c_u` (`c_u,conv + (c_u,strat − c_u,conv) w_st`) when
+`inv_blend == false`, or linearly in `1 / c_u`
+(`1 / (1 / c_u,conv + (1 / c_u,strat − 1 / c_u,conv) w_st)`) when
+`inv_blend == true`. Returns `c_u,conv` directly when `c_u,strat == c_u,conv`.
+"""
+@inline function _updraft_fidelity_coeff(
+    c_u_conv,
+    c_u_strat,
+    φ_ref,
+    aq,
+    a,
+    q_c_env,
+    T_mean,
+    T_warm_start = typeof(T_mean)(263.15),
+    T_warm_end = typeof(T_mean)(273.15),
+    inv_blend::Bool = false,
+)
+    FT = typeof(T_mean)
+    c_u_strat == c_u_conv && return FT(c_u_conv)
+    a_0 = max(zero(FT), one(FT) - a)
+    q_c_0 = max(zero(FT), FT(q_c_env))
+    φ_up = aq / max(aq + a_0 * q_c_0, floatmin(FT))
+    w_warm = clamp(
+        (T_mean - FT(T_warm_start)) / (FT(T_warm_end) - FT(T_warm_start)),
+        zero(FT),
+        one(FT),
+    )
+    w_st = (one(FT) - min(one(FT), φ_up / FT(φ_ref))) * w_warm
+    if inv_blend
+        inv_conv = inv(max(FT(c_u_conv), floatmin(FT)))
+        inv_strat = inv(max(FT(c_u_strat), floatmin(FT)))
+        return inv(inv_conv + (inv_strat - inv_conv) * w_st)
+    end
+    return FT(c_u_conv) + (FT(c_u_strat) - FT(c_u_conv)) * w_st
+end
+
+"""
     updraft_variance_fidelity(
         α, sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs, sigma_S,
         thermo_params, microphysics_model, turbconv_params, σ_abs,
         c_u, α_min, α_max,
+        [c_u_strat, φ_ref, q_c_env, T_mean,
+         T_warm_start, T_warm_end, inv_blend],
     )
 
 Variance fidelity of the updraft rule (`sgs_variance_fidelity_model: updraft`):
 the width `α σ_S` of the environment's condensate ramp is set by the in-cloud
 condensate of the updrafts,
 
-    α_up = clamp(c_u q_c,up / σ_S, α_min, α_max),    q_c,up = Σ a_j q_c,j / Σ a_j f_j,
+    α_up = clamp(c_u,eff q_c,up / σ_S, α_min, α_max),
+    q_c,up = Σ a_j q_c,j / Σ a_j f_j,
 
 with `a_j` the area, `q_c,j = q_lcl + q_icl` the condensate and `f_j` the cloud
-cover (`_updraft_cloud_fraction`) of updraft `j`, and `α_max = 1 / (1 − w_eq)`
-the bound of the equilibrium rule. The result is `(1 − W) α + W α_up`, with
+cover (`_updraft_cloud_fraction`) of updraft `j`, `c_u,eff` from
+`_updraft_fidelity_coeff`, and `α_max = 1 / (1 − w_eq)` the bound of the
+equilibrium rule. The result is `(1 − W) α + W α_up`, with
 
     W = Σ a_j f_j L_j / Σ a_j,
 
@@ -1587,6 +1662,10 @@ at the minimum area by the limiters carry no weight.
     α, sgsʲs, ρʲs, Tʲs, q_totʲs, q_liqʲs, q_iceʲs, sigma_S,
     thermo_params, microphysics_model, turbconv_params, σ_abs,
     c_u, α_min, α_max,
+    c_u_strat = c_u, φ_ref = one(typeof(α)),
+    q_c_env = zero(typeof(α)), T_mean = zero(typeof(α)),
+    T_warm_start = typeof(α)(263.15), T_warm_end = typeof(α)(273.15),
+    inv_blend::Bool = false,
 )
     FT = typeof(α)
     terms = unrolled_map(
@@ -1600,9 +1679,13 @@ at the minimum area by the limiters carry no weight.
         (x, y) -> (x[1] + y[1], x[2] + y[2], x[3] + y[3], x[4] + y[4]),
         terms,
     )
+    c_u_eff = _updraft_fidelity_coeff(
+        FT(c_u), FT(c_u_strat), FT(φ_ref), aq, a, FT(q_c_env), FT(T_mean),
+        FT(T_warm_start), FT(T_warm_end), inv_blend,
+    )
     q_c_up = aq / max(af, floatmin(FT))
     α_up = clamp(
-        FT(c_u) * q_c_up / max(FT(sigma_S), ϵ_numerics(FT)),
+        c_u_eff * q_c_up / max(FT(sigma_S), ϵ_numerics(FT)),
         FT(α_min),
         FT(α_max),
     )

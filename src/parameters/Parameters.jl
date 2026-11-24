@@ -405,13 +405,26 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ [0, 1]` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
-  - `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min`: Coefficient `c_u`
-    and lower bound `α_min` of the updraft rule of the variance fidelity
+  - `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_coeff_stratiform`,
+    `sgs_fidelity_updraft_share_ref`, `sgs_fidelity_updraft_warm_ramp_start`,
+    `sgs_fidelity_updraft_warm_ramp_end`, `sgs_fidelity_updraft_inv_blend`,
+    `sgs_fidelity_updraft_min`: Coefficient `c_u`, stratiform-regime
+    coefficient `c_u,strat`, updraft condensate-share reference `φ_ref > 0`,
+    warm-ramp temperature bounds `T_start < T_end` [K], inverse-blend switch
+    (`0` = linear in `c_u`, `1` = linear in `1 / c_u`), and lower bound `α_min`
+    of the updraft rule of the variance fidelity
     (`sgs_variance_fidelity_model: updraft`),
-    `α = clamp(c_u q_c,up / σ_S, α_min, 1 / (1 − w_eq))`, blended in by the
-    cloud cover and area-limiter factor of the updrafts
-    (`updraft_variance_fidelity`). `α_min` is a provisional floor that keeps
-    the environment condensate from spreading uniformly over the cell [-].
+    `α = clamp(c_u,eff q_c,up / σ_S, α_min, 1 / (1 − w_eq))`, blended in by
+    the cloud cover and area-limiter factor of the updrafts
+    (`updraft_variance_fidelity`). When
+    `sgs_fidelity_updraft_coeff_stratiform >= 0`, `c_u,eff` blends `c_u` and
+    `c_u,strat` with `w_st = (1 − min(1, φ_up / φ_ref)) w_warm`, where
+    `φ_up = Σ a_j q_c,j / (Σ a_j q_c,j + a_0 q_c,0)` is the updraft share of
+    cell cloud condensate and
+    `w_warm = clamp((T − T_start) / (T_end − T_start), 0, 1)`. The default `-1`
+    sets `c_u,strat = c_u` so the coefficient is uniform. `α_min` is a
+    provisional floor that keeps the environment condensate from spreading
+    uniformly over the cell [-, K].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
     width (`_sgs_augmented_sigma`) and on the updraft cover width
     (`_updraft_cloud_fraction`) [kg/kg].
@@ -472,6 +485,11 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sublimation_deposition_timescale::FT
     sgs_fidelity_equilibrium_weight::FT
     sgs_fidelity_updraft_coeff::FT
+    sgs_fidelity_updraft_coeff_stratiform::FT
+    sgs_fidelity_updraft_share_ref::FT
+    sgs_fidelity_updraft_warm_ramp_start::FT
+    sgs_fidelity_updraft_warm_ramp_end::FT
+    sgs_fidelity_updraft_inv_blend::FT
     sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
     cloud_fraction_eps_rel::FT
