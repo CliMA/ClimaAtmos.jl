@@ -244,7 +244,7 @@ sum to more than the grid-mean flux.
 end
 
 """
-    set_sfc_sgs_precip_energy_flux!(dest, Y, p, turbconv_model, gm)
+    set_sfc_sgs_precip_energy_flux!(dest, Y, p, turbconv_model, gm, phase = nothing)
 
 Write into the surface-level field `dest` the subdomain correction to the
 bottom-face sedimentation energy flux at the Newton linearization state, summed
@@ -255,7 +255,8 @@ inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
 and `environment_precip_energy_flux`, which is the value of the column
 correction flux through the surface face. Zero for every turbulence-convection
 model other than `PrognosticEDMFX`, and for a `PrognosticEDMFX` whose updrafts
-carry no prognostic condensate species.
+carry no prognostic condensate species. A `phase` of `TD.Liquid()` or `TD.Ice()`
+restricts the sum to cloud liquid and rain, or to cloud ice and snow.
 
 The environment density is first stored in `p.scratch.sfc_precip_env_density`,
 and the species terms are added in separate broadcasts: a single fused
@@ -292,30 +293,33 @@ parameter limit of some GPUs.
     )
 end
 
-set_sfc_sgs_precip_energy_flux!(dest, Y, p, _, gm) =
+set_sfc_sgs_precip_energy_flux!(dest, Y, p, _, gm, phase = nothing) =
     fill!(dest, zero(eltype(p.params)))
-function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
+function set_sfc_sgs_precip_energy_flux!(
+    dest, Y, p, ::PrognosticEDMFX, gm, phase = nothing,
+)
     FT = eltype(p.params)
     fill!(dest, zero(FT))
     sgs_species = unrolled_filter(
-        ((q_name, _, _, _, _),) ->
-            MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name),
+        ((q_name, _, _, _, _, species_phase),) ->
+            MatrixFields.has_field(Y.c.sgsʲs.:(1), q_name) &&
+            (isnothing(phase) || species_phase === phase),
         (
             (
                 @name(q_lcl), @name(ᶜwₗʲs.:(1)),
-                gm.int_ρq_lcl, gm.sfc_wₗ, TD.internal_energy_liquid,
+                gm.int_ρq_lcl, gm.sfc_wₗ, TD.internal_energy_liquid, TD.Liquid(),
             ),
             (
                 @name(q_icl), @name(ᶜwᵢʲs.:(1)),
-                gm.int_ρq_icl, gm.sfc_wᵢ, TD.internal_energy_ice,
+                gm.int_ρq_icl, gm.sfc_wᵢ, TD.internal_energy_ice, TD.Ice(),
             ),
             (
                 @name(q_rai), @name(ᶜwᵣʲs.:(1)),
-                gm.int_ρq_rai, gm.sfc_wᵣ, TD.internal_energy_liquid,
+                gm.int_ρq_rai, gm.sfc_wᵣ, TD.internal_energy_liquid, TD.Liquid(),
             ),
             (
                 @name(q_sno), @name(ᶜwₛʲs.:(1)),
-                gm.int_ρq_sno, gm.sfc_wₛ, TD.internal_energy_ice,
+                gm.int_ρq_sno, gm.sfc_wₛ, TD.internal_energy_ice, TD.Ice(),
             ),
         ),
     )
@@ -361,7 +365,7 @@ function set_sfc_sgs_precip_energy_flux!(dest, Y, p, ::PrognosticEDMFX, gm)
 
     MatrixFields.unrolled_foreach(
         sgs_species,
-    ) do (q_name, wʲ_name, int_ρq, sfc_w, e_int)
+    ) do (q_name, wʲ_name, int_ρq, sfc_w, e_int, _)
         int_qʲ = sfc_lev(MatrixFields.get_field(Y.c.sgsʲs.:(1), q_name))
         sfc_wʲ = sfc_lev(MatrixFields.get_field(p.precomputed, wʲ_name))
         # The 1-tuple broadcasts the function as a scalar without a heap `Ref`.
@@ -428,6 +432,7 @@ end
     e_rai = e_int_liq + int_Φ + sedimentation_kinetic_energy(sfc_wᵣ, int_uvw)
     e_sno = e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wₛ, int_uvw)
     f_e_sgs = zero_FT
+    f_e_sgs_sno = zero_FT
     return (;
         w_lcl_jac,
         w_icl_jac,
@@ -446,6 +451,7 @@ end
         e_rai,
         e_sno,
         f_e_sgs,
+        f_e_sgs_sno,
     )
 end
 
@@ -572,6 +578,14 @@ function record_stage_precipitation_linearization!(Y, p)
         p,
         p.atmos.turbconv_model,
         gm,
+    )
+    set_sfc_sgs_precip_energy_flux!(
+        sfc_precip_lin_state.f_e_sgs_sno,
+        Y,
+        p,
+        p.atmos.turbconv_model,
+        gm,
+        TD.Ice(),
     )
     return nothing
 end

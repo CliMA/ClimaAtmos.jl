@@ -86,6 +86,7 @@ function precipitation_surface_flux_accumulator_quantities(
         e_rai::FT,
         e_sno::FT,
         f_e_sgs::FT,
+        f_e_sgs_sno::FT,
     }
     return (;
         b_imp_stages,
@@ -95,6 +96,7 @@ function precipitation_surface_flux_accumulator_quantities(
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
         col_integrated_precip_energy_tendency_accum = zeros(sfc_space),
+        surface_snow_energy_flux_accum = zeros(sfc_space),
         sfc_precip_env_density = zeros(sfc_space),
         c_lev1_uvw = Fields.Field(UVW{FT}, c_lev1_space),
         c_lev1_uvwʲ = Fields.Field(UVW{FT}, c_lev1_space),
