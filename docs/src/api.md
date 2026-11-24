@@ -488,6 +488,7 @@ ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite
 ClimaAtmos.ClimaAtmos
 ClimaAtmos.Parameters
 ClimaAtmos.Parameters.DEFAULT_PARAMS_FILEPATH
+ClimaAtmos.create_toml_dict
 ClimaAtmos.Diagnostics
 ClimaAtmos.RRTMGPInterface
 ClimaAtmos.AtmosArtifacts

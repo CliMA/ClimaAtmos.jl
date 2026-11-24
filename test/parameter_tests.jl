@@ -531,7 +531,7 @@ end
 
 @testset "ClimaAtmos default parameters" begin
     name = "zd_rayleigh"
-    defaults = CA.atmos_default_toml_dict(Float64)
+    defaults = CP.create_toml_dict(Float64; override_file = CAP.DEFAULT_PARAMS_FILEPATH)
     atmos_default = defaults.data[name]["value"]
     @test atmos_default != CP.create_toml_dict(Float64).data[name]["value"]
 
