@@ -87,7 +87,8 @@ the implicit solver. To remove it in debugging workflows, comment out the call i
 """
 function amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
     (; microphysics_model) = p.atmos
-    (; ᶜu, ᶠu³, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜu, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶜtemp_UVW, ᶠtemp_UVW, ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW) = p.scratch
     (; ᶜtemp_scalar, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
     ᶜΦ = p.core.ᶜΦ
