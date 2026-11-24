@@ -1,4 +1,4 @@
-479
+480
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+480
+- EDMF form drag computed from the plume radius, `α_d / 2 (1 / Rʲ + 1 / R⁰)` with
+  `R = H √a`, instead of `α_d / (2 H) (1 / √aʲ + 1 / √a⁰)`: equal in exact
+  arithmetic with the new parameters at their default `0`, but rounded
+  differently, so prognostic EDMF jobs change by roundoff.
+
 479
 - Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
   its two cells, the non-orographic damping layer spans at least the top three cells,

@@ -13,6 +13,12 @@ main
   the draft relative humidity. Below freezing, a condensate-free environment was measured
   against ice and a liquid draft against liquid, which shrank the contrast by a factor of
   about 3 at 258 K. This changes `PiGroups` runs with supercooled or mixed-phase drafts.
+- ![][badge-✨feature/enhancement] EDMF updraft plume radius `R` (`plume_radius`)
+  with a height-growing floor `min(c_R (z − z_sfc), R_max)`, shared by the form
+  drag and a new TKE-driven turbulent entrainment `2 c_e √tke / R`, plus an
+  optional Gaussian height taper of turbulent entrainment. New provisional
+  parameters `pressure_drag_plume_radius_slope`, `pressure_drag_plume_radius_max`,
+  `turb_entr_tke_coeff`, `turb_entr_height_scale`, all default `0` (off).
 - ![][badge-🔥behavioralΔ] Set `Setups.ISDAC` surface sensible and latent heat
   fluxes to zero (`shf = 0`, `lhf = 0`) per Ovchinnikov et al. (2014), Appendix
   A2 (previously `MoninObukhov(; z0 = 4e-4)` computed interactive surface heat

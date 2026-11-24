@@ -634,22 +634,39 @@ function detrainment_rate(
 end
 
 """
-    turbulent_entrainment(turbconv_params, ᶜaʲ)
+    turbulent_entrainment(turbconv_params, ᶜaʲ, ᶜz = 0, z_sfc = 0, tke = 0, R = 1)
 
 Turbulent (diffusive) entrainment rate [1/s] of an updraft of area fraction
-`ᶜaʲ`:
+`ᶜaʲ` and radius `R` [m] at altitude `ᶜz` above the surface `z_sfc`, with `tke`
+the isotropic TKE [m²/s²]:
 
-    turb_entr = max(0, c₁ exp(-c₂ aʲ)),
+    turb_entr = (max(0, c₁ exp(-c₂ aʲ)) + 2 c_e √max(0, tke) / R) ·
+                exp(-(max(0, z - z_sfc) / H_t)²),
 
-with `(c₁, c₂) = turb_entr_param_vec`. Unlike the dynamical entrainment of
-`compute_entrainment`, it does not scale with the updraft velocity, and
-it decays as the updraft fills the grid box. Precomputed into
-`p.precomputed.ᶜturb_entrʲs` and added to the dynamical rate in
-`edmfx_entr_detr_tendency!`.
+with `(c₁, c₂) = turb_entr_param_vec`, `c_e = turb_entr_tke_coeff` and
+`H_t = turb_entr_height_scale` (`gaussian_height_taper`; no taper for
+`H_t = 0`). The first term decays as the updraft fills the grid box. The
+second is the exchange across the updraft edge by the turbulence the updraft
+is embedded in: an edge velocity `c_e √tke` on the perimeter `2πR` of a plume
+of cross section `πR²`, with `R` from `plume_radius`, the radius of the form
+drag. Unlike the dynamical
+entrainment of `compute_entrainment`, neither term scales with the updraft
+velocity. Precomputed into `p.precomputed.ᶜturb_entrʲs` and added to the
+dynamical rate in `edmfx_entr_detr_tendency!`.
 """
-function turbulent_entrainment(turbconv_params, ᶜaʲ)
-    turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
-    return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
+function turbulent_entrainment(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜz = zero(ᶜaʲ),
+    z_sfc = zero(ᶜaʲ),
+    tke = zero(ᶜaʲ),
+    R = one(ᶜaʲ),
+)
+    (c₁, c₂) = CAP.turb_entr_param_vec(turbconv_params)
+    c_e = CAP.turb_entr_tke_coeff(turbconv_params)
+    H_t = CAP.turb_entr_height_scale(turbconv_params)
+    rate = max(c₁ * exp(-c₂ * ᶜaʲ), 0) + 2 * c_e * sqrt(max(tke, zero(tke))) / R
+    return rate * gaussian_height_taper(ᶜz, z_sfc, H_t)
 end
 
 """

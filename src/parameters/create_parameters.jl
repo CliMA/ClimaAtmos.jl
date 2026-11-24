@@ -676,6 +676,10 @@ function TurbulenceConvectionParameters(
         # (`subsaturation_entrainment_inv_length`); coefficient 0 = off.
         entr_subsat_coeff = FT(0),
         entr_subsat_power = FT(2),
+        turb_entr_height_scale = FT(0),
+        turb_entr_tke_coeff = FT(0),
+        pressure_drag_plume_radius_slope = FT(0),
+        pressure_drag_plume_radius_max = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

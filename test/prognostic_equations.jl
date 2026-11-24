@@ -159,5 +159,14 @@ end
         @test d_c(FT(0.1), FT(-0.2)) == d_c(FT(0.1), 1 - a_max)
         @test d_c(FT(0.1), FT(1.3)) == d_c(FT(0.1), FT(1))
         @test d_c(FT(0.1), FT(0.9)) isa FT
+
+        # Plume-radius floor `R ≥ min(c_R (z - z_sfc), R_max)`; the drag uses
+        # the same `plume_radius` as the TKE-driven turbulent entrainment.
+        c_R, R_max, z = FT(0.25), FT(1000), FT(6000)
+        R = ClimaAtmos.plume_radius(H, FT(1e-4), a_min, a_max, z, FT(0), c_R, R_max)
+        @test R ≈ R_max
+        @test ClimaAtmos.pressure_drag_coefficient(
+            α_d, H, FT(1e-4), FT(1), a_min, a_max, z, FT(0), c_R, R_max,
+        ) ≈ α_d / 2 * (1 / R + 1 / H)
     end
 end

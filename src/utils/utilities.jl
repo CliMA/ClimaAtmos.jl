@@ -228,6 +228,18 @@ i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
+    gaussian_height_taper(z, z_sfc, H)
+
+Gaussian weight `exp(-(max(0, z - z_sfc) / H)²)` of the height above the
+surface `z_sfc`: `1` at and below the surface, `e⁻¹` at `z - z_sfc = H`. For
+`H ≤ 0` the taper is off and the weight is `1` at all heights.
+"""
+@inline function gaussian_height_taper(z, z_sfc, H)
+    H > zero(H) || return one(z)
+    return exp(-(max(zero(z), z - z_sfc) / H)^2)
+end
+
+"""
     symmetric_part(G)
 
 Return the symmetric part `(G + Gᵀ) / 2` of a `UVW × UVW` tensor `G`, the strain
