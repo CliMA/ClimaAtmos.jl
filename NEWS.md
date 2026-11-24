@@ -3,6 +3,35 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] PrognosticEDMFX on DG horizontal
+  spaces: the horizontal updraft diffusion (`edmfx_horizontal_diffusion: true`)
+  takes its element-minimum draft area over the face neighbors as well, since
+  the SIPG face terms use the larger weight of the two sides. Before, the
+  diffusion rate next to a draft-free element was amplified by up to the area
+  ratio (~10⁶) and the explicit step went unstable as soon as updrafts formed.
+  The updraft vertical velocities also get a face jump penalty at the shear
+  speed `max(|u_n|, dg_vi_shear_floor c)`, weighted by the grid-mean density;
+  with hyperdiffusion off on DG they had no horizontal dissipation.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] `WeatherModel` with
+  `era5_ic_full_pressure: true` extends `t` and `p_3d` hydrostatically below the
+  ERA5 surface (`z_sfc`), with temperature rising at 6.5 K/km, instead of using
+  the lowest-level values the file repeats there. The repeated values left a
+  layer with no vertical pressure gradient wherever the model surface lies below
+  the ERA5 surface, which fell freely on the first step. The file must carry
+  `z_sfc`.
+- ![][badge-🐛bugfix] `ic_hydrostatic_rebalance: true` works again for
+  `WeatherModel`, `AMIPFromERA5`, and `MoistFromFile` initial conditions, and now
+  also with `era5_ic_full_pressure: true`. `rebalance_hydrostatic_pressure`
+  includes the condensate in the moisture partition.
+- ![][badge-✨feature/enhancement] Opt-in `dg_interface_flux: lmars` for the
+  flux-form DG dynamics (`dg_equation_form: fddg`): the low-Mach approximate
+  Riemann solver (Chen et al. 2013) as the dissipation of the Kennedy–Gruber
+  central flux. The pressure jump drives a mass flux, the normal velocity jump
+  is damped at the sound speed, and the interface mass flux upwinds total
+  energy, momentum, the vertical velocity, water and tracers, which replaces
+  their separate penalties. New option `dg_lmars_floor` (default `0`, pure
+  LMARS) floors the contact speed and upwind rate at a fraction of the sound
+  speed.
 - ![][badge-✨feature/enhancement] Add subsurface volume reflectance `R_sub`
   (default `0`) to the sunlit (`cosθ > 0`) direct and diffuse ocean surface
   albedos `α_s` in `RegressionFunctionAlbedo`, as `α_s + (1 - α_s) R_sub`.
