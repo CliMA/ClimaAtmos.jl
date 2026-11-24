@@ -672,6 +672,10 @@ function TurbulenceConvectionParameters(
         # reference density (`set_updraft_reference_density_excess!`): 0 = the
         # grid-mean density, 1 = the clear-fraction blend.
         edmf_buoyancy_clear_env_weight = FT(0),
+        # Subsaturation term of the `InvZEntrainment` dynamical entrainment
+        # (`subsaturation_entrainment_inv_length`); coefficient 0 = off.
+        entr_subsat_coeff = FT(0),
+        entr_subsat_power = FT(2),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -694,6 +698,15 @@ function TurbulenceConvectionParameters(
     f_ev = parameters.edmf_buoyancy_clear_env_weight
     0 <= f_ev <= 1 || throw(
         ArgumentError("edmf_buoyancy_clear_env_weight must lie in [0, 1]; got $f_ev"),
+    )
+    (; entr_subsat_coeff, entr_subsat_power) = parameters
+    entr_subsat_coeff >= 0 || throw(
+        ArgumentError("entr_subsat_coeff must be nonnegative; got $entr_subsat_coeff"),
+    )
+    # A power below one gives the humidity factor an infinite derivative where
+    # the draft and environment humidities meet.
+    entr_subsat_power >= 1 || throw(
+        ArgumentError("entr_subsat_power must be at least 1; got $entr_subsat_power"),
     )
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)

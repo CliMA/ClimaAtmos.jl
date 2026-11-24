@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] `InvZEntrainment` has an optional subsaturation term
+  that raises dynamical entrainment where a draft is moister than its environment,
+  `(c_sub / H) max(0, RHʲ - RH⁰ʲ)^p_sub` with `H` the pressure scale height and both
+  relative humidities taken against saturation over the draft condensate. It is off by
+  default (`entr_subsat_coeff = 0`); `entr_subsat_power` sets `p_sub`.
+- ![][badge-🔥behavioralΔ] The relative-humidity contrast `Π₄` of `PiGroupsEntrainment`
+  measures the environment against saturation over the draft condensate, the reference of
+  the draft relative humidity. Below freezing, a condensate-free environment was measured
+  against ice and a liquid draft against liquid, which shrank the contrast by a factor of
+  about 3 at 258 K. This changes `PiGroups` runs with supercooled or mixed-phase drafts.
 - ![][badge-🔥behavioralΔ] Set `Setups.ISDAC` surface sensible and latent heat
   fluxes to zero (`shf = 0`, `lhf = 0`) per Ovchinnikov et al. (2014), Appendix
   A2 (previously `MoninObukhov(; z0 = 4e-4)` computed interactive surface heat

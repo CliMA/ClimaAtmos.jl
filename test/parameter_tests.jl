@@ -432,3 +432,76 @@ end
     @test config_0m("Kessler").evaporation.k_E === Float32(2e-4)  # default FLOAT_TYPE
     @test_throws ErrorException config_0m("NotAnOption")
 end
+
+# Defined at top level: on Julia 1.10, a closure capturing the loop variable
+# `FT` infers `FT(x)` as `Any` and fails `@inferred`.
+function invz_vel_scale(thp, tc, z, RHʲ, RH⁰ʲ)
+    FT = typeof(z)
+    return CA.entrainment_velocity_scale(
+        thp, tc, z, zero(FT), FT(70000), FT(0.9), FT(0.02), FT(2), RHʲ,
+        FT(0.01), zero(FT), RH⁰ʲ, zero(FT), FT(0.5), CA.InvZEntrainment(),
+    )
+end
+
+@testset "InvZEntrainment subsaturation term" begin
+    for FT in (Float32, Float64)
+        params = CA.ClimaAtmosParameters(FT)
+        thp = CAP.thermodynamics_params(params)
+        tc_off = CAP.turbconv_params(params)
+        @test CAP.entr_subsat_coeff(tc_off) == zero(FT)
+        @test CAP.entr_subsat_power(tc_off) == FT(2)
+        tc_on = CA.TurbulenceConvectionParameters(
+            FT,
+            (; entr_subsat_coeff = FT(5)),
+        )
+
+        p, ρ, aʲ = FT(70000), FT(0.9), FT(0.02)
+        ref_H = p / (ρ * FT(CAP.grav(params)))
+
+        @test @inferred(invz_vel_scale(thp, tc_on, zero(FT), one(FT), FT(0.35))) ===
+              zero(FT)
+
+        # The term vanishes where the draft is no moister than the environment
+        # and otherwise grows with the contrast squared.
+        z = FT(3000)
+        base = invz_vel_scale(thp, tc_off, z, one(FT), FT(0.35))
+        @test invz_vel_scale(thp, tc_on, z, FT(0.8), FT(0.8)) == base
+        @test invz_vel_scale(thp, tc_on, z, FT(0.6), FT(0.8)) == base
+        U_a = CA.upper_area_limiter_factor(aʲ, tc_on)
+        @test @inferred(invz_vel_scale(thp, tc_on, z, one(FT), FT(0.35))) ≈
+              base + U_a * (FT(5) / ref_H) * FT(0.65)^2
+        @test CA.subsaturation_entrainment_inv_length(
+            thp, tc_on, p, ρ, one(FT), zero(FT),
+        ) ≈ FT(5) / ref_H
+        tc_linear = CA.TurbulenceConvectionParameters(
+            FT,
+            (; entr_subsat_coeff = FT(5), entr_subsat_power = one(FT)),
+        )
+        @test CA.subsaturation_entrainment_inv_length(
+            thp, tc_linear, p, ρ, one(FT), FT(0.35),
+        ) ≈ FT(5) / ref_H * FT(0.65)
+
+        # Below freezing, a condensate-free environment is measured against
+        # saturation over the updraft condensate phase.
+        T, q_tot, q_c = FT(258), FT(1.2e-3), FT(1e-4)
+        e_vap = TD.partial_pressure_vapor(thp, p, q_tot)
+        RH⁰_liq = CA.environment_relative_humidity_draft_phase(
+            thp, T, p, q_tot, zero(FT), zero(FT), q_c, zero(FT),
+        )
+        @test RH⁰_liq ≈ e_vap / TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+        @test RH⁰_liq < TD.relative_humidity(thp, T, p, q_tot)
+        @test CA.environment_relative_humidity_draft_phase(
+            thp, T, p, q_tot, zero(FT), zero(FT), zero(FT), q_c,
+        ) ≈ TD.relative_humidity(thp, T, p, q_tot)
+        @test CA.environment_relative_humidity_draft_phase(
+            thp, T, p, q_tot, zero(FT), zero(FT), zero(FT), zero(FT),
+        ) ≈ TD.relative_humidity(thp, T, p, q_tot)
+
+        for (name, value) in ((:entr_subsat_coeff, -1), (:entr_subsat_power, 0.5))
+            @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+                FT,
+                NamedTuple{(name,)}((FT(value),)),
+            )
+        end
+    end
+end
