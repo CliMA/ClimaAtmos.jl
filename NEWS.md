@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Change the default 1-moment cloud-condensate terminal
+  velocities from `Fixed` to `Stokes` for cloud liquid
+  (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022` for cloud ice
+  (`cloud_ice_terminal_velocity: "Chen2022"`), matching the state-dependent
+  `Chen2022` defaults used for rain and snow.
 - ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
   snow sediment at the mass-weighted mean of the terminal velocities in the
   precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),
