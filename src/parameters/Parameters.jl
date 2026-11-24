@@ -196,6 +196,12 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     condensate and its latent heat, with `cf⁰` the environment cloud fraction
     of the SGS closure. `1` gives the clear-fraction blend; `0` (default)
     references the grid-mean density [-].
+  - `entr_subsat_coeff`: Coefficient `c_subsat ≥ 0` of the subsaturation term
+    `(c_subsat / ref_H) max(0, RHʲ - RH⁰ʲ)^p` of the `InvZEntrainment`
+    velocity-scaling prefactor (`subsaturation_entrainment_inv_length`), with
+    `ref_H` the pressure scale height; `0` (default) turns the term off [-].
+  - `entr_subsat_power`: Exponent `p ≥ 1` on the draft–environment
+    relative-humidity contrast `max(0, RHʲ - RH⁰ʲ)` (`2` by default) [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -243,6 +249,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     edmfx_updraft_kh_diffusion_factor::FT
     edmf_tail_entr_fraction::FT
     edmf_buoyancy_clear_env_weight::FT
+    entr_subsat_coeff::FT
+    entr_subsat_power::FT
 end
 
 """

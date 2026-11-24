@@ -562,13 +562,15 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
                 ),
                 ᶜbuoyʲ,
                 zero_FT,
-                TD.relative_humidity(
+                environment_relative_humidity_draft_phase(
                     thermo_params,
                     ᶜT⁰,
                     ᶜp,
                     ᶜq_tot_nonneg⁰,
                     ᶜq_liq⁰,
                     ᶜq_ice⁰,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
                 ),
                 zero_FT,
                 max(ᶜtke, 0),

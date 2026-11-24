@@ -10,7 +10,7 @@ import Thermodynamics.Parameters as TDP
 """
     calculate_pi_groups(
         elev_above_sfc, ref_H, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ,
-        ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
+        ᶜw⁰, ᶜRH⁰ʲ, ᶜbuoy⁰, ᶜtke
     )
 
 Compute the non-dimensional Π-groups of the PROPHET (`EDMFX` in code)
@@ -25,7 +25,8 @@ entrainment closure.
   - `ᶜRHʲ`: Updraft relative humidity [-].
   - `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
   - `ᶜw⁰`: Environment physical vertical velocity [m/s].
-  - `ᶜRH⁰`: Environment relative humidity [-].
+  - `ᶜRH⁰ʲ`: Environment relative humidity against the saturation reference of
+    the updraft condensate (`environment_relative_humidity_draft_phase`) [-].
   - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
   - `ᶜtke`: Turbulent kinetic energy [m²/s²].
 
@@ -50,7 +51,7 @@ function calculate_pi_groups(
     ᶜRHʲ,
     ᶜbuoyʲ,
     ᶜw⁰,
-    ᶜRH⁰,
+    ᶜRH⁰ʲ,
     ᶜbuoy⁰,
     ᶜtke,
 )
@@ -59,7 +60,7 @@ function calculate_pi_groups(
     Π₁_raw = elev_above_sfc * (ᶜbuoyʲ - ᶜbuoy⁰) / vel_diff_sq
     Π₂_raw = max(ᶜtke, 0) / vel_diff_sq
     Π₃ = sqrt(max(ᶜaʲ, 0))
-    Π₄ = ᶜRHʲ - ᶜRH⁰
+    Π₄ = ᶜRHʲ - ᶜRH⁰ʲ
     Π₅ = elev_above_sfc / max(ref_H, eps(FT))
 
     Π₁ = min(max(Π₁_raw / FT(100), FT(-1)), FT(1))
@@ -200,7 +201,7 @@ compute_entrainment(
 """
     entrainment_velocity_scale(
         thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp, ᶜρ,
-        ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke,
+        ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ, ᶜw⁰, ᶜRH⁰ʲ, ᶜbuoy⁰, ᶜtke,
         model_option::AbstractEntrainmentModel,
     )
 
@@ -217,7 +218,14 @@ third from `area_bounding_entr_detr` (its positive branch).
   - `PiGroupsEntrainment`: `Π`-group closure
     (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
     `entr_param_vec`.
-  - `InvZEntrainment`: `entr_vel_scale = limiter · (entr_inv_length + entr_coeff / (ᶜz - z_sfc))`.
+  - `InvZEntrainment`:
+    `entr_vel_scale = limiter · (entr_inv_length + entr_coeff / Δz + S)` with
+    `Δz = ᶜz - z_sfc` and the subsaturation term
+    `S = (c_subsat / ref_H) max(0, ᶜRHʲ - ᶜRH⁰ʲ)^p`
+    (`subsaturation_entrainment_inv_length`) raises entrainment where the draft
+    is moister than its environment: mixtures with drier air evaporate draft
+    condensate and lose buoyancy. Here, `ref_H = ᶜp / (ᶜρ g)` is the pressure
+    scale height.
 
 Both non-trivial models multiply by `upper_area_limiter_factor` and
 return zero at or below the surface, where `1/(ᶜz - z_sfc)` is singular.
@@ -237,7 +245,8 @@ All state arguments are cell-centered.
   - `ᶜRHʲ`: Updraft relative humidity [-].
   - `ᶜbuoyʲ`: Updraft buoyancy [m/s²].
   - `ᶜw⁰`: Environment physical vertical velocity [m/s].
-  - `ᶜRH⁰`: Environment relative humidity [-].
+  - `ᶜRH⁰ʲ`: Environment relative humidity against the saturation reference of
+    the updraft condensate (`environment_relative_humidity_draft_phase`) [-].
   - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
   - `ᶜtke`: Turbulent kinetic energy [m²/s²].
   - `model_option`: Entrainment model dispatch tag.
@@ -258,7 +267,7 @@ function entrainment_velocity_scale(
     ᶜRHʲ,
     ᶜbuoyʲ,
     ᶜw⁰,
-    ᶜRH⁰,
+    ᶜRH⁰ʲ,
     ᶜbuoy⁰,
     ᶜtke,
     ::PiGroupsEntrainment,
@@ -269,7 +278,7 @@ function entrainment_velocity_scale(
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
     # become singular. Model assumes operation above the surface.
     if elev_above_sfc <= eps(FT)
-        return 0
+        return zero(FT)
     end
 
     g = TDP.grav(thermo_params)
@@ -283,7 +292,7 @@ function entrainment_velocity_scale(
         ᶜRHʲ,
         ᶜbuoyʲ,
         ᶜw⁰,
-        ᶜRH⁰,
+        ᶜRH⁰ʲ,
         ᶜbuoy⁰,
         ᶜtke,
     )
@@ -314,7 +323,7 @@ function entrainment_velocity_scale(
     ᶜRHʲ,
     ᶜbuoyʲ,
     ᶜw⁰,
-    ᶜRH⁰,
+    ᶜRH⁰ʲ,
     ᶜbuoy⁰,
     ᶜtke,
     ::InvZEntrainment,
@@ -327,13 +336,95 @@ function entrainment_velocity_scale(
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
     # become singular. Model assumes operation above the surface.
     if elev_above_sfc <= eps(FT)
-        return 0
+        return zero(FT)
     end
 
     area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    subsat_inv_length = subsaturation_entrainment_inv_length(
+        thermo_params,
+        turbconv_params,
+        ᶜp,
+        ᶜρ,
+        ᶜRHʲ,
+        ᶜRH⁰ʲ,
+    )
     entr_vel_scale =
-        area_limiter_factor * (entr_inv_length + entr_coeff / elev_above_sfc)
+        area_limiter_factor *
+        (entr_inv_length + entr_coeff / elev_above_sfc + subsat_inv_length)
     return max(0, entr_vel_scale)
+end
+
+"""
+    subsaturation_entrainment_inv_length(
+        thermo_params, turbconv_params, ᶜp, ᶜρ, ᶜRHʲ, ᶜRH⁰ʲ,
+    )
+
+Subsaturation term [1/m] of the `InvZEntrainment` velocity-scaling prefactor,
+
+    (c_subsat / ref_H) max(0, ᶜRHʲ - ᶜRH⁰ʲ)^p,
+
+with `ref_H = ᶜp / (ᶜρ g)` the pressure scale height, `c_subsat` =
+`entr_subsat_coeff`, and `p` = `entr_subsat_power`.
+
+The humidity factor is the updraft–environment relative-humidity contrast, with
+both relative humidities taken against saturation over the updraft condensate
+(`environment_relative_humidity_draft_phase`). For a saturated updraft, it is
+the deficit that evaporates updraft condensate in mixtures with environmental
+air, including supercooled liquid mixed with air at ice saturation. The factor
+vanishes where the updraft is no moister than its environment and inside
+overcast layers, and it is small below cloud base, where the updraft is only
+slightly moister than its environment.
+"""
+function subsaturation_entrainment_inv_length(
+    thermo_params,
+    turbconv_params,
+    ᶜp,
+    ᶜρ,
+    ᶜRHʲ,
+    ᶜRH⁰ʲ,
+)
+    FT = eltype(thermo_params)
+    c_subsat = CAP.entr_subsat_coeff(turbconv_params)
+    # The coefficient is uniform across the domain, so this branch takes the
+    # same path in every thread and skips the power below when the term is off.
+    c_subsat == 0 && return zero(FT)
+    p_subsat = CAP.entr_subsat_power(turbconv_params)
+    ref_H = ᶜp / (ᶜρ * TDP.grav(thermo_params))
+    ΔRH = max(0, ᶜRHʲ - ᶜRH⁰ʲ)
+    return (c_subsat / ref_H) * ΔRH^p_subsat
+end
+
+"""
+    environment_relative_humidity_draft_phase(
+        thermo_params, ᶜT⁰, ᶜp, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_liqʲ, ᶜq_iceʲ,
+    )
+
+Environment relative humidity [-] against saturation over the updraft
+condensate: the environment vapor pressure divided by the saturation vapor
+pressure at the environment temperature `ᶜT⁰` for the liquid fraction of
+`(ᶜq_liqʲ, ᶜq_iceʲ)`, clipped to `[0, 1]`. Without updraft condensate, the
+liquid fraction follows the temperature, as in `TD.relative_humidity`.
+
+`TD.relative_humidity` measures each subdomain against its own condensate:
+below freezing, a condensate-free environment against ice and a liquid updraft
+against liquid. Their difference understates the deficit that evaporates the
+updraft liquid, by a factor of about 3 at 258 K and 80% relative humidity over
+liquid.
+"""
+@inline function environment_relative_humidity_draft_phase(
+    thermo_params,
+    ᶜT⁰,
+    ᶜp,
+    ᶜq_tot⁰,
+    ᶜq_liq⁰,
+    ᶜq_ice⁰,
+    ᶜq_liqʲ,
+    ᶜq_iceʲ,
+)
+    FT = eltype(thermo_params)
+    p_vap = TD.partial_pressure_vapor(thermo_params, ᶜp, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    p_vap_sat = TD.saturation_vapor_pressure(thermo_params, ᶜT⁰, ᶜq_liqʲ, ᶜq_iceʲ)
+    return clamp(p_vap / (p_vap_sat + ϵ_numerics(FT)), 0, 1)
 end
 
 """

@@ -50,13 +50,16 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
 
   - **`"Generalized"`** ([`InvZEntrainment`](@ref ClimaAtmos.InvZEntrainment),
     the default). The velocity-proportional prefactor is a fixed inverse length
-    plus an inverse
-    height above the surface, and the velocity-independent rate combines a
-    buoyancy timescale with a constant relaxation rate:
+    plus an inverse height above the surface and an optional humidity-contrast
+    term, and the velocity-independent rate combines a buoyancy timescale with
+    a constant relaxation rate:
 
     ```math
     \varepsilon_w = \Lambda_{\max} \left( \frac{1}{L_\varepsilon}
-      + \frac{c_\varepsilon}{z - z_s} \right) ,
+      + \frac{c_\varepsilon}{z - z_s}
+      + \frac{c_{\mathrm{sub}}}{H}
+        \left[ (\mathrm{RH}^j - \mathrm{RH}^{0j})_+ \right]^{p_{\mathrm{sub}}}
+      \right) ,
     \qquad
     \varepsilon_r = \Lambda_{\max} \left( c_{\varepsilon b} \,
       \tau_{\mathrm{buoy}}^{-1} + \tau_\varepsilon^{-1} \right) ,
@@ -66,6 +69,19 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
     the clipped inverse buoyancy timescale built from the draft–environment
     buoyancy and velocity contrasts, and ``\Lambda_{\max}`` the upper-area
     limiter.
+
+    The third term of ``\varepsilon_w`` raises entrainment where the draft is
+    moister than its environment, since mixtures with drier air evaporate draft
+    condensate and lose buoyancy (`subsaturation_entrainment_inv_length`).
+    Here, ``H`` is the pressure scale height, and ``\mathrm{RH}^{0j}`` is the
+    environment relative humidity against saturation over the draft
+    condensate, the reference of ``\mathrm{RH}^j``, so that supercooled draft
+    liquid mixed with air at ice saturation counts as subsaturated. For a
+    saturated draft, the humidity factor is the deficit
+    ``1 - \mathrm{RH}^{0j}``; it vanishes inside overcast layers and is small
+    below cloud base, where the draft is only slightly moister than its
+    environment. The coefficient ``c_{\mathrm{sub}}`` is zero by default, which
+    turns the term off.
 
   - **`"PiGroups"`** ([`PiGroupsEntrainment`](@ref
     ClimaAtmos.PiGroupsEntrainment)). The prefactor is a linear function of five
@@ -81,7 +97,8 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
     ``\Pi_1 \propto z \, \Delta b^j / (\Delta w^j)^2``,
     ``\Pi_2 \propto \kappa_{\mathrm{iso}} / (\Delta w^j)^2``,
     ``\Pi_3 = \sqrt{a^j}``,
-    ``\Pi_4 = \mathrm{RH}^j - \mathrm{RH}^0``, and
+    ``\Pi_4 = \mathrm{RH}^j - \mathrm{RH}^{0j}``, the humidity contrast of the
+    subsaturation term above, and
     ``\Pi_5 = z / H`` with ``H`` the pressure scale height. ``\Pi_1`` and
     ``\Pi_2`` are rescaled to ``O(1)`` and clipped to ``[-1, 1]``. The
     coefficients are `entr_param_vec` and are the natural target of calibration
@@ -973,6 +990,7 @@ covariance, quadrature and cloud-fraction closures,
 | ``a_{s,\max}``                                                                                  | `max_surface_area`                                                                                                                                                                                                                   | `EDMF_max_surface_area`                                                                                 |
 | ``c_u``, ``z_i``, ``\alpha``                                                                    | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                                                                                                                                                           | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
 | ``c_\varepsilon``, ``1/L_\varepsilon``                                                          | `entr_coeff`, `entr_inv_length`                                                                                                                                                                                                      | `entr_coeff`, `entr_inv_length`                                                                         |
+| ``c_{\mathrm{sub}}``, ``p_{\mathrm{sub}}``                                                      | `entr_subsat_coeff`, `entr_subsat_power`                                                                                                                                                                                             | `entr_subsat_coeff`, `entr_subsat_power`                                                                |
 | ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                                                | `entr_buoy_coeff`, `entr_inv_tau`                                                                                                                                                                                                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
 | ``\tau_{\max}^{-1}``                                                                            | `entr_detr_buoy_inv_tau_max`                                                                                                                                                                                                         | `entr_detr_buoy_inv_tau_max`                                                                            |
 | ``c_1 \dots c_6`` (Π groups)                                                                    | `entr_param_vec`                                                                                                                                                                                                                     | `entr_param_vec`                                                                                        |
