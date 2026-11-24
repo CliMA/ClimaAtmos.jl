@@ -13,7 +13,7 @@ value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
 
 ## 2) `RegressionFunctionAlbedo`
 
-This is an empirical parameterization of the direct and diffuse surface albedo of Jin et al. (2011) [Jin2011](@cite) (reflectivity of the inner ocean is ignored). The direct reflection is calculated using the Fresnel reflection at the air-sea interface due to the difference in refractive index between air and water. The current implementation uses the broadband representation (the relative refractive index $n$ is independent of wavelength). Its formulation is:
+This is an empirical parameterization of the direct and diffuse surface albedo of Jin et al. (2011) [Jin2011](@cite), augmented by subsurface volume reflectance $R_{\text{sub}}$ from water molecules and hydrosols (whitecap foam reflectance is omitted). The direct reflection is calculated using the Fresnel reflection at the air-sea interface due to the difference in refractive index between air and water. The current implementation uses the broadband representation (the relative refractive index $n$ is independent of wavelength). Its formulation is:
 
 ```math
 α_{dir}(λ, μ, u) = r_{f}(n, μ) - \frac{r_{f}(n, μ)}{r_{f}(n_{0}, μ)} f(μ, σ(u))
@@ -75,9 +75,20 @@ for clear sky, and
 
 for cloudy sky. In the current implementation, we assume clear skies everywhere.
 
-In the code, both the direct and the diffuse albedo are clamped to the
+In the code, both the direct and the diffuse surface albedo $α_s$ are clamped to the
 interval ``[0, 1]``, since the diffuse regression can otherwise go negative,
 and both return zero at night (``μ \le 0``).
+
+The subsurface volume reflectance is added to both for the light transmitted
+through the surface:
+
+```math
+α = α_s + (1 - α_s) R_{\text{sub}}
+```
+
+$R_{\text{sub}}$ is assumed constant (independent of wavelength, chlorophyll
+concentration, solar zenith angle, and wind speed) and is treated as a tuning
+parameter. Broadband values for the open ocean are about 0.005–0.01.
 
 ## 3) `CouplerAlbedo`
 

@@ -20,7 +20,12 @@ end
 MoistAdiabaticProfileEDMFX(; perturb::Bool = false) =
     MoistAdiabaticProfileEDMFX(perturb)
 
-function center_initial_condition(setup::MoistAdiabaticProfileEDMFX, local_geometry, params)
+function center_initial_condition(
+    setup::MoistAdiabaticProfileEDMFX,
+    local_geometry,
+    params,
+    sphere,
+)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     temp_profile = DryAdiabaticProfile{FT}(thermo_params, FT(330), FT(200))
@@ -28,7 +33,7 @@ function center_initial_condition(setup::MoistAdiabaticProfileEDMFX, local_geome
     (; z) = local_geometry.coordinates
     T, p = temp_profile(thermo_params, z)
     if setup.perturb
-        T += _temperature_perturbation(local_geometry.coordinates)
+        T += _temperature_perturbation(local_geometry.coordinates, sphere)
     end
 
     q_tot = z < FT(0.7e4) ? FT(1e-3) * exp(-(z - FT(4e3))^2 / 2 / FT(1e3)^2) : FT(0)

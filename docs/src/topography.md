@@ -107,10 +107,15 @@ to the full elevation field rather than splitting it into large- and
 small-scale parts as [Schar2002](@cite) do, the smoothing above limits
 the small-scale deformation aloft.
 
-The reference levels themselves are stretched with
-[`ClimaCore.Meshes.HyperbolicTangentStretching`](@extref) when `z_stretch` is
-`true` (the default), anchored on the lowest-layer thickness `dz_bottom`, and
-uniform otherwise.
+The reference levels themselves are stretched when `z_stretch` is `true` (the
+default in the YAML configuration) and uniform otherwise. The stretching is the
+two-scale [`ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`](@extref),
+anchored on the lowest-layer thickness `dz_bottom`, the top-layer thickness
+`dz_top` (default 3000 m), and the boundary-layer scale height `z_pbl` (default
+2200 m). The rule admits a layer count within a range set by these thicknesses
+and `z_max`; [`get_z_mesh`](@ref ClimaAtmos.get_z_mesh) builds the mesh, and
+ClimaCore raises an error that names the range when the layer count lies
+outside it.
 
 ## Consequences for the discretization
 

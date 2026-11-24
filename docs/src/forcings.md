@@ -66,12 +66,20 @@ total energy takes
 
 ```math
 \left. \frac{\partial \rho e_{tot}}{\partial t} \right|_{adv} =
-\rho \left[ c_{vm} \left. \frac{\partial T}{\partial t} \right|_{adv}
+\rho \left[ c_{pm} \left. \frac{\partial T}{\partial t} \right|_{adv}
   + I_v(T) \left. \frac{\partial q_t}{\partial t} \right|_{adv} \right] ,
 ```
 
-with ``c_{vm}`` the isochoric heat capacity of the moist mixture and ``I_v`` the
-internal energy of water vapor. No geopotential term appears: horizontal
+with ``c_{pm}`` the isobaric heat capacity of the moist mixture and ``I_v`` the
+internal energy of water vapor. The setups prescribe potential-temperature
+tendencies at constant pressure, supplied as
+``\partial T / \partial t = \Pi \, \partial \theta / \partial t`` with ``\Pi``
+the Exner function. Heat ``Q`` per unit mass changes potential temperature by
+``Q / (c_{pm} \Pi)``, so ``c_{pm}`` realizes the prescribed rate. With a rigid
+model top, net column heating also changes the pressure, so ``T`` departs from
+the prescribed rate while ``\theta`` follows it. The file-driven forcings and
+the temperature nudging convert their tendencies the same way. No geopotential
+term appears: horizontal
 advection moves specific humidity between columns at the same height.
 
 ## Column Coriolis and geostrophic forcing
@@ -114,7 +122,7 @@ tendencies, which is then converted to the prognostic variables,
 
 ```math
 \left. \frac{\partial \rho e_{tot}}{\partial t} \right|_{ext} =
-\rho \left[ c_{vm} \frac{\partial T}{\partial t}
+\rho \left[ c_{pm} \frac{\partial T}{\partial t}
   + \left( c_{vv} (T - T_0) + L_{v0} - R_v T_0 \right) \frac{\partial q_t}{\partial t} \right] ,
 \qquad
 \left. \frac{\partial \rho q_t}{\partial t} \right|_{ext} = \rho \frac{\partial q_t}{\partial t} .
@@ -216,9 +224,9 @@ Friction relaxes the horizontal wind toward rest with
 Two implementation choices are worth knowing. Temperature is diagnosed from the
 ideal gas law for dry air, so the forcing is independent of moisture even in a
 moist run. The energy tendency converts the temperature relaxation with the
-*dry* isochoric heat capacity ``c_{vd}``, consistent with relaxing at constant
-density. The equator-to-pole contrast and the equatorial equilibrium temperature
-take different values in dry and moist configurations
+*dry* isobaric heat capacity ``c_{pd}``, because the relaxation is a heating
+rate at constant pressure. The equator-to-pole contrast and the equatorial
+equilibrium temperature take different values in dry and moist configurations
 (`ΔT_y_dry`/`ΔT_y_wet` and `T_equator_dry`/`T_equator_wet`).
 
 ## Prescribed radiative forcing
@@ -238,23 +246,25 @@ topography and the explicit solver.
 
 ## What each case forces
 
-| Case                          | Subsidence                               | Horizontal advection         | Coriolis                         | Other                                  |
-|:----------------------------- |:---------------------------------------- |:---------------------------- |:-------------------------------- |:-------------------------------------- |
-| Bomex                         | yes                                      | yes                          | ``f = 3.76 \times 10^{-5}`` s⁻¹  |                                        |
-| Rico                          | yes                                      | yes                          | ``f = 4.5 \times 10^{-5}`` s⁻¹   |                                        |
-| DYCOMS RF01, RF02             | ``-Dz``, ``D = 3.75 \times 10^{-6}`` s⁻¹ |                              | ``f = 0``                        | Prescribed radiation                   |
-| GABLS                         |                                          |                              | ``f = 1.39 \times 10^{-4}`` s⁻¹  |                                        |
-| Larcform1                     |                                          |                              | ``f = 1.432 \times 10^{-4}`` s⁻¹ | Polar-night insolation                 |
-| ISDAC                         | yes                                      |                              |                                  | Analytic nudging, prescribed radiation |
-| TRMM-LBA                      |                                          |                              |                                  | Prescribed radiative heating           |
-| Soares, GATE III, SimplePlume |                                          |                              |                                  | None                                   |
-| GCM, ARM VARANAL, reanalysis  | `Subsidence()` term                      | `HorizontalAdvection()` term |                                  | Nudging, vertical fluctuation          |
+| Case                          | Subsidence                               | Horizontal advection         | Coriolis                         | Other                                          |
+|:----------------------------- |:---------------------------------------- |:---------------------------- |:-------------------------------- |:---------------------------------------------- |
+| Bomex                         | yes                                      | yes                          | ``f = 3.76 \times 10^{-5}`` s⁻¹  |                                                |
+| Rico                          | yes                                      | yes                          | ``f = 4.5 \times 10^{-5}`` s⁻¹   |                                                |
+| DYCOMS RF01, RF02             | ``-Dz``, ``D = 3.75 \times 10^{-6}`` s⁻¹ |                              | ``f = 0``                        | Prescribed radiation                           |
+| GABLS                         |                                          |                              | ``f = 1.39 \times 10^{-4}`` s⁻¹  |                                                |
+| Larcform1                     |                                          |                              | ``f = 1.432 \times 10^{-4}`` s⁻¹ | Polar-night insolation                         |
+| ISDAC                         | yes                                      |                              |                                  | Analytic nudging, prescribed radiation         |
+| MPACE                         | yes                                      | yes                          |                                  | Analytic wind nudging, time-varying insolation |
+| TRMM-LBA                      |                                          |                              |                                  | Prescribed radiative heating                   |
+| Soares, GATE III, SimplePlume |                                          |                              |                                  | None                                           |
+| GCM, ARM VARANAL, reanalysis  | `Subsidence()` term                      | `HorizontalAdvection()` term |                                  | Nudging, vertical fluctuation                  |
 
 ## Symbols
 
 | Symbol                                | Meaning                                                                       | Units      |
 |:------------------------------------- |:----------------------------------------------------------------------------- |:---------- |
-| ``c_{vm}``, ``c_{vd}``, ``c_{vv}``    | Isochoric heat capacity of moist air, of dry air, of water vapor              | J kg⁻¹ K⁻¹ |
+| ``c_{pm}``, ``c_{pd}``                | Isobaric heat capacity of moist air, of dry air                               | J kg⁻¹ K⁻¹ |
+| ``c_{vv}``                            | Isochoric heat capacity of water vapor                                        | J kg⁻¹ K⁻¹ |
 | ``f``                                 | Coriolis parameter                                                            | s⁻¹        |
 | ``f_h``                               | Boundary-layer ramp in ``\sigma``                                             |            |
 | ``I_v``                               | Specific internal energy of water vapor                                       | J kg⁻¹     |
@@ -272,14 +282,14 @@ topography and the explicit solver.
 
 ## Where this is implemented
 
-| Concept                                | Source                                                                                                                                                                                                                                    |
-|:-------------------------------------- |:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subsidence                             | [forcing/subsidence.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/subsidence.jl)                                                                                                                  |
-| Large-scale advection                  | [forcing/large_scale_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/large_scale_advection.jl)                                                                                            |
-| Composed forcing terms                 | [forcing/forcing_terms.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/forcing_terms.jl)                                                                                                            |
-| External driving, nudging, term caches | [forcing/external_forcing.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/external_forcing.jl)                                                                                                      |
-| Column Coriolis                        | [scm_coriolis.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/scm_coriolis.jl)                                                                                                                              |
-| Held–Suarez                            | [radiation/held_suarez.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/radiation/held_suarez.jl)                                                                                                        |
-| Case definitions                       | [src/setups/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/setups)                                                                                                                                                                |
-| Dataset formats                        | [src/column_datasets/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/column_datasets)                                                                                                                                              |
-| Model types                            | [`ClimaAtmos.AbstractForcing`](@ref), [`ClimaAtmos.LargeScaleSubsidence`](@ref), [`ClimaAtmos.LargeScaleAdvection`](@ref), [`ClimaAtmos.HeldSuarezForcing`](@ref), [`ClimaAtmos.ISDACForcing`](@ref), [`ClimaAtmos.PrescribedFlow`](@ref) |
+| Concept                                | Source                                                                                                                                                                                                                                                                       |
+|:-------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Subsidence                             | [forcing/subsidence.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/subsidence.jl)                                                                                                                                                     |
+| Large-scale advection                  | [forcing/large_scale_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/large_scale_advection.jl)                                                                                                                               |
+| Composed forcing terms                 | [forcing/forcing_terms.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/forcing_terms.jl)                                                                                                                                               |
+| External driving, nudging, term caches | [forcing/external_forcing.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/forcing/external_forcing.jl)                                                                                                                                         |
+| Column Coriolis                        | [scm_coriolis.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/scm_coriolis.jl)                                                                                                                                                                 |
+| Held–Suarez                            | [radiation/held_suarez.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/radiation/held_suarez.jl)                                                                                                                                           |
+| Case definitions                       | [src/setups/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/setups)                                                                                                                                                                                                   |
+| Dataset formats                        | [src/column_datasets/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/column_datasets)                                                                                                                                                                                 |
+| Model types                            | [`ClimaAtmos.AbstractForcing`](@ref), [`ClimaAtmos.LargeScaleSubsidence`](@ref), [`ClimaAtmos.LargeScaleAdvection`](@ref), [`ClimaAtmos.HeldSuarezForcing`](@ref), [`ClimaAtmos.ISDACForcing`](@ref), [`ClimaAtmos.MPACEForcing`](@ref), [`ClimaAtmos.PrescribedFlow`](@ref) |

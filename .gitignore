@@ -28,6 +28,7 @@ docs/src/configuration_options.md
 */Manifest*.toml  # docs, test
 .buildkite/PrecompileCI/Manifest*.toml
 calibration/test/Manifest*.toml
+test/musica/Manifest*.toml
 
 Artifacts.toml
 

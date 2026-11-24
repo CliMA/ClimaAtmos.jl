@@ -36,6 +36,8 @@ end
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
     @test defaults.processes.cloud_ice_formation isa
           CMP.TemperatureDependentIceNumber
+    @test defaults.processes.snow_deposition_sublimation isa
+          CMP.DepositionWithoutCloudCondensate
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
 
@@ -57,7 +59,12 @@ end
     params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
     processes = params.microphysics_1m_params.processes
     @test processes.rain_autoconversion isa CMP.PrescribedNd
-    @test processes.cloud_ice_formation isa CMP.TemperatureDependent
+    # `cloud_ice_formation` lives on `microphysics_1m_implicit_params` when
+    # `implicit_microphysics: true` (the default) and on `microphysics_1m_params`
+    # otherwise; `cloud_formation_1m_params` returns whichever set carries it.
+    @test CAP.cloud_formation_1m_params(
+        params,
+    ).processes.cloud_ice_formation isa CMP.TemperatureDependent
     @test isnothing(processes.rain_snow_accretion)
     @test isnothing(
         params.microphysics_1m_params.process_params.rain_snow_accretion,
@@ -75,6 +82,25 @@ end
     yaml_processes =
         CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
     @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
+
+    # Khairoutdinov and Kogan (2000) warm-rain options
+    kk_config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "KK2000",
+            "cloud_liquid_rain_accretion" => "KK2000",
+        );
+        job_id = "kk2000_options",
+    )
+    kk_processes = CA.get_microphysics_model(kk_config.parsed_args).processes
+    @test kk_processes.rain_autoconversion isa CMP.KK2000Autoconversion
+    @test kk_processes.cloud_liquid_rain_accretion isa CMP.KK2000Accretion
+    kk_mp = CA.Parameters.microphysics_1m_params(CA.ClimaAtmosParameters(kk_config))
+    # the prescribed droplet number is the one the radiation effective radius uses
+    @test kk_mp.process_params.rain_autoconversion.Nc ==
+          CA.Parameters.microphysics_cloud_params(
+        CA.ClimaAtmosParameters(kk_config),
+    ).N_cloud_liquid_droplets
     @test isnothing(yaml_processes.rain_snow_accretion)
 end
 
@@ -128,15 +154,37 @@ end
         @test CAP.sgs_variance_horizontal_cross_correlation(sq) == FT(0.74)
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
-        @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
+        @test CAP.sgs_precip_incloud_fraction(sq) == FT(1)
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
-        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
+        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
+        @test CAP.cloud_fraction_eps_rel(sq) == FT(0)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,
         (; sgs_displacement_truncation = 0.5),
     )
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; cloud_fraction_eps_rel = -0.05),
+    )
+    @test CAP.edmf_tail_entr_fraction(CA.TurbulenceConvectionParameters(Float64)) ==
+          0.5
+    for f in (0.0, -0.1, 1.5)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_tail_entr_fraction = f),
+        )
+    end
+    @test CAP.edmf_buoyancy_clear_env_weight(
+        CA.TurbulenceConvectionParameters(Float64),
+    ) == 0
+    for f_ev in (-0.1, 1.1)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_buoyancy_clear_env_weight = f_ev),
+        )
+    end
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(
@@ -148,6 +196,9 @@ end
   [sgs_ice_uniform_fraction]
   value = 0.5
   type = "float"
+  [cloud_fraction_eps_rel]
+  value = 0.25
+  type = "float"
   """,
         )
         flush(io)
@@ -158,6 +209,7 @@ end
         sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
         @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.cloud_fraction_eps_rel(sq) == 0.25
         @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
     # The parameter log leaves out the superseded ClimaParams value of `c_Δx`,
@@ -173,13 +225,66 @@ end
     @test c_Δx(CP.create_toml_dict(Float64; override_file = log_file)) == 1.24
     climaparams_c_Δx =
         toml_dict.data["sgs_variance_horizontal_scale_factor"]["value"]
-    @test climaparams_c_Δx != 1.24
     override = Dict(
         "sgs_variance_horizontal_scale_factor" =>
             Dict("value" => climaparams_c_Δx, "type" => "float"),
     )
     @test c_Δx(CP.create_toml_dict(Float64; override_file = override)) ==
           climaparams_c_Δx
+end
+
+@testset "0M updraft precipitation parameters" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    for FT in (Float32, Float64)
+        # The ClimaParams defaults give the updrafts the grid-mean parameters.
+        params = CA.ClimaAtmosParameters(
+            CP.create_toml_dict(FT);
+            microphysics_model = m0,
+        )
+        (; precip, precip_updraft) = CAP.microphysics_0m_params(params)
+        @test precip_updraft == precip
+        @test precip_updraft.τ_precip isa FT
+
+        # The updraft timescale is the ratio times the grid-mean timescale;
+        # the thresholds are shared.
+        toml_dict = CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                "precipitation_timescale_updraft_ratio" =>
+                    Dict("value" => 0.25, "type" => "float"),
+            ),
+        )
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        mp0 = CAP.microphysics_0m_params(params)
+        @test mp0.precip_updraft.τ_precip ≈ FT(0.25) * precip.τ_precip
+        @test mp0.precip_updraft.S_0 === mp0.precip.S_0
+        @test mp0.precip_updraft.qc_0 === mp0.precip.qc_0
+        @test mp0.precip == precip
+        @test "CloudMicrophysics" in
+              toml_dict.data["precipitation_timescale_updraft_ratio"]["used_in"]
+    end
+
+    # The key also reaches the parameters through a run toml.
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [precipitation_timescale]
+  value = 1000.0
+
+  [precipitation_timescale_updraft_ratio]
+  value = 0.3
+  """,
+        )
+        flush(io)
+        config = CA.AtmosConfig(
+            Dict("toml" => [path], "microphysics_model" => "0M"),
+            job_id = "parameter_test_0m_updraft",
+        )
+        mp0 = CAP.microphysics_0m_params(CA.ClimaAtmosParameters(config))
+        @test mp0.precip.τ_precip == 1000
+        @test mp0.precip_updraft.τ_precip ≈ 300
+    end
 end
 
 @testset "AtmosConfig Parameter Overrides" begin
@@ -226,4 +331,104 @@ end
 
         @test CA.ClimaAtmosParameters(config) isa CAP.ClimaAtmosParameters
     end
+end
+
+@testset "0M precipitation evaporation parameters" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    override = Dict(
+        "precipitation_evaporation_coefficient" => 2e-4,
+        "precipitation_evaporation_rh_crit" => 0.85,
+        "precipitation_evaporation_area_fraction" => 0.5,
+        "precipitation_evaporation_flux_scale" => 4e-3,
+        "precipitation_evaporation_exponent" => 0.6,
+    )
+    override_toml(FT) = CP.create_toml_dict(
+        FT;
+        override_file = Dict(
+            k => Dict("value" => v, "type" => "float") for (k, v) in override
+        ),
+    )
+    for FT in (Float32, Float64)
+        # Option off (the default): no evaporation parameters are built and
+        # none is read, even with a positive coefficient in the TOML.
+        for toml_dict in (CP.create_toml_dict(FT), override_toml(FT))
+            params =
+                CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+            @test isnothing(CAP.microphysics_0m_params(params).evaporation)
+            @test isbits(CAP.microphysics_0m_params(params))
+        end
+
+        # Option on: the evaporation parameters come from the TOML.
+        toml_dict = override_toml(FT)
+        params = CA.ClimaAtmosParameters(
+            toml_dict;
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
+        )
+        evaporation = CAP.microphysics_0m_params(params).evaporation
+        @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
+        @test isbits(CAP.microphysics_0m_params(params))
+        @test evaporation.k_E === FT(2e-4)
+        @test evaporation.RH_c === FT(0.85)
+        @test evaporation.a_p === FT(0.5)
+        @test evaporation.α₂ === FT(4e-3)
+        @test evaporation.α₃ === FT(0.6)
+        for name in keys(override)
+            @test "CloudMicrophysics" in toml_dict.data[name]["used_in"]
+        end
+
+        # Option on with the ClimaParams defaults: the default coefficient is
+        # positive, so no TOML entry is needed.
+        params = CA.ClimaAtmosParameters(
+            CP.create_toml_dict(FT);
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
+        )
+        @test CAP.microphysics_0m_params(params).evaporation.k_E === FT(1.36e-4)
+
+        # Option on with a coefficient that is not positive is an error.
+        @test_throws ErrorException CA.ClimaAtmosParameters(
+            CP.create_toml_dict(
+                FT;
+                override_file = Dict(
+                    "precipitation_evaporation_coefficient" =>
+                        Dict("value" => 0.0, "type" => "float"),
+                ),
+            );
+            microphysics_model = m0,
+            precipitation_evaporation_0m = true,
+        )
+        # The option is only valid with 0M microphysics.
+        @test_throws ErrorException CA.ClimaAtmosParameters(
+            override_toml(FT);
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            precipitation_evaporation_0m = true,
+        )
+    end
+
+    # The option is read from the YAML config.
+    function config_0m(option)
+        mktemp() do path, io
+            write(
+                io,
+                """
+      [precipitation_evaporation_coefficient]
+      value = 2e-4
+      """,
+            )
+            flush(io)
+            config = CA.AtmosConfig(
+                Dict(
+                    "toml" => [path],
+                    "microphysics_model" => "0M",
+                    "precipitation_evaporation_0m" => option,
+                ),
+                job_id = "parameter_test_0m_evaporation",
+            )
+            CAP.microphysics_0m_params(CA.ClimaAtmosParameters(config))
+        end
+    end
+    @test isnothing(config_0m(nothing).evaporation)
+    @test config_0m("Kessler").evaporation.k_E === Float32(2e-4)  # default FLOAT_TYPE
+    @test_throws ErrorException config_0m("NotAnOption")
 end

@@ -69,6 +69,9 @@ function create_ogw_simulation(
         config.parsed_args["topography"] = "Earth"
         config.parsed_args["topo_smoothing"] = false
         config.parsed_args["topography_damping_factor"] = 1
+        # The default grid and the Garner (2005) grids lie outside the range
+        # the two-scale stretching admits.
+        config.parsed_args["z_stretch"] = false
         for (k, v) in extra_parsed_args
             config.parsed_args[k] = v
         end
@@ -86,6 +89,9 @@ function create_ogw_simulation(
     config.parsed_args["topography"] = "Earth"
     config.parsed_args["topo_smoothing"] = false
     config.parsed_args["topography_damping_factor"] = 1
+    # The default grid and the Garner (2005) grids lie outside the range
+    # the two-scale stretching admits.
+    config.parsed_args["z_stretch"] = false
     for (k, v) in extra_parsed_args
         config.parsed_args[k] = v
     end

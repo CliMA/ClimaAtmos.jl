@@ -23,7 +23,7 @@ function amip_target(context, output_dir)
     param_dict =
         ClimaParams.create_toml_dict(
             FT;
-            override_file = "toml/prognostic_edmfx.toml",
+            override_file = "toml/default_parameters.toml",
         )
     params = CA.ClimaAtmosParameters(param_dict)
 
@@ -88,9 +88,8 @@ function amip_target(context, output_dir)
     h_elem = 4
     z_elem = 15
     z_max = 60000.0
-    dz_bottom = 30.0
 
-    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
+    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, context)
 
     model = CA.AtmosModel(
         grid;
@@ -329,6 +328,7 @@ if MANYTESTS
             CA.SphereGrid(FT; topography, context = comms_ctx),
             CA.BoxGrid(FT; context = comms_ctx),
             CA.ColumnGrid(FT; context = comms_ctx),
+            CA.MultiColumnGrid(FT; n_columns = 2, context = comms_ctx),
         )
     else
         grids = (
@@ -338,11 +338,13 @@ if MANYTESTS
     end
 
     for grid in grids
-        mesh = if hasproperty(grid, :horizontal_grid)
-            grid.horizontal_grid.topology.mesh
-        else
-            nothing
-        end
+        mesh =
+            if hasproperty(grid, :horizontal_grid) &&
+               !(grid isa ClimaCore.Grids.ExtrudedMultiPointGrid)
+                grid.horizontal_grid.topology.mesh
+            else
+                nothing
+            end
         if mesh isa Meshes.EquiangularCubedSphere
             microphys_models = (CA.NonEquilibriumMicrophysics1M(),)
             topography_type = CA.EarthTopography()
@@ -389,7 +391,9 @@ if MANYTESTS
                     # Create job_id string from configuration
                     config_name =
                         mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
-                        mesh isa Meshes.RectilinearMesh ? "box" : "column"
+                        mesh isa Meshes.RectilinearMesh ? "box" :
+                        grid isa ClimaCore.Grids.ExtrudedMultiPointGrid ? "multicolumn" :
+                        "column"
                     microphysics_name =
                         microphysics_model isa CA.NonEquilibriumMicrophysics1M ?
                         "nonequil_1M" : "equil_0M"

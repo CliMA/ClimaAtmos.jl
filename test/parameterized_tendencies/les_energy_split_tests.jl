@@ -201,15 +201,12 @@ end
     (; Y, p, simulation) = generate_test_simulation(config)
     t = simulation.integrator.t
     perturb!(Y, p, t; velocity = true)
-    les = p.atmos.amd_les
-    for tendency! in (CA.horizontal_amd_tendency!, CA.vertical_amd_tendency!)
-        Yₜ = similar(Y)
-        Yₜ .= zero(eltype(Yₜ))
-        tendency!(Yₜ, Y, p, t, les)
-        @test all(isfinite, parent(Yₜ.c.ρe_tot))
-        @test all(isfinite, parent(Yₜ.c.ρq_tot))
-        @test maximum(abs, parent(Yₜ.c.ρe_tot)) > 0
-        @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
-        check_water_distribution(Yₜ, Y)
-    end
+    Yₜ = similar(Y)
+    Yₜ .= zero(eltype(Yₜ))
+    CA.amd_tendency!(Yₜ, Y, p, t, p.atmos.amd_les)
+    @test all(isfinite, parent(Yₜ.c.ρe_tot))
+    @test all(isfinite, parent(Yₜ.c.ρq_tot))
+    @test maximum(abs, parent(Yₜ.c.ρe_tot)) > 0
+    @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
+    check_water_distribution(Yₜ, Y)
 end

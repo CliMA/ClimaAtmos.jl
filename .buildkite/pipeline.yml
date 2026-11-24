@@ -25,7 +25,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: climacommon/2025_03_18
+  modules: climacommon/2026_10_30-1.13.3
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -55,9 +55,7 @@ steps:
     concurrency: 1
     concurrency_group: "depot/climaatmos-ci"
     command:
-      # update_registry=false: the registry lives in the read-only depot/shared;
-      # skip the git-pull that would fail against it (see .buildkite/build_depot.sh).
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(; update_registry=false)'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate()'"
       - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
 
   - label: ":arrows_counterclockwise: Decide pipeline"

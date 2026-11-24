@@ -35,6 +35,7 @@ const T2 = 290
             "initial_condition" => "DYCOMS_RF02",
             "microphysics_model" => "0M",
             "config" => "column",
+            "z_stretch" => false,
             "output_default_diagnostics" => false,
         );
         job_id = "coupler_compatibility1",
@@ -70,6 +71,8 @@ const T2 = 290
     new_atmos = CA.AtmosModel(p.atmos; surface = new_surface)
     p_overwritten = CA.AtmosCache(
         p.dt,
+        p.dtγ,
+        p.mp_averaging,
         new_atmos,
         p.numerics,
         p.params,
@@ -112,6 +115,7 @@ end
             "microphysics_model" => "0M",
             "rad" => "clearsky",
             "config" => "column",
+            "z_stretch" => false,
             "turbconv" => "prognostic_edmfx",
             # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
             # GitHub actions taking too long to run (for unknown reasons). If you need this,

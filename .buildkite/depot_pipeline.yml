@@ -7,7 +7,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: climacommon/2025_03_18
+  modules: climacommon/2026_10_30-1.13.3
 
 env:
   OPENBLAS_NUM_THREADS: 1

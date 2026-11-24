@@ -292,6 +292,8 @@ column of `Y`. Uses a separate single-column cache, so it does not modify the
 cache used by `update_jacobian!`.
 """
 function first_column_block_arrays(alg::AutoDenseJacobian, Y, p, dtγ, t)
+    # The Jacobian reads the 1M tendencies that the stage hooks deferred.
+    ensure_1m_tendencies!(Y, p)
     scalar_names = scalar_field_names(Y)
     field_vector_indices = field_vector_index_iterator(Y)
     column_Y = first_column_view(Y)

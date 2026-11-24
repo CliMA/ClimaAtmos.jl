@@ -10,3 +10,4 @@ diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days
 hyperdiff: ~
+z_stretch: false

@@ -337,9 +337,11 @@ condensate_cv_difference(::TD.Ice, params) =
 """
     advected_gs_scalar_names(Y)
 
-Return a `Tuple` of the `@name`s (relative to `Y.c`) of the grid-scale scalars
-whose vertical advection with the grid-mean velocity is treated implicitly:
-`ρ`, `ρe_tot`, and `ρq_tot` when moisture is active.
+Return a `Tuple` of the `@name`s (relative to `Y.c`) of the active thermodynamic
+and mass grid-scale scalars advected implicitly with the grid-mean velocity:
+`ρ`, `ρe_tot`, and `ρq_tot` when moisture is active. The sedimenting
+microphysics species (`sedimenting_tracer_names`) and `ρtke` are also advected
+implicitly with the grid-mean velocity.
 """
 advected_gs_scalar_names(Y) = (
     @name(ρ),

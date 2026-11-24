@@ -464,17 +464,6 @@ end
             ᶜtemp_scalar_2 = similar(ᶜz),
             ᶜtemp_scalar_3 = similar(ᶜz),
             ᶜtemp_scalar_4 = similar(ᶜz),
-            ᶜtemp_scalar_8 = similar(ᶜz),
-            ᶜtemp_scalar_9 = similar(ᶜz),
-            ᶜtemp_scalar_10 = similar(ᶜz),
-            ᶠtemp_C3 = Fields.Field(
-                Geometry.Covariant3Vector{FT},
-                face_space,
-            ),
-            ᶠtemp_C3_2 = Fields.Field(
-                Geometry.Covariant3Vector{FT},
-                face_space,
-            ),
         ),
     )
     tendency(Y, p) = begin
@@ -497,7 +486,7 @@ end
     # `sublimation_deposition_timescale`.
     c_d = CA.tke_dissipation_coefficient(CAP.turbconv_params(params))
     τ_l = CAP.condensation_evaporation_timescale(params)
-    cmp = CAP.microphysics_1m_params(params)
+    cmp = CAP.cloud_formation_1m_params(params)
     ρ_ref = TD.air_density(thermo_params, FT(280), FT(1e5), FT(0), FT(0), FT(0))
     @test CA.cloud_species_relaxation_time(
         cmp, thermo_params, FT(280), ρ_ref, FT(5e-3), FT(1e-4), FT(0),

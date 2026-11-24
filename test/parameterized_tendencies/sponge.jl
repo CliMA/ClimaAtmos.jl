@@ -227,10 +227,6 @@ include("../test_helpers.jl")
                 params,
                 precomputed = (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg),
                 core = (; ᶜΦ),
-                scratch = (;
-                    ᶜtemp_scalar = similar(ᶜz),
-                    ᶜtemp_scalar_2 = similar(ᶜz),
-                ),
             )
 
             Yₜ = similar(Y)

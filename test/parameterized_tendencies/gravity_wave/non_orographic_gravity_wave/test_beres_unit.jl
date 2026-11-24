@@ -669,7 +669,7 @@ end
 # a sign or selection error in the explicit oracle below; a clean match confirms
 # the shipped reservoir form picks up every phase change with the right sign —
 # including the freezing terms (S_accr_lcl_sno_cold, S_accr_rai_sno_cold) and the
-# warm-arm melt (S_accr_rai_sno_warm) that a naive hand-selection omits.
+# warm-arm ice-rain melt (S_accr_melt_icl_rai) that a naive hand-selection omits.
 # ============================================================================
 
 # Independent oracle: the explicit canonical sum Q_lat = (1/cp) Σ_p L_p R_p,
@@ -712,8 +712,8 @@ function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
         src.S_melt_icl_lcl +
         src.S_melt_sno_rai +
         src.S_accr_melt_lcl_sno +
-        src.S_accr_melt_rai_sno +
-        src.S_accr_rai_sno_warm
+        src.S_accr_melt_icl_rai +
+        src.S_accr_melt_rai_sno
     q_liq_ice = Lf * (freeze - melt)
 
     return (q_vap_liq + q_vap_ice + q_liq_ice) / cp
@@ -728,8 +728,8 @@ const FREEZE_MELT_TERMS = (
     :S_melt_icl_lcl,
     :S_melt_sno_rai,
     :S_accr_melt_lcl_sno,
+    :S_accr_melt_icl_rai,
     :S_accr_melt_rai_sno,
-    :S_accr_rai_sno_warm,
 )
 
 @testset "Beres canonical latent heating: dual-formulation oracle" begin
@@ -739,6 +739,27 @@ const FREEZE_MELT_TERMS = (
             mp = CMP.Microphysics1MParams(
                 toml_dict;
                 rain_autoconversion = CMP.PrescribedNd(toml_dict),
+            )
+            # `_beres_latent_heating` sums CM BMT on both the bulk and
+            # implicit 1M parameter sets. Here we exercise the "no implicit
+            # split" case: all processes live on `mp`, and `mp_imp` has every
+            # process nulled so its BMT contribution is zero.
+            mp_imp = CMP.Microphysics1MParams(
+                toml_dict;
+                cloud_liquid_formation = nothing,
+                cloud_ice_formation = nothing,
+                cloud_ice_melt = nothing,
+                cloud_liquid_freezing = nothing,
+                rain_autoconversion = nothing,
+                snow_autoconversion = nothing,
+                rain_condensation_evaporation = nothing,
+                snow_deposition_sublimation = nothing,
+                snow_melt = nothing,
+                cloud_liquid_rain_accretion = nothing,
+                cloud_liquid_snow_accretion = nothing,
+                cloud_ice_rain_accretion = nothing,
+                cloud_ice_snow_accretion = nothing,
+                rain_snow_accretion = nothing,
             )
             thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
 
@@ -763,6 +784,7 @@ const FREEZE_MELT_TERMS = (
             for T in Ts, (q_tot, q_lcl, q_icl, q_rai, q_sno) in qs
                 shipped = CA._beres_latent_heating(
                     mp,
+                    mp_imp,
                     thp,
                     ρ,
                     T,
@@ -824,6 +846,24 @@ end
         toml_dict;
         rain_autoconversion = CMP.PrescribedNd(toml_dict),
     )
+    # Null implicit set; the single-mp sum collapses to `mp`'s contribution.
+    mp_imp = CMP.Microphysics1MParams(
+        toml_dict;
+        cloud_liquid_formation = nothing,
+        cloud_ice_formation = nothing,
+        cloud_ice_melt = nothing,
+        cloud_liquid_freezing = nothing,
+        rain_autoconversion = nothing,
+        snow_autoconversion = nothing,
+        rain_condensation_evaporation = nothing,
+        snow_deposition_sublimation = nothing,
+        snow_melt = nothing,
+        cloud_liquid_rain_accretion = nothing,
+        cloud_liquid_snow_accretion = nothing,
+        cloud_ice_rain_accretion = nothing,
+        cloud_ice_snow_accretion = nothing,
+        rain_snow_accretion = nothing,
+    )
     thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
     ρ = FT(0.7)
 
@@ -832,6 +872,7 @@ end
     q_sat_warm = TD.q_vap_saturation(thp, T_warm, ρ)
     Q_cond = CA._beres_latent_heating(
         mp,
+        mp_imp,
         thp,
         ρ,
         T_warm,
@@ -847,6 +888,7 @@ end
     # Warm, strongly subsaturated, rain present → net evaporation → cooling.
     Q_evap = CA._beres_latent_heating(
         mp,
+        mp_imp,
         thp,
         ρ,
         T_warm,

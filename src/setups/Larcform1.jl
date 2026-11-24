@@ -31,18 +31,25 @@ end
 
 Larcform1(; thermo_params) = Larcform1(larcform1_profiles(thermo_params))
 
+larcform1_constants(thermo_params) = APL.Larcform1_constants(
+    eltype(thermo_params),
+    TD.Parameters.R_d(thermo_params),
+    TD.Parameters.grav(thermo_params),
+)
+
 function larcform1_profiles(thermo_params)
     FT = eltype(thermo_params)
-    T_prof = APL.Larcform1_T(FT)
-    RH_prof = APL.Larcform1_RH(FT)
-    p_apl = APL.Larcform1_p(FT)  # analytic pressure used for RH → q_tot conversion
-    z_trop = FT(APL.Larcform1_constants.z_tropopause)
-    q_top = FT(APL.Larcform1_constants.q_top)
+    R_d = TD.Parameters.R_d(thermo_params)
+    grav = TD.Parameters.grav(thermo_params)
+    T_prof = APL.Larcform1_T(FT, R_d, grav)
+    RH_prof = APL.Larcform1_RH(FT, R_d, grav)
+    p_apl = APL.Larcform1_p(FT, R_d, grav)  # analytic pressure used for RH → q_tot conversion
+    (; z_tropopause, q_top, P_0) = larcform1_constants(thermo_params)
     Rv_over_Rd = TD.Parameters.Rv_over_Rd(thermo_params)
 
     # RH → q_tot using liquid-water saturation (Pithan 2016 Table 1 specifies wrt liquid)
     q_tot_prof = APL.ZProfile(
-        z -> if z ≤ z_trop
+        z -> if z ≤ z_tropopause
             T = T_prof(z)
             p = p_apl(z)
             RH = RH_prof(z)
@@ -57,11 +64,11 @@ function larcform1_profiles(thermo_params)
 
     p_prof = hydrostatic_pressure_profile(;
         thermo_params,
-        p_0 = FT(APL.Larcform1_constants.P_0),
+        p_0 = P_0,
         T = T_prof,
         q_tot = q_tot_prof,
     )
-    u = APL.Larcform1_geostrophic_u(FT)
+    u = APL.Larcform1_geostrophic_u(FT, R_d, grav)
     v = APL.Larcform1_geostrophic_v(FT)
     return (; T = T_prof, q_tot = q_tot_prof, p = p_prof, u, v)
 end
@@ -85,7 +92,7 @@ function surface_condition(::Larcform1, params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     T_surface = FT(250)
-    p_surface = FT(APL.Larcform1_constants.P_0)
+    p_surface = larcform1_constants(thermo_params).P_0
     # Surface q_vap consistent with RH-wrt-liquid specification
     p_v_sat = TD.saturation_vapor_pressure(thermo_params, T_surface, TD.Liquid())
     ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
@@ -97,8 +104,8 @@ function surface_condition(::Larcform1, params)
     )
 end
 
-coriolis_forcing(::Larcform1, ::Type{FT}) where {FT} = (;
-    prof_ug = APL.Larcform1_geostrophic_u(FT),
-    prof_vg = APL.Larcform1_geostrophic_v(FT),
+coriolis_forcing(setup::Larcform1, ::Type{FT}) where {FT} = (;
+    prof_ug = setup.profiles.u,
+    prof_vg = setup.profiles.v,
     coriolis_param = FT(1.432e-4),  # 2Ω sin(80°N)
 )

@@ -334,17 +334,21 @@ currently too small, and snow is not currently included in cloud_fraction calcul
 meaning that the way it is currently implemented in radiation is not physically correct
 and subject to change in the future.
 
-The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
-with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
-prescribed sea-salt, dust, and sulfate mass concentrations and the column liquid water
-path; the ice effective radius is a constant. Cloud condensate and cloud fraction come from
-the model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field` when
-`radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed fields are
-re-evaluated from their `TimeVaryingInput`s first, regardless of the branch below.
+The liquid effective radius follows the Liu and Hallett (1997) parameterization,
+evaluated with a droplet number concentration diagnosed by
+`ml_N_cloud_liquid_droplets` from the prescribed sea-salt, dust, and sulfate
+mass concentrations and the in-cloud liquid specific humidity; a species with no
+prescribed bins enters at its reference concentration (`sum_aerosol_bins!`). The
+ice effective radius is a constant. Both radii are zero where the condensate or
+the cloud fraction is zero. Cloud condensate and cloud fraction come from the
+model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field`
+when `radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed
+fields are re-evaluated from their `TimeVaryingInput`s first, regardless of the
+branch below.
 
-Nothing is written when `radiation_mode.idealized_clouds` is true, since those cloud layers
-are prescribed once at solver construction. Uses `p.scratch.ᶜtemp_scalar`,
-`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `temp_field_level`.
+Nothing is written when `radiation_mode.idealized_clouds` is true, since those
+cloud layers are prescribed once at solver construction. Uses
+`p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3`.
 """
 function update_cloud_properties!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -383,6 +387,9 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         # RRTMGP needs lwp and iwp in g/m^2
         kg_to_g_factor = 1000
         m_to_um_factor = FT(1e6)
+        zero_FT = zero(FT)
+        eps_FT = eps(FT)
+        cmc_liquid = cmc.liquid
         cloud_liquid_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.clwc :
@@ -396,70 +403,65 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             p.radiation.prescribed_clouds_field.cc : ᶜcloud_fraction
         @. ᶜlwp =
             kg_to_g_factor * u.c.ρ * cloud_liquid_water_content * ᶜΔz /
-            max(cloud_fraction, eps(FT))
+            max(cloud_fraction, eps_FT)
         @. ᶜiwp =
             kg_to_g_factor * u.c.ρ * cloud_ice_water_content * ᶜΔz /
-            max(cloud_fraction, eps(FT))
+            max(cloud_fraction, eps_FT)
         @. ᶜfrac = cloud_fraction
         # RRTMGP needs effective radius in microns
-        seasalt_aero_conc = p.scratch.ᶜtemp_scalar
-        dust_aero_conc = p.scratch.ᶜtemp_scalar_2
-        SO4_aero_conc = p.scratch.ᶜtemp_scalar_3
-        @. seasalt_aero_conc = 0
-        @. dust_aero_conc = 0
-        @. SO4_aero_conc = 0
-        # Get aerosol mass concentrations if available
-        seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-        dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
-        SO4_names = [:SO4]
-        if :prescribed_aerosols_field in propertynames(p.tracers)
-            aerosol_field = p.tracers.prescribed_aerosols_field
-            for aerosol_name in propertynames(aerosol_field)
-                if aerosol_name in seasalt_names
-                    data = getproperty(aerosol_field, aerosol_name)
-                    @. seasalt_aero_conc += data
-                elseif aerosol_name in dust_names
-                    data = getproperty(aerosol_field, aerosol_name)
-                    @. dust_aero_conc += data
-                elseif aerosol_name in SO4_names
-                    data = getproperty(aerosol_field, aerosol_name)
-                    @. SO4_aero_conc += data
-                end
-            end
-        end
-        lwp_col = p.scratch.temp_field_level
-        ᶜliquid_water_mass_concentration =
-            @. lazy(cloud_liquid_water_content * u.c.ρ)
-        Operators.column_integral_definite!(
-            lwp_col,
-            ᶜliquid_water_mass_concentration,
+        aerosol_field =
+            :prescribed_aerosols_field in propertynames(p.tracers) ?
+            p.tracers.prescribed_aerosols_field : nothing
+        (; c₀_dust, c₀_seasalt, c₀_SO4) = cmc.aml
+        seasalt_aero_conc = sum_aerosol_bins!(
+            p.scratch.ᶜtemp_scalar,
+            aerosol_field,
+            (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05),
+            c₀_seasalt,
+        )
+        dust_aero_conc = sum_aerosol_bins!(
+            p.scratch.ᶜtemp_scalar_2,
+            aerosol_field,
+            (:DST01, :DST02, :DST03, :DST04, :DST05),
+            c₀_dust,
+        )
+        SO4_aero_conc = sum_aerosol_bins!(
+            p.scratch.ᶜtemp_scalar_3,
+            aerosol_field,
+            (:SO4,),
+            c₀_SO4,
+        )
+        ᶜq_liq_in = @. lazy(
+            max(zero_FT, cloud_liquid_water_content) /
+            max(eps_FT, cloud_fraction),
         )
 
         @. ᶜreliq = ifelse(
-            cloud_liquid_water_content > FT(0),
+            (cloud_liquid_water_content > zero_FT) &
+            (cloud_fraction > zero_FT),
             CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
-                cmc.liquid,
+                cmc_liquid,
                 u.c.ρ,
-                max(FT(0), cloud_liquid_water_content) /
-                max(eps(FT), cloud_fraction),
+                ᶜq_liq_in,
                 ml_N_cloud_liquid_droplets(
                     (cmc,),
                     dust_aero_conc,
                     seasalt_aero_conc,
                     SO4_aero_conc,
-                    lwp_col,
+                    ᶜq_liq_in,
                 ),
-                FT(0),
-                FT(0),
+                zero_FT,
+                zero_FT,
             ) * m_to_um_factor,
-            FT(0),
+            zero_FT,
         )
 
+        reice_um =
+            CM.CloudDiagnostics.effective_radius_const(cmc.ice) * m_to_um_factor
         @. ᶜreice = ifelse(
-            cloud_ice_water_content > FT(0),
-            CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
-            m_to_um_factor,
-            FT(0),
+            (cloud_ice_water_content > zero_FT) & (cloud_fraction > zero_FT),
+            reice_um,
+            zero_FT,
         )
 
         # Snow (placeholder): write the in-cloud snow water path and a placeholder
@@ -485,62 +487,105 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             snow_effective_radius_um = FT(90)
             @. ᶜswp =
                 kg_to_g_factor * u.c.ρ * snow_water_content * ᶜΔz /
-                max(cloud_fraction, eps(FT))
+                max(cloud_fraction, eps_FT)
             @. ᶜresno = ifelse(
-                snow_water_content > FT(0),
+                (snow_water_content > zero_FT) & (cloud_fraction > zero_FT),
                 snow_effective_radius_um,
-                FT(0),
+                zero_FT,
             )
         end
     end
     return nothing
 end
 
+"""
+    sum_aerosol_bins!(ᶜconc, aerosol_field, bin_names, c₀)
+
+Sum the prescribed aerosol bins named in `bin_names` into `ᶜconc` [kg/kg]; return
+`ᶜconc`.
+
+When `aerosol_field` is `nothing` or holds none of the bins, `ᶜconc` is set to the
+reference concentration `c₀`, so the species term of `ml_N_cloud_liquid_droplets`
+vanishes and an unprescribed species leaves the droplet number at its reference
+value. Called from `update_cloud_properties!`.
+"""
+function sum_aerosol_bins!(ᶜconc, aerosol_field, bin_names, c₀)
+    present_names =
+        isnothing(aerosol_field) ? () :
+        filter(in(bin_names), propertynames(aerosol_field))
+    if isempty(present_names)
+        fill!(ᶜconc, c₀)
+    else
+        fill!(ᶜconc, zero(c₀))
+        for name in present_names
+            ᶜbin = getproperty(aerosol_field, name)
+            @. ᶜconc += ᶜbin
+        end
+    end
+    return ᶜconc
+end
 
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 
-Return the cloud droplet number concentration diagnosed from the aerosol loading and the
-cloud liquid water [1/m³].
+Return the cloud droplet number concentration diagnosed from the aerosol loading
+and the in-cloud liquid specific humidity [1/m³].
 
-The data-driven closure is log-linear about a reference state,
+The closure is a bounded log-saturation law about a reference state. The sum
 
 ```math
-N = N₀ \\left[1 + Σ_i α_i \\, \\log(c_i / c_{0,i}) + α_{q_l} \\log(q_l / q_{0,l})\\right],
+s = Σ_i α_i \\, \\log(\\max(c_i / c_{0,i}, c_{\\min}))
+    + α_{q_l} \\log(\\max(q_l / q_{0,l}, c_{\\min}))
 ```
 
-summed over dust, sea salt, and ammonium sulfate. Each argument is floored at `eps` before
-the logarithm, and the calibration coefficients `α` and reference values `c₀`, `q₀` come
-from `cmc.aml`.
+runs over dust, sea salt, and ammonium sulfate, and
+
+```math
+N = N₀ \\exp\\left(Δ_{\\max} \\tanh(s / Δ_{\\max})\\right).
+```
+
+The floor ``c_{\\min} = 10^{-3}`` keeps the logarithms finite for vanishing
+concentrations, and ``Δ_{\\max} = \\ln(3)`` bounds ``N`` in ``[N₀ / 3, 3 N₀]``;
+for small ``|s|``, ``N ≈ N₀ (1 + s)``. The calibration coefficients `α` and
+reference values `c₀`, `q₀` come from `cmc.aml`; with the default ``α = 0``,
+``N = N₀``.
+
+!!! note "TODO: calibrate the bound and the floor"
+
+    The bound and the floor are provisional values set in the code. Both should
+    become ClimaParams parameters when the coefficients are calibrated.
 
 # Arguments
 
-  - `cmc`: Cloud and aerosol parameter set (`CAP.microphysics_cloud_params`), providing
-    `cmc.aml` and the reference concentration `cmc.N_cloud_liquid_droplets` [1/m³].
-  - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass concentrations
-    [kg/kg].
-  - `q_liq`: Cloud liquid water content, compared against the reference `q₀_liq`.
-
-!!! note
-
-    `q₀_liq` is calibrated as a specific humidity [kg/kg], but `update_cloud_properties!`
-    passes the column-integrated liquid water path [kg/m²] for `q_liq`.
+  - `cmc`: Cloud and aerosol parameter set (`CAP.microphysics_cloud_params`),
+    providing `cmc.aml` and the reference concentration
+    `cmc.N_cloud_liquid_droplets` [1/m³].
+  - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass
+    concentrations [kg/kg].
+  - `q_liq`: In-cloud liquid water specific humidity [kg/kg], compared against
+    `q₀_liq`.
 """
-function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
-    # We can also add w, T, RH, w' ...
-    # Also consider lookind only at around cloud base height
+@inline function ml_N_cloud_liquid_droplets(
+    cmc,
+    c_dust,
+    c_seasalt,
+    c_SO4,
+    q_liq,
+)
     (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
     (; c₀_dust, c₀_seasalt, c₀_SO4, q₀_liq) = cmc.aml
     N₀ = cmc.N_cloud_liquid_droplets
 
     FT = eltype(N₀)
-    return N₀ * (
-        FT(1) +
-        α_dust * (log(max(c_dust, eps(FT))) - log(c₀_dust)) +
-        α_seasalt * (log(max(c_seasalt, eps(FT))) - log(c₀_seasalt)) +
-        α_SO4 * (log(max(c_SO4, eps(FT))) - log(c₀_SO4)) +
-        α_q_liq * (log(max(q_liq, eps(FT))) - log(q₀_liq))
-    )
+    c_min_scale = FT(1e-3)
+    s =
+        α_dust * log(max(c_dust / c₀_dust, c_min_scale)) +
+        α_seasalt * log(max(c_seasalt / c₀_seasalt, c_min_scale)) +
+        α_SO4 * log(max(c_SO4 / c₀_SO4, c_min_scale)) +
+        α_q_liq * log(max(q_liq / q₀_liq, c_min_scale))
+
+    Δ_max = log(FT(3))
+    return N₀ * exp(Δ_max * tanh(s / Δ_max))
 end
 
 """

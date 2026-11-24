@@ -161,11 +161,11 @@ function rrtmgp_solver_kwargs(
     ᶠspace = Spaces.face_space(space)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    latitude = if issphere(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -176,7 +176,7 @@ function rrtmgp_solver_kwargs(
     optical_thickness_parameter =
         @. τ_equator + (τ_pole - τ_equator) * sind(latitude)^2
     kwargs = (; lapse_rate = FT(3.5), optical_thickness_parameter, latitude)
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         zkwargs = (;
             center_z = Fields.field2array(ᶜz),
             face_z = Fields.field2array(ᶠz),
@@ -208,10 +208,10 @@ function rrtmgp_solver_kwargs(
     ᶜΔz = Fields.Δz_field(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    latitude = if issphere(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -347,8 +347,7 @@ function rrtmgp_solver_kwargs(
     end
 
     if include_z
-        if ᶜspace.grid.global_geometry isa
-           Geometry.AbstractSphericalGlobalGeometry
+        if issphere(ᶜspace)
             kwargs = (;
                 kwargs...,
                 center_z = Fields.field2array(ᶜz),
@@ -465,7 +464,7 @@ function radiation_model_cache(
         rrtmgp_params,
         context,
         radiation_mode;
-        ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
+        ncol = Spaces.ncolumns(axes(Y.c)),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
         interpolation,
         bottom_extrapolation,
@@ -591,16 +590,23 @@ radiation; updrafts are typically absent in the stratosphere, where radiation ma
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
     (; turbconv_model) = p.atmos
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     # Apply radiation tendency to updrafts in prognostic EDMF. We use the
     # grid-mean radiation as an approximation for updraft radiation.
     # Note: Radiation is not applied to updrafts in diagnostic EDMF because updrafts
     # are typically absent in the stratosphere where radiation is more important.
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs) = p.precomputed
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+    n = turbconv_model isa PrognosticEDMFX ? n_mass_flux_subdomains(turbconv_model) : 0
+    drafts = ntuple(j -> (p.precomputed.ᶜρʲs.:($j), Yₜ.c.sgsʲs.:($j).mse), Val(n))
+    # The grid-mean and updraft tendencies in one column loop, with the flux
+    # divergence evaluated once.
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        ᶠradiation_flux,
+        drafts,
+    ) do Yₜc, ᶠradiation_flux, drafts
+        ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜc.ρe_tot -= ᶜdiv_flux
+        for (ᶜρʲ, ᶜmseʲₜ) in drafts
+            @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
         end
     end
     return nothing
@@ -752,16 +758,35 @@ Allocate the working fields of the TRMM_LBA prescribed radiative heating profile
 
 # Returns
 
-A `NamedTuple` holding the heating-rate field `ᶜdTdt_rad` [K/s] and the top-of-atmosphere
-and surface net energy flux accumulators used by the diagnostics.
+A `NamedTuple` holding the heating-rate field `ᶜdTdt_rad` [K/s], the time-height profile
+`rad_profile` from `AtmosphericProfilesLibrary` with its height knots `z_knots` [m], and the
+top-of-atmosphere and surface net energy flux accumulators used by the diagnostics.
 """
 function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
+    rad_profile = APL.TRMM_LBA_radiation(FT)
     return (;
         ᶜdTdt_rad = similar(Y.c, FT),
+        rad_profile,
+        z_knots = APL.TRMM_LBA_radiation_z(FT),
         net_energy_flux_toa = [Geometry.WVector(FT(0))],
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
+end
+
+"""
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+
+Set `ᶜdTdt_rad` to the TRMM_LBA radiative heating rate `rad_profile(t, z)` [K/s].
+
+The profile is evaluated at time `t` on the height knots `z_knots`, and the resulting height
+profile is interpolated linearly in height.
+"""
+function set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+    ᶜz = Fields.coordinate_field(axes(ᶜdTdt_rad)).z
+    z_profile = APL.linear_interp(z_knots, map(z -> rad_profile(t, z), z_knots))
+    @. ᶜdTdt_rad = z_profile(ᶜz)
+    return nothing
 end
 
 """
@@ -772,22 +797,20 @@ Apply the TRMM_LBA prescribed radiative heating to `Yₜ.c.ρe_tot` in place; re
 
 Unlike the other modes, no flux is computed: the heating rate `ᶜdTdt_rad(t, z)` [K/s] is
 read from the `AtmosphericProfilesLibrary` observational profile, which varies with both
-height and time of day, and converted to an energy tendency with the moist isochoric heat
-capacity, `Yₜ.c.ρe_tot += ρ cv_m dT/dt`. Applied explicitly at every stage.
+height and time of day, and converted to an energy tendency with the moist isobaric heat
+capacity, `Yₜ.c.ρe_tot += ρ cp_m dT/dt`, because the profile is a heating rate at constant
+pressure. Applied explicitly at every stage.
 """
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
-    # TODO: get working (need to add cache / function)
-    rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
+    (; ᶜdTdt_rad, rad_profile, z_knots) = p.radiation
     ᶜρ = Y.c.ρ
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, FT(t))
     @. Yₜ.c.ρe_tot +=
-        ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
+        ᶜρ * TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing
 end
 
@@ -835,6 +858,16 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
         radiation_flux,
         # F₀ * exp(-κ * (LWP_zₜ - ᶠLWP_z)) + F₁ * exp(-κ * ᶠLWP_z),
     ))  # = -∂F/∂z = ρ cₚ ∂T/∂t (longwave radiation)
+
+    (; turbconv_model) = p.atmos
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                ᶜdivᵥ(Geometry.WVector(radiation_flux)) / ᶜρʲs.:($$j)
+        end
+    end
 
     return nothing
 end

@@ -37,7 +37,7 @@ Condensed water path from a global simulation initialized with ERA5 on 8-31-25 0
 
 ## Installation
 
-ClimaAtmos.jl is a registered Julia package (recommended Julia: v1.11):
+ClimaAtmos.jl is a registered Julia package (recommended Julia: v1.13):
 
 ```julia
 using Pkg

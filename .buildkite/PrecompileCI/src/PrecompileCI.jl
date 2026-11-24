@@ -9,16 +9,23 @@ import ClimaParams
     with_logger(NullLogger()) do
         FT = Float32 # Float64?
         h_elem = 6 # 16, 30?
-        z_elem = 10 # 30, 31, 63?
+        # The 63-level grid up to 60 km with 30 m bottom spacing lies in the
+        # range the two-scale stretching admits for the default `dz_top` and
+        # `z_pbl`.
+        z_elem = 63
         x_elem = y_elem = 2
         x_max = y_max = 1e8
-        z_max = FT(30000.0)
-        dz_bottom = FT(500)
+        z_max = FT(60000.0)
+        dz_bottom = FT(30)
         z_stretch = true
         bubble = true
         nh_poly = 3 # GLL{4} = nh_poly + 1
         # TODO: compile CUDA methods as well
-        context = ClimaComms.context(ClimaComms.CPUSingleThreaded())
+        # The singleton context is constructed directly: `ClimaComms.context`
+        # reads `CLIMACOMMS_CONTEXT`, which the MPI jobs set, and the
+        # precompile process does not load MPI.jl.
+        context =
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
         topography = CA.NoTopography()
         params = CA.ClimaAtmosParameters(FT)
         radius = CA.Parameters.planet_radius(params)

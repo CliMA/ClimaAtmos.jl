@@ -570,8 +570,7 @@ import ClimaAtmos:
                     for (a_p, σ_S) in
                         ((FT(0.3), FT(2e-4)), (FT(0.15), FT(5e-5)), (FT(1), FT(1e-4)))
                         rule = ClimaAtmos.conditional_rule(
-                            thp, ρ, T, mu_S, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S),
-                            FT(150), FT(0.05),
+                            T, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S), FT(150),
                         )
                         frac = ClimaAtmos.conditional_rule_shaft_fraction(rule)
                         # exact up to the quantile approximation of the threshold:
@@ -686,6 +685,60 @@ import ClimaAtmos:
                         quad, q_tot, T, q′q′, T′T′, FT(0.6),
                     )
                 end
+            end
+        end
+    end
+
+    @testset "1M wrappers return zero where no process rate remains" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                T_freeze = TD.Parameters.T_freeze(thp)
+                # the bulk set of `implicit_microphysics: true` and that of
+                # `implicit_microphysics: false`
+                mp_bulk = CMP.Microphysics1MParams(toml_dict;
+                    cloud_liquid_formation = nothing,
+                    cloud_ice_formation = nothing,
+                    rain_condensation_evaporation = nothing,
+                    snow_deposition_sublimation = nothing,
+                )
+                mp_unsplit = CMP.Microphysics1MParams(toml_dict;
+                    cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
+                )
+                ρ = FT(0.8)
+                w = FT(0.2)
+                dt = FT(120)
+                nsubs = 2
+
+                T = T_freeze - 15
+                q_sno = FT(2e-4)
+                q_tot = FT(0.8) * TD.q_vap_saturation(thp, T, ρ) + q_sno
+                zero_tendency = ClimaAtmos.zero_1m_tendency(FT)
+                @test microphysics_tendencies_1m(
+                    ρ, q_tot, FT(0), FT(0), FT(0), q_sno, T, w,
+                    mp_bulk, thp, dt, nsubs,
+                ) === zero_tendency
+                quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                T′T′ = FT(0.25)
+                q′q′ = (FT(0.05) * q_tot)^2
+                args = (BMT.Microphysics1Moment(), quad, mp_bulk, thp, ρ, T, w,
+                    q_tot, FT(0), FT(0), FT(0), q_sno, T′T′, q′q′, FT(0.6),
+                    FT(0), FT(1), FT(0), FT(0), dt, nsubs)
+                @test microphysics_tendencies_1m(args...) === zero_tendency
+                # with the precipitation placement the nodes hold multiples
+                # of the cell mean; they are still without rates
+                λ = FT(0)
+                mu_S = q_tot - TD.q_vap_saturation(thp, T, ρ)
+                @test microphysics_tendencies_1m(
+                    args..., λ, mu_S, FT(1), FT(0.3),
+                ) === zero_tendency
+                # the same cell above freezing melts its snow, and with
+                # vapor exchange it sublimates
+                warm = Base.setindex(args, T_freeze + 5, 6)
+                @test microphysics_tendencies_1m(warm...).dq_sno_dt < 0
+                sublimating = Base.setindex(args, mp_unsplit, 3)
+                @test microphysics_tendencies_1m(sublimating...).dq_sno_dt < 0
             end
         end
     end

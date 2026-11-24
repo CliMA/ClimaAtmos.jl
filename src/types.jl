@@ -45,6 +45,17 @@ Equilibrium (saturation-adjustment) moisture with a 0-moment precipitation sink.
 Only `ρq_tot` is prognostic; cloud liquid and ice are diagnosed by saturation
 adjustment, and condensate in excess of a threshold is removed instantaneously.
 Selected by `microphysics_model: "0M"`. Requires `use_sgs_quadrature: true`.
+
+Optional processes are config keys that select which 0-moment parameter sets are
+built (see `microphysics_0m_parameters`); `~` (null) disables the process:
+
+| Process                                  | Config key                     | Variants                 |
+|:---------------------------------------- |:------------------------------ |:------------------------ |
+| below-cloud evaporation of precipitation | `precipitation_evaporation_0m` | `Kessler`, `~` (default) |
+
+With `Kessler`, the `precipitation_evaporation_*` parameters are read (ClimaParams
+defaults unless set in the parameter TOML), and
+`precipitation_evaporation_coefficient` must be positive.
 """
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 
@@ -72,27 +83,27 @@ it.
 Any process that is not passed keeps its default, so
 `NonEquilibriumMicrophysics1M()` turns every process on with these variants:
 
-| Process                         | Default variant                   |
-|:------------------------------- |:--------------------------------- |
-| `cloud_liquid_formation`        | `CloudLiquidFormation()`          |
-| `cloud_ice_formation`           | `TemperatureDependentIceNumber()` |
-| `cloud_ice_melt`                | `CloudIceMelt()`                  |
-| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`   |
-| `rain_autoconversion`           | `Kessler1M()`                     |
-| `snow_autoconversion`           | `NoSupersaturation()`             |
-| `rain_condensation_evaporation` | `RainEvaporation()`               |
-| `snow_deposition_sublimation`   | `DepositionAndSublimation()`      |
-| `snow_melt`                     | `SnowMelt()`                      |
-| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`      |
-| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`      |
-| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`         |
-| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`         |
-| `rain_snow_accretion`           | `RainSnowAccretion()`             |
+| Process                         | Default variant                      |
+|:------------------------------- |:------------------------------------ |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`             |
+| `cloud_ice_formation`           | `TemperatureDependentIceNumber()`    |
+| `cloud_ice_melt`                | `CloudIceMelt()`                     |
+| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`      |
+| `rain_autoconversion`           | `Kessler1M()`                        |
+| `snow_autoconversion`           | `NoSupersaturation()`                |
+| `rain_condensation_evaporation` | `RainEvaporation()`                  |
+| `snow_deposition_sublimation`   | `DepositionWithoutCloudCondensate()` |
+| `snow_melt`                     | `SnowMelt()`                         |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`         |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`         |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`            |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`            |
+| `rain_snow_accretion`           | `RainSnowAccretion()`                |
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` and `cloud_liquid_freezing`
-override the `CMP.Microphysics1MOptions` defaults.
+`get_microphysics_1m_options`). `cloud_ice_formation` and
+`snow_deposition_sublimation` override the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 
@@ -101,6 +112,11 @@ override the `CMP.Microphysics1MOptions` defaults.
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
   - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
+    `cloud_liquid_formation`, `cloud_ice_formation`, `rain_condensation_evaporation`,
+    and `snow_deposition_sublimation` are routed to either `microphysics_1m_params`
+    (bulk CM BMT) or `microphysics_1m_implicit_params` (SGS-integrated implicit
+    source) by `create_parameters.jl`, driven by the `implicit_microphysics` config
+    toggle.
 
 # Examples
 
@@ -125,10 +141,17 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # `cloud_ice_formation` overrides the CloudMicrophysics default
-        # (`ConstantTimescale`) so that these defaults match `default_config.yml`
+        # Override CM's `ConstantTimescale` ice formation and
+        # `DepositionAndSublimation` snow defaults to match
+        # `default_config.yml`. `create_parameters.jl` splits
+        # `cloud_liquid_formation`, `cloud_ice_formation`,
+        # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
+        # between `microphysics_1m_params` (bulk) and
+        # `microphysics_1m_implicit_params` (implicit) based on
+        # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
+            snow_deposition_sublimation = CMP.DepositionWithoutCloudCondensate(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
@@ -391,6 +414,17 @@ function MLCloud_constructor(model)
 end
 
 """
+    build_mlcloud(nn_filepath, nn_param_vec)
+
+Build an `MLCloud` from the network architecture stored in the JLD2 file
+`nn_filepath` and the parameter vector `nn_param_vec`.
+
+The method is defined in the `ClimaAtmosFlux` extension, which is loaded when
+`Flux` is imported alongside `ClimaAtmos`.
+"""
+function build_mlcloud end
+
+"""
     AbstractInsolation
 
 Source of the top-of-atmosphere solar flux and cosine of the solar zenith angle
@@ -440,7 +474,7 @@ struct ExternalTVInsolation <: AbstractInsolation end
     Larcform1Insolation
 
 Polar-night insolation for the LARCFORM-1 setup: zero TOA flux, with the cosine
-of the zenith angle set to `eps(FT)` because RRTMGP requires a positive value.
+of the zenith angle set to 0.
 """
 struct Larcform1Insolation <: AbstractInsolation end
 
@@ -449,9 +483,9 @@ struct Larcform1Insolation <: AbstractInsolation end
 
 Compute insolation from the orbital parameters at the current simulation date.
 
-When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
-`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
-(the default global behavior). When provided, the explicit lat/lon are used
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid on
+the sphere and fall back to `(0, 0)` on other grids (the default global
+behavior). When provided, the explicit lat/lon are used
 instead — useful for single-column setups whose coordinate system doesn't
 carry lat/lon (e.g. ARM VARANAL).
 
@@ -1084,22 +1118,7 @@ the subgrid orographic drag tensor is obtained (see `get_topo_info`).
 abstract type OrographicGravityWave <: AbstractGravityWave end
 
 """
-    LinearOrographicGravityWave{S}(; topo_info = Val(:linear))
-
-Orographic gravity-wave drag driven by an analytical drag input, for idealized
-tests. Selected by `orographic_gravity_wave: "linear"`.
-
-# Fields
-
-  - `topo_info`: `Val(:linear)`, selecting the analytical drag input in
-    `get_topo_info`.
-"""
-Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
-    topo_info::S = Val(:linear)
-end
-
-"""
-    FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, topo_info, topography)
+    FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd, topo_info, topography)
 
 Orographic gravity-wave drag following [garner2005](@cite), combining the drag
 of vertically propagating waves with the drag of low-level blocked flow.
@@ -1124,6 +1143,9 @@ with the shape parameters taken from `params.orographic_gravity_wave_params`.
   - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
     spacing, `L = α · Δx`. Applied by `compute_OGW_info` for `raw_topo_online` (and
     when regenerating `raw_topo` artifacts offline) [-].
+  - `a_tofd`: Amplitude of the Beljaars (2004) turbulent orographic form drag (TOFD)
+    relative to the IFS; `1` reproduces the IFS and `0` disables the low-level TOFD
+    term [-].
   - `topo_info`: `Val(:raw_topo)`, `Val(:raw_topo_online)`, or
     `Val(:gfdl_restart)`, selecting how the orographic drag tensor is built (see
     `get_topo_info`).
@@ -1141,6 +1163,7 @@ Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
     a1::FT
     Fr_crit::FT
     α_smoothing::FT
+    a_tofd::FT
     topo_info::S
     topography::T
 end
@@ -1228,7 +1251,8 @@ Surface-temperature and insolation requirements are derived from the resolved
 
 # Fields
 
-  - `dataset`: The `ColumnDatasets.ColumnDataset` handle for the forcing file.
+  - `dataset`: The `ColumnDatasets.AbstractColumnData` forcing source, or a
+    `PerColumnDatasets` with one source per column.
   - `forcing`: Tuple of composed forcing terms, validated at construction.
   - `time_interpolation_method`: Time-interpolation method handed to the file's
     `TimeVaryingInput`s.
@@ -1237,14 +1261,16 @@ Surface-temperature and insolation requirements are derived from the resolved
 
     ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnDataset; forcing, time_interpolation_method)
     ExternalDrivenTVForcing(path::String; kwargs...)
+    ExternalDrivenTVForcing(datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData}; kwargs...)
 
 The `path` method opens the file as a `ColumnDataset` and forwards the keyword
-arguments. `forcing` defaults to `default_forcing_terms()` and
+arguments. With a vector of column data sources, column `h` of a multi-column
+grid is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
 struct ExternalDrivenTVForcing{
-    CD <: ColumnDatasets.AbstractColumnData,
+    CD <: Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets},
     F <: Tuple,
     M,
 }
@@ -1253,7 +1279,7 @@ struct ExternalDrivenTVForcing{
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.AbstractColumnData;
+    dataset::Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets};
     forcing = default_forcing_terms(),
     time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )
@@ -1272,6 +1298,10 @@ end
 function ExternalDrivenTVForcing(path::String; kwargs...)
     return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
+ExternalDrivenTVForcing(
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData};
+    kwargs...,
+) = ExternalDrivenTVForcing(ColumnDatasets.PerColumnDatasets(datasets); kwargs...)
 
 """
     ISDACForcing
@@ -1281,6 +1311,22 @@ case. Supplied by `Setups.ISDAC`, which `initial_condition: "ISDAC"` selects; th
 `external_forcing` key does not accept it.
 """
 struct ISDACForcing end
+
+"""
+    MPACEForcing{FT}(; u_nudge = -13, v_nudge = -3, τ_wind = 3600)
+
+Analytic horizontal-wind nudging for the M-PACE mixed-phase Arctic cloud case
+[Klein2009](@cite), relaxing `(u, v)` toward `(u_nudge, v_nudge)` [m/s], default
+`(-13, -3)` m/s, with timescale `τ_wind` [s], default `3600` s. Supplied by
+`Setups.MPACE`, which `initial_condition: "MPACE"` selects; the
+`external_forcing` key does not accept it.
+"""
+Base.@kwdef struct MPACEForcing{FT}
+    u_nudge::FT = FT(-13)
+    v_nudge::FT = FT(-3)
+    τ_wind::FT = FT(3600)
+end
+MPACEForcing(::Type{FT}) where {FT} = MPACEForcing{FT}()
 
 """
     AbstractEnvBuoyGradClosure
@@ -1655,29 +1701,18 @@ by `rad: "ISDAC"`.
     κ::FT = 170  # m²/kg
 end
 
-import AtmosphericProfilesLibrary as APL
-
 """
-    RadiationTRMM_LBA(::Type{FT})
+    RadiationTRMM_LBA()
 
-Prescribed radiative heating profile for the TRMM-LBA deep-convection case,
-taken from AtmosphericProfilesLibrary.
+Prescribed radiative heating of the TRMM-LBA deep-convection case.
 
-The stored profile is evaluated as `rad_profile(t, z)` to give a temperature
-tendency [K/s], which is converted to an energy tendency. Selected by
-`rad: "TRMM_LBA"`.
+Selected by `rad: "TRMM_LBA"`.
 
-# Fields
-
-  - `rad_profile`: Callable `(t, z)` returning the radiative heating rate [K/s].
+The time-height profile `APL.TRMM_LBA_radiation(FT)` from AtmosphericProfilesLibrary
+is stored in the radiation cache and evaluated as `rad_profile(t, z)` to give
+a temperature tendency [K/s], which is converted to an energy tendency.
 """
-struct RadiationTRMM_LBA{R}
-    rad_profile::R
-    function RadiationTRMM_LBA(::Type{FT}) where {FT}
-        rad_profile = APL.TRMM_LBA_radiation(FT)
-        return new{typeof(rad_profile)}(rad_profile)
-    end
-end
+struct RadiationTRMM_LBA end
 
 """
     PrescribedFlow{FT}
@@ -1761,8 +1796,9 @@ end
 Whether a process is integrated explicitly or implicitly.
 
 Subtypes: `Explicit` and `Implicit`. Used for the `diff_mode` numerics option
-(config key `implicit_diffusion`) and for
-`microphysics_tendency_timestepping` (config key `implicit_microphysics`).
+(config key `implicit_diffusion`) and for `microphysics_tendency_timestepping`
+(hard-coded to `Implicit()` when microphysics is active; `implicit_microphysics`
+instead controls whether 1M cond/subl flow through the implicit cache).
 """
 abstract type AbstractTimesteppingMode end
 
@@ -1836,14 +1872,18 @@ symbols or strings.
 
 # Fields
 
-  - `energy_q_tot_upwinding`: Upwinding for the vertical advection of `ρe_tot`
-    and `ρq_tot`.
-  - `tracer_upwinding`: Upwinding for the vertical advection of the remaining
-    grid-scale tracers.
-  - `edmfx_mse_q_tot_upwinding`: Upwinding for the EDMF subdomain `mse`,
-    `q_tot`, and TKE advection.
+  - `energy_humidity_upwinding`: Upwinding for the vertical advection of
+    `ρe_tot` (`e_tot - Φ`, with central geopotential and pressure work),
+    `ρq_tot`, and the sedimenting microphysics species
+    (`sedimenting_tracer_names`).
+  - `tracer_upwinding`: Upwinding for the explicit vertical advection of passive
+    non-water grid-scale tracers (`passive_gs_tracer_names`; `ρtke` uses
+    implicit first-order upwind advection in the Newton residual).
+  - `edmfx_mse_humidity_upwinding`: Upwinding for the EDMF subdomain `mse`,
+    `q_tot`, and sedimenting microphysics species (`sedimenting_sgs_tracer_names`).
   - `edmfx_sgsflux_upwinding`: Upwinding for the EDMF subgrid-scale mass flux.
-  - `edmfx_tracer_upwinding`: Upwinding for the EDMF subdomain tracers.
+  - `edmfx_tracer_upwinding`: Upwinding for the passive EDMF subdomain tracers
+    (`passive_sgs_tracer_names`).
   - `test_dycore_consistency`: Whether to fill the cache with `NaN`s before each
     tendency evaluation, so that any quantity the dycore reads without first
     setting it shows up as a `NaN`.
@@ -1863,9 +1903,9 @@ symbols or strings.
 """
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
     # Enable specific upwinding schemes for specific equations
-    energy_q_tot_upwinding::EN_UP
+    energy_humidity_upwinding::EN_UP
     tracer_upwinding::TR_UP
-    edmfx_mse_q_tot_upwinding::ED_UP
+    edmfx_mse_humidity_upwinding::ED_UP
     edmfx_sgsflux_upwinding::SG_UP
     edmfx_tracer_upwinding::ED_TR_UP
     # Add NaNs to certain equations to track down problems
@@ -1884,30 +1924,46 @@ end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
 """
-    AtmosNumerics(; energy_q_tot_upwinding = :vanleer_limiter, tracer_upwinding = :vanleer_limiter,
-                  edmfx_mse_q_tot_upwinding = :first_order, edmfx_sgsflux_upwinding = :none,
-                  edmfx_tracer_upwinding = :first_order, test_dycore_consistency = false,
-                  reproducible_restart = false, limiter = nothing, diff_mode = Explicit(),
-                  hyperdiff = Hyperdiffusion{Float32}(...),
-                  vertical_water_borrowing_species = nothing)
+    AtmosNumerics(;
+        energy_humidity_upwinding = :vanleer_limiter,
+        tracer_upwinding = :vanleer_limiter,
+        edmfx_mse_humidity_upwinding = :first_order,
+        edmfx_sgsflux_upwinding = :none,
+        edmfx_tracer_upwinding = :first_order,
+        test_dycore_consistency = false,
+        reproducible_restart = false,
+        limiter = nothing,
+        diff_mode = Explicit(),
+        hyperdiff = Hyperdiffusion{Float32}(...),
+        vertical_water_borrowing_species = nothing,
+    )
 
 Create an `AtmosNumerics`, converting the upwinding options to `Val`
 types for compile-time dispatch.
 
 # Keyword Arguments
 
-  - `energy_q_tot_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot` and
-    `ρq_tot` vertical advection. Valid values are `:none`, `:first_order`,
-    `:third_order`, and `:vanleer_limiter`, given as a `Symbol`, a `String`, or
-    an already-wrapped `Val`.
-  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the other grid-scale
-    tracers, same valid values.
-  - `edmfx_mse_q_tot_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    `mse`, `q_tot`, and TKE.
+  - `energy_humidity_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot`,
+    `ρq_tot`, and the sedimenting microphysics species in vertical advection.
+    Valid values are `:none`, `:first_order`, `:third_order`, and
+    `:vanleer_limiter`, given as a `Symbol`, a `String`, or an already-wrapped
+    `Val`. `:first_order` gives positive first-order transport of `e_tot - Φ`,
+    `q_tot`, and the sedimenting species with the leading diffusivity of
+    backward-Euler upwind; `:third_order` is linear and unlimited (not positive
+    or monotone on discontinuities); `:none` skips their post-Newton dissipation
+    and antidiffusion, leaving their vertical advection forward-Euler central
+    under one Newton iteration with `ManualSparseJacobian` (amplifying
+    oscillatory modes unless vertical diffusion damps them).
+  - `tracer_upwinding = :vanleer_limiter`: Upwinding for the passive non-water
+    grid-scale tracers (`ρtke` uses implicit first-order upwinding directly in
+    the Newton residual), same valid values.
+  - `edmfx_mse_humidity_upwinding = :first_order`: Upwinding for the EDMF
+    subdomain `mse`, `q_tot`, and sedimenting microphysics species; `:none` or
+    `:first_order`.
   - `edmfx_sgsflux_upwinding = :none`: Upwinding for the EDMF subgrid-scale mass
     flux.
-  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the EDMF subdomain
-    tracers.
+  - `edmfx_tracer_upwinding = :first_order`: Upwinding for the passive EDMF
+    subdomain tracers; `:none` or `:first_order`.
   - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
@@ -1926,9 +1982,9 @@ numerics = ClimaAtmos.AtmosNumerics(; tracer_upwinding = :third_order, hyperdiff
 ```
 """
 function AtmosNumerics(;
-    energy_q_tot_upwinding = :vanleer_limiter,
+    energy_humidity_upwinding = :vanleer_limiter,
     tracer_upwinding = :vanleer_limiter,
-    edmfx_mse_q_tot_upwinding = :first_order,
+    edmfx_mse_humidity_upwinding = :first_order,
     edmfx_sgsflux_upwinding = :none,
     edmfx_tracer_upwinding = :first_order,
     test_dycore_consistency = false,
@@ -1945,11 +2001,19 @@ function AtmosNumerics(;
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
     parse_upwinding(x::Union{Symbol, String}) = Val(Symbol(x))
     parse_upwinding(x::Val) = x
+    # The updraft advection and its Jacobian are first-order upwind or central.
+    for (name, value) in (
+        ("edmfx_mse_humidity_upwinding", edmfx_mse_humidity_upwinding),
+        ("edmfx_tracer_upwinding", edmfx_tracer_upwinding),
+    )
+        parse_upwinding(value) in (Val(:none), Val(:first_order)) ||
+            error("`$name` must be `none` or `first_order`; got `$value`.")
+    end
 
     return AtmosNumerics(
-        parse_upwinding(energy_q_tot_upwinding),
+        parse_upwinding(energy_humidity_upwinding),
         parse_upwinding(tracer_upwinding),
-        parse_upwinding(edmfx_mse_q_tot_upwinding),
+        parse_upwinding(edmfx_mse_humidity_upwinding),
         parse_upwinding(edmfx_sgsflux_upwinding),
         parse_upwinding(edmfx_tracer_upwinding),
         test_dycore_consistency,
@@ -2115,7 +2179,7 @@ usually supplied by a `Setups` case rather than set by hand.
 
   - `subsidence`: `nothing`, or a `LargeScaleSubsidence`.
   - `external_forcing`: `nothing`, or a forcing object
-    (`ExternalDrivenTVForcing`, `ISDACForcing`).
+    (`ExternalDrivenTVForcing`, `ISDACForcing`, `MPACEForcing`).
   - `ls_adv`: `nothing`, or a `LargeScaleAdvection`.
   - `advection_test`: Whether to run in pure tracer-advection test mode, in which
     the dynamics are frozen.
@@ -2182,7 +2246,25 @@ struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
 struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractVarianceFidelityModel
+
+Closure for the variance fidelity `α` of the condensate reconstruction
+(`set_covariance_cache!`). Selected by the YAML key
+`sgs_variance_fidelity_model`.
+
+  - `EquilibriumVarianceFidelity` (`"equilibrium"`, default):
+    `α = α_Da · α_eq` (`sgs_variance_fidelity`).
+  - `UpdraftVarianceFidelity` (`"updraft"`): with `PrognosticEDMFX` and
+    non-equilibrium microphysics, `α` is set from the condensate of the cloudy
+    updrafts where they are active (`updraft_variance_fidelity`), and is
+    `α_Da · α_eq` elsewhere. Other configurations ignore it.
+"""
+abstract type AbstractVarianceFidelityModel end
+struct EquilibriumVarianceFidelity <: AbstractVarianceFidelityModel end
+struct UpdraftVarianceFidelity <: AbstractVarianceFidelityModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2191,8 +2273,9 @@ Group of moisture, cloud, and microphysics choices inside an
 
   - `microphysics_model`: An `AbstractMicrophysicsModel`; `DryModel()` by default.
   - `cloud_model`: An `AbstractCloudModel`; `QuadratureCloud()` by default.
-  - `microphysics_tendency_timestepping`: `Explicit()`, `Implicit()`, or
-    `nothing` when there is no microphysics.
+  - `microphysics_tendency_timestepping`: always `Implicit()` when microphysics
+    is active, `nothing` otherwise. Retained as a field so the 2M tendency
+    limiter (`apply_2m_tendency_limits!`) can still dispatch on it.
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
@@ -2205,9 +2288,12 @@ Group of moisture, cloud, and microphysics choices inside an
     by the largest excess the displaced (quadratic) profile reaches; `false`
     (default) keeps
     the truncated-Gaussian expectation.
+  - `sgs_variance_fidelity_model`: An `AbstractVarianceFidelityModel`;
+    `EquilibriumVarianceFidelity()` by default.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
-    `FixedTerminalVelocity()` for every species by default.
+    `FixedTerminalVelocity()` for cloud liquid and cloud ice, and
+    `Chen2022TerminalVelocity()` for rain and snow by default.
 
 # Examples
 
@@ -2218,7 +2304,7 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
@@ -2226,10 +2312,11 @@ water = ClimaAtmos.AtmosWater(;
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = DiagnosedTqCorrelation()
     sgs_variance_curvature::Bool = false
+    sgs_variance_fidelity_model::SVF = EquilibriumVarianceFidelity()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
-    terminal_velocity_rain::TVR = FixedTerminalVelocity()
-    terminal_velocity_snow::TVS = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = Chen2022TerminalVelocity()
+    terminal_velocity_snow::TVS = Chen2022TerminalVelocity()
 end
 
 """
@@ -2674,7 +2761,7 @@ struct's docstring for the full list of admissible values.
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
     `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
-    `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `sgs_variance_fidelity_model`, `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
@@ -2734,7 +2821,17 @@ function AtmosModel(
     spaces = get_spaces(grid)
     FT = Spaces.undertype(spaces.center_space)
 
-    params = isnothing(params) ? ClimaAtmosParameters(FT) : params
+    # Thread the caller's microphysics_model so default params pick up its 1M
+    # process selections; otherwise they silently fall back to the defaults.
+    params =
+        isnothing(params) ?
+        ClimaAtmosParameters(
+            FT;
+            microphysics_model = get(
+                kwargs, :microphysics_model,
+                get(defaults, :microphysics_model, nothing),
+            ),
+        ) : params
     eltype(params) == FT || error(
         "Float-type mismatch: the grid is $FT but `params` is " *
         "$(eltype(params)). Use `ClimaAtmosParameters($FT)`.",

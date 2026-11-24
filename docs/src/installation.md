@@ -3,7 +3,7 @@
 ## Julia
 
 Download and install Julia from [julialang.org/downloads](https://julialang.org/downloads/).
-We recommend Julia v1.11, the version used to build our documentation; CI also tests v1.10.
+We recommend Julia v1.13, the version used to build our documentation; CI also tests v1.10.
 If you are new to Julia's package manager, the official guides on
 [environments](https://pkgdocs.julialang.org/v1/environments/) and
 [managing packages](https://pkgdocs.julialang.org/v1/managing-packages/) are worth a look.

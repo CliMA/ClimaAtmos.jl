@@ -4,7 +4,7 @@
 # (set in depot_pipeline.yml). See that file for the overall design.
 set -euo pipefail
 
-STAGING="$JULIA_DEPOT_PATH"                 # Julia builds here
+STAGING="${JULIA_DEPOT_PATH%%:*}"           # Julia builds here
 mkdir -p "$STAGING"
 
 # Start from the last published depot so we only build the delta and stay
@@ -53,6 +53,10 @@ fi
 
 echo "--- Instantiate + precompile"
 julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.precompile(strict=true)'
+
+# Leave out the registry so each consumer build downloads a current one into
+# its own writable depot.
+rm -rf "$STAGING/registries"
 
 echo "--- Lock and publish (atomic symlink swap)"
 # Make everything readable before removing write access. Julia copies the

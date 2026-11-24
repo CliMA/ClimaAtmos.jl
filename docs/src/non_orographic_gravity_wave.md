@@ -41,7 +41,7 @@ Because the background winds and convective sources differ between the tropics a
 
 ### Upward propagation and wave breaking
 
-Reflected waves are removed from the spectrum. A wave that breaks at any level above the source deposits all its momentum flux into that level and is removed from the spectrum.
+Reflected waves are removed from the spectrum without depositing anything. A wave that breaks at any level at or above the source deposits all its momentum flux into that level and is removed from the spectrum.
 
 The reflection frequency is defined as
 
@@ -49,7 +49,7 @@ The reflection frequency is defined as
 \omega_r(z) = \left(\frac{N(z)^2 k^2}{k^2+\alpha^2}\right)^{1/2}
 ```
 
-where $N(z)$ is the buoyancy frequency, $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
+where $N(z)$ is the buoyancy frequency (from $dT/dz$ at cell centres, with a one-sided difference in the bottom and top cells, where interpolating to the boundary face would give only about half the gradient), $k$ is the horizontal wavenumber that corresponds to a default wavelength of 300 km, and $\alpha = 1/(2H)$ where $H$ is the scale height. $\omega_r(z)$ determines, for each monochromatic wave in the spectrum, whether the wave is reflected at height $z$.
 
 The instability condition is defined as
 
@@ -59,15 +59,20 @@ Q(z,c) = \frac{\rho_0}{\rho(z)} \frac{2N(z)B_0(c)}{k[c-u(z)]^3}
 
 $Q(z,c)$ determines whether the monochromatic wave of phase speed $c$ becomes unstable at height $z$.
 
-At the source level:
+The tests are applied to every layer from the launch level upward. The first layer is the one between the launch level $z_0$ and the level above it, $z_1$, and its tests use the values at $z_1$. Within each layer the surviving waves are tested in order:
 
-  - if $|\omega|=k|c-u_0| \geq \omega_r$, this wave would have undergone internal reflection somewhere below and is removed from the spectrum.
-  - if $Q(z_0, c) \geq 1$, it is also removed because it is not stable at the source level.
+  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ undergo total internal reflection and are removed from the spectrum without depositing momentum. This is the only way the scheme discards launched flux. It needs $|c - u| \gtrsim N/\sqrt{k^2 + \alpha^2}$, about 135 m/s for $N = 0.01\ \mathrm{s^{-1}}$ and the 300 km band, so it is rare.
+  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$, or reach a critical level, i.e., where the intrinsic phase speed is zero or has changed sign relative to the source, $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
 
-At each level above the source $(z_n > z_0)$, waves are tested in order:
+#### Waves that are unstable at the launch level
 
-  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ are removed from the spectrum.
-  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$ or encounter a critical level, i.e., where the intrinsic phase speed has changed sign relative to the source $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
+[alexander1999](@cite) apply the reflection and stability tests once more at the launch level itself (their Eqs. 20–22), with $u_0$ and $N(z_0)$, and remove the waves that fail from the launch spectrum: "the remaining waves that are propagating and stable define the input momentum flux spectrum at the source level". This scheme instead skips that launch-level test, so a wave with $Q(z_0, c) \geq 1$ is kept and, since $Q$ grows with height as $\rho_0/\rho$, it almost always breaks in the first layer and deposits its flux there. The reasons are:
+
+ 1. **The flux is generated.** A wave too strong to be stable at its launch level breaks right away, near its source, and decelerates the flow there. Removing it would treat the source as if it never emitted that flux. This matters most for the Beres source, whose spectrum is computed from the convective heating rather than prescribed.
+ 2. **For the AD99 source, the launched flux then equals $F_{S0}$.** The intermittency $\epsilon$ below is normalized by the full spectrum $\sum |B_0|$. Removing waves at launch would make the flux that actually leaves the source $F_{S0}$ times the surviving share, a fraction that varies with the source-level wind and stability. With the waves kept, the only gap between $F_{S0}$ and the deposited flux is the rare reflection above.
+ 3. **It is the all-or-nothing form of saturation.** Saturation schemes (e.g. [lindzen1981](@cite), as used in CAM/WACCM) keep such a wave, cap its flux at the saturation value, and deposit the excess just above the source. In this scheme a wave either keeps all its flux or deposits all of it. A wave capped exactly at the stability limit would break in the next layer anyway, because $Q$ grows with height, so depositing the whole wave in the first layer is the consistent analogue.
+
+The cost is a departure from [alexander1999](@cite): the drag just above the launch level is slightly larger than in the published scheme, and in exchange no launched momentum is lost.
 
 The gravity wave drag at half-levels is then
 
@@ -77,13 +82,25 @@ X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2})\Delta z} \sum_j (B_0)_j
 
 where the sum is over the breaking waves and $\epsilon = F_{S0} / (\rho_0\, n_k \sum |B_0|)$ is the wave intermittency ($n_k$ is the number of horizontal wavenumber bands, one by default). Here, $F_{S0}$ is the prescribed time-averaged total momentum flux, specified as a latitude-dependent quantity.
 
-Any momentum flux that propagates to the model top without breaking is re-deposited by spreading it uniformly over the levels at and above the damping level (defined by `nogw_damp_pressure`). The divisor in the code is one larger than the number of those levels, so this recovers the escaped momentum only approximately.
-
 The drag at full levels is obtained by averaging adjacent half-levels:
 
 ```math
 X(z_{n}) = \frac{1}{2} \left[ X(z_{n-1/2}) + X(z_{n+1/2}) \right].
 ```
+
+The kernel returns the flux corresponding to each layer, which is converted into a drag by dividing by the mean mass of the two cells on either side of the layer, i.e., $\tfrac{1}{2}(m_{n-1} + m_n)$, in place of the layer mass $\rho(z_{n-1/2})\Delta z$ above. The resulting drag is then distributed to the two vertically adjacent cells. Here, $m = \rho J / \Delta A$ is the cell mass per unit area of the column's bottom face, which includes the change of a cell's area with height in the deep-atmosphere configuration. As half of each adjacent cell's mass lies inside the layer, the averaging then distributes a mass-weighted share of the layer's flux to the two adjacent cells. With such a distribution, the column-integrated momentum tendency, $\sum_n m_n X(z_n)$, exactly matches the total deposited flux for uniform, stretched, and deep-atmosphere configurations.
+
+Any momentum flux that reaches the model top without breaking is force-broken there and redistributed within the model, because momentum flux that leaves through the model lid would otherwise be lost and give the atmosphere below a spurious response that depends on the lid height [shepherd2004](@cite). It is redistributed as a uniform acceleration over the levels at and above the damping level, i.e., the lowest level whose pressure is below `nogw_damp_pressure`. However, to ensure that the escaped momentum is always spread over several cells rather than concentrated in the top cell, the damping layer is set to always span at least the top three cells (`NOGW_MIN_DAMP_CELLS`). A warning is logged when the pressure rule results in a damping layer with fewer than three cells and has to be corrected (once per run). As a result, on a sphere the damping layer comprises three cells or more, depending on the model top, while in a single column it is always the top three cells. The redistribution is mass-weighted, so it deposits exactly the momentum that escaped:
+
+```math
+X_{\mathrm{redist}} = \frac{F_{\mathrm{top}}}{M_R},
+\qquad
+M_R = \int_{z_{\mathrm{damp}-1/2}}^{z_{n_t+1/2}} \rho \, \frac{J}{\Delta A} \, \mathrm{d}z ,
+```
+
+Here $n_t$ is the topmost value of the level index $n$ used above. $F_{\mathrm{top}}$ is the escaped momentum flux, which the kernel returns at the top level $n_t$. $M_R$ is the mass of the receiving levels, the whole cells from the bottom face of the damping level, $z_{\mathrm{damp}-1/2}$, to the model top face, $z_{n_t+1/2}$, weighted by $J/\Delta A$ as in the column integrals ($J$ the metric Jacobian, $\Delta A$ the area of the column's bottom face). Therefore, $\int \rho \, X_{\mathrm{redist}} \, (J/\Delta A) \, \mathrm{d}z = F_{\mathrm{top}}$ exactly. This redistribution is applied after the half-level averaging above, so it is not smoothed.
+
+Note that the magnitude of the assembled drag vector is limited to $3\sqrt{2}\times 10^{-3}\ \mathrm{m\,s^{-2}}$, as in the orographic scheme, keeping its direction. Therefore, where the limit is active, the deposited momentum is smaller than the launched momentum by construction.
 
 ## Beres (2004) Convective Source Spectrum
 
@@ -242,21 +259,22 @@ Every dt_nogw seconds:
         │       │     u_heat, v_heat, N_source
         │       ├─ Activate if grid-mean amplitude > threshold AND h > h_min
         │       └─ Set per-column Beres launch level = z_top
-        └─ 3. For each horizontal wavenumber k:
-                ├─ AD99 background (always on): Gaussian B₀(c)
-                │     → propagate¹ from AD99 source level → ×intermittency ε
-                │     → accumulate into uforcing, vforcing
-                └─ [Beres configured]: convective B₀(c) from Q₀, h, N
-                      (zero unless column is active)
-                      → propagate¹ from z_top → ×coverage ā at deposition
-                      → ADD into uforcing, vforcing
+        ├─ 3. For each horizontal wavenumber k:
+        │       ├─ AD99 background (always on): Gaussian B₀(c)
+        │       │     → propagate¹ from AD99 source level → ×intermittency ε
+        │       │     → accumulate into uforcing, vforcing
+        │       └─ [Beres configured]: convective B₀(c) from Q₀, h, N
+        │             (zero unless column is active)
+        │             → propagate¹ from z_top → ×coverage ā at deposition
+        │             → ADD into uforcing, vforcing
+        └─ 4. Zero NaN/Inf in uforcing, vforcing and clamp them to ±3e-3 m/s²
            ¹"propagate" = the shared upward-marching kernel (reflection → instability /
             critical-level breaking → model-top + sponge redistribution); identical
             for both sources.
 
 Every dt (integrator step):
   non_orographic_gravity_wave_apply_tendency!
-    └─ Clamp forcing, zero NaN/Inf, apply to wind tendencies
+    └─ Add uforcing, vforcing to the wind tendencies
 ```
 
 ## Where this is implemented

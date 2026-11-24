@@ -24,6 +24,8 @@ config.parsed_args["h_elem"] = 8;
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
+# This grid lies outside the range the two-scale stretching admits.
+config.parsed_args["z_stretch"] = false;
 config.parsed_args["orographic_gravity_wave"] = "raw_topo";
 
 params = CA.ClimaAtmosParameters(config)

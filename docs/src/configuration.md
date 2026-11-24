@@ -46,7 +46,7 @@ perturb_initstate: false
 dt: "120secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_1M.toml]
+toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 ode_algo: "ARS222"
 ```
@@ -101,15 +101,20 @@ toml: [parameters.toml]
 
 and run as usual. Three behaviors to know about:
 
-  - The `toml` key accepts several files, but a given parameter may appear in
-    only one of them; a duplicate entry across files raises a
-    `Duplicate TOML entry` error.
+  - The `toml` key accepts several files, merged in order: a parameter set in
+    more than one file takes the value from the last one, and a warning names
+    it with both values. The warning prints each entry's `type`, so give every
+    entry of a parameter set in more than one file a `type` field; without it
+    the warning is replaced by a logged `KeyError`, though the merge still
+    succeeds.
+    [`toml/default_parameters.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/default_parameters.toml)
+    gives every entry a `type`, so a case file can list only its differences
+    from it: `toml: [toml/default_parameters.toml, my_case.toml]`.
   - A `toml:` key in a later configuration file *replaces* the earlier list
     rather than appending to it. Many shipped model configurations already
-    carry one (e.g.
-    [`toml/prognostic_edmfx_1M.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/prognostic_edmfx_1M.toml)
-    in the BOMEX example above), so to combine your overrides with such a
-    configuration, list both files.
+    carry one (e.g. `toml/default_parameters.toml` in the BOMEX example above),
+    so to combine your overrides with such a configuration, list its files
+    followed by yours.
   - Overriding a parameter that no component of the current model uses raises
     an error; set `strict_params: false` to allow unused overrides.
 
@@ -135,7 +140,7 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
 #### Column configurations
 
-  - **[`numerics_column_ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze63.yml)**: Single column configuration with 63 vertical levels
+  - **[`numerics_column_ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze79.yml)**: Single column configuration with 79 vertical levels
 
 #### Sphere configurations
 
@@ -143,11 +148,11 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
   - **[`numerics_sphere_he6ze31.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he6ze31.yml)**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-  - **[`numerics_sphere_he16ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he16ze63.yml)**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he16ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he16ze79.yml)**: Spherical configuration with 16 horizontal elements (206km), 79 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
   - **[`numerics_sphere_he30ze43.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze43.yml)**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-  - **[`numerics_sphere_he30ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze63.yml)**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he30ze79.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze79.yml)**: Spherical configuration with 30 horizontal elements (110km), 79 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
 #### Diagnostics configurations for PROPHET columns
 
@@ -165,7 +170,7 @@ Common configurations are designed to be combined with model-specific configurat
 import ClimaAtmos as CA
 
 config = CA.AtmosConfig([
-    "config/common_configs/numerics_sphere_he16ze63.yml",
+    "config/common_configs/numerics_sphere_he16ze79.yml",
     "config/model_configs/your_model_config.yml",
 ])
 simulation = CA.AtmosSimulation(config)

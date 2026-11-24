@@ -171,13 +171,14 @@ height_factor(z_surface::FT, p::FT, T_sfc::FT, s::HeldSuarezForcingParams) where
                                         forcing)
 
 Return a lazy broadcast of the Held-Suarez thermal relaxation tendency for `ρe_tot`,
-`-ρ cv_d k_T (T - T_equil)` [J/m³/s], or a `NullBroadcasted` when `forcing isa Nothing`.
+`-ρ cp_d k_T (T - T_equil)` [J/m³/s], or a `NullBroadcasted` when `forcing isa Nothing`.
 
 The relaxation rate `k_T` and the equilibrium temperature `T_equil` are given by
 `compute_ΔρT`; the equator-to-pole contrast and equatorial temperature depend on whether
-the run is dry or moist (`held_suarez_ΔT_y_T_equator`). Because energy is relaxed at
-constant density, the temperature tendency is converted with the dry isochoric heat
-capacity `cv_d`.
+the run is dry or moist (`held_suarez_ΔT_y_T_equator`). [HeldSuarez1994](@cite) define
+the relaxation as a heating rate at constant pressure, so the temperature tendency is
+converted with the dry isobaric heat capacity `cp_d`: heat `Q` per unit mass changes
+potential temperature by `Q / (cp_d Π)`, with `Π` the Exner function.
 
 Held-Suarez is selected with `rad: held_suarez`. It performs no radiative transfer, so it
 is applied in `remaining_tendency!` at every timestepper stage rather than on the `dt_rad`
@@ -203,7 +204,7 @@ function held_suarez_forcing_tendency_ρe_tot(
     FT = Spaces.undertype(ᶜspace)
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
-    cv_d = FT(CAP.cv_d(params))
+    cp_d = FT(CAP.cp_d(params))
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
     p_ref_theta = FT(CAP.p_ref_theta(params))
@@ -231,7 +232,7 @@ function held_suarez_forcing_tendency_ρe_tot(
     )
 
     return @. lazy(
-        -compute_ΔρT(T_sfc, ᶜρ, ᶜp, lat, z_surface, hs_params) * cv_d,
+        -compute_ΔρT(T_sfc, ᶜρ, ᶜp, lat, z_surface, hs_params) * cp_d,
     )
 end
 

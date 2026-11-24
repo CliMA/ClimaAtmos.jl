@@ -99,6 +99,7 @@ end
                 "initial_condition" => "DYCOMS_RF02",
                 "microphysics_model" => "0M",
                 "config" => "column",
+                "z_stretch" => false,
                 "output_default_diagnostics" => false,
             ),
             job_id = "tendency_0M",
@@ -151,7 +152,7 @@ end
                 "t_end" => "10secs",
                 "ode_algo" => "SSP333",
                 "toml" =>
-                    [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                    [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
                 "output_default_diagnostics" => false,
             );
             job_id = "tendency_0M_prognostic_edmfx",
@@ -216,6 +217,7 @@ end
                 "initial_condition" => "PrecipitatingColumn",
                 "microphysics_model" => "1M",
                 "config" => "column",
+                "z_stretch" => false,
                 "output_default_diagnostics" => false,
             ),
             job_id = "tendency_1M",
@@ -313,6 +315,7 @@ end
                 "initial_condition" => "PrecipitatingColumn",
                 "microphysics_model" => "1M",
                 "config" => "column",
+                "z_stretch" => false,
                 "use_sgs_quadrature" => true,
                 "sgs_distribution" => "gaussian",
                 "quadrature_order" => 2,

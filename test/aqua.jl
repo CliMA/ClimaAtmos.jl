@@ -33,7 +33,8 @@ end
     Aqua.test_all(
         ClimaAtmos;
         persistent_tasks = true,
-        stale_deps = !in_downgrade_ci,
+        # JLD2 is loaded by the ClimaAtmosFlux extension, not by ClimaAtmos itself
+        stale_deps = in_downgrade_ci ? false : (; ignore = [:JLD2]),
     )
 end
 

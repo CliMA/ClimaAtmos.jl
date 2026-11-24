@@ -1,4 +1,4 @@
-import OrderedCollections
+import OrderedCollections: OrderedDict
 
 include(joinpath(@__DIR__, "reproducibility_utils.jl"))
 paths = latest_comparable_dirs()

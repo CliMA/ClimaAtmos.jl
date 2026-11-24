@@ -156,6 +156,20 @@ into the analytic implicit solve for ``\hat{\rho}^j``, and scalars are detrained
 implicitly through the area divergence of the mass flux; see
 [Discretization and Time Stepping](prophet_numerics.md).
 
+**Tail entrainment.** The dynamical entrainment draws the mean of the top
+fraction ``f`` of the environment's Gaussian subgrid ``(T, q_t)`` distribution,
+ranked by moist static energy (`tail_entrainment_increments`;
+``f`` = `edmf_tail_entr_fraction`, ``1/2`` by default, and ``f = 1`` recovers
+the environment mean); turbulent entrainment keeps the mean. The ranking
+follows buoyancy sorting [Blyth1986, Fritsch1990](@cite): of the mixtures
+formed at the updraft edge, the moist ones stay buoyant and continue with the
+updraft, and the dry ones sink away. Moist static energy is conserved under
+mixing and phase change, so the selection carries moisture and heat, and the
+entrained air's buoyancy develops inside the updraft. The clear-air buoyancy
+reference rests on the same picture of the cloud edge: the updraft mixes with
+the moist near field and is buoyed against the clear remainder (see the note
+on the reference density in [PROPHET: Overview and Equations](prophet.md)).
+
 ## Pressure closure
 
 The subgrid pressure perturbation exerts two forces on a draft: a virtual-mass
@@ -181,7 +195,11 @@ diverges [Weller2019](@cite).
 The code implements this in the single-draft, environment-only setting, inside
 the implicit vertical-velocity solve. The virtual-mass effect appears as a
 buoyancy reduction factor ``(1 - \alpha_b)`` with
-``\alpha_b`` = `pressure_normalmode_buoy_coeff1`, applied unconditionally. The
+``\alpha_b`` = `pressure_normalmode_buoy_coeff1`, applied unconditionally.
+With `edmf_buoyancy_clear_env_weight` positive, the buoyancy it multiplies is
+taken against the reference density of `set_updraft_reference_density_excess!`, which adds
+an updraft–environment force pair to the virtual-mass term (see the note on the
+reference density in [PROPHET: Overview and Equations](prophet.md)). The
 form drag,
 
 ```math
@@ -597,11 +615,14 @@ variances vanish the diagnosed value falls back to the prescribed
 `Tq_correlation_coefficient`, which `tq_correlation_model: constant` uses
 everywhere.
 
-The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``),
-because a wider Gaussian places a quadrature node at negative total water, and
-condensing the clamped excess can drive the grid-mean vapor negative. The σ_q
-bound rescales ``\Sigma_{T q_t}`` by the same factor so the diagnosed
-correlation is invariant under the clamp.
+The total-water standard deviation is then bounded by
+``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``), with ``q_t`` the mean of
+the subdomain on which the quadrature is centred (the environment under
+`PrognosticEDMFX`, the grid mean otherwise), because a wider Gaussian places a
+quadrature node at negative total water, and condensing the clamped excess can
+drive the subdomain vapor negative. The ``\sigma_q`` bound rescales
+``\Sigma_{T q_t}`` by the same factor so the diagnosed correlation is invariant
+under the clamp.
 
 The total grid-mean subgrid covariance adds the inter-subdomain spread to this
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),
@@ -673,15 +694,82 @@ beyond a few standard deviations lies outside the air the displacement reaches.
 With the default ``c = 3`` (``s c \approx 3.04``), the condensate of a cell
 comes from within three standard deviations of its mean excess.
 ``c = \infty`` restores the Gaussian.
+
 The cloud fraction is then the fraction of the distribution carrying positive
-local condensate, evaluated with a variance augmented by a non-equilibrium floor
-that scales with the saturation specific humidity and is released as the
-subdomain mean saturates. That floor keeps the cloud fraction from being driven
-to one by a vanishing equilibrium variance, and loosely parallels the
-critical-relative-humidity scaling of
-statistical cloud schemes [Quaas2012](@cite). Microphysical rates are evaluated
-at each node and aggregated linearly, which preserves total water and total
-energy at the subdomain level because the bulk rates preserve them pointwise.
+local condensate, ``f_c = \Phi(z)``, where ``z`` solves the truncated-Gaussian
+condensate relation ``C = z \Phi(z) + \phi(z)`` for the normalized condensate
+
+```math
+C = \frac{\min(q_c, q_{c,\mathrm{eq}})}{\sigma_{\mathrm{aug}}}
+  + \frac{\max(0, q_c - q_{c,\mathrm{eq}})}
+    {\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}} ,
+\qquad
+\sigma_{\mathrm{aug}}^2 = (\alpha \sigma_S)^2
+  + (\varepsilon_{\mathrm{rel}} \delta_{\mathrm{sub}})^2
+  + \sigma_{\mathrm{abs}}^2
+```
+
+(`_compute_cloud_fraction`, `_sgs_augmented_sigma`). Here,
+``\delta_{\mathrm{sub}} = \max(0, -\mu_S)`` is the subsaturation deficit of the
+cloud-available water and ``\alpha`` the variance fidelity described below.
+Condensate up to the equilibrium amount ``q_{c,\mathrm{eq}}``, which the
+subdomain's own saturation-excess fluctuations support, is normalized by the
+width ``\sigma_{\mathrm{aug}}``. Condensate beyond it, such as condensate
+detrained from updrafts into subsaturated air, is normalized by
+``\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}``, because filling
+the clear fraction at mean deficit ``\delta_{\mathrm{sub}}`` takes condensate
+of that order.
+
+The width ``\sigma_{\mathrm{aug}}`` is the gradient width ``\alpha \sigma_S``
+with two floors. The absolute floor ``\sigma_{\mathrm{abs}}`` keeps it finite
+in quiescent air. The deficit floor
+``\varepsilon_{\mathrm{rel}} \delta_{\mathrm{sub}}`` (`cloud_fraction_eps_rel`,
+default 0) sets the width where
+``\alpha \sigma_S < \varepsilon_{\mathrm{rel}} \delta_{\mathrm{sub}}``.
+
+At full fidelity (``\alpha = 1``), ``q_{c,\mathrm{eq}}`` vanishes faster than
+``\sigma_S`` as the deficit grows, so the equilibrium part stays patchy on its
+own. The deficit floor lowers its normalized condensate by the factor
+``(1 + \varepsilon_{\mathrm{rel}}^2 \delta_{\mathrm{sub}}^2 / \sigma_S^2)^{-1/2}``,
+which is at most 1.1% for ``\varepsilon_{\mathrm{rel}} = 0.05`` within the
+truncation ``\delta_{\mathrm{sub}} \le s c \sigma_S``. Where the condensate
+falls short of equilibrium, however, the equilibrium-ratio factor of the variance fidelity
+narrows the ramp in proportion to the condensate
+(``\alpha_{\mathrm{eq}} \approx q_c / (w_{\mathrm{eq}} q_{c,\mathrm{eq}})`` for
+``q_c \ll q_{c,\mathrm{eq}}``), so ``q_c / (\alpha \sigma_S)``, and with it the
+cloud fraction, stays fixed as the condensate decreases toward the absolute
+floor. The deficit floor bounds the normalized condensate by
+``C \le q_c / (\varepsilon_{\mathrm{rel}} \delta_{\mathrm{sub}})``: the cloud
+fraction of subsaturated air vanishes with its condensate, and a cloud fraction
+of one half (``C = 1/\sqrt{2\pi}``) takes condensate of at least
+``\varepsilon_{\mathrm{rel}} \delta_{\mathrm{sub}} / \sqrt{2\pi}``. For
+``\delta_{\mathrm{sub}} = \sigma_S = 0.2~\mathrm{g~kg^{-1}}``,
+``\alpha_{\mathrm{Da}} = 1`` and ``w_{\mathrm{eq}} = 0.5``, the cloud fraction
+without the deficit floor is 9–10% for any condensate between ``10^{-3}`` and
+``10^{-1}`` of ``q_{c,\mathrm{eq}}``; with ``\varepsilon_{\mathrm{rel}} = 0.05``,
+it decreases from 9.5% at ``10^{-1} q_{c,\mathrm{eq}}`` to 0.6% at
+``10^{-3} q_{c,\mathrm{eq}}``, and it is 16% for condensate in equilibrium with
+or without the floor. A small Damköhler factor narrows the ramp for any
+condensate, so the deficit floor then also lowers the cloud fraction of
+condensate near equilibrium: for ``\alpha_{\mathrm{Da}} = 0.1`` in the same
+example, from 76% to 72%.
+
+The deficit term and its first derivative in ``\mu_S`` vanish at saturation, so
+the cloud fraction remains continuously differentiable there, and the floor
+leaves saturated air unchanged. Subsaturated air with detrained or residual
+condensate therefore stays patchy, and quiescent saturated decks become
+overcast.
+
+The two floors and the deficit normalization of the excess enter the cloud
+fraction only. The microphysics nodes keep the ramp width ``\alpha \sigma_S``,
+so where a floor or the deficit widens the normalization, the cloud fraction is
+smaller than the fraction of the node distribution that carries condensate. The
+precipitation shaft is assigned by node weight (`set_precip_fraction!`), so
+conservation holds whether or not the two fractions agree.
+
+Microphysical rates are evaluated at each node and aggregated linearly, which
+preserves total water and total energy at the subdomain level because the bulk
+rates preserve them pointwise.
 
 The one-moment microphysics nodes are placed from the conditional moments of
 the Gaussian. Every quantity the one-moment evaluator reads at a node is a
@@ -707,6 +795,30 @@ with ``\gamma = \partial q_{\mathrm{sat}}/\partial T``, so neither the nodes nor
 the cloud fraction need a quadrature pass.
 The zero-moment microphysics is integrated with the Gauss–Hermite tensor rule.
 
+The slope ``\alpha`` of the condensate ramp ``\max(0, \lambda + \alpha S')`` is
+the variance fidelity ``\alpha_{\mathrm{Da}} \alpha_{\mathrm{eq}}``
+(`sgs_variance_fidelity`). The Damköhler factor
+``\alpha_{\mathrm{Da}} = 1 / (1 + A \tau_{\mathrm{mp}} c_d \sqrt{\mathrm{TKE}} / l)``
+compares the microphysical relaxation time ``\tau_{\mathrm{mp}}`` with the
+turbulent mixing time ``l / (c_d \sqrt{\mathrm{TKE}})``, scaled by ``A``
+(`cloud_fraction_steepness_scale`): it is one in quiescent air and tends to zero
+where mixing homogenizes the condensate faster than the microphysics restores
+its spread. The equilibrium-ratio factor
+``\alpha_{\mathrm{eq}} = r / (w_{\mathrm{eq}} + (1 - w_{\mathrm{eq}}) r)``, with
+``r = (q_c + q_{\min}) / (q_{c,\mathrm{eq}} + q_{\min})`` and the weight
+``w_{\mathrm{eq}}`` (`sgs_fidelity_equilibrium_weight`), scales the ramp width
+with the condensate relative to its equilibrium value: it is one at
+equilibrium, ``r / w_{\mathrm{eq}}`` for ``q_c \ll q_{c,\mathrm{eq}}``, and
+``1 / (1 - w_{\mathrm{eq}})`` for ``q_c \gg q_{c,\mathrm{eq}}``. With `sgs_variance_fidelity_model: updraft`
+(PrognosticEDMFX with non-equilibrium microphysics), the ramp width is instead
+set by the in-cloud condensate of the updrafts,
+``\alpha \sigma_S = c_u q_{c,\mathrm{up}}``, bounded to
+``[\alpha_{\min}, 1/(1 - w_{\mathrm{eq}})]`` and blended in by the updrafts'
+cloud cover and EDMF lower area-limiter factor (`updraft_variance_fidelity`): in
+cumulus, environmental cloud is mostly detrained, and its spread follows the
+updraft condensate rather than the variance closure. ``c_u = 0.6`` is
+provisional, from FastEddy BOMEX and SGP environment liquid.
+
 The rule follows from the shape of the integrand: the
 node evaluator is piecewise linear in ``S'`` between the three edges, so the
 edges set where the nodes go. It was developed offline
@@ -727,12 +839,13 @@ by a guarded Aitken ``\Delta^2`` extrapolation, which is applied only when
 successive increments change sign, so that the accelerated value lies between
 computed iterates.
 
-The grid-mean cloud fraction is the volume-fraction-weighted sum
-``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation the
-cloud fraction is a single-domain quantity: the environment's PDF
-inversion is applied to the grid-mean cloud condensate,
-``f_c = f_c^0\!\left(a^0 q_c^0 + \sum_j a^j q_c^j\right)``, with no area weighting and
-no separate draft term.
+The grid-mean cloud fraction is the area-fraction-weighted sum
+``f_c^{\mathrm{tot}} = a^0 f_c^0 + \sum_j a^j f_c^j``
+(`_edmf_weight_cloud_fraction!`), where ``f_c^0`` is the truncated-Gaussian
+cover of the environment cloud condensate ``q_c^0`` and ``f_c^j``
+(`_updraft_cloud_fraction`) is binary under equilibrium microphysics and the
+truncated-Gaussian cover against the updraft vapor subsaturation deficit under
+non-equilibrium microphysics.
 
 !!! note "Under active development"
 
@@ -746,8 +859,8 @@ no separate draft term.
     with the microphysics coupling in
     [Microphysics](microphysics.md); the configuration keys are `cloud_model`,
     `use_sgs_quadrature`, `sgs_distribution`, `quadrature_order`,
-    `tq_correlation_model` (default `diagnosed`), and `sgs_variance_curvature`
-    (default `false`).
+    `tq_correlation_model` (default `diagnosed`), `sgs_variance_curvature`
+    (default `false`), and `sgs_variance_fidelity_model` (default `equilibrium`).
 
 ## Boundary conditions
 
@@ -881,6 +994,7 @@ covariance, quadrature and cloud-fraction closures,
 | ``r_{\Delta x,\theta}``, ``r_{v,\theta}``, ``r_{h,\theta q}``                                   | `sgs_variance_theta_horizontal_scale_ratio`, `sgs_variance_theta_vertical_scale_ratio`, `sgs_variance_horizontal_cross_correlation`                                                                                                  | —, —, —                                                                                                 |
 | ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
 | ``c``                                                                                           | `sgs_displacement_truncation` (displacement truncation, in standard deviations)                                                                                                                                                      | —                                                                                                       |
+| ``\sigma_{\mathrm{abs}}``, ``\varepsilon_{\mathrm{rel}}``                                       | `cloud_fraction_sigma_abs`, `cloud_fraction_eps_rel` (absolute and deficit floors of the cloud-fraction width)                                                                                                                       | `cloud_fraction_sigma_abs`, `cloud_fraction_eps_rel` (ClimaParams default `0.02` superseded by `0`)     |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of

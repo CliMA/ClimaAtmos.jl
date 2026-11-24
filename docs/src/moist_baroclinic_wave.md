@@ -38,10 +38,9 @@ Each piece sets one part of the case:
 
   - `SphereGrid(FT; h_elem = 6, z_elem = 10)` is a cubed sphere with 6
     elements along each panel edge, about 550 km between grid points, and 10
-    levels up to 30 km. The levels are stretched by default
-    (`z_stretch = true`): the lowest is 500 m thick (`dz_bottom`), and they
-    thicken with height. [Running Global Simulations](global_simulations.md)
-    explains how `h_elem` sets the resolution.
+    uniform levels up to 30 km (`z_stretch = false`, the constructor default).
+    [Running Global Simulations](global_simulations.md) explains how `h_elem`
+    sets the resolution and how `z_stretch = true` refines the boundary layer.
   - [`MoistBaroclinicWave`](@ref ClimaAtmos.Setups.MoistBaroclinicWave) sets
     the initial state. `deep_atmosphere = true` builds it for the
     deep-atmosphere equations, which `SphereGrid` uses by default.

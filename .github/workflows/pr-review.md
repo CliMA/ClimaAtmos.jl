@@ -15,10 +15,9 @@ tools:
   cache-memory: true
   github:
     toolsets: [default, pull_requests]
-  web-fetch:
 runtimes:
   julia:
-    version: "1.11"
+    version: "1.13"
 safe-outputs:
   noop:
   create-pull-request-review-comment:

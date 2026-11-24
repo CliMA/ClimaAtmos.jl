@@ -57,3 +57,28 @@ config_err = ErrorException("File $(CA.normrelpath(file)) is empty or missing.")
     @test isempty(missing_help)
     @test isempty(missing_value)
 end
+
+@testset "`AtmosNumerics` upwinding validation" begin
+    num = CA.AtmosNumerics(;
+        energy_humidity_upwinding = :first_order,
+        edmfx_mse_humidity_upwinding = :none,
+    )
+    @test num.energy_humidity_upwinding === Val(:first_order)
+    @test num.edmfx_mse_humidity_upwinding === Val(:none)
+
+    # Removed keys are rejected as unrecognized keywords.
+    @test_throws MethodError CA.AtmosNumerics(;
+        energy_q_tot_upwinding = :first_order,
+    )
+    @test_throws MethodError CA.AtmosNumerics(;
+        edmfx_mse_q_tot_upwinding = :none,
+    )
+
+    # Updraft reconstructions accept only `:none` and `:first_order`.
+    @test_throws ErrorException CA.AtmosNumerics(;
+        edmfx_mse_humidity_upwinding = :vanleer_limiter,
+    )
+    @test_throws ErrorException CA.AtmosNumerics(;
+        edmfx_tracer_upwinding = :third_order,
+    )
+end

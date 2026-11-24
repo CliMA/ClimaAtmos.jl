@@ -2,7 +2,7 @@
 agents:
   queue: clima
   slurm_time: 14:00:00
-  modules: climacommon/2025_05_15
+  modules: climacommon/2026_11_06-1.13.3
 
 env:
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "97e24f95a29bcdcb1d08e7e31feef0b9a1e1e631"
+  COUPLER_COMMIT: "ff8318886e257c33b864b09c540f74f718ebcd58"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
   # Packages whose [compat] bounds are dropped from the coupler projects at
@@ -70,7 +70,7 @@ steps:
     env:
       CLIMACOMMS_DEVICE: "CUDA"
       # Fallback used when no passing main build metadata is available yet.
-      BASELINE_SYPD: "0.279"
+      BASELINE_SYPD: "0.252"
       MIN_PERCENT_CHANGE: "-1"
     agents:
       slurm_gpus_per_task: 1

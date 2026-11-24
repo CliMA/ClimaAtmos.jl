@@ -104,6 +104,7 @@ function make_1m_subcol_simulation(;
             "initial_condition" => "DYCOMS_RF02",
             "microphysics_model" => "1M",
             "config" => "column",
+            "z_stretch" => false,
             "output_default_diagnostics" => false,
             "dt_subcol" => "10mins",
             "cosp_n_subcolumns" => cosp_n_subcolumns,

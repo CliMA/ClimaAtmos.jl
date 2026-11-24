@@ -36,6 +36,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
     @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
     @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
+    @safetestset "AtmosphericProfilesLibrary" begin @time include("atmospheric_profiles_library.jl") end
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
@@ -69,6 +70,8 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
+    @safetestset "Consistent energy and water transport" begin @time include("prognostic_equations/consistent_transport_tests.jl") end
+    @safetestset "Deferred 1M tendencies" begin @time include("prognostic_equations/deferred_1m_tendency_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
 
     # Conservation tests
@@ -82,10 +85,12 @@ end
 if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
     @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
+    @safetestset "EDMFX updraft reference density" begin @time include("prognostic_equations/updraft_reference_density_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+    @safetestset "EDMFX tail entrainment" begin @time include("prognostic_equations/edmfx_tail_entrainment_tests.jl") end
 end
 
 # ============================================================================
@@ -99,12 +104,16 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
+    @safetestset "Implicit microphysics split tests" begin @time include("parameterized_tendencies/microphysics/implicit_microphysics_split.jl") end
+    @safetestset "Microphysics averaging window" begin @time include("parameterized_tendencies/microphysics/averaging_window.jl") end
     @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
+    @safetestset "0M precipitation evaporation tests" begin @time include("parameterized_tendencies/microphysics/precipitation_evaporation.jl") end
     @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "Updraft variance fidelity tests" begin @time include("parameterized_tendencies/microphysics/updraft_variance_fidelity.jl") end
     @safetestset "Cloud inhomogeneity tests" begin @time include("parameterized_tendencies/microphysics/cloud_inhomogeneity.jl") end
     @safetestset "Displacement length wiring" begin @time include("parameterized_tendencies/microphysics/displacement_length_wiring.jl") end
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
@@ -120,10 +129,14 @@ if TEST_GROUP in ("parameterizations", "all")
     # Full-physics sphere simulation
     @safetestset "Checkbounds sphere simulation" begin @time include("checkbounds_sphere_simulation.jl") end
 
-    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
-    # build). The simulation-based Beres tests (test_beres_single_column.jl,
-    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
+    # Gravity wave: Beres convective NOGW and orographic OGW pure-function unit
+    # tests (no simulation build). Simulation-based gravity-wave tests run as
+    # standalone Buildkite steps.
     @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
+    @safetestset "OGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_unit.jl") end
+    @safetestset "OGW blocked drag unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_blocked_drag.jl") end
+    @safetestset "OGW TOFD unit tests" begin @time include("parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_tofd.jl") end
+    @safetestset "AD99 NOGW momentum budget" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_ad99_momentum_budget.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included

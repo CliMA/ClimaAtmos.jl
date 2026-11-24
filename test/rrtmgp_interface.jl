@@ -255,3 +255,91 @@ end
     end
     @test isnothing(CA.set_sw_cloud_optical_depth_factor!(Y, (; radiation = (;))))
 end
+
+@testset "Aerosol droplet activation closure" for FT in (Float32, Float64)
+    cmc = CA.cloud_parameters(FT)
+    N₀ = cmc.N_cloud_liquid_droplets
+    z = zero(FT)
+    # Default calibration coefficients are zero, so any state returns N₀.
+    @test @inferred(RRTMGPI.ml_N_cloud_liquid_droplets(cmc, z, z, z, z)) ≈ N₀
+
+    # Positive calibration coefficients stay in [N₀ / 3, 3 N₀], equal N₀ at the
+    # reference state, and floor inputs at 1e-3 of the reference values.
+    aml = cmc.aml
+    α_active = (;
+        α_dust = FT(0.04),
+        α_seasalt = FT(0.12),
+        α_SO4 = FT(0.18),
+        α_q_liq = FT(0.09),
+    )
+    with_α(k) = merge(cmc, (; aml = merge(aml, map(α -> k * α, α_active))))
+    cmc_active = with_α(1)
+    @test @inferred(
+        RRTMGPI.ml_N_cloud_liquid_droplets(
+            cmc_active,
+            aml.c₀_dust,
+            aml.c₀_seasalt,
+            aml.c₀_SO4,
+            aml.q₀_liq,
+        ),
+    ) ≈ N₀
+    N_floor = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        FT(1e-3) * aml.c₀_dust,
+        FT(1e-3) * aml.c₀_seasalt,
+        FT(1e-3) * aml.c₀_SO4,
+        FT(1e-3) * aml.q₀_liq,
+    )
+    N_zero = RRTMGPI.ml_N_cloud_liquid_droplets(cmc_active, z, z, z, z)
+    N_neg = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        -aml.c₀_dust,
+        -aml.c₀_seasalt,
+        -aml.c₀_SO4,
+        -aml.q₀_liq,
+    )
+    N_high = RRTMGPI.ml_N_cloud_liquid_droplets(
+        cmc_active,
+        one(FT),
+        one(FT),
+        one(FT),
+        one(FT),
+    )
+    @test N_zero == N_floor
+    @test N_neg == N_floor
+    @test N₀ / 3 <= N_zero < N₀
+    @test N₀ < N_high <= 3 * N₀
+
+    # Negative coefficients reverse the response, so the floor sets the largest
+    # value; large coefficients saturate at the bounds N₀ / 3 and 3 N₀.
+    N_zero_neg_α = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(-1), z, z, z, z)
+    @test N₀ < N_zero_neg_α <= 3 * N₀
+    N_sat_low = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(100), z, z, z, z)
+    N_sat_high = RRTMGPI.ml_N_cloud_liquid_droplets(with_α(-100), z, z, z, z)
+    @test N_sat_low ≈ N₀ / 3 rtol = 10 * eps(FT)
+    @test N_sat_high ≈ 3 * N₀ rtol = 10 * eps(FT)
+end
+
+@testset "Aerosol bin sums" for FT in (Float32, Float64)
+    (; cent_space) = get_cartesian_spaces(; FT)
+    names = (:SSLT01, :SSLT02, :SO4)
+    aerosol_field = similar(
+        Fields.coordinate_field(cent_space),
+        NamedTuple{names, NTuple{3, FT}},
+    )
+    fill!(aerosol_field.SSLT01, FT(1e-9))
+    fill!(aerosol_field.SSLT02, FT(2e-9))
+    fill!(aerosol_field.SO4, FT(4e-9))
+    ᶜconc = zeros(cent_space)
+    c₀ = FT(1e-8)
+    seasalt_bins = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
+    dust_bins = (:DST01, :DST02, :DST03, :DST04, :DST05)
+
+    # Present bins are summed; absent species and absent aerosols give c₀.
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, seasalt_bins, c₀)
+    @test all(≈(FT(3e-9)), parent(ᶜconc))
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, aerosol_field, dust_bins, c₀)
+    @test all(==(c₀), parent(ᶜconc))
+    RRTMGPI.sum_aerosol_bins!(ᶜconc, nothing, seasalt_bins, c₀)
+    @test all(==(c₀), parent(ᶜconc))
+end

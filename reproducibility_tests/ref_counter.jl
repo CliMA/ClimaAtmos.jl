@@ -1,4 +1,4 @@
-446
+479
 
 # **README**
 #
@@ -32,6 +32,225 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+479
+- Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
+  its two cells, the non-orographic damping layer spans at least the top three cells,
+  the non-orographic drag is limited by its magnitude instead of per component, and the
+  buoyancy frequency in the bottom and top cells uses a one-sided `dT/dz`
+  (non-orographic and orographic). Changes the output of every run with gravity-wave
+  drag enabled.
+
+478
+- Update to CloudMicrophysics 0.51: 1-moment rain collisions ramp rain freezing below freezing (`temperature_rain_collision_snow`), melt collected cloud ice above freezing (`S_accr_melt_icl_rai`), and melt snow in rain collisions only thermally; the other 1-moment tendencies change by roundoff.
+
+477
+- Switching off snow deposition growth when in clouds
+
+476
+- `toml/default_parameters.toml` sets `cloud_fraction_eps_rel = 0.05`, the
+  floor of the cloud-fraction width at 5% of the subsaturation deficit, which
+  lowers the cloud fraction of trace condensate in subsaturated air. Changes
+  the output of the moist jobs that use this TOML with the `quadrature` cloud
+  model.
+
+475
+- `toml/default_parameters.toml` (renamed from `prognostic_edmfx_1M.toml`)
+  replaces most case parameter files.
+
+474
+- 1M `PrognosticEDMFX`: `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` set `edmf_buoyancy_clear_env_weight =
+  1`, so the updraft buoyancy is referenced to the clear part of the
+  environment, blended with its mean by the environment clear fraction.
+  Changes the output of the jobs that use these TOMLs.
+
+473
+- `prognostic_edmfx_1M.toml` matches ClimaCoupler's `amip_progedmf_1m.toml`:
+  Changes the output of every job that uses this parameter file.
+
+472
+- Tail entrainment on by default for the prognostic EDMF updraft
+  (`edmf_tail_entr_fraction = 0.5`). Changes the output of every
+  prognostic EDMF job with SGS covariances.
+
+471
+- The linearized saturation-excess width `σ_S` is evaluated as
+  `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`, and the temperature
+  regression on the saturation excess clamps the correlation of `T′` and `S′`
+  to `[−1, 1]`. Changes the output of runs that use `σ_S` (the
+  truncated-Gaussian cloud fraction and the 1M SGS closures): at rounding
+  level in general, and in the node temperatures where `σ_q ≈ γ σ_T` and
+  `corr ≈ 1`.
+
+470
+- Turbulent lateral entrainment `turb_entr_param_vec = [0.007, 400.0]` in
+  `prognostic_edmfx_1M.toml` and `prognostic_edmfx_1M_mlcloud.toml`. Changes the
+  output of every job that uses these parameter files.
+
+469
+- Non-orographic gravity-wave drag (AD99 and Beres): waves unstable at the launch
+  level deposit their momentum in the first layer above it instead of being dropped,
+  waves meeting an exact critical level deposit their momentum, and the momentum that
+  escapes through the model top is spread over the damping layer as a mass-weighted
+  uniform acceleration. Changes the output of every run with
+  `non_orographic_gravity_wave` enabled.
+
+468
+- Orographic gravity-wave drag: the blocked (non-propagating) drag accumulates
+  the WKB phase layer by layer and uses `wtsum = Σ Δp·weight` (GFDL
+  `topo_drag`) with each cell's own pressure thickness (hydrostatic pressures on
+  the bottom and top faces), starts the blocked layer in the first cell above the
+  PBL-top cell and counts the phase from that cell's top face (as GFDL does) on any
+  vertical grid, and the forcing limiter
+  caps the vector magnitude at `3e-3·√2 m/s²` instead of clamping each component,
+  and the turbulent
+  orographic form drag (IFS form, `ogw_tofd_coefficient = 2.7` from ClimaParams
+  1.3.9) is on by default when `topography` is `Earth`. Changes the output of
+  `aquaplanet_equil_allsky_gw_raw`.
+
+467
+- Fused slab and column loops (advection, the turbulent and hyperdiffusive
+  fluxes, the viscous sponge, the implicit-stage solves, the Jacobian, the
+  gravity wave drag, AMD) change the order of floating-point operations.
+
+466
+- Two approximate linear-solve iterations and stage-wise state constraints
+  by default; unified implicit vertical transport across dry and moist models
+  with central `ᶠρ u³ ᶠinterp(e_tot) + u³ ᶠinterp(p)`, `q_tot`, and sedimenting
+  microphysics tracers in the Newton residual (with central velocity Jacobian
+  blocks), first-order upwind `ρtke` in the Newton residual with tridiagonal
+  advection-diffusion-dissipation diagonal (omitting velocity blocks so `u³`
+  sign reversals preserve M-matrix positivity), and post-Newton
+  `1 + 2 C_γ`-weighted implicit first-order upwind dissipation plus
+  Courant-limited `energy_humidity_upwinding` antidiffusion (Zalesak-limited for
+  `vanleer_limiter`) on `e_tot - Φ`, `q_tot`, and sedimenting tracers at the
+  solved velocity; `dt`-independent van Leer slopes (`zero(dt)`); stage-weighted
+  surface precipitation fluxes and slab-ocean coupling; backward-Euler damping
+  of parallel-decelerating orographic gravity-wave drag and `NaN` / zero-weight
+  mask guard in `calc_nonpropagating_forcing!`; incremental implicit-stage
+  condensate predictor, two-pass updraft area predictor, Picard cache refresh,
+  per-species condensate and `q_tot` floors in 1M microphysics, Beres latent
+  heating, and non-equilibrium thermodynamics, and floor plus proportional
+  rescaling of updraft condensates to `q_totʲ` after the Picard microphysics
+  increment (`rescale_condensates_to_total!`); stabilized implicit 1M
+  microphysics Jacobian (`-Γ · C / q_sat` saturation feedback, `Float32`-safe
+  denominator floors, `SGSQuadrature` `INP_limiter` unblocking, and
+  `PrognosticEDMFX` `(c.ρq_x, c.sgsʲs.:(1).q_x)` off-diagonal coupling); and
+  non-negative clamping of grid-mean, updraft, and environment sedimentation
+  fluxes. All change results.
+
+465
+- The `TRMM_LBA` radiation takes the height profile at the current time and interpolates
+  it in height on every device. This changes SCM TRMM results at the level of Float32
+  rounding.
+
+464
+- Implicit Jacobian for 1M rain evaporation (`ρq_rai` diagonal: `tend/q_rai`)
+  and snow sublimation/deposition (`ρq_sno` diagonal: `tend/q_sno` for
+  sublimation; ventilation-integral prefactor `C = 4πn₀G/(ρλ²)·vent` for
+  deposition, computed without dividing by S).
+
+463
+- `TRMM_LBA_RH` is a fraction instead of a percentage. This changes SCM TRMM
+  results at the level of Float32 rounding.
+
+462
+- 1M rain and snow are placed on the precipitation shaft by default
+  (`sgs_precip_incloud_fraction = 1`, `sgs_precip_fraction_floor = 0.1`).
+
+461
+- Update dependencies for v0.42.18
+
+460
+- CI moves from Julia 1.11 to 1.13.3, which changes results.
+
+459
+- When `diff_mode == Implicit()`, `edmfx_tke_tendency!` (shear, buoyancy,
+  pressure-drag, detrainment shear-mixing) runs in the implicit stage next
+  to `edmfx_sgs_diffusive_flux_tendency!`, so production and dissipation
+  share the Newton iterate. The Jacobian is unchanged.
+- Remove clipping of zenith angle
+
+458
+- Prescribed temperature tendencies (large-scale advection and radiative
+  cooling, the TRMM-LBA heating rate, file-driven forcings and nudging) and
+  the Held–Suarez thermal relaxation are converted to energy with the isobaric
+  heat capacity (`cp_m`, `cp_d`), which changes `prognostic_edmfx_rico_column`,
+  `prognostic_edmfx_trmm_column`, and `held_suarez_equil`.
+
+457
+- The 1M `rain_terminal_velocity` default flips from `Fixed` to `Chen2022`,
+  so rain now falls at the state-dependent Chen et al. (2022) speed by
+  default, matching snow.
+- The implicit sedimentation Jacobian for rain and snow (`ρq_rai`, `ρq_sno`,
+  and the first-updraft `q_rai`, `q_sno` under `PrognosticEDMFX`) uses the
+  running column max of the species' terminal velocity in the derivative
+  instead of the pointwise `w(q^n)`, so one Newton iteration carries
+  rain/snow across multiple cells at CFL > 1. Tendency unchanged. Cloud
+  liquid and cloud ice keep the pointwise `w`.
+
+456
+- Added smooth maximum on rain and snow sedimentation velocity. This changes
+  SCM TRMM results
+
+455
+- `numerics_sphere_he6ze10.yml` stretches its 10 levels with `dz_top: 6500.0`,
+  `prognostic_edmfx_aquaplanet` takes the 31-level grid of
+  `numerics_sphere_he6ze31.yml`, and the single-column CI jobs on
+  `numerics_column_ze63.yml` use `numerics_column_ze79.yml`.
+- The prognostic EDMF column cases use stretched grids whose spacing follows
+  `numerics_column_ze79.yml` up to their own `z_max`.
+
+454
+- `implicit_microphysics: true` (default) now additionally routes 1M
+  `cloud_liquid_formation` and `cloud_ice_formation` to a second CM BMT
+  call driven by `microphysics_1m_implicit_params`, applied as
+  `ᶜmp_tendency_implicit` with a `−dtγ / τ_cond` and `−dtγ / τ_subl`
+  Jacobian on the `q_lcl` / `q_icl` diagonals. The
+  `cloud_liquid_formation: ImplicitCloudLiquidFormation` string is removed.
+  The default of `update_cache_every` also flips from `"step"` to
+  `"stage"`, so `set_precomputed_quantities!` fires once per IMEX stage
+  instead of once per step; the 1M `allocs_limit` entries in `perf/flame.jl`
+  (`flame_default_1m`, `flame_aquaplanet_progedmf_1m`) are bumped to
+  accommodate this.
+
+453
+- The cloud-fraction width is floored by `σ_abs` alone; condensate is
+  partitioned into its equilibrium part, normalized by that width, and the
+  non-equilibrium excess, normalized with the subsaturation deficit of the
+  cloud-available water; the updraft cover is evaluated against the updraft
+  vapor deficit and sets the updraft's in-cloud variance in the shortwave
+  inhomogeneity factor, and under `PrognosticEDMFX` the θ→T Jacobian, the
+  curvature slope, the moisture-variance bound and the correlation guard are
+  evaluated at the environment state.
+
+452
+- Stretched vertical grids use the two-scale
+  `BoundaryLayerHyperbolicTangentStretching` rule with `dz_top` and `z_pbl`,
+  so every stretched CI grid changes (#4949).
+
+451
+- The fused covariance loop reads the surface TKE at the first level, and
+  `ᶜbuoygrad` is written for models without covariances.
+
+450
+- Fused column loops (`DataLayouts.foreach_column`) for the implicit and explicit
+  tendencies, the precomputed quantities and caches (including the SGS covariance
+  cache and cloud fraction), and the manual sparse Jacobian.
+
+449
+- Release v0.42.17: SurfaceFluxes v1.5.1 -> v1.6.0, ClimaCore v1.0.4 -> v1.0.6.
+
+448
+- 1M `cloud_liquid_formation` now defaults to `CloudLiquidFormation` (explicit
+  via CM's bulk-averaged tendency); the new `ImplicitCloudLiquidFormation`
+  routes it through an SGS-integrated implicit source with a `−dtγ / τ_cond`
+  Jacobian diagonal.
+
+447
+- Snow falls at the Chen et al. (2022) speed by default;
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 200.
+
 446
 - Include condensate and precipitation sedimentation enthalpy and mass-source
   dilution in `PrognosticEDMFX` updraft `mse` and `ρaʲ`, clamp laterally

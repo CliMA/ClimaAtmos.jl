@@ -1,3 +1,6 @@
+# Mutable (with const fields) so that closures and containers hold a pointer to the cache
+# instead of an inline copy, which is much cheaper to compile.
+
 """
     AtmosCache
 
@@ -45,8 +48,9 @@ state and may be overwritten by any function.
   - `conservation_check`: Column-integrated precipitation energy tendency, used for
     the conservation check with a prognostic surface temperature.
 """
-struct AtmosCache{
+mutable struct AtmosCache{
     FT,
+    MAW,
     AM,
     NUM,
     CAP,
@@ -67,52 +71,63 @@ struct AtmosCache{
     CONSCHECK,
 }
     # Timestep of the simulation (in seconds); also used by callbacks and tendencies
-    dt::FT
+    const dt::FT
+
+    # Implicit stage window `γ · dt`, resolved from the ODE scheme at
+    # construction (`imex_gamma`); zero for schemes without a single-γ DIRK
+    # diagonal (fully explicit, variable-γ ESDIRK). Read by the 1M microphysics
+    # cache when `mp_averaging isa StageAveraging`.
+    const dtγ::FT
+
+    # Dispatch tag selecting the 1M bulk-tendency averaging window
+    # (`StepAveraging` ⇒ `dt`, `StageAveraging` ⇒ `dtγ`). Baked in at
+    # construction from `update_cache_every` and the scheme's γ availability.
+    const mp_averaging::MAW
 
     # AtmosModel
-    atmos::AM
+    const atmos::AM
 
     # Limiter
-    numerics::NUM
+    const numerics::NUM
 
     # ClimaAtmosParameters that have to be used
-    params::CAP
+    const params::CAP
 
     # Variables that are used generally, such as ᶜΦ
-    core::COR
+    const core::COR
 
     # Used by update_surface_conditions! in set_precomputed_quantities! and coupler
-    sfc_setup::SFC
+    const sfc_setup::SFC
 
     # Center and face ghost buffers used by DSS
-    ghost_buffer::GHOST
+    const ghost_buffer::GHOST
 
     # Quantities that are updated with set_precomputed_quantities!
-    precomputed::PREC
+    const precomputed::PREC
 
     # Pre-allocated areas of memory to store temporary values
-    scratch::SCRA
+    const scratch::SCRA
 
     # Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
     # ghost buffers for DSS
-    hyperdiff::HYPE
+    const hyperdiff::HYPE
 
     # Additional parameters used by the various tendencies
-    external_forcing::EXTFORCING
-    non_orographic_gravity_wave::NONGW
-    orographic_gravity_wave::ORGW
-    radiation::RAD
-    tracers::TRAC
+    const external_forcing::EXTFORCING
+    const non_orographic_gravity_wave::NONGW
+    const orographic_gravity_wave::ORGW
+    const radiation::RAD
+    const tracers::TRAC
 
     # Net energy flux coming through top of atmosphere and surface
-    net_energy_flux_toa::NETFLUXTOA
-    net_energy_flux_sfc::NETFLUXSFC
+    const net_energy_flux_toa::NETFLUXTOA
+    const net_energy_flux_sfc::NETFLUXSFC
 
     # Predicted steady-state velocity, if `check_steady_state` is `true`
-    steady_state_velocity::SSV
+    const steady_state_velocity::SSV
 
     # Conservation check for prognostic surface temperature
-    conservation_check::CONSCHECK
+    const conservation_check::CONSCHECK
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
@@ -154,6 +169,17 @@ gravity waves, radiation, tracers).
   - `steady_state_velocity`: Predicted steady-state velocity for the
     `check_steady_state` diagnostic, or `nothing`.
 
+# Keyword Arguments
+
+  - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
+    explicit), used to extract `dtγ`, `b_imp` stage weights, and the
+    `compensate_explicit_scalar_advection` flag.
+  - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
+    stage-weighted surface precipitation accumulator and scalar advection
+    dissipation weight.
+  - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
+    or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
+
 # Returns
 
 A fully initialized `AtmosCache`.
@@ -164,10 +190,24 @@ function build_cache(
     params,
     dt,
     start_date,
-    steady_state_velocity,
+    steady_state_velocity;
+    ode_algo = nothing,
+    jacobian = ManualSparseJacobian(),
+    update_cache_every = "step",
 )
     FT = eltype(params)
     dt = FT(dt)
+    γ = imex_gamma(ode_algo)
+    if ode_algo isa CTS.IMEXAlgorithm &&
+       any(!iszero, LinearAlgebra.diag(ode_algo.tableau.a_imp))
+        !isnothing(γ) || error(
+            "IMEX tableau must have a single non-zero diagonal γ for p.dtγ",
+        )
+    end
+    dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
+    mp_averaging =
+        (update_cache_every == "stage" && !isnothing(γ)) ?
+        StageAveraging() : StepAveraging()
 
     aerosol_names = atmos.radiation.aerosol_names
     time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
@@ -234,6 +274,9 @@ function build_cache(
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
         ᶜf³,
         ᶠf¹²,
+        # ∂ξ³/∂x³ on faces: a vertical flux is CT3(ᶠ∂ξ³∂x³ * w), the value that
+        # converting WVector(w) computes from the 3x3 inverse of ∂x∂ξ
+        ᶠ∂ξ³∂x³ = (lg -> parent(lg.∂ξ∂x)[3, 3]).(Fields.local_geometry_field(Y.f)),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry),
@@ -241,7 +284,45 @@ function build_cache(
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = atmos.surface.boundary_overrides
-    scratch = temporary_quantities(Y, atmos)
+    has_noneq_precip =
+        atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+            NonEquilibriumMicrophysics2MP3,
+        }
+    b_imp_stages, n_imp_stages =
+        (jacobian isa ManualSparseJacobian && has_noneq_precip) ?
+        imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
+    if atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature &&
+       has_noneq_precip &&
+       !iszero(dtγ) &&
+       n_imp_stages == 0
+        @warn(
+            "Stage-weighted surface precipitation accumulator is disabled for \
+             this solver/Jacobian configuration; `SlabOceanTemperature` \
+             receives only the pointwise stage flux while the atmosphere \
+             applies the post-solve sedimentation increment."
+        )
+    end
+    compensate_explicit_scalar_advection =
+        !iszero(dtγ) &&
+        (
+            jacobian isa ManualSparseJacobian || (
+                jacobian isa AutoSparseJacobian &&
+                atmos.microphysics_model isa DryModel &&
+                atmos.diff_mode != Implicit()
+            )
+        ) &&
+        ode_algo isa CTS.IMEXAlgorithm &&
+        !isnothing(ode_algo.newtons_method) &&
+        isnothing(ode_algo.newtons_method.krylov_method)
+    scratch = temporary_quantities(
+        Y,
+        atmos;
+        b_imp_stages,
+        n_imp_stages,
+        compensate_explicit_scalar_advection,
+    )
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments = (;
@@ -252,6 +333,8 @@ function build_cache(
         precomputed,
         scratch,
         dt,
+        dtγ,
+        mp_averaging,
         conservation_check,
         external_forcing,
     )
@@ -278,8 +361,9 @@ function build_cache(
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
-    args = (
-        dt,
+    # `dt` and `dtγ` share `FT`; `mp_averaging`'s type is its own parameter.
+    # The remaining 18 args supply the parametric slots of `AtmosCache`.
+    parametric_args = (
         atmos,
         numerics,
         params,
@@ -300,7 +384,9 @@ function build_cache(
         conservation_check,
     )
 
-    return AtmosCache{map(typeof, args)...}(args...)
+    return AtmosCache{FT, typeof(mp_averaging), map(typeof, parametric_args)...}(
+        dt, dtγ, mp_averaging, parametric_args...,
+    )
 end
 
 
@@ -315,11 +401,11 @@ spherical geometry, the horizontal component `ᶠf¹²` is also nonzero. On a pl
 `nothing`. Called from `build_cache`.
 """
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
-    if eltype(ᶜcoord) <: Geometry.LatLongZPoint
+    if issphere(axes(ᶜcoord))
         Ω = CAP.Omega(params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
         if global_geom isa Geometry.DeepSphericalGlobalGeometry
-            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
+            coriolis_deep(coord) = Geometry.LocalVector(
                 Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
                 global_geom,
                 coord,
@@ -327,8 +413,7 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
             ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
             ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
         else
-            coriolis_shallow(coord::Geometry.LatLongZPoint) =
-                Geometry.WVector(2 * Ω * sind(coord.lat))
+            coriolis_shallow(coord) = Geometry.WVector(2 * Ω * sind(coord.lat))
             ᶜf³ = @. CT3(coriolis_shallow(ᶜcoord))
             ᶠf¹² = nothing
         end

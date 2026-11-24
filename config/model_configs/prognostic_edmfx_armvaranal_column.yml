@@ -22,15 +22,15 @@ microphysics_model: "1M"
 config: "column"
 hyperdiff: ~
 z_max: 15e3 # ARM VARANAL data extends to ~16 km (100 hPa).
-z_elem: 45
-z_stretch: true
-dz_bottom: 30
+z_elem: 63
+dz_bottom: 28.0
+dz_top: 1130.0
 perturb_initstate: false
 dt: "120secs"
 dt_rad: "120mins"
 t_end: "4days"
 ode_algo: "ARS222"
-toml: [toml/prognostic_edmfx_varanal_sgp.toml]
+toml: [toml/default_parameters.toml, toml/prognostic_edmfx_varanal_sgp.toml]
 rad: allskywithclear
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

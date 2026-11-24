@@ -140,6 +140,8 @@ config.parsed_args["nh_poly"] = 3
 config.parsed_args["z_max"] = 42e3
 config.parsed_args["z_elem"] = 33
 config.parsed_args["dz_bottom"] = 300.0
+# This grid lies outside the range the two-scale stretching admits.
+config.parsed_args["z_stretch"] = false
 config.parsed_args["orographic_gravity_wave"] = "gfdl_restart"
 config.parsed_args["topography"] = "Earth";
 (; parsed_args) = config

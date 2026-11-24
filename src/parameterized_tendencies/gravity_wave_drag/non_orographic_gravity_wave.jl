@@ -2,6 +2,7 @@
 ##### Non-orographic gravity wave parameterization
 #####
 using UnrolledUtilities
+import ClimaCore.DataLayouts
 import ClimaCore.Domains
 import ClimaCore.Meshes
 import ClimaCore.Spaces as Spaces
@@ -11,7 +12,7 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(mp_bulk, mp_imp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
 Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
@@ -29,11 +30,17 @@ transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`, so
 
     Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
 
-with reference-`T₀` constants `L_v` and `L_s`. Called from
-`compute_beres_convective_heating!` when `heating_latent` is enabled.
+with reference-`T₀` constants `L_v` and `L_s`. The 1M species tendencies are the sum of
+two CM BMT calls — one on the bulk parameter set (every explicit process) and one on the
+isolated implicit set (`cloud_liquid_formation` / `cloud_ice_formation` only) — so the
+latent heating reflects every active 1M process regardless of which stage integrates each.
+Condensate inputs are floored at zero and `q_tot` at the condensate sum before evaluating
+`cp_m` and the tendencies. Called from `compute_beres_convective_heating!` when
+`heating_latent` is enabled.
 """
 @inline function _beres_latent_heating(
-    mp,
+    mp_bulk,
+    mp_imp,
     thp,
     ρ,
     T,
@@ -44,10 +51,30 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     q_rai,
     q_sno,
 )
-    src = BMT.bulk_microphysics_tendencies(
+    FT = typeof(ρ)
+    q_lcl = max(zero(FT), q_lcl)
+    q_icl = max(zero(FT), q_icl)
+    q_rai = max(zero(FT), q_rai)
+    q_sno = max(zero(FT), q_sno)
+    q_tot = max(zero(FT), q_tot, q_lcl + q_icl + q_rai + q_sno)
+    src_bulk = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
         BMT.Microphysics1Moment(),
-        mp,
+        mp_bulk,
+        thp,
+        ρ,
+        T,
+        w,
+        q_tot,
+        q_lcl,
+        q_icl,
+        q_rai,
+        q_sno,
+    )
+    src_imp = BMT.bulk_microphysics_tendencies(
+        BMT.InstantaneousVerbose(),
+        BMT.Microphysics1Moment(),
+        mp_imp,
         thp,
         ρ,
         T,
@@ -61,10 +88,11 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     Lv = TD.Parameters.LH_v0(thp)
     Ls = TD.Parameters.LH_s0(thp)
     cpʲ = TD.cp_m(thp, q_tot, q_lcl, q_icl)
-    return (
-        Lv * (src.dq_lcl_dt + src.dq_rai_dt) +
-        Ls * (src.dq_icl_dt + src.dq_sno_dt)
-    ) / cpʲ
+    dq_lcl_dt = src_bulk.dq_lcl_dt + src_imp.dq_lcl_dt
+    dq_icl_dt = src_bulk.dq_icl_dt + src_imp.dq_icl_dt
+    dq_rai_dt = src_bulk.dq_rai_dt + src_imp.dq_rai_dt
+    dq_sno_dt = src_bulk.dq_sno_dt + src_imp.dq_sno_dt
+    return (Lv * (dq_lcl_dt + dq_rai_dt) + Ls * (dq_icl_dt + dq_sno_dt)) / cpʲ
 end
 
 """
@@ -139,6 +167,8 @@ function _beres_cache_fields(Y, ::BeresSourceParams)
 end
 
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
+    # Each run checks its own damping layer once (see `NOGW_DAMP_LAYER_CHECKED`).
+    NOGW_DAMP_LAYER_CHECKED[] = false
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
@@ -166,17 +196,13 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
             gw_nk = Int(nk),
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
-            ᶜdTdz = similar(Y.c.ρ),
             ᶜuv_temp = similar(Y.c, Geometry.UVVector{FT}),
-            ᶜwvec_temp = similar(Y.c, Geometry.WVector{FT}),
             gw_temp_surface = similar(Fields.level(Y.c.ρ, 1)),
             source_ρ_z_u_v_level,
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
             v_waveforcing = similar(Y.c.ρ),
-            u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
-            v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
@@ -246,17 +272,13 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_flag = gw_flag,
             gw_nk = Int(nk),
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
-            ᶜdTdz = similar(Y.c.ρ),
             ᶜuv_temp = similar(Y.c, Geometry.UVVector{FT}),
-            ᶜwvec_temp = similar(Y.c, Geometry.WVector{FT}),
             gw_temp_surface = similar(Fields.level(Y.c.ρ, 1)),
             source_p_ρ_z_u_v_level,
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
             v_waveforcing = similar(Y.c.ρ),
-            u_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
-            v_waveforcing_top = similar(Fields.level(Y.c.ρ, 1)),
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
@@ -285,22 +307,27 @@ integrator step. The `::Nothing` method is a no-op.
 Steps, in order:
 
  1. Compute the buoyancy frequency `N = sqrt(g/T · (dT/dz + g/c_pm))` at cell centers from
-    `p.precomputed.ᶜT` and the moist heat capacity, floored at `sqrt(2.5e-5)` s⁻¹. The
+    `p.precomputed.ᶜT` and the moist heat capacity, floored at `sqrt(2.5e-5)` s⁻¹. `dT/dz`
+    is the difference of the interpolated face temperatures across each cell, one-sided
+    in the bottom and top cells. The
     cache field `ᶜbuoyancy_frequency` holds `N`, not `N²`, once this step completes.
  2. Locate the AD99 launch level per column and record `(ρ, u, v)` there: on a column, the
     level closest to `source_height`; on a sphere, the highest level with
     `p > source_pressure`. On a sphere the damp level is the lowest level with
-    `p < damp_pressure`; on a column it is the model top.
+    `p < damp_pressure`, lowered if needed so the damping layer spans at least
+    `NOGW_MIN_DAMP_CELLS` top cells; on a column it is the top `NOGW_MIN_DAMP_CELLS` cells.
  3. When a Beres source is configured, call `compute_beres_convective_heating!` and
     then locate the Beres launch level, the first level (going up) with `z ≥ gw_ztop`.
  4. Loop over the `gw_nk` horizontal wavenumber bands and, for each, run the shared
     upward-marching kernel `waveforcing_column_accumulate!` for the AD99 source and
     (when configured) again for the Beres source, accumulating both into `uforcing` and
     `vforcing` via `postprocess_and_accumulate!`.
+ 5. Sanitize the forcing with `limit_gravity_wave_forcing!`.
 
 Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
-clobbers several `p.scratch` fields. Described in [alexander1999](@cite) and
-[beres2004](@cite); see the *Non-orographic Gravity Waves* page for the derivations.
+clobbers `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level`.
+Described in [alexander1999](@cite) and [beres2004](@cite); see the *Non-orographic
+Gravity Waves* page for the derivations.
 """
 non_orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
@@ -313,10 +340,8 @@ function non_orographic_gravity_wave_compute_tendency!(
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
     (;
-        ᶜdTdz,
         ᶜbuoyancy_frequency,
         ᶜuv_temp,
-        ᶜwvec_temp,
         damp_level,
         u_waveforcing,
         v_waveforcing,
@@ -333,19 +358,31 @@ function non_orographic_gravity_wave_compute_tendency!(
     thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
 
-    # compute buoyancy frequency
-    # Materialize the WVector into a cache buffer first:
-    @. ᶜwvec_temp = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))
-    ᶜdTdz .= ᶜwvec_temp.components.data.:1
+    # compute the buoyancy frequency N = sqrt(|N²|) [1/s], or sqrt(2.5e-5) s⁻¹ where
+    # N² < 2.5e-5 s⁻², to avoid small numbers
+    # Inside the column, dT/dz is computed as the difference of the interpolated face
+    # temperatures across each cell. However, because ᶠinterp copies the end-cell value
+    # to the boundary face, the bottom and top cells would get only about half the
+    # gradient there. Therefore, a one-sided difference is taken across the face to
+    # their only neighbouring cell instead.
+    n_levels = Spaces.nlevels(axes(Y.c))
+    ᶜface_above = Operators.TopBiasedF2C()
+    ᶜface_below = Operators.BottomBiasedF2C()
+    ᶠdTdz = @. lazy(w_component(Geometry.WVector(ᶠgradᵥ(ᶜT))))
+    ᶜdTdz = @. lazy(
+        ifelse(
+            ᶜlevel == 1,
+            ᶜface_above(ᶠdTdz),
+            ifelse(
+                ᶜlevel == n_levels,
+                ᶜface_below(ᶠdTdz),
+                w_component(Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))),
+            ),
+        ),
+    )
     ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-
-    @. ᶜbuoyancy_frequency =
-        (grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m)
-    @. ᶜbuoyancy_frequency = ifelse(
-        ᶜbuoyancy_frequency < FT(2.5e-5),
-        FT(sqrt(2.5e-5)),
-        sqrt(abs(ᶜbuoyancy_frequency)),
-    ) # to avoid small numbers
+    ᶜN² = @. lazy((grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m))
+    @. ᶜbuoyancy_frequency = ifelse(ᶜN² < FT(2.5e-5), FT(sqrt(2.5e-5)), sqrt(abs(ᶜN²)))
 
     # prepare physical uv input variables for gravity_wave_forcing()
     @. ᶜuv_temp = Geometry.UVVector(Y.c.uₕ)
@@ -353,7 +390,8 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜv = ᶜuv_temp.components.data.:2
 
     if iscolumn(axes(Y.c))
-        # source level: the index of the level that is closest to the source height
+        # source level: the index of the level that is closest to the source height,
+        # the upper of the two when two levels are equally close
         (; gw_source_height, source_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
 
@@ -375,7 +413,8 @@ function non_orographic_gravity_wave_compute_tendency!(
         source_level = source_ρ_z_u_v_level.:5
         # get the ρ,u,v value on the source level
 
-        fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
+        # A column has no damp pressure; the damping layer is the top cells.
+        fill!(damp_level, highest_damp_level(Spaces.nlevels(axes(ᶜz))))
 
     elseif issphere(axes(Y.c))
         (; ᶜp) = p.precomputed
@@ -415,6 +454,15 @@ function non_orographic_gravity_wave_compute_tendency!(
                 return (level_prev, p_prev)
             end
         end
+        # The damping layer spans at least `NOGW_MIN_DAMP_CELLS` top cells. The warning
+        # check reduces over all columns and MPI ranks, so it runs at each run's first call.
+        damp_level_max = highest_damp_level(Spaces.nlevels(axes(ᶜz)))
+        if !NOGW_DAMP_LAYER_CHECKED[]
+            NOGW_DAMP_LAYER_CHECKED[] = true
+            maximum(damp_level) > damp_level_max &&
+                @warn "Fewer than $NOGW_MIN_DAMP_CELLS levels lie above nogw_damp_pressure ($gw_damp_pressure Pa) in some columns; the non-orographic gravity-wave momentum that escapes the model top is spread over the top $NOGW_MIN_DAMP_CELLS cells there instead."
+        end
+        @. damp_level = min(damp_level, damp_level_max)
     else
         error("Only sphere and columns are supported")
     end
@@ -424,22 +472,9 @@ function non_orographic_gravity_wave_compute_tendency!(
         compute_beres_convective_heating!(Y, p, ᶜbuoyancy_frequency)
 
         (; gw_ztop, beres_source_ρ_z_u_v_level) = p.non_orographic_gravity_wave
-        beres_input = Base.Broadcast.broadcasted(
-            tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+        set_beres_launch_state!(
+            beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
         )
-        Operators.column_reduce!(
-            beres_source_ρ_z_u_v_level,
-            beres_input;
-            init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
-        ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
-        (ρ, z, u, v, level, ztop)
-            # Take the first level (going up) whose z meets/exceeds ztop.
-            if (z_prev < ztop) && (z >= ztop)
-                return (ρ, z, u, v, level)
-            else
-                return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
-            end
-        end
     end
 
     uforcing .= 0
@@ -465,6 +500,72 @@ function non_orographic_gravity_wave_compute_tendency!(
         p,
     )
 
+    # Sanitize the forcing here, once per callback, rather than at every stage that
+    # applies it.
+    limit_gravity_wave_forcing!(uforcing, vforcing, p.scratch.ᶜtemp_scalar)
+end
+
+"""
+    limit_gravity_wave_forcing!(uforcing, vforcing, ᶜdrag_scale)
+
+Set non-finite components of the drag `(uforcing, vforcing)` [m/s²] to zero, then scale the
+vector by `min(1, F_max/|F|)` with `F_max = 3e-3·√2` m/s², as in the orographic scheme. The
+drag keeps its direction. `ᶜdrag_scale` is scratch.
+"""
+function limit_gravity_wave_forcing!(uforcing, vforcing, ᶜdrag_scale)
+    FT = eltype(uforcing)
+    @debug begin
+        if any(!isfinite, uforcing) || any(!isfinite, vforcing)
+            @error(
+                "Non-finite NOGW forcing, set to zero before the magnitude limit",
+                has_nan_u = any(isnan, uforcing),
+                has_nan_v = any(isnan, vforcing),
+                has_inf_u = any(isinf, uforcing),
+                has_inf_v = any(isinf, vforcing),
+            )
+        end
+    end
+    @. uforcing = ifelse(isfinite(uforcing), uforcing, zero(uforcing))
+    @. vforcing = ifelse(isfinite(vforcing), vforcing, zero(vforcing))
+    F_max = FT(3e-3) * sqrt(FT(2))
+    # Materialized first, so scaling `uforcing` does not change the |F| seen by `vforcing`.
+    @. ᶜdrag_scale = min(FT(1), F_max / hypot(uforcing, vforcing))
+    @. uforcing *= ᶜdrag_scale
+    @. vforcing *= ᶜdrag_scale
+    return nothing
+end
+
+"""
+    set_beres_launch_state!(beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop)
+
+Set the per-column Beres launch state: the density, height, winds, and level index of the
+first level (going up) whose height meets or exceeds the convective envelope top `gw_ztop`.
+
+Mutates `beres_source_ρ_z_u_v_level`, a level field of `(ρ, z, u, v, level)` tuples that
+`non_orographic_gravity_wave_forcing` reads as the Beres launch level. Called from
+`non_orographic_gravity_wave_compute_tendency!` after `compute_beres_convective_heating!`
+has set `gw_ztop`.
+"""
+function set_beres_launch_state!(
+    beres_source_ρ_z_u_v_level, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+)
+    FT = eltype(ᶜρ)
+    beres_input = Base.Broadcast.broadcasted(
+        tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel, gw_ztop,
+    )
+    Operators.column_reduce!(
+        beres_source_ρ_z_u_v_level,
+        beres_input;
+        init = (FT(0), FT(-Inf), FT(0), FT(0), FT(0)),
+    ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev),
+    (ρ, z, u, v, level, ztop)
+        # Take the first level (going up) whose z meets/exceeds ztop.
+        if (z_prev < ztop) && (z >= ztop)
+            return (ρ, z, u, v, level)
+        else
+            return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
+        end
+    end
 end
 
 """
@@ -506,8 +607,9 @@ requires the grid-mean counterpart of that amplitude to exceed `Q0_threshold` an
 # Arguments
 
   - `Y`: Prognostic state; read only.
-  - `p`: Cache. Reads `p.precomputed` draft fields and clobbers `p.scratch.ᶜtemp_scalar`
-    and `ᶜtemp_scalar_2` through `ᶜtemp_scalar_6`.
+  - `p`: Cache. Reads `p.precomputed` draft fields and the horizontal wind `ᶜuv_temp`,
+    which `non_orographic_gravity_wave_compute_tendency!` sets before calling this
+    function.
   - `ᶜN`: Buoyancy frequency at cell centers [1/s], passed explicitly rather than read from
     the cache so the units are unambiguous at the call site.
 
@@ -522,6 +624,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     (; turbconv_model) = p.atmos
     # `n_updrafts ≥ 1` is guaranteed here
     n_updrafts = n_mass_flux_subdomains(turbconv_model)
+    draft_indices = StaticOneTo(n_updrafts)
 
     (; ᶠu³ʲs, ᶜρʲs, ᶜuʲs, ᶜTʲs, ᶜT) = p.precomputed
     (; ᶠu³) = p.precomputed
@@ -548,8 +651,12 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ) = p.non_orographic_gravity_wave
 
     FT = Spaces.undertype(axes(Y.c))
+    ϵ = eps(FT)
+    _zero = FT(0)
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
 
     # Compute DSE-based mass-flux Q₁ (Yanai apparent heat source):
     #   ρ·Q₁ ≈ -∂/∂z [Mᶜ·(s_c − s̄)]  where s = cp_d·T + g·z
@@ -557,83 +664,58 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Note 2: MSE (h = cp·T + gz + Lv·q) is conserved under condensation, so its mass-flux divergence gives Q₁−Q₂, masking the latent-heating signal. DSE works because Tʲ is saturation-adjusted: the warming from condensation along the parcel trajectory is already encoded in Tʲ, so cp_d·(Tʲ − T̄) weighs the cumulative latent heat release.
     #
     # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
-    ᶜQ_conv = p.scratch.ᶜtemp_scalar_2
-    ᶜQ_conv .= FT(0)
     cp_d = FT(CAP.cp_d(p.params))
 
-    # Scratch fields for face velocity anomaly and cell-center scalars
-    ᶠu³_diff = p.scratch.ᶠtemp_CT3
-    ᶜa_scalar = p.scratch.ᶜtemp_scalar
-    # In-cloud DSE anomaly (no area factor) and ρa-weighting denominator
-    ᶜa_scalar_ic = p.scratch.ᶜtemp_scalar_5
-    ᶜρa_sum = p.scratch.ᶜtemp_scalar_6
+    # Compute Q_conv (grid-mean) and Q_conv_ic (in-cloud) in one fused column loop.
+    DataLayouts.foreach_column(
+        gw_Q_conv, gw_Q_conv_ic, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶠu³ʲs, ᶜρʲs, ᶜTʲs, ᶜT,
+    ) do ᶜQ_conv, ᶜQ_conv_ic, Yc, ᶜJ, ᶠJ, ᶠu³, ᶠu³ʲs, ᶜρʲs, ᶜTʲs, ᶜT
+        @inline
+        ᶜQ_conv_sum = @. zero(Yc.ρ)
+        ᶜQ_conv_ic_sum = @. zero(Yc.ρ)
+        ᶜρa_sum = @. zero(Yc.ρ)
+        for j in draft_indices
+            ᶜρaʲ = Yc.sgsʲs.:($j).ρa
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜTʲ = ᶜTʲs.:($j)
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
 
-    # Compute Q_conv (grid-mean), Q_conv_ic (in-cloud) and total area fraction
-    # in one pass.
-    ᶜa_up = p.scratch.ᶜtemp_scalar_4
-    ᶜa_up .= FT(0)
-    gw_Q_conv_ic .= FT(0)
-    ᶜρa_sum .= FT(0)
-    for j in 1:n_updrafts
-        # Velocity anomaly at faces (contravariant)
-        @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+            # In-cloud DSE anomaly: cp_d·(Tʲ − T̄), no area factor
+            # ᶜρʲs is a physical air density (~1 kg/m³), so this guard almost never
+            # fires -- except at the domain top, where in Float32 ρʲ = p/(R·T) can
+            # approach eps(FT). Kept for consistency with the `/ ᶜρʲ` divisions below
+            # (which genuinely need it there) so all draft terms zero out together.
+            ᶜa_scalar_ic = @. ifelse(ᶜρʲ > ϵ, cp_d * (ᶜTʲ - ᶜT), _zero)
 
-        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            # DSE anomaly × area fraction: cp_d·(Tʲ − T̄) · (ρaʲ/ρʲ)
+            ᶜa_scalar = @. ifelse(ᶜρʲ > ϵ, ᶜa_scalar_ic * (ᶜρaʲ / ᶜρʲ), _zero)
 
-        # In-cloud DSE anomaly: cp_d·(Tʲ − T̄), no area factor
-        # ᶜρʲs is a physical air density (~1 kg/m³), so this guard almost never
-        # fires -- except at the domain top, where in Float32 ρʲ = p/(R·T) can
-        # approach eps(FT). Kept for consistency with the `/ ᶜρʲs` divisions below
-        # (which genuinely need it there) so all draft terms zero out together.
-        @. ᶜa_scalar_ic =
-            ifelse(ᶜρʲs.:($$j) > eps(FT), cp_d * (ᶜTʲs.:($$j) - ᶜT), FT(0))
+            # Face mass flux ρʲ·(u³ʲ − u³) of the velocity anomaly, shared by the centered
+            # divergences -∂(ρʲ·u³_diff·χ)/∂z of both heatings (`vertical_transport` with
+            # `Val(:none)`)
+            ᶠρu³_diff = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ * (ᶠu³ʲ - ᶠu³)
 
-        # DSE anomaly × area fraction: cp_d·(Tʲ − T̄) · (ρaʲ/ρʲ)
-        @. ᶜa_scalar =
-            ifelse(
-                ᶜρʲs.:($$j) > eps(FT),
-                ᶜa_scalar_ic * (ᶜρaʲ / ᶜρʲs.:($$j)),
-                FT(0),
+            # Convert from W/m³ to heating rate K/s (grid-mean Q₁)
+            @. ᶜQ_conv_sum +=
+                -(ᶜadvdivᵥ(ᶠρu³_diff * ᶠinterp(ᶜa_scalar))) / (Yc.ρ * cp_d)
+
+            # In-cloud heating of draft j normalized by the draft density:
+            #   Q_icʲ = −(1/(ρʲ)) ∂z[ρʲ·(wʲ−w̄)·(Tʲ−T̄)]
+            # Accumulated ρaʲ-weighted so that for M>1 drafts the result is the
+            # conditional mean over the total draft area,
+            #   gw_Q_conv_ic = Σⱼ (ρaʲ · Q_icʲ) / Σⱼ ρaʲ
+            @. ᶜQ_conv_ic_sum += ifelse(
+                ᶜρʲ > ϵ,
+                max(ᶜρaʲ, _zero) *
+                -(ᶜadvdivᵥ(ᶠρu³_diff * ᶠinterp(ᶜa_scalar_ic))) / (ᶜρʲ * cp_d),
+                _zero,
             )
-
-        # Divergence: -∂(ρʲ·u³_diff·a_scalar)/∂z on cell centers
-        # Val(:none) = centered differencing (dt unused)
-        vtt = vertical_transport(
-            ᶜρʲs.:($j),
-            ᶠu³_diff,
-            ᶜa_scalar,
-            FT(1),
-            Val(:none),
-        )
-        # Convert from W/m³ to heating rate K/s (grid-mean Q₁)
-        @. ᶜQ_conv += vtt / (ᶜρ * cp_d)
-
-        # In-cloud heating of draft j normalized by the draft density:
-        #   Q_icʲ = −(1/(ρʲ)) ∂z[ρʲ·(wʲ−w̄)·(Tʲ−T̄)]
-        # Accumulated ρaʲ-weighted so that for M>1 drafts the result is the
-        # conditional mean over the total draft area,
-        #   gw_Q_conv_ic = Σⱼ (ρaʲ · Q_icʲ) / Σⱼ ρaʲ
-        vtt_ic = vertical_transport(
-            ᶜρʲs.:($j),
-            ᶠu³_diff,
-            ᶜa_scalar_ic,
-            FT(1),
-            Val(:none),
-        )
-        @. gw_Q_conv_ic += ifelse(
-            ᶜρʲs.:($$j) > eps(FT),
-            max(ᶜρaʲ, FT(0)) * vtt_ic / (ᶜρʲs.:($$j) * cp_d),
-            FT(0),
-        )
-        @. ᶜρa_sum += max(ᶜρaʲ, FT(0))
-
-        # Total updraft area fraction (used to set z_top and a_cover below)
-        @. ᶜa_up += ifelse(ᶜρʲs.:($$j) > eps(FT), ᶜρaʲ / ᶜρʲs.:($$j), FT(0))
+            @. ᶜρa_sum += max(ᶜρaʲ, _zero)
+        end
+        @. ᶜQ_conv = ᶜQ_conv_sum
+        # Finalize the ρa-weighted in-cloud mean over drafts
+        @. ᶜQ_conv_ic = ifelse(ᶜρa_sum > ϵ, ᶜQ_conv_ic_sum / ᶜρa_sum, _zero)
     end
-
-    # Finalize the ρa-weighted in-cloud mean over drafts
-    @. gw_Q_conv_ic =
-        ifelse(ᶜρa_sum > eps(FT), gw_Q_conv_ic / ᶜρa_sum, FT(0))
 
     # When enabled, replace the in-cloud DSE flux-divergence Q₁
     # just computed in gw_Q_conv_ic with Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾, the
@@ -641,11 +723,17 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # The grid-mean gw_Q_conv (Q₁) above is left untouched, as it still drives activation criteria and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        mp = CAP.microphysics_1m_params(p.params)
+        # Run CM BMT on both 1M parameter sets and sum: the bulk set carries
+        # every explicit process; the implicit set carries only
+        # `cloud_liquid_formation` and `cloud_ice_formation` (nulled when
+        # `implicit_microphysics: false`). The sum is the full latent heating
+        # regardless of which stage integrates cond/subl, without double-
+        # counting (the two sets are process-disjoint by construction).
+        mp_bulk = CAP.microphysics_1m_params(p.params)
+        mp_imp = CAP.microphysics_1m_implicit_params(p.params)
         thp = CAP.thermodynamics_params(p.params)
         ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
         gw_Q_conv_ic .= FT(0)
-        ᶜρa_sum .= FT(0)
         for j in 1:n_updrafts
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
@@ -661,7 +749,8 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             @. gw_Q_conv_ic += ifelse(
                 ᶜρʲ > eps(FT),
                 max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
-                    mp,
+                    mp_bulk,
+                    mp_imp,
                     thp,
                     ᶜρʲ,
                     ᶜTʲ,
@@ -674,24 +763,21 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
                 ),
                 FT(0),
             )
-            @. ᶜρa_sum += max(ᶜρaʲ, FT(0))
         end
+        # The draft weights of the in-cloud heating are the non-negative draft
+        # densities max(ρaʲ, 0) [kg/m³].
+        positive_draft_mass = sgsʲ -> max(sgsʲ.ρa, zero(sgsʲ.ρa))
+        ᶜdraft_mass = @. lazy(draft_sum(positive_draft_mass, Y.c.sgsʲs))
         @. gw_Q_conv_ic =
-            ifelse(ᶜρa_sum > eps(FT), gw_Q_conv_ic / ᶜρa_sum, FT(0))
+            ifelse(ᶜdraft_mass > eps(FT), gw_Q_conv_ic / ᶜdraft_mass, FT(0))
     end
 
-    # Persist Q_conv into cache before scratch field is reused
-    @. gw_Q_conv = ᶜQ_conv
-
-    # Reuse the `ᶜuv_temp` cache buffer (already filled with UVVector(uₕ) in
-    # `non_orographic_gravity_wave_compute_tendency!` before this call).
-    @. ᶜuv_temp = Geometry.UVVector(Y.c.uₕ)
+    # `ᶜuv_temp` holds UVVector(uₕ), which `non_orographic_gravity_wave_compute_tendency!`
+    # sets before this call.
     ᶜu = ᶜuv_temp.components.data.:1
     ᶜv = ᶜuv_temp.components.data.:2
 
-    # Pass 1: set the convective envelope [z_bot, z_top] and depth h, staging
-    # gw_u_heat = z_bot and gw_v_heat = z_top for Pass 2 (both are overwritten
-    # with the mass-weighted mean winds once Pass 2 completes).
+    # Pass 1: set the convective envelope [z_bot, z_top] and depth h.
     # We construct the envelope by moment matching: fit a half-sine to the in-cloud
     # heating Q_conv_ic by its centroid z_c and spread σ. A half-sine of depth h has
     # variance h²·(π²−8)/(4π²), so h = σ/√(variance), z_bot = z_c − h/2,
@@ -727,38 +813,36 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         end
     end
     h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
-    # z_c (held temporarily in gw_zbot)
-    @. gw_zbot = ifelse(
-        result_field.:1 > eps(FT),
-        result_field.:2 / result_field.:1,
-        FT(0),
-    )
-    # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
-    @. gw_h_heat = ifelse(
-        result_field.:1 > eps(FT),
-        h_coef * sqrt(max(result_field.:3 / result_field.:1 - gw_zbot^2, FT(0))),
-        FT(0),
-    )
-    @. gw_ztop = gw_zbot + gw_h_heat / 2              # z_top = z_c + h/2
-    @. gw_zbot = max(gw_zbot - gw_h_heat / 2, FT(0))  # z_bot = z_c − h/2
-    # Clamp z_top to the domain top.
-    # Keep z_bot ≤ z_top.
+    half_π = FT(π) / FT(2)
     z_dom_top = maximum(ᶜz)
-    @. gw_ztop = min(gw_ztop, z_dom_top)
-    @. gw_zbot = min(gw_zbot, gw_ztop)
-    # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
-    @. gw_Q0 = ifelse(
-        (gw_h_heat > eps(FT)) & (result_field.:1 > FT(0)),
-        max(FT(π) / FT(2) * result_field.:1 / gw_h_heat, FT(0)),
-        FT(0),
-    )
-    @. gw_u_heat = gw_zbot
-    @. gw_v_heat = gw_ztop
-    @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
-
-    # Persist zbot/ztop before gw_u_heat/gw_v_heat get overwritten by mean winds
-    @. gw_zbot = gw_u_heat
-    @. gw_ztop = gw_v_heat
+    # The envelope and amplitude of every column in one loop.
+    DataLayouts.foreach_column(
+        gw_zbot, gw_ztop, gw_h_heat, gw_Q0, result_field,
+    ) do gw_zbot, gw_ztop, gw_h_heat, gw_Q0, moments
+        @inline
+        (Q⁺_integral, zQ⁺_integral, z²Q⁺_integral) =
+            (moments.:1, moments.:2, moments.:3)
+        # z_c
+        ᶜz_c = @. ifelse(Q⁺_integral > ϵ, zQ⁺_integral / Q⁺_integral, _zero)
+        # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
+        ᶜh = @. ifelse(
+            Q⁺_integral > ϵ,
+            h_coef * sqrt(max(z²Q⁺_integral / Q⁺_integral - ᶜz_c^2, _zero)),
+            _zero,
+        )
+        # z_top = z_c + h/2 and z_bot = z_c − h/2, with z_top clamped to the domain top
+        # and z_bot to [0, z_top].
+        @. gw_ztop = min(ᶜz_c + ᶜh / 2, z_dom_top)
+        @. gw_zbot = min(max(ᶜz_c - ᶜh / 2, _zero), gw_ztop)
+        # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
+        ᶜQ0 = @. ifelse(
+            (ᶜh > ϵ) & (Q⁺_integral > _zero),
+            max(half_π * Q⁺_integral / ᶜh, _zero),
+            _zero,
+        )
+        @. gw_Q0 = ifelse(isnan(ᶜQ0) | isinf(ᶜQ0), _zero, ᶜQ0)
+        @. gw_h_heat = ifelse(isnan(ᶜh) | isinf(ᶜh), _zero, ᶜh)
+    end
 
     # Pass 2: within [z_bot, z_top], compute:
     #   - Q₀ integrals: Σ(Q · Δz) for the grid-mean (gating) and in-cloud
@@ -768,14 +852,15 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # All quantities drawn from the same convective envelope.
 
     ᶜΔz = Fields.Δz_field(axes(Y.c))
-    # Precompute 3D envelope mask (2D z_bot/z_top broadcast over column)
-    ᶜz_bot = gw_u_heat
-    ᶜz_top = gw_v_heat
-    ᶜin_env = p.scratch.ᶜtemp_scalar_3  # free scratch (no longer holds ᶜw_up)
-    @. ᶜin_env = ifelse((ᶜz >= ᶜz_bot) & (ᶜz <= ᶜz_top), FT(1), FT(0))
+    # 3D envelope mask (2D z_bot/z_top broadcast over column) and total updraft area
+    # fraction, evaluated in the column reduction
+    ᶜin_env = @. lazy(ifelse((ᶜz >= gw_zbot) & (ᶜz <= gw_ztop), FT(1), FT(0)))
+    # (Σⱼ ρaʲ/ρʲ without the drafts whose density is at most ϵ)
+    draft_area = (sgsʲ, ρʲ) -> ifelse(ρʲ > ϵ, sgsʲ.ρa / ρʲ, zero(ρʲ))
+    ᶜa_up = @. lazy(mapreduce_with_init(draft_area, +, Y.c.sgsʲs, ᶜρʲs))
     input2 = Base.Broadcast.broadcasted(
         tuple,
-        ᶜQ_conv,
+        gw_Q_conv,
         ᶜu,
         ᶜv,
         ᶜN,
@@ -789,7 +874,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Same 7-slot `result_field` as Pass 1, which used only slots 1-3 for the
     # heating moments. Slot 6 (Qic_integral) is accumulated but currently unread:
     # the amplitude Q0 comes from the Pass 1 moments instead.
-    _zero = FT(0)
     _half = FT(0.5)
     reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero, _zero)
     Operators.column_reduce!(
@@ -818,38 +902,40 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         return (Q_int, u_sum, v_sum, N_sum, m_sum, Qic_int, a_sum)
     end
 
-    # Unpack Pass 2 results
-    mass_sum = result_field.:5
-    @. gw_u_heat = ifelse(mass_sum > eps(FT), result_field.:2 / mass_sum, FT(0))
-    @. gw_v_heat = ifelse(mass_sum > eps(FT), result_field.:3 / mass_sum, FT(0))
-    @. gw_N_source =
-        ifelse(mass_sum > eps(FT), result_field.:4 / mass_sum, FT(0.01))
-
-    # Coverage: mass-weighted envelope mean of the updraft area fraction,
-    # clamped to [0, 1]. Used as the Beres deposition (intermittency) factor.
-    @. gw_a_cover = ifelse(
-        mass_sum > eps(FT),
-        min(max(result_field.:7 / mass_sum, FT(0)), FT(1)),
-        FT(0),
-    )
-
-    # Spectrum amplitude: gw_Q0 was already set from the column moments in Pass 1.
-    @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
-
-    # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating depth above minimum.
-    # Activation trigger always uses grid-mean Q₁ (slot 1) to ensure the same activation criteria between 0M and 1M microphysics.
+    # Unpack Pass 2 results, and set the beres_active flag: GRID-MEAN amplitude above
+    # threshold AND heating depth above minimum. The activation trigger always uses
+    # grid-mean Q₁ (slot 1) to ensure the same activation criteria between 0M and 1M
+    # microphysics.
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
-    @. gw_beres_active = ifelse(
-        (
-            max(
-                FT(π) / FT(2) * result_field.:1 / max(gw_h_heat, eps(FT)),
-                FT(0),
-            ) > Q0_threshold
-        ) & (gw_h_heat > h_heat_min),
-        FT(1),
-        FT(0),
-    )
+    _one = FT(1)
+    N_source_default = FT(0.01)
+    DataLayouts.foreach_column(
+        gw_u_heat, gw_v_heat, gw_N_source, gw_a_cover, gw_beres_active, gw_h_heat,
+        result_field,
+    ) do gw_u_heat, gw_v_heat, gw_N_source, gw_a_cover, gw_beres_active, gw_h_heat,
+    sums
+        @inline
+        (Q_integral, u_sum, v_sum, N_sum, mass_sum, a_sum) =
+            (sums.:1, sums.:2, sums.:3, sums.:4, sums.:5, sums.:7)
+        @. gw_u_heat = ifelse(mass_sum > ϵ, u_sum / mass_sum, _zero)
+        @. gw_v_heat = ifelse(mass_sum > ϵ, v_sum / mass_sum, _zero)
+        @. gw_N_source =
+            ifelse(mass_sum > ϵ, N_sum / mass_sum, N_source_default)
+        # Coverage: mass-weighted envelope mean of the updraft area fraction,
+        # clamped to [0, 1]. Used as the Beres deposition (intermittency) factor.
+        @. gw_a_cover = ifelse(
+            mass_sum > ϵ,
+            min(max(a_sum / mass_sum, _zero), _one),
+            _zero,
+        )
+        @. gw_beres_active = ifelse(
+            (max(half_π * Q_integral / max(gw_h_heat, ϵ), _zero) > Q0_threshold) &
+            (gw_h_heat > h_heat_min),
+            _one,
+            _zero,
+        )
+    end
 
     # --- Diagnostics for source-shape & launched-spectrum ---
     gw_beres_source.detailed_diagnostics || return
@@ -901,13 +987,12 @@ end
 
 Add the cached non-orographic gravity wave drag to the horizontal momentum tendency.
 
-Mutates `Yₜ.c.uₕ`, and also sanitizes `p.non_orographic_gravity_wave.uforcing` and
-`vforcing` in place: any `NaN`/`Inf` is replaced by zero and the rest is clamped to
-±3e-3 m/s², the same limit the orographic scheme uses. The `::Nothing` method is a no-op.
+Mutates `Yₜ.c.uₕ`. The `::Nothing` method is a no-op.
 
 This runs every integrator step, while the forcing itself is refreshed only on the
-`dt_nogw` callback by `non_orographic_gravity_wave_compute_tendency!`, so between callbacks
-the same forcing is reapplied.
+`dt_nogw` callback by `non_orographic_gravity_wave_compute_tendency!`, which also clamps
+it to ±3e-3 m/s² and replaces any `NaN`/`Inf` by zero; between callbacks the same forcing
+is reapplied.
 """
 non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
@@ -918,25 +1003,8 @@ function non_orographic_gravity_wave_apply_tendency!(
     t,
     ::NonOrographicGravityWave,
 )
-
     (; uforcing, vforcing) = p.non_orographic_gravity_wave
-    FT = Spaces.undertype(axes(Y.c))
-
-    # Constrain forcing (same limit as OGW: 3e-3 m/s²)
-    @. uforcing = ifelse(
-        isnan(uforcing) | isinf(uforcing),
-        FT(0),
-        max(FT(-3e-3), min(FT(3e-3), uforcing)),
-    )
-    @. vforcing = ifelse(
-        isnan(vforcing) | isinf(vforcing),
-        FT(0),
-        max(FT(-3e-3), min(FT(3e-3), vforcing)),
-    )
-
-    @. Yₜ.c.uₕ +=
-        Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
-
+    @. Yₜ.c.uₕ += Geometry.Covariant12Vector(Geometry.UVVector(uforcing, vforcing))
 end
 
 """
@@ -973,7 +1041,7 @@ and the intermittency factor.
   - `ᶜρ_source`, `ᶜu_source`, `ᶜv_source`: AD99 launch-level density and winds.
   - `gw_ncval`: `Val(nc)` with `nc` the number of phase-speed bins.
   - `p`: Cache; the NOGW cache supplies the source parameters and
-    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` are clobbered.
+    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` and `temp_field_level` are clobbered.
 """
 function non_orographic_gravity_wave_forcing(
     ᶜu,
@@ -1055,6 +1123,27 @@ function non_orographic_gravity_wave_forcing(
         Fields.field_values(z_endlevel_m1)
     field_shiftlevel_up!(ᶜz, ᶜz_p1, gw_temp_surface)
 
+    # The kernel returns the flux each layer loses. It is turned into a drag by dividing by
+    # the mean mass of the two cells on either side of the layer, `m = ρ·J/ΔA` (`ΔA`: the
+    # area at the bottom of the column). Half of each cell lies inside the layer, so the drag
+    # given to the two cells then adds up exactly to the flux the layer lost, on any grid.
+    # `u_waveforcing` is not written until the kernel runs, so it serves as scratch here.
+    ᶜlayer_ratio = p.scratch.ᶜtemp_scalar_6
+    ᶜρJ_p1 = u_waveforcing
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    @. ᶜlayer_ratio = ᶜρ * ᶜJ
+    field_shiftlevel_up!(ᶜlayer_ratio, ᶜρJ_p1, FT(0))
+    @. ᶜlayer_ratio = 2 / (ᶜlayer_ratio + ᶜρJ_p1)
+    ᶠspace = Spaces.face_space(axes(ᶜρ))
+    Fields.field_values(gw_temp_surface) .=
+        Fields.field_values(
+            Fields.level(Fields.local_geometry_field(ᶠspace).J, half),
+        ) ./ Fields.field_values(Fields.level(Fields.Δz_field(ᶠspace), half))
+    DataLayouts.foreach_column(ᶜlayer_ratio, gw_temp_surface) do ᶜratio, ΔA_bottom
+        @inline
+        @. ᶜratio *= ΔA_bottom
+    end
+
     mask_u = StaticBitVector{nc}(_ -> true)
     mask_v = StaticBitVector{nc}(_ -> true)
     # We use StaticBitVector here because the unrolled_reduce function in Julia can
@@ -1062,6 +1151,14 @@ function non_orographic_gravity_wave_forcing(
     # StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage
     # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
+
+    # The escaped flux is spread over the damping layer as a uniform acceleration, so it is
+    # divided by the layer's mass `M_R`, measured as in the column integrals.
+    gw_deposit_scale = p.scratch.temp_field_level
+    ᶜmasked_ρ = @. lazy(ifelse(ᶜlevel >= damp_level, ᶜρ, FT(0)))
+    Operators.column_integral_definite!(gw_deposit_scale, ᶜmasked_ρ)
+    Fields.field_values(gw_deposit_scale) .=
+        inv.(Fields.field_values(gw_deposit_scale))
 
     # Collect the per-column fields each source mode needs into a broadcasted
     # tuple. Both modes share the same 7 fields in slots 1–7; slots 8–16 hold the
@@ -1174,10 +1271,6 @@ function non_orographic_gravity_wave_forcing(
         )
     end
 
-    u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
-    v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top
-    gw_avg_scratch = p.scratch.ᶜtemp_scalar_6
-
     # loop over all wave lengths
     for ink in 1:gw_nk
         # --- AD99 background source (always active) ---
@@ -1192,10 +1285,9 @@ function non_orographic_gravity_wave_forcing(
             gw_ncval, nothing, Val(:ad99),
         )
         postprocess_and_accumulate!(
-            u_waveforcing, v_waveforcing,
-            u_waveforcing_top, v_waveforcing_top,
-            uforcing, vforcing,
-            damp_level, ᶜlevel, level_end, gw_avg_scratch,
+            uforcing, vforcing, u_waveforcing, v_waveforcing,
+            damp_level, ᶜlevel, level_end, gw_deposit_scale,
+            ᶜlayer_ratio,
         )
 
         # --- Beres convective source (when configured) ---
@@ -1211,10 +1303,9 @@ function non_orographic_gravity_wave_forcing(
                 gw_ncval, gw_beres_source, Val(:beres),
             )
             postprocess_and_accumulate!(
-                u_waveforcing, v_waveforcing,
-                u_waveforcing_top, v_waveforcing_top,
-                uforcing, vforcing,
-                damp_level, ᶜlevel, level_end, gw_avg_scratch,
+                uforcing, vforcing, u_waveforcing, v_waveforcing,
+                damp_level, ᶜlevel, level_end, gw_deposit_scale,
+                ᶜlayer_ratio,
             )
         end
     end
@@ -1222,71 +1313,73 @@ function non_orographic_gravity_wave_forcing(
 end
 
 """
-    postprocess_and_accumulate!(u_waveforcing, v_waveforcing, u_waveforcing_top,
-                                v_waveforcing_top, uforcing, vforcing, damp_level,
-                                ᶜlevel, level_end, scratch)
+    postprocess_and_accumulate!(uforcing, vforcing, u_waveforcing, v_waveforcing,
+                                damp_level, ᶜlevel, level_end, deposit_scale,
+                                ᶜlayer_ratio)
 
 Redistribute the escaped flux of one source and add its drag to the forcing fields.
 
-Mutates `u_waveforcing`/`v_waveforcing` (used as working storage), the `*_top` fields, and
-`uforcing`/`vforcing`, which are incremented. Called once per wavenumber band and source
-from `non_orographic_gravity_wave_forcing`.
+Mutates `uforcing`/`vforcing`, which are incremented, in one column loop. Called once per
+wavenumber band and source from `non_orographic_gravity_wave_forcing`, after the pair of
+`waveforcing_column_accumulate!` calls that set `u_waveforcing`/`v_waveforcing`.
 
-The half-level drag left by the upward march is moved to full levels by averaging adjacent
-half-levels (`gw_average!`), after saving and zeroing the top level, whose value is the
-momentum flux that escaped through the model top. That escaped flux is then spread over the
-levels at and above `damp_level` by `gw_deposit`, so momentum is conserved.
-
-!!! warning
-
-    `gw_average!` clobbers `scratch`, which the caller's input tuples alias as the shifted
-    density field, so both `waveforcing_column_accumulate!` calls of the pair must have
-    completed before this function runs.
+The top level of the half-level flux left by the upward march holds the momentum flux that
+escaped through the model top. The rest, the flux each layer gives up, is multiplied by
+`ᶜlayer_ratio` (set in `non_orographic_gravity_wave_forcing`) and moved to full levels by
+averaging adjacent half-levels, `½(X[k-1/2] + X[k+1/2])`, with zero below the bottom level
+and at the top level. The escaped flux is spread over the levels at and above `damp_level` by
+`gw_deposit`, scaled by the per-column `deposit_scale`. The drag from waves breaking
+inside the column and the redistributed escaped flux each conserve momentum exactly; the
+*Non-orographic Gravity Waves* docs page explains why. On a sphere
+`damp_level` is a field of level indices; single-column tests pass one level index.
 """
 function postprocess_and_accumulate!(
-    u_waveforcing, v_waveforcing,
-    u_waveforcing_top, v_waveforcing_top,
-    uforcing, vforcing,
-    damp_level, ᶜlevel, level_end, scratch,
+    uforcing, vforcing, u_waveforcing, v_waveforcing,
+    damp_level, ᶜlevel, level_end, deposit_scale, ᶜlayer_ratio,
 )
-    # Extract momentum flux at model top
-    copyto!(
-        Fields.field_values(u_waveforcing_top),
-        Fields.field_values(
-            Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))),
-        ),
-    )
-    fill!(Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))), 0)
-
-    copyto!(
-        Fields.field_values(v_waveforcing_top),
-        Fields.field_values(
-            Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))),
-        ),
-    )
-    fill!(Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))), 0)
-
-    # Interpolate from center to face (clobbers scratch)
-    gw_average!(u_waveforcing, scratch)
-    gw_average!(v_waveforcing, scratch)
-
-    # Deposit escaped momentum flux above damp level
-    @. u_waveforcing = gw_deposit(
-        u_waveforcing_top, u_waveforcing, damp_level, ᶜlevel, level_end,
-    )
-    @. v_waveforcing = gw_deposit(
-        v_waveforcing_top, v_waveforcing, damp_level, ᶜlevel, level_end,
-    )
-
-    # Accumulate into forcing
-    @. uforcing = uforcing + u_waveforcing
-    @. vforcing = vforcing + v_waveforcing
+    FT = eltype(uforcing)
+    # The drag at the half level below each full level, zero below the bottom level
+    ᶠbelow = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(FT(0)))
+    ᶜbelow = Operators.BottomBiasedF2C()
+    (_zero, _half, top_level) = (FT(0), FT(0.5), FT(level_end))
+    # A level index is captured by the loop, while a field of them is a loop argument.
+    (damp_level_fields, damp_level_index) =
+        damp_level isa Fields.Field ? ((damp_level,), nothing) : ((), damp_level)
+    DataLayouts.foreach_column(
+        uforcing, vforcing, u_waveforcing, v_waveforcing, ᶜlevel, deposit_scale,
+        ᶜlayer_ratio, damp_level_fields,
+    ) do ᶜuforcing, ᶜvforcing, ᶜu_waveforcing, ᶜv_waveforcing, ᶜlevel,
+    ᶜdeposit_scale, ᶜlayer_ratio, damp_level_fields
+        @inline
+        ᶜdamp_level =
+            isnothing(damp_level_index) ? damp_level_fields[1] : damp_level_index
+        unrolled_foreach((
+            (ᶜuforcing, ᶜu_waveforcing),
+            (ᶜvforcing, ᶜv_waveforcing),
+        )) do (ᶜforcing, ᶜwaveforcing)
+            @inline
+            # The momentum flux that escaped through the model top
+            ᶜescaped_flux = Fields.level(ᶜwaveforcing, level_end)
+            # The flux each layer loses, divided by the mean mass of the two cells it spans
+            ᶜlayer_drag = @. lazy(ᶜwaveforcing * ᶜlayer_ratio)
+            @. ᶜforcing += gw_deposit(
+                ᶜescaped_flux,
+                _half * (
+                    ifelse(ᶜlevel == top_level, _zero, ᶜlayer_drag) +
+                    ᶜbelow(ᶠbelow(ᶜlayer_drag))
+                ),
+                ᶜdamp_level,
+                ᶜlevel,
+                ᶜdeposit_scale,
+            )
+        end
+    end
 end
 
 """
     compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
-Return the AD99 launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m³/s³].
+Return the AD99 launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m²/s²].
 
 A thin named wrapper around the AD99 method of `wave_source`, so that
 `waveforcing_column_accumulate!` selects between the two source spectra by name rather than
@@ -1376,16 +1469,16 @@ end
     waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
                                    gw_ncval, beres_source, source_mode::Val{MODE})
 
-March one source spectrum up each column and write the half-level drag it deposits.
+March one source spectrum up each column and write the momentum flux each layer gives up.
 
-Mutates `waveforcing` [m/s²]; the return value is unused. This is the kernel shared by both
+Mutates `waveforcing` [Pa]; the return value is unused. This is the kernel shared by both
 sources; `MODE` is `:ad99` or `:beres` and selects the launch spectrum, the launch level,
 and the intermittency factor at compile time.
 
 At the bottom level the launch spectrum `B₀(c)` is evaluated once (by
 `compute_ad99_spectrum` or `compute_beres_spectrum`) and then carried upward by the column
 accumulator together with a `StaticBitVector` mask of the phase-speed bins still
-propagating. At each level at or above `source_level - 1`, every unmasked bin is tested in
+propagating. At each level at or above `source_level`, every unmasked bin is tested in
 order and removed from the mask when it fails:
 
  1. Critical level, `ĉ = c[n] - u = 0`.
@@ -1394,16 +1487,24 @@ order and removed from the mask when it fails:
  3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N`, or a sign change of `ĉ` relative to its
     launch-level value (critical-level absorption).
 
-A bin removed at or above the launch level adds its `B₀[n]` to the level's flux sum `fm`;
-at the top level every surviving bin is removed and deposited there, so the flux escaping
-the model top is available to `gw_deposit`. The drag is then
-`(ρ_source/√(ρ_k·ρ_{k+1}))·fm·ε/(z_{k+1} - z_k)`, zero below the launch level, where the
+A bin removed by test 1 or 3 adds its `B₀[n]` to the layer's flux sum `fm`; a reflected
+bin (test 2) is removed without depositing anything, which is the only way the kernel
+discards launched flux. At the top level every surviving bin is removed and deposited
+there, so the flux escaping the model top is available to `gw_deposit`.
+
+No test is applied at the launch level itself: the first one uses the level above it, so a
+bin already unstable at launch deposits into the layer between the launch level and the
+next level. This departs from [alexander1999](@cite), whose Eq. (22) instead removes such
+waves from the launch spectrum; the *Non-orographic Gravity Waves* page gives the reasons.
+
+The flux each layer gives up is then
+`ρ_source·fm·ε`, zero below the launch level, where the
 intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
 `a_cover/(ρ_source·nk)` for Beres.
 
 # Arguments
 
-  - `waveforcing`: Output drag at cell centers [m/s²]; overwritten.
+  - `waveforcing`: Output momentum flux given up by each layer [Pa]; overwritten.
   - `mask`: Initial `StaticBitVector{nc}` of active phase-speed bins. A bit vector is used
     because `unrolled_reduce` over a plain tuple mask allocates past 32 elements.
   - `input`: Broadcasted 16-slot tuple field. Slots 1-7 are shared
@@ -1502,7 +1603,7 @@ function waveforcing_column_accumulate!(
             B0_or_NaNs, Bsum_or_NaN
         end
 
-        if level >= source_level_eff - 1
+        if level >= source_level_eff
             # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
             # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
             # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
@@ -1513,9 +1614,13 @@ function waveforcing_column_accumulate!(
             ) do (mask, fm), (n)
                 if (mask[n]) == true
                     c_hat = c[n] - u_kp1 # c0mu
-                    # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                    # The phase speed matches the wind at this level: this is the wave's
+                    # critical level, so it is absorbed in the layer below and deposits
+                    # its flux there, like the sign-change test further down (which is
+                    # skipped here because the reflection test needs `c_hat ≠ 0`).
                     if c_hat == 0.0
                         mask = Base.setindex(mask, false, n)
+                        fm = fm + B0[n]
                     else
                         c_hat0 = c[n] - u_source_eff
                         # define the criterion which determines if wave is reflected at this level (test).
@@ -1530,9 +1635,7 @@ function waveforcing_column_accumulate!(
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
                                 mask = Base.setindex(mask, false, n)
-                                if level >= source_level_eff
-                                    fm = fm + B0[n]
-                                end
+                                fm = fm + B0[n]
                             else
                                 # if wave is not reflected at this level, determine if it is
                                 # breaking at this level (Foc >= 0), or if wave speed relative to
@@ -1545,9 +1648,7 @@ function waveforcing_column_accumulate!(
                                 Foc = B0[n] / (c_hat)^3 - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
                                     mask = Base.setindex(mask, false, n)
-                                    if level >= source_level_eff
-                                        fm = fm + B0[n]
-                                    end
+                                    fm = fm + B0[n]
                                 end
                             end
                         end # (test >= 0.0)
@@ -1564,13 +1665,13 @@ function waveforcing_column_accumulate!(
             else # MODE == :beres
                 beres_a_cover / (ρ_source_eff * FT1(nk))
             end
-            if level >= source_level_eff
-                rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
-            else
-                wave_forcing = FT1(0.0)
-            end
+            # The momentum flux the layer gives up [Pa]; `postprocess_and_accumulate!`
+            # divides it by the layer's mass.
+            wave_forcing = ρ_source_eff * FT1(fm) * eps
         end
+        # Below the launch level the block is skipped and `wave_forcing` passes
+        # through unchanged from the level below. It starts at the `FT(0)` from
+        # `init` at level 1, so every level below the launch level returns zero.
         return (wave_forcing, mask, Bsum, B0)
 
     end
@@ -1594,48 +1695,58 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
 end
 
 """
-    gw_average!(wave_forcing, wave_forcing_m1)
+    NOGW_MIN_DAMP_CELLS
 
-Move the drag from half-levels to full levels by averaging adjacent half-levels.
+Number of top cells the non-orographic gravity-wave damping layer always spans [-].
 
-Mutates `wave_forcing` in place, setting it to `½(X[k-1/2] + X[k+1/2])`, and clobbers
-`wave_forcing_m1`, which is used as scratch for the level-shifted copy (zero below the
-bottom level). Called from `postprocess_and_accumulate!`.
+The damping layer receives the momentum flux that escapes through the model top. On a
+sphere it starts at the lowest level above `nogw_damp_pressure`; when fewer than
+`NOGW_MIN_DAMP_CELLS` levels lie above that pressure (a model top near or below it), it
+would otherwise shrink to one or two top cells, which then take all the escaped flux.
 """
-function gw_average!(wave_forcing, wave_forcing_m1)
-    FT = eltype(wave_forcing)
-    B1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
-    B2 = Operators.BottomBiasedF2C(;)
-    wave_forcing_m1 .= B2.(B1.(wave_forcing))
-    @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
-end
+const NOGW_MIN_DAMP_CELLS = 3
+
+# Whether the damping layer has been checked for fewer than `NOGW_MIN_DAMP_CELLS` levels
+# above `nogw_damp_pressure`. Reset when the NOGW cache is built, so each run checks once.
+const NOGW_DAMP_LAYER_CHECKED = Ref(false)
 
 """
-    gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+    highest_damp_level(nlevels)
+
+Return the highest level index at which the damping layer may start, so that it spans at
+least `NOGW_MIN_DAMP_CELLS` top cells of a column with `nlevels` levels.
+"""
+highest_damp_level(nlevels) = nlevels - NOGW_MIN_DAMP_CELLS + 1
+
+"""
+    gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, deposit_scale)
 
 Add the momentum flux that escaped through the model top back into the sponge layer.
 
-Returns `wave_forcing` unchanged below `damp_level`, and `wave_forcing + wave_forcing_top/(height + 2 - damp_level)` at and above it, so the escaped flux is spread
-evenly over the damping layer and column momentum is conserved. Applied pointwise by
-`postprocess_and_accumulate!`.
+Returns `wave_forcing` unchanged below `damp_level`, and
+`wave_forcing + wave_forcing_top * deposit_scale` at and above it, so the escaped flux
+is deposited as a uniform acceleration over the damping layer and column momentum is
+conserved. Applied pointwise by `postprocess_and_accumulate!`.
 
 # Arguments
 
-  - `wave_forcing_top`: Drag carried by the waves that reached the model top [m/s²].
+  - `wave_forcing_top`: Momentum flux carried by the waves that reached the model top [Pa].
   - `wave_forcing`: Drag already accumulated at this level [m/s²].
   - `damp_level`: Index of the lowest damping level [-].
   - `level`: Index of the current level [-].
-  - `height`: Index of the topmost level, i.e. the number of levels [-].
-
-# Notes
-
-There are `height + 1 - damp_level` levels at and above `damp_level`, so the divisor here
-distributes the escaped flux over one level more than the layer contains.
+  - `deposit_scale`: Per column, one over the mass of the damping layer [m²/kg].
 """
-function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+function gw_deposit(
+    wave_forcing_top,
+    wave_forcing,
+    damp_level,
+    level,
+    deposit_scale,
+)
+    # `deposit_scale` turns the escaped flux into the uniform acceleration it gives the
+    # damping layer's combined mass.
     if level >= damp_level
-        wave_forcing =
-            wave_forcing + wave_forcing_top / (height + 2 - damp_level)
+        wave_forcing = wave_forcing + wave_forcing_top * deposit_scale
     end
     return wave_forcing
 end
@@ -1660,7 +1771,7 @@ end
 """
     wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
-Return the AD99 launch spectrum `B₀(c)` as an `NTuple{nc}` [m³/s³].
+Return the AD99 launch spectrum `B₀(c)` as an `NTuple{nc}` [m²/s²].
 
 The spectrum is the sum of a wide and a narrow Gaussian in phase speed, each of half-width
 at half-maximum `cw` and `cn` and peak amplitude `Bw` and `Bn` at `c0`, multiplied by

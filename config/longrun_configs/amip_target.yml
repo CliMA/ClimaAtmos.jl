@@ -23,4 +23,4 @@ dt_nogw: "400secs"
 nogw_beres_source: true
 topography: "Earth"
 topo_smoothing: true
-toml: [toml/prognostic_edmfx_1M.toml]
+toml: [toml/default_parameters.toml]

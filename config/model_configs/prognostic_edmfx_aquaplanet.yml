@@ -1,7 +1,3 @@
-# This job takes too long so we use a lower top and coarser vertical resolution
-z_max: 30000.0
-z_elem: 10
-dz_bottom: 500.0
 dt: 20secs
 surface_setup: DefaultMoninObukhov
 rad: clearsky
@@ -19,7 +15,7 @@ approximate_linear_solve_iters: 2
 microphysics_model: "0M"
 t_end: 1hours
 dt_save_state_to_disk: 600secs
-toml: [toml/prognostic_edmfx.toml]
+toml: [toml/default_parameters.toml]
 output_default_diagnostics: false
 reproducibility_test: true
 diagnostics:

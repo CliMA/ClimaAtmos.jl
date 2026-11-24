@@ -1,5 +1,3 @@
-using Flux
-import JLD2
 import CloudMicrophysics as CM
 
 """
@@ -39,6 +37,26 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
+    get_precipitation_evaporation_0m(parsed_args)
+
+Return whether the below-cloud evaporation of the 0-moment precipitation flux is
+on, from the `precipitation_evaporation_0m` config key: `"Kessler"` (the
+Kessler-type evaporation of CloudMicrophysics `Evaporation0M`) → `true`, `~`
+(null, the default) → `false`. Parsed with `parse_option`, so an unknown string
+raises an error. The option is only valid with `microphysics_model: "0M"`, and
+needs a positive `precipitation_evaporation_coefficient` (the ClimaParams
+default is positive); both are checked in `microphysics_0m_parameters`.
+"""
+get_precipitation_evaporation_0m(parsed_args) =
+    !isnothing(
+        parse_option(
+            get(parsed_args, "precipitation_evaporation_0m", nothing),
+            Dict("Kessler" => :Kessler),
+            "precipitation_evaporation_0m",
+        ),
+    )
+
+"""
     get_microphysics_1m_options(parsed_args)
 
 Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword
@@ -52,21 +70,31 @@ The remaining keys select the process-option type that controls dispatch inside
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
-  - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
+  - `cloud_liquid_formation`: `"CloudLiquidFormation"`. The `implicit_microphysics`
+    config toggle routes it between CM's bulk-averaged tendency and the
+    SGS-integrated implicit source.
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"TemperatureDependentIceNumber"`,
-    `"ConstantTimescale"`, `"TemperatureDependent"`.
+    `"ConstantTimescale"`, `"TemperatureDependent"`. Routed by `implicit_microphysics`
+    the same way as `cloud_liquid_formation`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
-  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
-    whose timescale and threshold blend between convective and stratiform values with the vertical
-    velocity of the subdomain being evaluated (grid mean, updraft, or environment). The stratiform
-    values are the convective ones times the dimensionless scales (both
-    default 1.0, giving the classic velocity-independent scheme).
+  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`, `"KK2000"`. `Kessler1M` is the Kessler
+    scheme whose timescale and threshold blend between convective and stratiform values with the
+    vertical velocity of the subdomain being evaluated (grid mean, updraft, or environment). The
+    stratiform values are the convective ones times the dimensionless scales (both
+    default 1.0, giving the classic velocity-independent scheme). `KK2000` is the Khairoutdinov and
+    Kogan (2000) autoconversion (`KK2000Autoconversion`) with the cloud droplet number prescribed by
+    the ClimaParams `prescribed_cloud_droplet_number_concentration`, the value also used by the
+    radiation effective radius.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
-  - `rain_condensation_evaporation`: `"RainEvaporation"`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
+  - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
+    the same way as `cloud_liquid_formation`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`,
+    `"DepositionWithoutCloudCondensate"` (no snow deposition where cloud liquid or cloud ice is
+    present). Routed by `implicit_microphysics` the same way as `cloud_liquid_formation`.
   - `snow_melt`: `"SnowMelt"`.
-  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"`.
+  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
+    `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
   - `cloud_liquid_snow_accretion`: `"CloudLiquidSnowAccretion"`.
   - `cloud_ice_rain_accretion`: `"CloudIceRainAccretion"`.
   - `cloud_ice_snow_accretion`: `"CloudIceSnowAccretion"`.
@@ -82,10 +110,7 @@ function get_microphysics_1m_options(parsed_args)
 
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
-        Dict(
-            "CloudLiquidFormation" =>
-                CMP.CloudLiquidFormation(),
-        ),
+        Dict("CloudLiquidFormation" => CMP.CloudLiquidFormation()),
         "cloud_liquid_formation",
     )
     cloud_ice_formation = parse_option(
@@ -112,6 +137,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "Kessler1M" => CMP.Kessler1M(),
             "PrescribedNd" => CMP.PrescribedNd(),
+            "KK2000" => CMP.KK2000Autoconversion(),
         ),
         "rain_autoconversion",
     )
@@ -148,6 +174,8 @@ function get_microphysics_1m_options(parsed_args)
             "SublimationOnly" => CMP.SublimationOnly(),
             "DepositionAndSublimation" =>
                 CMP.DepositionAndSublimation(),
+            "DepositionWithoutCloudCondensate" =>
+                CMP.DepositionWithoutCloudCondensate(),
         ),
         "snow_deposition_sublimation",
     )
@@ -161,6 +189,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "CloudLiquidRainAccretion" =>
                 CMP.CloudLiquidRainAccretion(),
+            "KK2000" => CMP.KK2000Accretion(),
         ),
         "cloud_liquid_rain_accretion",
     )
@@ -551,7 +580,6 @@ key.
     `params.orographic_gravity_wave_params`. `"raw_topo"` loads a preprocessed
     HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
     initialization, and `"gfdl_restart"` regrids the GFDL restart file.
-  - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
 """
@@ -561,7 +589,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     return if ogw_name == "raw_topo" ||
               ogw_name == "raw_topo_online" ||
               ogw_name == "gfdl_restart"
-        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing) =
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd) =
             params.orographic_gravity_wave_params
         topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
         topography = Val(Symbol(parsed_args["topography"]))
@@ -576,12 +604,13 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             a1,
             Fr_crit,
             α_smoothing,
+            a_tofd,
             topo_info,
             topography,
         )
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", "raw_topo_online", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "raw_topo_online".""",
         )
     end
 end
@@ -676,7 +705,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
-        RadiationTRMM_LBA(FT)
+        RadiationTRMM_LBA()
     elseif radiation_name == "ISDAC"
         RadiationISDAC{FT}()
     elseif isnothing(radiation_name)
@@ -776,13 +805,9 @@ function get_cloud_model(parsed_args, params)
             @clima_artifact("cloud_fraction_nn"),
             parsed_args["cloud_nn_architecture"],
         )
-        nn_model_data = JLD2.load(nn_filepath)
-        nn_architecture = nn_model_data["re"]
-
         nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # build the model
-        cf_nn_model = nn_architecture(nn_param_vec)
-        MLCloud_constructor(cf_nn_model)
+        build_mlcloud(nn_filepath, nn_param_vec)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
@@ -879,7 +904,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}; setup_components) w
         # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
         # The file stores one repeating day, so repeat it in time.
         ExternalDrivenTVForcing(
-            era5_dataset(parsed_args, FT; monthly = true);
+            era5_datasets(parsed_args, FT; monthly = true);
             time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
         )
     else
@@ -1035,6 +1060,13 @@ function check_case_consistency(parsed_args)
     smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
     config = parsed_args["config"]
 
+    if get(parsed_args, "sgs_variance_fidelity_model", "equilibrium") == "updraft" &&
+       !(turbconv == "prognostic_edmfx" && microphysics in ("1M", "2M", "2MP3"))
+        @warn "sgs_variance_fidelity_model: updraft acts only with \
+               turbconv: prognostic_edmfx and non-equilibrium (1M, 2M or 2MP3) \
+               microphysics; it is ignored here."
+    end
+
     # Geometry consistency (always checked, independent of the case-specific
     # checks below)
     valid_configs = ("sphere", "column", "box", "plane")
@@ -1166,12 +1198,31 @@ function get_tq_correlation_model(parsed_args)
 end
 
 """
+    get_sgs_variance_fidelity_model(parsed_args)
+
+Return the `AbstractVarianceFidelityModel` selected by the
+`sgs_variance_fidelity_model` config key: `"equilibrium"` →
+`EquilibriumVarianceFidelity()` (default), `"updraft"` →
+`UpdraftVarianceFidelity()`.
+"""
+function get_sgs_variance_fidelity_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_fidelity_model", "equilibrium"),
+        Dict(
+            "equilibrium" => EquilibriumVarianceFidelity(),
+            "updraft" => UpdraftVarianceFidelity(),
+        ),
+        "sgs_variance_fidelity_model",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
 
-Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`,
+`get_tracer_nonnegativity_method` and `get_sgs_variance_fidelity_model`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
 (the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
@@ -1187,6 +1238,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
     sgs_variance_curvature = pa["sgs_variance_curvature"]
+    sgs_variance_fidelity_model = get_sgs_variance_fidelity_model(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1220,17 +1272,19 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     terminal_velocity_snow =
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
-    implicit_microphysics = pa["implicit_microphysics"]
-
+    # `implicit_microphysics` controls which 1M processes (cloud
+    # liquid/ice formation, rain evaporation, snow sublimation) flow
+    # through the implicit cache with a Jacobian; the microphysics
+    # tendency itself is always applied in the implicit stage.
     return AtmosWater(;
         microphysics_model,
         cloud_model,
-        microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
-                                             Explicit(),
+        microphysics_tendency_timestepping = Implicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         tq_correlation_model,
         sgs_variance_curvature,
+        sgs_variance_fidelity_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
@@ -1442,7 +1496,10 @@ function AtmosSurface(
             isnothing(pa["rad"]) && error(
                 "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
             )
-            RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
+            RegressionFunctionAlbedo{FT}(;
+                n = params.water_refractive_index,
+                R_sub = params.ocean_subsurface_reflectance,
+            )
         elseif pa["albedo_model"] == "CouplerAlbedo"
             CouplerAlbedo()
         else

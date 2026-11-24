@@ -1,7 +1,3 @@
-# This job takes too long so we use a lower top and coarser vertical resolution
-z_max: 30000.0
-z_elem: 10
-dz_bottom: 500.0
 rayleigh_sponge: false
 viscous_sponge: false
 dt: 20secs
@@ -25,7 +21,7 @@ non_orographic_gravity_wave: true
 orographic_gravity_wave: "raw_topo"
 t_end: 1hours
 dt_save_state_to_disk: 600secs
-toml: [toml/prognostic_edmfx.toml]
+toml: [toml/default_parameters.toml]
 output_default_diagnostics: false
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfss, hfls, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]

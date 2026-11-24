@@ -171,13 +171,11 @@ Relax the horizontal momentum `Y.c.uₕ` toward the target `(ᶜu_nudge, ᶜv_nu
 [m/s] with inverse timescale `ᶜinv_τ_wind` [1/s], adding the tendency
 `-(uₕ - uₕ_nudge) / τ` to `Yₜ.c.uₕ`.
 
-Uses the scratch field `p.scratch.ᶜtemp_C12` to hold the target vector. Shared by
-the file-driven and per-term `Nudging` forcings. Returns `nothing`.
+Shared by the file-driven and per-term `Nudging` forcings. Returns `nothing`.
 """
 function nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
+    ᶜuₕ_nudge = @. lazy(C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg))
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
     return nothing
 end
@@ -189,9 +187,14 @@ Convert temperature (`ᶜdTdt` [K/s]) and total-specific-humidity (`ᶜdqtdt` [1
 tendencies into total-energy and total-water tendencies, adding them to
 `Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`.
 
-The energy conversion is `ρ [c_{v,m} dT/dt + (c_{v,v}(T - T₀) + L_{v,0} - R_v T₀) dq_tot/dt]`, i.e., the moist-mixture heat capacity times the temperature tendency
-plus the internal energy of the added vapor; no potential-energy term, since the
-water is added at constant height. Reads the thermodynamic state from
+The energy conversion is
+`ρ [c_{p,m} dT/dt + (c_{v,v}(T - T₀) + L_{v,0} - R_v T₀) dq_tot/dt]`, i.e., the
+isobaric moist-mixture heat capacity times the temperature tendency plus the
+internal energy of the added vapor; no potential-energy term, since the water is
+added at constant height. The forcing and nudging tendencies are temperature
+rates at constant pressure. Heat `Q` per unit mass changes potential temperature
+by `Q / (c_{p,m} Π)`, with `Π` the Exner function, so `c_{p,m}` realizes them.
+Reads the thermodynamic state from
 `p.precomputed`. Shared by the file-driven and ISDAC forcings. Returns
 `nothing`.
 """
@@ -205,7 +208,7 @@ function apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
     R_v = TD.Parameters.R_v(thermo_params)
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt +
+            TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt +
             (cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0) * ᶜdqtdt
         )
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt
@@ -304,14 +307,19 @@ function _set_inv_τ_rate!(ᶜinv_τ, ::DefaultTimescale, variables, ᶜz, param
     return nothing
 end
 _set_inv_τ_rate!(ᶜinv_τ, τ::Number, variables, ᶜz, params) =
-    (ᶜinv_τ .= 1 / τ; nothing)
+    (ᶜinv_τ .= 1 / τ;
+        nothing)
 _set_inv_τ_rate!(ᶜinv_τ, f, variables, ᶜz, params) =
-    (@. ᶜinv_τ = 1 / f(ᶜz); nothing)
+    (@. ᶜinv_τ = 1 / f(ᶜz);
+        nothing)
 
 _apply_inv_τ_mask!(ᶜinv_τ, ::Nothing, ᶜz) = nothing
-_apply_inv_τ_mask!(ᶜinv_τ, w::Number, ᶜz) = (ᶜinv_τ .*= w; nothing)
-_apply_inv_τ_mask!(ᶜinv_τ, m::Fields.Field, ᶜz) = (ᶜinv_τ .*= m; nothing)
-_apply_inv_τ_mask!(ᶜinv_τ, f, ᶜz) = (@. ᶜinv_τ *= f(ᶜz); nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, w::Number, ᶜz) = (ᶜinv_τ .*= w;
+    nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, m::Fields.Field, ᶜz) = (ᶜinv_τ .*= m;
+    nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, f, ᶜz) = (@. ᶜinv_τ *= f(ᶜz);
+    nothing)
 
 # --- HorizontalAdvection / VerticalFluctuation: a (dT, dq) tendency pair ---
 function _tendency_pair_cache(Y, cd, start_date, method, dT_var, dq_var)
@@ -626,8 +634,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(u(ᶜz), v(ᶜz)), ᶜlg)
+    ᶜuₕ_nudge = @. lazy(C12(Geometry.UVVector(u(ᶜz), v(ᶜz)), ᶜlg))
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind(ᶜz)
 
     # TODO: May make more sense to use initial ISDAC (hydrostatic) pressure, but would need to add it to cache,
@@ -641,4 +648,33 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
         -(specific(Y.c.ρq_tot, Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
     apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt_nudging, ᶜdqtdt_nudging)
+end
+
+"""
+    external_forcing_cache(Y, external_forcing::MPACEForcing, params, _)
+
+Return an empty cache for M-PACE (Mixed-Phase Arctic Cloud Experiment) wind
+nudging.
+"""
+external_forcing_cache(Y, external_forcing::MPACEForcing, params, _) = (;)
+
+"""
+    external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+
+Apply the M-PACE horizontal-wind forcing [Klein2009](@cite): Newtonian
+relaxation of `(u, v)` toward `(forcing.u_nudge, forcing.v_nudge)` (default
+`(-13, -3)` m/s) with timescale `forcing.τ_wind` (default `3600` s), via
+`nudge_uv!`. `t` is unused.
+"""
+function external_forcing_tendency!(Yₜ, Y, p, t, forcing::MPACEForcing)
+    FT = Spaces.undertype(axes(Y.c))
+    nudge_uv!(
+        Yₜ,
+        Y,
+        p,
+        FT(forcing.u_nudge),
+        FT(forcing.v_nudge),
+        1 / FT(forcing.τ_wind),
+    )
+    return nothing
 end

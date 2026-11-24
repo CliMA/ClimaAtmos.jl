@@ -4,4 +4,4 @@ t_end: "360days"
 rad: "held_suarez"
 dt_save_state_to_disk: "30days"
 disable_surface_flux_tendency: true
-toml: [toml/longrun_held_suarez.toml]
+toml: [toml/default_parameters.toml]

@@ -217,13 +217,13 @@ effective-thickness approximation because ``\mathrm{E}[\ln \tau]`` and
 ``\mathrm{E}[\tau]`` are area-weighted sums over the components. The other is
 the Gamma factor of the mixture's own mean and variance. Each underestimates
 ``\chi`` where the other holds. The geometric mean collapses when an updraft
-that the binary cover counts as cloudy holds only trace condensate, although
-such an updraft is optically clear. The moment-matched Gamma puts a small,
-dense updraft core into a heavy tail near zero, whereas the geometric mean
-weighs the core by its area, so a dense core beside a thin environment cloud
-lowers ``\chi`` below the environment value. Where nearly all of the cover is
-trace-condensate updraft area, both estimates are small; those levels hold
-almost no water. The
+that the binary cover of 0-moment microphysics counts as cloudy holds only
+trace condensate, although such an updraft is optically clear. The
+moment-matched Gamma puts a small, dense updraft core into a heavy tail near
+zero, whereas the geometric mean weighs the core by its area, so a dense core
+beside a thin environment cloud lowers ``\chi`` below the environment value.
+Where nearly all of the cover is trace-condensate updraft area, both estimates
+are small; those levels hold almost no water. The
 radiation callback evaluates ``\chi`` (`set_sw_cloud_optical_depth_factor!`)
 before it passes the cloud properties to RRTMGP. Other cloud models
 (`GridScaleCloud`, `MLCloud`) have no in-cloud distribution, and prescribed
@@ -272,19 +272,10 @@ include ``\chi``.
 
 **Effective radii.** The liquid effective radius follows the ``1/3``-power law
 of [LiuHallett1997](@cite), evaluated with a droplet number concentration
-diagnosed from the aerosol loading. That closure, `ml_N_cloud_liquid_droplets`,
-is log-linear in the dust, sea-salt, and ammonium-sulfate concentrations and in
-the liquid water. The ice effective radius is a constant from the microphysics
-parameters.
-
-!!! warning "Known inconsistency"
-
-    `ml_N_cloud_liquid_droplets` was calibrated with a specific humidity [kg
-    kg⁻¹] as its liquid-water argument, but `update_cloud_properties!` passes
-    the column-integrated liquid water path [kg m⁻²]. The reference value it is
-    compared against is the specific-humidity one, so the liquid-water term of
-    the closure is evaluated far from where it was fitted. This is recorded in
-    the docstring and tracked as a code-side task.
+(`ml_N_cloud_liquid_droplets`) that follows a bounded log-saturation law in the
+dust, sea-salt, and ammonium-sulfate mass concentrations and the in-cloud
+liquid specific humidity. The ice effective radius is a constant from the
+microphysics parameters.
 
 **Where the clouds come from.** Three sources, selected independently of the
 mode:
@@ -384,8 +375,9 @@ cooling, the second cloud-base warming.
 [`RadiationTRMM_LBA`](@ref ClimaAtmos.RadiationTRMM_LBA) (`rad: TRMM_LBA`) is
 the odd one out: it prescribes a heating rate directly, with no flux at all. The
 observational profile varies with both height and time of day, and is converted
-to an energy tendency with the moist isochoric heat capacity,
-``\rho \, c_{vm} \, \partial T / \partial t``. It is used for the TRMM-LBA
+to an energy tendency with the moist isobaric heat capacity,
+``\rho \, c_{pm} \, \partial T / \partial t``, because it is a heating rate at
+constant pressure. It is used for the TRMM-LBA
 deep-convection case [Grabowski2006](@cite).
 
 ## Held–Suarez forcing
