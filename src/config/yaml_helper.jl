@@ -20,8 +20,7 @@ else through unchanged. `strip_help_messages` applies this to every entry of the
 """
 strip_help_message(v::Dict) = v["value"]
 strip_help_message(v) = v
-strip_help_messages(d) =
-    Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
+strip_help_messages(d) = Dict(k => strip_help_message(v) for (k, v) in d)
 
 """
     load_yaml_file(f)

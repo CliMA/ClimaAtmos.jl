@@ -3,7 +3,7 @@ import LinearAlgebra: I, Adjoint
 using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
 import UnrolledUtilities:
-    unrolled_any, unrolled_filter, unrolled_flatmap, unrolled_map, unrolled_reduce
+    unrolled_any, unrolled_filter, unrolled_flatmap, unrolled_map, unrolled_unique
 import CloudMicrophysics.Common as CMC
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
@@ -454,17 +454,14 @@ In principle two different types are possible (for example a `DiagonalRow` from
 thermodynamics and a `TridiagonalRow` from diffusion); there is no such case at
 present, but if one arises the wider type should be used.
 """
-merge_jacobian_blocks(block_pairs) =
-    unrolled_reduce(block_pairs, ()) do merged, block_pair
-        matching = unrolled_filter(pair -> pair.first == block_pair.first, merged)
-        if isempty(matching)
-            (merged..., block_pair)
-        else
-            typeof(matching[1].second) == typeof(block_pair.second) ||
-                error("Jacobian block requested with two different types")
-            merged
-        end
-    end
+function merge_jacobian_blocks(block_pairs)
+    merged = unrolled_unique(pair -> pair.first, block_pairs)
+    keys_and_types =
+        unrolled_unique(pair -> (pair.first, typeof(pair.second)), block_pairs)
+    length(keys_and_types) == length(merged) ||
+        error("Jacobian block requested with two different types")
+    return merged
+end
 
 """
     jacobian_diagonal_names(Y)

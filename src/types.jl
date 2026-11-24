@@ -2612,6 +2612,7 @@ const GROUPED_PROPERTY_MAP = Dict{Symbol, Symbol}(
 
 # These fields tie a model to one specific run, all other fields contain physics
 const _MODEL_NON_PHYSICS_FIELDS = (:grid, :params, :setup)
+const _MODEL_PHYSICS_FIELDS = filter(!in(_MODEL_NON_PHYSICS_FIELDS), fieldnames(AtmosModel))
 
 """
     Base.getproperty(atmos::AtmosModel, ::Val{property_name})
@@ -2962,11 +2963,8 @@ end
 
 # NamedTuple of every physics field. Used by checkpoint hashing, `show`, and
 # validation.
-_physics_fields(model::AtmosModel) = (;
-    (
-        name => getfield(model, name) for
-        name in fieldnames(AtmosModel) if !(name in _MODEL_NON_PHYSICS_FIELDS)
-    )...,
+_physics_fields(model::AtmosModel) = NamedTuple{_MODEL_PHYSICS_FIELDS}(
+    map(name -> getfield(model, name), _MODEL_PHYSICS_FIELDS),
 )
 
 """
