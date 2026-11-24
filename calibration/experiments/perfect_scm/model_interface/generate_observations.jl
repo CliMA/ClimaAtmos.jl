@@ -80,7 +80,7 @@ Create an `EKP.Observation` using all diagnostics at `diagnostics_filepath`.
 Each variable is processed by `preprocess`. See the documentation of that
 function to see what kind of processing is done.
 
-The covariance matrix for each variable is the
+The covariance matrix for each variable is diagonal with every entry equal to
 `1e-11 + (model_error_scale * Statistics.mean(var.data))^2` where the
 `model_error_scale = 0.05`.
 """
@@ -117,18 +117,16 @@ function create_ekp_observations(
         scalar = 1e-11 + (model_error_scale * Statistics.mean(var.data))^2
         @info "Scalar for $(ClimaAnalysis.short_name(var)): $scalar"
 
-        covar_estimator = ClimaCalibrate.ObservationRecipe.ScalarCovariance(;
-            scalar,
-            use_latitude_weights = false,
+        covar_estimator = ClimaCalibrate.ObservationRecipe.DiagonalCovariance(
+            ClimaCalibrate.ObservationRecipe.ScalarDiagonal(scalar),
         )
 
-        var_dates = ClimaAnalysis.dates(var)
-        ClimaCalibrate.ObservationRecipe.observation(
-            covar_estimator,
-            var,
-            first(var_dates),
-            last(var_dates),
+        # A single sample spanning every date of the preprocessed variable
+        sample_collection = ClimaCalibrate.SampleBuilder.build_samples(
+            var;
+            FT = eltype(var.data),
         )
+        ClimaCalibrate.ObservationRecipe.observation(covar_estimator, sample_collection, 1)
     end
 
     # EKP will cycle through the observations again if all observations are
