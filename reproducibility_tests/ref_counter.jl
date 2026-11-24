@@ -1,4 +1,4 @@
-478
+479
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+479
+- Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
+  its two cells, the non-orographic damping layer spans at least the top three cells,
+  the non-orographic drag is limited by its magnitude instead of per component, and the
+  buoyancy frequency in the bottom and top cells uses a one-sided `dT/dz`
+  (non-orographic and orographic). Changes the output of every run with gravity-wave
+  drag enabled.
+
 478
 - Update to CloudMicrophysics 0.51: 1-moment rain collisions ramp rain freezing below freezing (`temperature_rain_collision_snow`), melt collected cloud ice above freezing (`S_accr_melt_icl_rai`), and melt snow in rain collisions only thermally; the other 1-moment tendencies change by roundoff.
 

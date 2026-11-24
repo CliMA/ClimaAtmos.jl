@@ -24,11 +24,12 @@ here from cell indices, face heights, and pressures only, following GFDL `topo_d
      the column total Sigma (du/dt) * Delta p / g equals tau_x * tau_np / tau_l
      exactly.
 
-It also tests the two helpers that prepare the inputs, on a stretched grid (cells of
+It also tests the three helpers that prepare the inputs, on a stretched grid (cells of
 different thickness):
   - `ogw_face_pressure!`: the pressure at the bottom and top faces, from hydrostatic
     balance.
   - `blocked_layer_start_height!`: the top face of the cell above the PBL-top cell.
+  - `ogw_temperature_gradient!`: dT/dz, one-sided in the bottom and top cells.
 =#
 
 using Test
@@ -403,4 +404,39 @@ end
     end
     @test start_faces == [zf[[3, 7, 19, 32, n + 1]]; Inf]
     @test !(zf[19] ≈ zc[17] + 3 * (zf[18] - zf[17]) / 2)
+end
+
+# ogw_temperature_gradient! on uniform and stretched columns with T = 300 - 0.0065 z +
+# 1e-7 z²: interior cells keep the difference across their two faces (face
+# temperatures are the mean of the neighbouring centers); the bottom and top cells take
+# the one-sided difference to their only neighbour, not half of it.
+@testset "OGW buoyancy frequency input: one-sided dT/dz in the end cells" begin
+    FT = Float64
+    for stretch in
+        (Meshes.Uniform(), Meshes.GeneralizedExponentialStretching(FT(30), FT(2_000)))
+        center_space = CommonSpaces.ColumnSpace(
+            FT;
+            z_min = FT(0),
+            z_max = FT(30_000),
+            z_elem = 40,
+            stretch,
+            staggering = Grids.CellCenter(),
+        )
+        face_space = Spaces.face_space(center_space)
+        c_z = Fields.coordinate_field(center_space).z
+        c_T = @. FT(300) - FT(0.0065) * c_z + FT(1e-7) * c_z^2
+        c_dTdz = Fields.zeros(center_space)
+        f_dTdz = Fields.zeros(face_space)
+        CA.ogw_temperature_gradient!(c_dTdz, f_dTdz, c_T)
+        zc = vec(parent(c_z))
+        zf = vec(parent(Fields.coordinate_field(face_space).z))
+        T = vec(parent(c_T))
+        dTdz = vec(parent(c_dTdz))
+        n = length(zc)
+        T_face = (T[1:(end - 1)] .+ T[2:end]) ./ 2
+        centred = (T_face[2:end] .- T_face[1:(end - 1)]) ./ diff(zf)[2:(end - 1)]
+        @test dTdz[2:(end - 1)] ≈ centred rtol = 1e-10
+        @test dTdz[1] ≈ (T[2] - T[1]) / (zc[2] - zc[1]) rtol = 1e-10
+        @test dTdz[n] ≈ (T[n] - T[n - 1]) / (zc[n] - zc[n - 1]) rtol = 1e-10
+    end
 end

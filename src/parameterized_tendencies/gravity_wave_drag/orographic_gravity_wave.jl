@@ -245,6 +245,7 @@ Prepares the inputs the forcing routine needs and then calls
 
   - The buoyancy frequency `N = sqrt(g/T · (dT/dz + g/c_pm))`, using the moist isobaric
     specific heat, at cell centers and interpolated to faces, floored at `sqrt(eps(FT))`.
+    `dT/dz` comes from `ogw_temperature_gradient!` (one-sided in the bottom and top cells).
   - Face pressure `ᶠp` from `ogw_face_pressure!`: interpolated from cell centers at
     interior faces and hydrostatic at the bottom and top faces. The non-propagating drag
     takes each cell's pressure thickness from it.
@@ -288,8 +289,9 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
 
-    # compute buoyancy frequency
-    ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
+    # compute buoyancy frequency (ᶠbuoyancy_frequency is scratch for the face dT/dz
+    # until N is interpolated to the faces below)
+    ogw_temperature_gradient!(ᶜdTdz, ᶠbuoyancy_frequency, ᶜT)
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) *
         (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
@@ -612,7 +614,7 @@ function orographic_gravity_wave_forcing!(
     # Check before the limiter: it maps an infinite component to NaN (F_max/Inf = 0,
     # then 0·Inf), which would hide the original problem.
     @debug begin
-        if !all(isfinite, ᶜuforcing) || !all(isfinite, ᶜvforcing)
+        if any(!isfinite, ᶜuforcing) || any(!isfinite, ᶜvforcing)
             @error "Non-finite OGWD forcing before the magnitude limiter!"
             @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), has_inf=$(any(isinf, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
             @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), has_inf=$(any(isinf, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
@@ -637,6 +639,26 @@ function orographic_gravity_wave_forcing!(
     )
     @. ᶜuforcing *= ᶜdrag_scale
     @. ᶜvforcing *= ᶜdrag_scale
+end
+
+"""
+    ogw_temperature_gradient!(ᶜdTdz, ᶠdTdz, ᶜT)
+
+Set `ᶜdTdz` to the vertical temperature gradient `dT/dz` [K/m] at cell centers, one-sided
+in the bottom and top cells (see the *Orographic Gravity Waves* docs page). `ᶠdTdz` is
+scratch. Called from `orographic_gravity_wave_compute_tendency!`.
+"""
+function ogw_temperature_gradient!(ᶜdTdz, ᶠdTdz, ᶜT)
+    @. ᶜdTdz = w_component(Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT))))
+    @. ᶠdTdz = w_component(Geometry.WVector(ᶠgradᵥ(ᶜT)))
+    # The face levels and the end-cell levels are different spaces with the same layout,
+    # so copy their raw data (views into the fields).
+    n = Spaces.nlevels(axes(ᶜT))
+    Fields.field_values(Fields.level(ᶜdTdz, 1)) .=
+        Fields.field_values(Fields.level(ᶠdTdz, 1 + half))
+    Fields.field_values(Fields.level(ᶜdTdz, n)) .=
+        Fields.field_values(Fields.level(ᶠdTdz, n - half))
+    return nothing
 end
 
 """
