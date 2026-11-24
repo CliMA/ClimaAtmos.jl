@@ -13,7 +13,7 @@ Tests cover:
 using Test
 using ClimaAtmos
 import ClimaAtmos as CA
-import ClimaCore: Fields, Spaces
+import ClimaCore: Fields, Geometry, Spaces
 import ClimaCore.CommonSpaces
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
@@ -760,6 +760,61 @@ import Thermodynamics as TD
                     @test cf_m0 > cf_mh2 > cf_mh
                     @test (cf_m0 - cf_mh2) < FT(0.3) * (cf_m0 - cf_mh)
                 end
+            end
+        end
+    end
+
+    @testset "Environment autoconversion velocity" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                # The detrained fraction is the excess of the condensate over
+                # its equilibrium value `q_eq`, relative to the condensate.
+                mu_S = FT(-3e-4)
+                sigma_S = FT(2e-4)
+                q_eq = CA.truncated_gaussian_condensate(mu_S, sigma_S)
+                f_neq(q_lcl, q_icl, λ_eq = mu_S) =
+                    CA.env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+                @test f_neq(FT(0), FT(0)) == FT(0)
+                @test f_neq(q_eq / 2, FT(0)) == FT(0)
+                @test f_neq(2 * q_eq, FT(0)) ≈ FT(0.5) rtol = FT(1e-5)
+                @test f_neq(q_eq, q_eq) ≈ FT(0.5) rtol = FT(1e-5)
+                @test f_neq(FT(1e-4), FT(0), FT(-Inf)) == FT(1)
+                @test f_neq(FT(0), FT(0), FT(-Inf)) == FT(0)
+                @test f_neq(FT(1e-4), FT(0)) isa FT
+
+                # Mean upward velocity of two drafts: a descending draft adds
+                # area and no velocity, and the area floor takes the mean to
+                # zero with the draft area.
+                space = CommonSpaces.ColumnSpace(
+                    FT;
+                    z_min = 0, z_max = 1000, z_elem = 4,
+                    staggering = CommonSpaces.CellCenter(),
+                )
+                ᶜlg = Fields.local_geometry_field(space)
+                a_min = FT(1e-5)
+                ρʲs = (FT(1), FT(0.5))
+                uʲs = (Geometry.WVector(FT(2)), Geometry.WVector(FT(-1)))
+                sgsʲs(a¹, a²) = ((; ρa = a¹ * ρʲs[1]), (; ρa = a² * ρʲs[2]))
+                w_up(a¹, a²) = CA.draft_mean_updraft_velocity.(
+                    Ref(sgsʲs(a¹, a²)), Ref(ρʲs), Ref(uʲs), ᶜlg, a_min,
+                )
+                @test all(≈(FT(1)), parent(w_up(FT(0.1), FT(0.1))))
+                @test all(≈(FT(2)), parent(w_up(FT(0.1), FT(0))))
+                @test all(≈(FT(2)), parent(w_up(FT(0.1), FT(-0.1))))
+                @test all(≈(FT(0.5)), parent(w_up(a_min / 4, FT(0))))
+                @test all(==(FT(0)), parent(w_up(FT(0), FT(0))))
+                @test eltype(w_up(FT(0.1), FT(0.1))) == FT
+
+                # The velocity is that of the environment for equilibrium
+                # condensate and the convective one for detrained condensate.
+                w⁰, c_w, w_d = FT(-0.1), FT(0.5), FT(1)
+                w_mp(f) = CA.env_autoconversion_velocity(w⁰, FT(2), f, c_w, w_d)
+                @test w_mp(FT(0)) == FT(0)
+                @test w_mp(FT(1)) == FT(2)
+                @test w_mp(FT(0.5)) == FT(1)
+                @test CA.env_autoconversion_velocity(
+                    FT(3), FT(2), FT(1), c_w, w_d,
+                ) == FT(3)
             end
         end
     end

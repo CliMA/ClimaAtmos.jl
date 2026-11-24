@@ -808,6 +808,12 @@ function SGSQuadratureParameters(
         # `sublimation_deposition_timescale`; zero uses the per-cell 1M
         # relaxation times (`cloud_species_relaxation_time`).
         sgs_cloud_species_constant_timescales = FT(0),
+        # Weight [-] of the mean updraft velocity and velocity [m/s] of
+        # detrained condensate in the `Kessler1M` autoconversion velocity of
+        # the environment (`env_autoconversion_velocity`): with both zero, the
+        # autoconversion is evaluated at the environment vertical velocity.
+        sgs_env_autoconversion_updraft_velocity_weight = FT(0),
+        sgs_env_autoconversion_detrained_velocity = FT(0),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`floor_displacement_length`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],
@@ -919,6 +925,14 @@ function SGSQuadratureParameters(
         (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
         (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
         (:cloud_fraction_eps_rel, parameters.cloud_fraction_eps_rel),
+        (
+            :sgs_env_autoconversion_updraft_velocity_weight,
+            parameters.sgs_env_autoconversion_updraft_velocity_weight,
+        ),
+        (
+            :sgs_env_autoconversion_detrained_velocity,
+            parameters.sgs_env_autoconversion_detrained_velocity,
+        ),
     )
         value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
     end

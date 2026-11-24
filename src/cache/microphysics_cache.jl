@@ -1159,6 +1159,143 @@ function update_implicit_1m_tendency!(
 end
 
 """
+    env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+
+Fraction `f_neq ∈ [0, 1]` of the environment cloud condensate
+`q_c = q_lcl + q_icl` in excess of its equilibrium value,
+
+    f_neq = clamp((q_c − q_c_eq) / q_c, 0, 1),
+
+and `0` where `q_c = 0`. The equilibrium condensate
+`q_c_eq = E[max(0, λ_eq + S′)]`, `S′ ~ N(0, σ_S²)`, is that of the SGS moments
+`sigma_S` and `λ_eq` (`_compute_sgs_moments`); it vanishes for `λ_eq = −Inf`.
+
+The excess `q_c − q_c_eq` is the vapor deficit of the environment: for a narrow
+distribution with a saturated mean, it equals `q_sat − q_vap`. Cloud liquid
+removes the deficit within its condensation timescale, so an excess persists
+where detrainment from updrafts supplies condensate, and `f_neq` marks
+environment condensate of convective origin. Cloud ice, which relaxes more
+slowly, enters `f_neq` through the total `q_c`: the excess is independent of
+the phase partition, and where it is positive, the vapor is subsaturated with
+respect to liquid, so that cloud liquid there evaporates within its
+condensation timescale unless detrainment supplies it.
+"""
+@inline function env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+    q_c = max(zero(q_lcl), q_lcl) + max(zero(q_icl), q_icl)
+    # `ifelse` discards the NaN of `truncated_gaussian_condensate` at
+    # `λ_eq = −Inf`.
+    q_c_eq = ifelse(
+        isfinite(λ_eq),
+        truncated_gaussian_condensate(λ_eq, sigma_S),
+        zero(λ_eq),
+    )
+    # The floor on the denominator gives `f_neq = 0` at `q_c = 0` without a
+    # comparison of `q_c` to zero, which `ForwardDiff` decides on the partials
+    # where the values tie.
+    q_c_floor = floatmin(typeof(q_c))
+    return clamp((q_c - q_c_eq) / max(q_c, q_c_floor), zero(q_c), one(q_c))
+end
+
+"""
+    draft_mean_updraft_velocity(sgsʲs, ρʲs, uʲs, lg, a_min)
+
+Area-weighted mean upward velocity of the drafts [m/s],
+
+    w_up = Σⱼ aʲ max(wʲ, 0) / max(Σⱼ aʲ, a_min),
+
+with the draft areas `aʲ = max(0, draft_area(ρaʲ, ρʲ))` and the vertical
+velocities `wʲ` of the draft velocities `uʲs` at the local geometry `lg`. The
+floor `a_min` on the total draft area takes `w_up` to zero as the drafts
+vanish.
+"""
+@inline function draft_mean_updraft_velocity(sgsʲs, ρʲs, uʲs, lg, a_min)
+    aʲs = unrolled_map(sgsʲs, ρʲs) do sgsʲ, ρʲ
+        max(zero(ρʲ), draft_area(sgsʲ.ρa, ρʲ))
+    end
+    w⁺ʲs = unrolled_map(uʲs) do uʲ
+        wʲ = get_physical_w(uʲ, lg)
+        max(zero(wʲ), wʲ)
+    end
+    return unrolled_dotproduct(aʲs, w⁺ʲs) / max(unrolled_sum(aʲs), a_min)
+end
+
+"""
+    env_autoconversion_velocity(w⁰, w_up, f_neq, c_w, w_d)
+
+Vertical velocity [m/s] at which the `Kessler1M` rain autoconversion of the
+`PrognosticEDMFX` environment is evaluated,
+
+    w_mp⁰ = max(w⁰, f_neq (c_w w_up + w_d)).
+
+`Kessler1M` blends its threshold and timescale between quiescent (stratiform)
+and convective values with `max(w, 0)`. The environment descends where
+updrafts rise, so at its own velocity `w⁰`, condensate that updrafts detrained
+into it converts at the quiescent values. That condensate, the fraction `f_neq`
+of the environment condensate (`env_detrained_condensate_fraction`), takes the
+velocity of the drafts that formed it: the mean updraft velocity `w_up` of the
+cell (`draft_mean_updraft_velocity`) with the weight `c_w`
+(`sgs_env_autoconversion_updraft_velocity_weight`), plus the velocity `w_d`
+(`sgs_env_autoconversion_detrained_velocity`) for condensate that has outlived
+its drafts. The velocity scales with `f_neq`: a stratocumulus deck in
+equilibrium (`f_neq ≈ 0`) converts at the quiescent values, and condensate
+detrained into a subsaturated cumulus layer (`f_neq ≈ 1`) at the convective
+ones.
+
+With the velocity scale `w_0` of `Kessler1M`
+(`rain_autoconversion_velocity_scale`), the blending factor in a descending
+environment is `x² / (1 + x²)`, `x = f_neq (c_w w_up + w_d) / w_0`: quadratic
+in `f_neq` for `x ≪ 1`, and one half at `f_neq = w_0 / (c_w w_up + w_d)`. The
+parameters `c_w` and `w_d` hence act relative to `w_0`; values that take
+`c_w w_up + w_d` far above `w_0` turn the blending into a switch at small
+`f_neq`.
+"""
+@inline env_autoconversion_velocity(w⁰, w_up, f_neq, c_w, w_d) =
+    max(w⁰, f_neq * (c_w * w_up + w_d))
+
+"""
+    uses_env_autoconversion_velocity(cmp, params)
+
+Whether the environment rain autoconversion of the 1M parameters `cmp` is
+evaluated at `env_autoconversion_velocity`: the autoconversion variant is
+`Kessler1M`, the one that reads the vertical velocity, and one of
+`sgs_env_autoconversion_updraft_velocity_weight` and
+`sgs_env_autoconversion_detrained_velocity` is positive.
+"""
+uses_env_autoconversion_velocity(cmp, params) =
+    cmp.processes.rain_autoconversion isa CMP.Kessler1M && (
+        CAP.sgs_env_autoconversion_updraft_velocity_weight(params) > 0 ||
+        CAP.sgs_env_autoconversion_detrained_velocity(params) > 0
+    )
+
+"""
+    ᶜenv_autoconversion_velocity(Y, p, ᶜq_lcl⁰, ᶜq_icl⁰)
+
+Lazy field of `env_autoconversion_velocity` for the environment cloud liquid
+`ᶜq_lcl⁰` and cloud ice `ᶜq_icl⁰`, with the SGS moments `ᶜsgs_moments` and the
+draft states of `Y` and `p.precomputed`.
+"""
+function ᶜenv_autoconversion_velocity(Y, p, ᶜq_lcl⁰, ᶜq_icl⁰)
+    (; ᶜu⁰, ᶜρʲs, ᶜuʲs, ᶜsgs_moments) = p.precomputed
+    FT = eltype(p.params)
+    c_w = FT(CAP.sgs_env_autoconversion_updraft_velocity_weight(p.params))
+    w_d = FT(CAP.sgs_env_autoconversion_detrained_velocity(p.params))
+    a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
+    ᶜsgsʲs = Y.c.sgsʲs
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜσ_S = ᶜsgs_moments.sigma_S
+    ᶜλ_eq = ᶜsgs_moments.λ_eq
+    return @. lazy(
+        env_autoconversion_velocity(
+            w_component(WVec(ᶜu⁰)),
+            draft_mean_updraft_velocity(ᶜsgsʲs, ᶜρʲs, ᶜuʲs, ᶜlg, a_min),
+            env_detrained_condensate_fraction(ᶜq_lcl⁰, ᶜq_icl⁰, ᶜσ_S, ᶜλ_eq),
+            c_w,
+            w_d,
+        ),
+    )
+end
+
+"""
     set_environment_1m_tendency!(
         ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
     )
@@ -1169,7 +1306,9 @@ quadrature `p.atmos.sgs_quadrature`, into `ᶜmp_tendency⁰`. The environment
 density and specific humidities, the liquid fraction `λ`, and the linearized SGS
 saturation-excess mean `mu_S` are first materialized in scratch fields by one
 column loop. `mode_args` (`()` or a 1-tuple of a `BMT` mode) is appended to the
-arguments of `microphysics_tendencies_1m`.
+arguments of `microphysics_tendencies_1m`. The vertical velocity is that of the
+environment or, where `uses_env_autoconversion_velocity` holds,
+`env_autoconversion_velocity`, materialized in `ᶜtemp_scalar_7`.
 """
 function set_environment_1m_tendency!(
     ᶜmp_tendency⁰, Y, p, tm, cmp, thp, dt, nsubs, nsubs_quad, mode_args,
@@ -1215,7 +1354,16 @@ function set_environment_1m_tendency!(
         end
     end
 
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
+    # The velocity of the `Kessler1M` autoconversion (see
+    # `env_autoconversion_velocity`) is materialized, so that the microphysics
+    # kernel takes one field for it, as for the other environment inputs.
+    ᶜw⁰_air = if uses_env_autoconversion_velocity(cmp, p.params)
+        ᶜw⁰_mp = p.scratch.ᶜtemp_scalar_7
+        ᶜw⁰_mp .= ᶜenv_autoconversion_velocity(Y, p, ᶜq_lcl⁰, ᶜq_icl⁰)
+        ᶜw⁰_mp
+    else
+        @. lazy(w_component(WVec(ᶜu⁰)))
+    end
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,

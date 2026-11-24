@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add a convective vertical velocity for the
+  `Kessler1M` rain autoconversion of the `PrognosticEDMFX` environment
+  (`env_autoconversion_velocity`). The fraction `f_neq` of the environment cloud
+  condensate in excess of its SGS equilibrium value, which detrainment from
+  updrafts supplies, converts at `max(w⁰, f_neq (c_w w_up + w_d))`, with `w_up`
+  the area-weighted mean updraft velocity of the cell. The new provisional
+  parameters `sgs_env_autoconversion_updraft_velocity_weight` (`c_w`) and
+  `sgs_env_autoconversion_detrained_velocity` (`w_d`) are `0` by default, which
+  keeps the environment vertical velocity `w⁰`. The `mp1men_` diagnostics are
+  evaluated at the same velocity.
 - ![][badge-🔥behavioralΔ] Change the default 1-moment cloud-condensate terminal
   velocities from `Fixed` to `Stokes` for cloud liquid
   (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022` for cloud ice

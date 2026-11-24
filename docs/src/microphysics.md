@@ -83,6 +83,57 @@ total water, density or total energy.
     In the above derivations, we assume that the volume
     of the working fluid is constant (not the pressure).
 
+### Autoconversion velocity of the PROPHET environment
+
+The `Kessler1M` rain autoconversion blends its threshold and timescale between
+quiescent (stratiform) and convective values with the factor
+``w_+^2 / (w_+^2 + w_0^2)``, where ``w_+ = \max(w, 0)`` is the upward velocity
+of the subdomain for which the rate is evaluated. With `PrognosticEDMFX`, each
+updraft takes its own velocity ``w^j`` and the environment its velocity
+``w^0``. The environment descends where updrafts rise, so cloud liquid that
+updrafts detrain into it converts to rain at the quiescent values. Two
+provisional parameters let it convert at convective values: the environment
+autoconversion is evaluated at
+
+```math
+w^0_{mp} = \max\!\left( w^0, \; f_{neq} \left( c_w w_{up} + w_d \right) \right),
+\qquad
+w_{up} = \frac{\sum_j a^j \max(w^j, 0)}{\max\!\left( \sum_j a^j, \, a_{\min} \right)},
+\qquad
+f_{neq} = \frac{\left( q_c^0 - q_{c,eq}^0 \right)_+}{q_c^0} .
+```
+
+Here, ``w_{up}`` is the area-weighted mean updraft velocity of the cell, and
+``f_{neq}`` is the fraction of the environment cloud condensate
+``q_c^0 = q_{liq}^0 + q_{ice}^0`` in excess of the equilibrium condensate
+``q_{c,eq}^0`` of the subgrid saturation-excess distribution (see
+[PROPHET: Closures](prophet_closures.md)). Cloud liquid relaxes to equilibrium
+within its condensation timescale, so an excess persists where detrainment
+supplies it: ``f_{neq} \approx 0`` in a stratocumulus deck, and
+``f_{neq} \approx 1`` for condensate detrained into a subsaturated cumulus
+layer. The weight ``c_w`` (`sgs_env_autoconversion_updraft_velocity_weight`)
+scales the updraft velocity, and ``w_d``
+(`sgs_env_autoconversion_detrained_velocity`) is the velocity of detrained
+condensate that has outlived its drafts. Both are zero by default, which
+recovers ``w^0``.
+
+The excess ``q_c^0 - q_{c,eq}^0`` is the vapor deficit of the environment; for
+a narrow distribution with a saturated mean, it equals
+``q_{sat}^0 - q_{vap}^0``. It is independent of the phase partition of the
+condensate, so cloud ice, which relaxes more slowly than cloud liquid, enters
+``f_{neq}`` through the total ``q_c^0``. Where the excess is positive, the
+vapor is subsaturated with respect to liquid, and cloud liquid evaporates
+within its condensation timescale unless detrainment supplies it.
+
+In a descending environment, the blending factor of the autoconversion is
+``x^2 / (1 + x^2)`` with ``x = f_{neq} (c_w w_{up} + w_d) / w_0``. It is
+quadratic in ``f_{neq}`` for ``x \ll 1`` and reaches one half at
+``f_{neq} = w_0 / (c_w w_{up} + w_d)``. The parameters ``c_w`` and ``w_d``
+hence act relative to the velocity scale ``w_0``
+(`rain_autoconversion_velocity_scale`): values that take
+``c_w w_{up} + w_d`` far above ``w_0`` turn the blending into a switch at
+small ``f_{neq}``.
+
 ## Sedimentation
 
 All microphysics tracers sediment with a bulk (group) sedimentation velocity.
@@ -411,6 +462,7 @@ throughout the domain.
 | ``\Phi``                          | Geopotential                                                                                              | m² s⁻²        |
 | ``\rho``, ``\rho e``              | Density and volumetric total energy of moist air                                                          | kg m⁻³, J m⁻³ |
 | ``a^j``, ``\chi^j``               | Area fraction and tracer of updraft subdomain ``j``                                                       | varies        |
+| ``w^j``, ``w^0``                  | Vertical velocity of updraft ``j`` and of the environment                                                 | m s⁻¹         |
 | ``\Delta t``                      | Model timestep                                                                                            | s             |
 
 [Notation and Symbols](notation.md) maps these onto the field names in the code;

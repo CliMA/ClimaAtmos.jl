@@ -93,6 +93,8 @@ import ..ρa⁰
 import ..n_mass_flux_subdomains
 import ..specific
 import ..ᶜspecific_env_value
+import ..uses_env_autoconversion_velocity
+import ..ᶜenv_autoconversion_velocity
 
 
 # We need the abbreviations for symbols like curl, grad, and so on
