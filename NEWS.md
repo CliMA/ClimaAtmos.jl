@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] The 1-moment cloud liquid and cloud ice terminal
+  velocities can be evaluated at the in-cloud specific humidity `q / clamp(CF, c_min, 1)`,
+  with `c_min` the new parameter `sgs_cloud_sedimentation_cf_floor` in `(0, 1]`. `q` and
+  the cloud fraction `CF` are those of the cell or, with `PrognosticEDMFX`, of the
+  environment. The default `1` keeps the velocities at the mean specific humidity.
 - ![][badge-✨feature/enhancement] `InvZEntrainment` has an optional subsaturation term
   that raises dynamical entrainment where a draft is moister than its environment,
   `(c_sub / H) max(0, RHʲ - RH⁰ʲ)^p_sub` with `H` the pressure scale height and both

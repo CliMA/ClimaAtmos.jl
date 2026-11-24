@@ -1,0 +1,6 @@
+# In-cloud sedimentation of cloud liquid and cloud ice in the 1M PrognosticEDMFX
+# restart test: the terminal velocities read the cloud fraction of the cache
+# update that sets them.
+[sgs_cloud_sedimentation_cf_floor]
+value = 0.1
+type = "float"

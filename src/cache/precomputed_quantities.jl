@@ -1148,9 +1148,11 @@ Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
 and cloud fraction, the EDMFX closures that depend on the environment cloud
 fraction (`set_prognostic_edmf_draft_closures!`), face diffusivities, the
 master mixing length `ᶜl_mix`, precipitation terminal velocities (unless they
-depend on the state, in which case `set_implicit_precomputed_quantities_core!`
-sets them; see `state_dependent_precipitation_velocities`), the microphysics
-tendency cache, surface precipitation fluxes, and, when
+depend on the state alone, in which case
+`set_implicit_precomputed_quantities_core!` sets them; see
+`state_dependent_precipitation_velocities` and
+`sedimentation_reads_cloud_fraction`), the microphysics tendency cache, surface
+precipitation fluxes, and, when
 `p.atmos.diff_mode == Explicit()`, the Smagorinsky-Lilly quantities (each step
 only when the corresponding model component is active). Reads the implicit
 precomputed quantities, so it must follow
@@ -1211,13 +1213,17 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF
     # updrafts, unless `set_implicit_precomputed_quantities_core!` already set them
-    # at this state.
-    state_dependent_precipitation_velocities(p.atmos) || set_precipitation_velocities!(
-        Y,
-        p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
+    # at this state. Velocities that read the cloud fraction are set here from the
+    # cloud fraction of the update above, so that they depend on `Y` alone.
+    if !state_dependent_precipitation_velocities(p.atmos) ||
+       sedimentation_reads_cloud_fraction(p.atmos, p.params)
+        set_precipitation_velocities!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
     # Compute microphysics sources from grid mean and sub-domains.
     # Always compute ᶜmp_tendency (and, for 0M, ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt)
     # here so both are fresh. When microphysics is implicit, the implicit stage

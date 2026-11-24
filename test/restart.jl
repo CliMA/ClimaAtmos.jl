@@ -306,7 +306,9 @@ if MANYTESTS
     end
     # 1M PrognosticEDMFX column with the clear-air updraft buoyancy reference,
     # whose draft closures read the environment cloud fraction of the same
-    # cache update. In DYCOMS RF01, a stratocumulus deck condenses within
+    # cache update, and with the Stokes cloud liquid velocity at the in-cloud
+    # specific humidity (`sgs_cloud_sedimentation_cf_floor`), which reads it
+    # too. In DYCOMS RF01, a stratocumulus deck condenses within
     # seconds, and the reference density excess becomes nonzero at its
     # partly cloudy edges, which the test checks. The case runs on CPUs only:
     # 1M PrognosticEDMFX exceeds the 4 KiB kernel-parameter limit of the P100
@@ -336,8 +338,13 @@ if MANYTESTS
                 "dt_save_state_to_disk" => "10secs",
                 "enable_diagnostics" => false,
                 "debug_tendency_diagnostics" => false,
+                "cloud_liquid_terminal_velocity" => "Stokes",
                 "toml" => [
                     joinpath(@__DIR__, "../toml/default_parameters.toml"),
+                    joinpath(
+                        @__DIR__,
+                        "../toml/cloud_sedimentation_restart_test.toml",
+                    ),
                 ],
                 "output_dir" => joinpath(edmf_1m_output_loc, edmf_1m_job_id),
             ),

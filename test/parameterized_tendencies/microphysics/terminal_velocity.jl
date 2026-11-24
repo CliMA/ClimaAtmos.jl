@@ -1,14 +1,24 @@
 #=
 Terminal velocity modes: selection from the config keys, and each (mode, species) closure
-against its CloudMicrophysics reference.
+against its CloudMicrophysics reference. In-cloud sedimentation of cloud liquid and
+cloud ice (`sgs_cloud_sedimentation_cf_floor`): the parameter, the in-cloud specific
+humidity, and the velocities `set_precipitation_velocities!` and
+`set_precomputed_quantities!` set for the grid mean and for the `PrognosticEDMFX`
+environment.
 =#
 
 using Test
+import ClimaComms
+ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
+import Thermodynamics as TD
+import ClimaCore: Fields
 import ClimaCore.MatrixFields: @name
+
+include("../../test_helpers.jl")
 
 @testset "Terminal velocity modes" begin
     for FT in (Float32, Float64)
@@ -119,6 +129,227 @@ import ClimaCore.MatrixFields: @name
                     )
                 end
             end
+
+            @testset "In-cloud specific humidity" begin
+                (; water, params) = make_water(
+                    Dict(
+                        "cloud_liquid_terminal_velocity" => "Stokes",
+                        "cloud_ice_terminal_velocity" => "Chen2022",
+                    ),
+                )
+                @test CAP.sgs_cloud_sedimentation_cf_floor(params) == one(FT)
+                @test !CA.sedimentation_reads_cloud_fraction(water, params)
+                for bad_floor in (zero(FT), FT(-0.1), FT(1.1))
+                    @test_throws ArgumentError CA.SGSQuadratureParameters(
+                        FT,
+                        (; sgs_cloud_sedimentation_cf_floor = bad_floor),
+                    )
+                end
+                cf_floor = FT(0.02)
+                sgs_quad = CA.SGSQuadratureParameters(
+                    FT,
+                    (; sgs_cloud_sedimentation_cf_floor = cf_floor),
+                )
+                @test CAP.sgs_cloud_sedimentation_cf_floor(sgs_quad) == cf_floor
+
+                @test CA.is_cloud_condensate(@name(q_lcl))
+                @test CA.is_cloud_condensate(@name(q_icl))
+                @test !CA.is_cloud_condensate(@name(q_rai))
+                @test !CA.is_cloud_condensate(@name(q_sno))
+
+                q = FT(2e-5)
+                q_ic(cf) = CA.incloud_specific_humidity(q, FT(cf), cf_floor)
+                @test q_ic(1) == q
+                @test q_ic(0.5) == q / FT(0.5)
+                # The floor bounds the concentration factor by 1 / cf_floor.
+                @test q_ic(0.005) == q_ic(0) == q / cf_floor
+                @test CA.incloud_specific_humidity(FT(-1e-5), FT(0.15), cf_floor) ==
+                      zero(FT)
+                # A floor of 1 returns the mean at any cloud fraction.
+                @test CA.incloud_specific_humidity(q, FT(0.1), one(FT)) == q
+
+                # The Stokes cloud liquid and Chen et al. (2022) cloud ice fall
+                # speeds increase with the in-cloud specific humidity, down to
+                # the cloud-fraction floor.
+                mm = water.microphysics_model
+                cmc = CAP.microphysics_cloud_params(params)
+                cmp = CAP.microphysics_1m_params(params)
+                for (mode, name) in (
+                    (CA.StokesTerminalVelocity(), @name(q_lcl)),
+                    (CA.Chen2022TerminalVelocity(), @name(q_icl)),
+                )
+                    w_ic(cf) = CA.terminal_velocity(
+                        mm, mode, name, params, cmc, cmp, FT(0.35), q_ic(cf),
+                    )
+                    @test zero(FT) < w_ic(1) < w_ic(0.5) < w_ic(0.15) < w_ic(0.02)
+                    @test w_ic(0.005) == w_ic(0.02)
+                end
+            end
         end
+    end
+end
+
+# A 1M column with state-dependent cloud liquid and cloud ice velocities, the
+# cloud-fraction floor read from a toml file, and cloud condensate set by hand
+# to a few percent of the total water, in proportions that vary with height.
+function cloud_sedimentation_column(job_id, extra)
+    cf_floor = 0.02
+    toml = joinpath(mktempdir(), "cloud_sedimentation_cf_floor.toml")
+    write(
+        toml,
+        "[sgs_cloud_sedimentation_cf_floor]\nvalue = $cf_floor\ntype = \"float\"\n",
+    )
+    config = CA.AtmosConfig(
+        merge(
+            Dict{String, Any}(
+                "FLOAT_TYPE" => "Float64",
+                "config" => "column",
+                "microphysics_model" => "1M",
+                "cloud_liquid_terminal_velocity" => "Stokes",
+                "cloud_ice_terminal_velocity" => "Chen2022",
+                "z_stretch" => false,
+                "toml" =>
+                    [joinpath(pkgdir(CA), "toml", "default_parameters.toml"), toml],
+                "output_default_diagnostics" => false,
+            ),
+            extra,
+        );
+        job_id,
+    )
+    (; Y, p, simulation) = generate_test_simulation(config)
+    FT = eltype(Y)
+    @test CAP.sgs_cloud_sedimentation_cf_floor(p.params) == FT(cf_floor)
+    @test CA.sedimentation_reads_cloud_fraction(p.atmos, p.params)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_top = maximum(parent(ᶜz))
+    @. Y.c.ρq_lcl = FT(0.02) * (2 - ᶜz / z_top) * Y.c.ρq_tot
+    @. Y.c.ρq_icl = FT(0.01) * (1 + ᶜz / z_top) * Y.c.ρq_tot
+    return (; Y, p, t = simulation.integrator.t)
+end
+
+grid_mean_column(job_id) = cloud_sedimentation_column(
+    job_id,
+    Dict("initial_condition" => "PrecipitatingColumn"),
+)
+edmfx_column(job_id) = cloud_sedimentation_column(
+    job_id,
+    Dict(
+        "initial_condition" => "Bomex",
+        "turbconv" => "prognostic_edmfx",
+        "prognostic_tke" => true,
+        "z_max" => 3000.0,
+        "z_elem" => 30,
+        "dt" => "1secs",
+        "t_end" => "10secs",
+    ),
+)
+
+# A cloud fraction without cloud in the lower half of the column, where the
+# floor applies, increasing to overcast at the top.
+function set_cloud_fraction_profile!(ᶜcf, Y)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_top = maximum(parent(ᶜz))
+    @. ᶜcf = max(0, 2 * ᶜz / z_top - 1)
+    return nothing
+end
+
+# Cloud liquid and cloud ice terminal velocities at the density `ᶜρ`, for the
+# in-cloud specific humidity with the cloud fraction `ᶜcf` and its floor.
+function expected_cloud_velocities(Y, p, ᶜρ, ᶜcf, cf_floor)
+    params = p.params
+    mm = p.atmos.microphysics_model
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    w(mode, name, ρ, q) =
+        CA.terminal_velocity(mm, mode, name, params, cmc, cmp, ρ, q)
+    w_liq(ρ, q) = w(CA.StokesTerminalVelocity(), @name(q_lcl), ρ, q)
+    w_ice(ρ, q) = w(CA.Chen2022TerminalVelocity(), @name(q_icl), ρ, q)
+    ᶜwₗ = @. w_liq(
+        ᶜρ,
+        CA.incloud_specific_humidity(Y.c.ρq_lcl / Y.c.ρ, ᶜcf, cf_floor),
+    )
+    ᶜwᵢ = @. w_ice(
+        ᶜρ,
+        CA.incloud_specific_humidity(Y.c.ρq_icl / Y.c.ρ, ᶜcf, cf_floor),
+    )
+    return (; ᶜwₗ, ᶜwᵢ)
+end
+
+# The cached velocities equal those at the in-cloud specific humidity for the
+# cloud fraction `ᶜcf`, and differ from those for the cloud fraction `other_cf`.
+function test_cloud_velocities(Y, p, ᶜρ, ᶜcf, other_cf)
+    cf_floor = CAP.sgs_cloud_sedimentation_cf_floor(p.params)
+    expected = expected_cloud_velocities(Y, p, ᶜρ, ᶜcf, cf_floor)
+    other = expected_cloud_velocities(Y, p, ᶜρ, other_cf, cf_floor)
+    for name in (:ᶜwₗ, :ᶜwᵢ)
+        ᶜw = getproperty(p.precomputed, name)
+        @test parent(ᶜw) ≈ parent(getproperty(expected, name))
+        @test !(parent(ᶜw) ≈ parent(getproperty(other, name)))
+    end
+    return nothing
+end
+
+# Environment density of the `PrognosticEDMFX` cache.
+function environment_density(p)
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    thp = CAP.thermodynamics_params(p.params)
+    return @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+end
+
+@testset "In-cloud velocities through `set_precipitation_velocities!`" begin
+    @testset "Grid mean" begin
+        (; Y, p) = grid_mean_column("cloud_sedimentation_grid_mean")
+        (; ᶜcloud_fraction) = p.precomputed
+        set_cloud_fraction_profile!(ᶜcloud_fraction, Y)
+        CA.set_precipitation_velocities!(
+            Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
+        )
+        # An overcast cell has the velocities at the mean specific humidity.
+        test_cloud_velocities(Y, p, Y.c.ρ, ᶜcloud_fraction, one(eltype(Y)))
+    end
+
+    @testset "PrognosticEDMFX environment" begin
+        (; Y, p) = edmfx_column("cloud_sedimentation_edmfx")
+        # Without updraft area, the environment holds all of the cloud
+        # condensate, and the grid-mean velocity is the environment velocity.
+        @. Y.c.sgsʲs.:(1).ρa = 0
+        # The environment cloud fraction is the one that enters, not the
+        # grid-mean cloud fraction, which is set to overcast.
+        (; ᶜcloud_fraction, ᶜcloud_fraction⁰) = p.precomputed
+        set_cloud_fraction_profile!(ᶜcloud_fraction⁰, Y)
+        @. ᶜcloud_fraction = 1
+        CA.set_precipitation_velocities!(
+            Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
+        )
+        test_cloud_velocities(
+            Y, p, environment_density(p), ᶜcloud_fraction⁰, ᶜcloud_fraction,
+        )
+    end
+end
+
+# `set_precomputed_quantities!` sets the velocities from the cloud fraction it
+# computes, so that the cache depends on `Y` alone: the cloud fraction that the
+# cache held before the call, here one half, leaves no trace in the velocities.
+@testset "In-cloud velocities through `set_precomputed_quantities!`" begin
+    @testset "Grid mean" begin
+        (; Y, p, t) = grid_mean_column("cloud_sedimentation_cache_grid_mean")
+        FT = eltype(Y)
+        (; ᶜcloud_fraction) = p.precomputed
+        @. ᶜcloud_fraction = FT(0.5)
+        CA.set_precomputed_quantities!(Y, p, t)
+        test_cloud_velocities(Y, p, Y.c.ρ, ᶜcloud_fraction, FT(0.5))
+    end
+
+    @testset "PrognosticEDMFX environment" begin
+        (; Y, p, t) = edmfx_column("cloud_sedimentation_cache_edmfx")
+        FT = eltype(Y)
+        @. Y.c.sgsʲs.:(1).ρa = 0
+        (; ᶜcloud_fraction, ᶜcloud_fraction⁰) = p.precomputed
+        @. ᶜcloud_fraction = FT(0.5)
+        @. ᶜcloud_fraction⁰ = FT(0.5)
+        CA.set_precomputed_quantities!(Y, p, t)
+        test_cloud_velocities(
+            Y, p, environment_density(p), ᶜcloud_fraction⁰, FT(0.5),
+        )
     end
 end
