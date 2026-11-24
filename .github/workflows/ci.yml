@@ -95,6 +95,8 @@ jobs:
           prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
           hash: ${{ hashFiles('Project.toml') }}
       - uses: julia-actions/julia-buildpkg@v1
+      # ClimaCore v1.0.9 allocates in `MatrixFields.single_field_solve!`.
+      - run: julia --project -e 'using Pkg; Pkg.pin(name = "ClimaCore", version = "1.0.8")'
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: ${{ env.COVERAGE }}
