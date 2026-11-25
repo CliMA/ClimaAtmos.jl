@@ -4,7 +4,7 @@ Tests of the orographic gravity-wave (OGW) drag and of the turbulent orographic 
 (closed forms, GFDL `topo_drag` numbers, or exact properties such as symmetry), not with
 the code's own earlier output, except where a section says it pins a regression.
 
-Sections, in order (the slowest, the Earth-topography sphere, is last):
+Sections, in order:
 
   1. The damping that keeps the cached gravity-wave drag from reversing the wind
      (`_semi_implicit_gw_drag`; TOFD's own implicit rate is in section 4), and the NaN
@@ -17,12 +17,13 @@ Sections, in order (the slowest, the Earth-topography sphere, is last):
   4. TOFD drag coefficient, smoothing, filtered-orography variance, implicit rate.
   5. Preprocessing of the elevation into hmax and the drag tensor, with analytic mountains,
      and the build record of the stored drag files.
-  6. One OGW step on a coarse Earth-topography sphere (about 3 minutes, mostly the build).
 
-Each section starts with a comment describing what it checks. Plot-only scripts with no
-assertions (Garner 2005 figures, 3D and base-flux plots, the artifact plots) and the
-script that builds the `raw_topo` artifacts live in scripts/. The two artifact scripts
-run in the Buildkite smoke step; the plot scripts are run by hand.
+Each section starts with a comment describing what it checks. One OGW step on a coarse
+Earth-topography sphere is in test_ogw_earth_sphere.jl, which runs as its own Buildkite
+step because it reads the full Earth elevation data. Plot-only scripts with no assertions
+(Garner 2005 figures, 3D and base-flux plots, the artifact plots) and the script that
+builds the `raw_topo` artifacts live in scripts/. The two artifact scripts run in the
+Buildkite smoke step; the plot scripts are run by hand.
 =#
 
 using Test
@@ -2174,66 +2175,4 @@ end
     @test_throws "has no build record" CA.read_ogw_drag_file(
         unstamped, ctx; h_elem, shape...,
     )
-end
-
-# ======================================================================================
-# 6. One step on an Earth-topography sphere
-# ======================================================================================
-
-#=
-One orographic gravity-wave step on a coarse sphere with Earth topography.
-
-Builds a small simulation (`h_elem = 4`, 10 levels) with `topography: "Earth"` and
-`orographic_gravity_wave: "raw_topo"`, which loads the shipped `ogw_computed_drag_h4` drag
-file (checking its build record), and builds the TOFD coefficient from the Earth elevation data, sets a uniform 10 m/s westerly and
-2 m/s southerly wind (the model starts at rest, which gives no drag), and calls the OGW
-compute step once. It checks the wiring end to end: the drag is finite, nonzero, within
-the limiter, and on balance opposes the wind. The single-column physics is checked
-against GFDL `topo_drag` in section 3 of this file.
-
-Takes about 3 minutes on one CPU, almost all of it the simulation build.
-=#
-
-@testset "OGW step on an Earth-topography sphere" begin
-    output_dir = mktempdir()
-    config = CA.AtmosConfig(
-        Dict(
-            "h_elem" => 4,
-            "z_elem" => 10,
-            "z_max" => 30000.0,
-            "z_stretch" => false,
-            "dt" => "400secs",
-            "t_end" => "400secs",
-            "topography" => "Earth",
-            "topo_smoothing" => true,
-            "orographic_gravity_wave" => "raw_topo",
-            "output_default_diagnostics" => false,
-            "output_dir" => output_dir,
-        );
-        job_id = "ogw_earth_sphere",
-    )
-    simulation = CA.get_simulation(config)
-    Y = simulation.integrator.u
-    p = simulation.integrator.p
-    FT = eltype(Y.c.ρ)
-
-    u_wind, v_wind = FT(10), FT(2)
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    Y.c.uₕ .= Geometry.Covariant12Vector.(Geometry.UVVector.(u_wind, v_wind), ᶜlg)
-    CA.orographic_gravity_wave_compute_tendency!(
-        Y,
-        p,
-        p.atmos.orographic_gravity_wave,
-    )
-
-    uf = Array(parent(p.orographic_gravity_wave.ᶜuforcing))
-    vf = Array(parent(p.orographic_gravity_wave.ᶜvforcing))
-    @test all(isfinite, uf) && all(isfinite, vf)
-    @test count(!iszero, uf) > 0
-    # The limiter caps the drag vector at 3e-3·√2 m/s².
-    @test maximum(sqrt.(uf .^ 2 .+ vf .^ 2)) <= FT(3e-3) * sqrt(FT(2)) * (1 + sqrt(eps(FT)))
-    # Summed over the globe, the drag decelerates the imposed wind.
-    @test sum(uf .* u_wind .+ vf .* v_wind) < 0
-    # TOFD uses the Earth elevation data, so its coefficient is nonzero somewhere.
-    @test maximum(parent(p.orographic_gravity_wave.ᶜtofd_Cd)) > 0
 end

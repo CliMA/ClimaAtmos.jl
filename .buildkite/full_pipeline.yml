@@ -182,6 +182,12 @@ steps:
           slurm_cpus_per_task: 8
           slurm_mem: 32GB
 
+      - label: ":wavy_dash: Orographic gravity wave: one step on an Earth-topography sphere"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_earth_sphere.jl"
+        agents:
+          slurm_mem: 32GB
+
       - label: ":wavy_dash: Beres NOGW: single-column heating + drag"
         retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_single_column.jl"
