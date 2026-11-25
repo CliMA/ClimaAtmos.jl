@@ -13,7 +13,6 @@ prescribe_clouds_in_radiation: true
 radiation_reset_rng_seed: true
 insolation: "timevarying"
 non_orographic_gravity_wave: true
-orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
 time_varying_trace_gases: ["CO2", "O3"]
 reproducibility_test: true

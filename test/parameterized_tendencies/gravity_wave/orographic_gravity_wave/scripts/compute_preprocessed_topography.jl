@@ -20,7 +20,9 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
-config.parsed_args["h_elem"] = 8;
+# Resolution: 8 by default; the CI smoke step sets OGW_SCRIPT_H_ELEM to a finer grid,
+# whose narrower smoothing window keeps the preprocessing cheap.
+config.parsed_args["h_elem"] = parse(Int, get(ENV, "OGW_SCRIPT_H_ELEM", "8"));
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
@@ -60,7 +62,7 @@ topo_kwargs = (;
 )
 
 if load_preprocessed_topography
-    topo_cg = CA.load_preprocessed_topography(; topo_kwargs...)
+    topo_cg = CA.load_preprocessed_topography(; topo_kwargs..., γ, h_frac, α_smoothing)
 else
     topo_cg = CA.compute_OGW_info(
         Y, elevation_data, earth_radius, γ, h_frac;
@@ -68,7 +70,15 @@ else
     )
 end
 
-output_filename = write_computed_drag!(topo_cg, config.comms_ctx; topo_kwargs...)
+output_filename = write_computed_drag!(
+    topo_cg,
+    config.comms_ctx;
+    topo_kwargs...,
+    γ,
+    h_frac,
+    α_smoothing,
+    elevation_source = basename(elevation_data),
+)
 
 datafile_cg, weightfile = save_nc_data(output_filename, topo_cg, spaces)
 

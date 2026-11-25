@@ -2,6 +2,9 @@ import ClimaDiagnostics.Writers:
     HDF5Writer
 import ClimaCore: InputOutput, Spaces, Fields, to_cpu
 import ClimaComms
+# The drag file writer lives in ClimaAtmos so the tests can use it; scripts that include
+# this file call it unqualified.
+import ClimaAtmos: write_computed_drag!
 
 # Save the computed drag data to a NetCDF file for diagnostics
 using NCDatasets
@@ -12,79 +15,6 @@ include(
 )
 include(
     joinpath(pkgdir(CA), "test/parameterized_tendencies/gravity_wave", "gw_plotutils.jl"))
-
-"""
-    write_computed_drag!(
-        computed_drag,
-        comms_ctx;
-        topography,
-        topo_smoothing,
-        topography_damping_factor,
-        h_elem
-    )
-
-Write the preprocessed orographic gravity wave drag and its configuration to an HDF5 file.
-
-The file is created in the working directory as `<output_filename>.hdf5`, with the
-topography configuration stored as file attributes so a later reader can confirm the drag
-matches its run. `output_filename` comes from `generate_drag_filename`, and
-`load_preprocessed_topography` reads the result back.
-
-This is the last step of the offline preprocessing pipeline; the files it produces are what
-the `ogw_computed_drag_h*` ClimaArtifacts distribute.
-
-# Arguments
-
-  - `computed_drag`: Drag field to save, as returned by `compute_OGW_info`.
-  - `comms_ctx`: Communications context used to initialize the HDF5 writer.
-
-# Keyword Arguments
-
-  - `topography`: Topography name.
-  - `topo_smoothing`: Whether topography smoothing was applied.
-  - `topography_damping_factor`: Damping factor applied to the topography.
-  - `h_elem`: Number of horizontal elements per panel direction [-].
-
-# Returns
-
-The extensionless base filename of the file written, as a `String`.
-
-See the *Orographic Gravity Waves* page for the pipeline diagram.
-"""
-function write_computed_drag!(
-    computed_drag,
-    comms_ctx;
-    topography,
-    topo_smoothing,
-    topography_damping_factor,
-    h_elem,
-)
-    (; output_filename, topo_damping_factor) = generate_drag_filename(;
-        topography, topo_smoothing, topography_damping_factor, h_elem,
-    )
-    # initialize HDF5 output
-    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", comms_ctx)
-
-    # write attributes to the HDF5 file
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "topography", topography)
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "topo_smoothing", topo_smoothing)
-    InputOutput.HDF5.write_attribute(
-        hdfwriter.file,
-        "topo_damping_factor",
-        topo_damping_factor,
-    )
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "h_elem", h_elem)
-
-    @info "Writing computed drag data to $(output_filename).hdf5"
-    # write computed drag data to the HDF5 file
-    InputOutput.write!(hdfwriter, computed_drag, "computed_drag")
-
-    # close the HDF5 writer
-    Base.close(hdfwriter)
-
-    return output_filename
-end
-
 
 """
     save_nc_data(output_filename, topo_cg, spaces) -> (datafile_cg, weightfile)

@@ -68,6 +68,53 @@ main
   temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
   too high in the bottom cell (where temperature falls with height). This changes the
   results of every run with either scheme enabled.
+- ![][badge-💥breaking] Orographic gravity-wave drag (`raw_topo`, `raw_topo_online`,
+  `gfdl_restart`) raises an error with `topography: "NoWarp"`, since a flat surface has no
+  subgrid mountains; with `NoWarp` it used Earth's drag tensor. Downstream configs (e.g.
+  ClimaCoupler) that set `orographic_gravity_wave` with the default `topography` (`NoWarp`)
+  now get this error. `aquaplanet_equil_allsky_gw_raw`, `bm_gravity_wave` and
+  `prognostic_edmfx_aquaplanet_gpu` now use `topography: "Earth"` with `topo_smoothing`,
+  and `aquaplanet_nonequil_allsky_gw_res_2M` no longer turns on orographic drag.
+- ![][badge-🔥behavioralΔ] The orographic gravity-wave drag follows GFDL `topo_drag` in six
+  more details, which changes every run with it: the base flux reads the low-level wind,
+  density and buoyancy frequency one cell higher, in the first cell above the PBL-top cell;
+  the wind curvature keeps its sign, so it can widen the effective obstacle width (up to
+  2·L₀) as well as narrow it; the face wind along the drag direction is floored after
+  interpolation; the blocked-drag weight is the center pressure minus the pressure at
+  `z_ref` instead of interpolation across the faces; the PBL top is searched only where the
+  pressure is at least half the surface (bottom-face) pressure, not half the lowest
+  cell-center pressure; and the propagating flux is built on cell faces, so a wave breaking
+  at its source no longer puts up to half of its drag into the PBL-top cell.
+- ![][badge-🐛bugfix] The orographic gravity-wave preprocessing (`compute_OGW_info`, run by
+  `raw_topo_online` and used to build the `raw_topo` artifacts) uses the true east-west grid
+  spacing at every latitude: `cos(lat)` was floored at `cos 60°`, so east-west slopes were
+  too small poleward of 60°. The drag tensor is now zero poleward of 88°. Longitude now
+  wraps around: at the ±180° edge of the elevation grid, the windows and slopes use the
+  terrain on the other side instead of stopping at the edge. This changes only terrain
+  within about one smoothing window (about 200 km at `h_elem = 16`) of the 180° meridian.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The preprocessing averages the drag tensor and
+  `max(0, h₀)^(2−γ)` over blocks about one model grid spacing wide before regridding, as
+  GFDL remaps them conservatively, and only then converts the latter to `hmax`. The tensor
+  at a single point acts against only some wind directions; the block means act against
+  every wind direction on about 99.9% of the land area at `h_elem = 16`, up from about 64%
+  with the artifacts on `main`. The elevation is sampled about every 7.5 km
+  (`ogw_topography_stride`), a tuning choice, instead of at a quarter of the smoothing
+  scale. The smoothing window grows with the model grid spacing while the sampling
+  stays at 7.5 km, so the preprocessing (and `raw_topo_online` start-up) runs slower on
+  coarser grids.
+- ![][badge-🔥behavioralΔ] The `raw_topo` artifacts (`ogw_computed_drag_h*`) are rebuilt with
+  the fixes above and the default smoothing fraction `ogw_smoothing_scale_fraction = 1.0`
+  (they used 0.15), so `raw_topo` output changes. `hmax` is about 3 times larger, so more
+  drag goes to blocked flow (low-level air that goes around a mountain, not over it). In one
+  10-day run at `h_elem = 16`, the area-integrated stress relative to `main` was 1.25 times
+  globally, 1.42 for blocked drag, 1.15 for propagating drag, and unchanged for turbulent
+  orographic form drag (TOFD); Antarctica 2.80, partly from a known leftover (poleward
+  overestimation of east-west drag); and Himalaya/Tibet 0.73. The runtime changes above,
+  with `main`'s drag files, give 0.82 times the global total; the rest of the change comes
+  from the new drag files. How this changes the winds and climate is not yet known; that
+  needs longer runs. Each drag file stores a build record (preprocessing version, `h_elem`,
+  `γ`, `h_frac`, `α_smoothing`, float types, elevation file); `raw_topo` now refuses a file
+  whose build record is missing or whose version or `h_elem` differ.
 
 0.43.0
 ------

@@ -281,39 +281,51 @@ end
         params,
         FT,
     )
+
+    # A flat surface has no mountain drag
+    for name in ("raw_topo", "raw_topo_online", "gfdl_restart")
+        @test_throws "needs a surface with topography" CA.get_orographic_gravity_wave_model(
+            Dict("orographic_gravity_wave" => name, "topography" => "NoWarp"),
+            params,
+            FT,
+        )
+    end
 end
 
 @testset "raw_topo stale-artifact warning" begin
-    FT = Float64
-    mk(; γ, h_frac, α, topography = Val(:Earth)) =
-        CA.FullOrographicGravityWave{FT, Val{:raw_topo}, typeof(topography)}(;
-            γ,
-            ϵ = 0.0,
-            β = 0.5,
-            h_frac,
-            ρscale = 1.2,
-            L0 = 8.0e4,
-            a0 = 0.9,
-            a1 = 3.0,
-            Fr_crit = 0.7,
-            α_smoothing = α,
-            a_tofd = 0.0,
-            topo_info = Val(:raw_topo),
-            topography,
-        )
+    # The shipped artifacts were built with γ, h_frac and α equal to RAW_TOPO_ARTIFACT_*.
+    # A run with the ClimaParams defaults must use those same values, or every default
+    # raw_topo run would warn that the artifact does not match. So if a ClimaParams default
+    # changes, this fails until the artifacts are rebuilt and the constants updated.
+    ogw_params = CA.OrographicGravityWaveParameters(Float64)
+    @test ogw_params.γ ≈ CA.RAW_TOPO_ARTIFACT_γ
+    @test ogw_params.h_frac ≈ CA.RAW_TOPO_ARTIFACT_H_FRAC
+    @test ogw_params.α_smoothing ≈ CA.RAW_TOPO_ARTIFACT_α_SMOOTHING
 
-    # Defaults match the shipped artifact: no warning.
-    @test_logs min_level = Logging.Warn CA.warn_if_stale_raw_topo_artifact(
-        mk(; γ = 0.4, h_frac = 0.1, α = 0.15),
+    # The build record of a drag file built at the artifact values; loading compares the
+    # run's values with it.
+    stamp = Dict{String, Any}(
+        "ogw_preprocessing_version" => CA.OGW_PREPROCESSING_VERSION,
+        "h_elem" => 16,
+        "gamma" => CA.RAW_TOPO_ARTIFACT_γ,
+        "h_frac" => CA.RAW_TOPO_ARTIFACT_H_FRAC,
+        "alpha_smoothing" => CA.RAW_TOPO_ARTIFACT_α_SMOOTHING,
+        "field_float_type" => "Float32",
+        "compute_float_type" => "Float64",
+        "elevation_source" => "ETOPO_2022_v1_60s_N90W180_surface.nc",
     )
-    # Analytical topography loads no artifact: no warning even when overridden.
-    @test_logs min_level = Logging.Warn CA.warn_if_stale_raw_topo_artifact(
-        mk(; γ = 0.5, h_frac = 0.2, α = 0.3, topography = Val(:Schar)),
+    check(; γ, h_frac, α) = CA.check_ogw_drag_stamp(
+        stamp, "drag.hdf5"; h_elem = 16, γ, h_frac, α_smoothing = α,
     )
-    # Overridden shape parameter on Earth: warn.
-    @test_logs (:warn,) CA.warn_if_stale_raw_topo_artifact(
-        mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
+    @test_logs min_level = Logging.Warn check(;
+        γ = ogw_params.γ, h_frac = ogw_params.h_frac, α = ogw_params.α_smoothing,
     )
+    # Float32 run parameters against the Float64 build record: no warning.
+    @test_logs min_level = Logging.Warn check(; γ = 0.4f0, h_frac = 0.1f0, α = 1.0f0)
+    # Overridden shape parameter: warn.
+    @test_logs (:warn,) check(; γ = 0.5, h_frac = 0.1, α = 1.0)
+    # The smoothing fraction the artifacts were built with before (0.15): warn.
+    @test_logs (:warn,) check(; γ = 0.4, h_frac = 0.1, α = 0.15)
 end
 
 @testset "n_columns" begin

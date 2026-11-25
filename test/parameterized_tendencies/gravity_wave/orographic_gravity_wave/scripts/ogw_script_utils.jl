@@ -40,10 +40,7 @@ function load_computed_drag(parsed_args, comms_ctx)
         h_elem = topo_kwargs.h_elem, context = comms_ctx,
     )
     @info "Loading from: $(artifact_path)"
-    reader = InputOutput.HDF5Reader(artifact_path, comms_ctx)
-    drag = InputOutput.read_field(reader, "computed_drag")
-    Base.close(reader)
-    return drag
+    return CA.read_ogw_drag_file(artifact_path, comms_ctx; h_elem = topo_kwargs.h_elem)
 end
 
 """

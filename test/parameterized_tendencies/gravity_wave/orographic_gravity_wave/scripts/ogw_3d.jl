@@ -118,18 +118,18 @@ end
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
-include("../gw_remap_plot_utils.jl")
+include(joinpath(@__DIR__, "..", "..", "gw_remap_plot_utils.jl"))
 
 # Include helper functions from test directory
-include(joinpath(@__DIR__, "..", "..", "..", "test_helpers.jl"))
-include("ogw_test_utils.jl")
+include(joinpath(@__DIR__, "..", "..", "..", "..", "test_helpers.jl"))
+include(joinpath(@__DIR__, "ogw_script_utils.jl"))
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 @show CUDA.functional()
 @show ClimaComms.device(comms_ctx)
 
 # GFDL data file path
-include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
+include(joinpath(@__DIR__, "../../../../artifact_funcs.jl"))
 ncfile = gfdl_ogw_data_path()
 
 # Initialize p

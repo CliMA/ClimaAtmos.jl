@@ -7,8 +7,8 @@ include(
         "preprocess_topography.jl",
     ),
 )
-include("../gw_remap_plot_utils.jl")
-include("ogw_test_utils.jl")
+include(joinpath(@__DIR__, "..", "..", "gw_remap_plot_utils.jl"))
+include(joinpath(@__DIR__, "ogw_script_utils.jl"))
 
 import ClimaComms
 import ClimaComms.@import_required_backends
@@ -21,7 +21,9 @@ if !(@isdefined config)
     config = CA.AtmosConfig(config_file; job_id)
 end
 
-config.parsed_args["h_elem"] = 8;
+# Resolution: 8 by default; the CI smoke step sets OGW_SCRIPT_H_ELEM to a finer grid,
+# whose narrower smoothing window keeps the preprocessing cheap.
+config.parsed_args["h_elem"] = parse(Int, get(ENV, "OGW_SCRIPT_H_ELEM", "8"));
 config.parsed_args["topography"] = "Earth";
 config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["topography_damping_factor"] = 1;
