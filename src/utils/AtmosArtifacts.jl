@@ -154,7 +154,7 @@ mountain heights `hmax` and `hmin`.
 # Keyword Arguments
 
   - `h_elem`: Number of horizontal elements per cubed-sphere panel edge; artifacts
-    exist for 6, 8, 12, and 16.
+    exist for 4, 6, 8, 12, 16, 30, and 60.
   - `context = nothing`: `ClimaComms` context.
 """
 function ogw_computed_drag_file_path(; h_elem::Int, context = nothing)

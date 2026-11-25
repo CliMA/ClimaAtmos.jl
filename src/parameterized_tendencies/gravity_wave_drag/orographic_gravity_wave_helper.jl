@@ -15,7 +15,11 @@ components with the code's index convention `tᵢⱼ = −∂χ/∂xⱼ · ∂h/
 is the `(j,i)` entry of `−∇χ(∇h)ᵀ`. The leading minus reproduces Garner's sign convention,
 so the resulting drag opposes the low-level flow.
 
-Called from `compute_OGW_info` in the offline preprocessing pipeline.
+The velocity-potential gradient, and so the whole tensor, is zero poleward of 88°, where
+the latitude circles are too short for the finite differences. `compute_OGW_info` applies
+the same cut to the model grid points after regridding.
+
+Called from `compute_OGW_latlon` in the offline preprocessing pipeline.
 
 # Arguments
 
@@ -39,7 +43,9 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)
-
+    polar_row = abs.(lat') .> 88
+    @. dχdx = ifelse(polar_row, 0, dχdx)
+    @. dχdy = ifelse(polar_row, 0, dχdy)
 
     t11 = dχdx .* dhdx
     t21 = dχdx .* dhdy
@@ -54,41 +60,37 @@ end
 
 Compute the horizontal gradient of a scalar on the spherical surface.
 
-Returns the zonal and meridional derivatives per unit physical distance, both the same
-shape as `A`, using centered differences in the interior and one-sided differences at the
-boundaries of each dimension.
+Returns the zonal and meridional derivatives per unit distance, each the same shape as `A`,
+by centered differences. Longitude wraps around, so the first and last columns are
+neighbors; the first and last latitude rows use one-sided differences.
 
-The zonal spacing shrinks as `cos(lat)`, so it is divided out; the factor is floored at
-`cos(60°)` to keep the gradient finite poleward of 60°, where the grid converges. Longitude
-is treated as non-periodic here, so the first and last columns use one-sided differences.
+The zonal step is one column, `R·Δλ·cos(lat)`, at every latitude, as in Garner.
+`cos(lat)` is floored at `sin(Δlat/2)` so rows at or next to a pole get a finite slope. The
+floor makes the east-west slope too small in the first and last rows of the ETOPO grid
+(0.008° from the poles), but `calc_orographic_tensor` zeroes the tensor poleward of 88°, so
+this error does not reach the drag.
 
 Called from `calc_orographic_tensor` in the offline preprocessing pipeline.
 
 # Arguments
 
   - `A`: Scalar field on the lon-lat grid, indexed `[lon, lat]`.
-  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees].
+  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees]; `lon` covers the whole
+    circle.
   - `earth_radius`: Sphere radius [m].
 """
 function calc_∇A(A, lon, lat, earth_radius)
     FT = eltype(A)
     dlat = lat[2] - lat[1]
     dlon = lon[2] - lon[1]
-    dAdx =
-        vcat(
-            (A[2, :] .- A[1, :])',
-            (A[3:end, :] .- A[1:(end - 2), :]) / FT(2),
-            (A[end, :] .- A[end - 1, :])',
-        ) ./ (
-            # Convert the longitudinal grid spacing (dlon) from degrees to
-            # physical distance (meters) at each latitude. The zonal distance
-            # per degree of longitude shrinks as cos(lat), so we multiply by
-            # cos(lat). The max(..., cosd(60)) clamp prevents division by
-            # near-zero values at high latitudes (|lat| > 60°). The result is
-            # tiled across all longitudes to form a (lon × lat) matrix.
-            deg2rad(dlon) * earth_radius .*
-            reshape(repeat(max.(cosd.(lat), cosd(FT(60))), length(lon)), length(lat), :)'
-        )
+    # Zonal grid spacing [m] of each latitude row, `R·Δλ·cos(lat)`. The floor
+    # `sin(Δlat/2)` keeps rows on or next to a pole finite; those rows are poleward of
+    # 88°, where `calc_orographic_tensor` zeroes the tensor.
+    cos_floor = sind(abs(dlat) / 2)
+    Δx_row = deg2rad(dlon) * earth_radius .* max.(cosd.(lat), cos_floor)
+    # Centered difference with periodic longitude: `circshift(A, (-1, 0))[i, :]` is
+    # `A[i + 1, :]`, wrapping from the last column to the first.
+    dAdx = (circshift(A, (-1, 0)) .- circshift(A, (1, 0))) ./ (FT(2) .* Δx_row')
     dAdy =
         hcat(
             A[:, 2] .- A[:, 1],
@@ -121,7 +123,7 @@ The smoothing scale is latitude-dependent, `sin(40°)/sin(max(20°, |lat|))` tim
 requested distance, divided by the Earth radius to give an angular scale, and is floored at
 one grid cell in each direction so the weights cannot blow up on a coarse grid.
 
-Called from `compute_OGW_info` in the offline preprocessing pipeline.
+Called from `compute_OGW_latlon` in the offline preprocessing pipeline.
 
 # Arguments
 
@@ -217,10 +219,9 @@ function calc_velocity_potential(
     # Initialize output
     χ = zeros(FT, nlon, nlat)
 
-    # Main convolution loop: latitude (outer) then longitude (inner)
-    # Note: Fortran skips |lat| > 89° (get_velpot.f90:81). This is a no-op
-    # (Antarctic mask + zero Arctic elevation) but we match it for safety.
-    for j in 1:nlat
+    # Main convolution loop: latitude (outer) then longitude (inner). Rows are
+    # independent and run on separate threads.
+    Threads.@threads for j in 1:nlat
         if abs(lat[j]) > FT(89)
             continue
         end
@@ -341,11 +342,11 @@ Smooth a lat-lon field with the same Lorentzian kernel `calc_hpoz_latlon` uses.
 
 Returns a new array of the same shape holding the weighted mean of `field` over a
 latitude-dependent window, with weights `w = 1/(1 + arc²/scale²)` and `arc` the angular
-separation. `field` is not modified. Unlike `calc_velocity_potential`, the longitude window
-is clipped rather than wrapped.
+separation. `field` is not modified. Unlike `calc_velocity_potential` and
+`calc_hpoz_latlon`, the longitude window is clipped rather than wrapped.
 
 Available for optionally pre-smoothing the elevation before the tensor gradients are taken;
-`compute_OGW_info` leaves that off by default and passes the raw elevation instead.
+`compute_OGW_latlon` does not use it and passes the raw elevation instead.
 
 # Arguments
 
@@ -463,9 +464,10 @@ with `h̄` the distance-weighted local mean elevation and Lorentzian weights
 `wᵢ = 1/(1 + arcᵢ²/s²)`, where `s` is the same latitude-dependent angular scale
 `calc_velocity_potential` uses. The fourth moment emphasizes the tallest peaks, which
 generate most of the wave drag, while still averaging over the subgrid terrain. Mutates
-`elev` in place, clipping ocean bathymetry to zero.
+`elev` in place, clipping ocean bathymetry to zero. Longitude is periodic: `lon` is taken
+to cover the whole circle in equal steps, and the window wraps across its ends.
 
-This is only the raw statistic; the caller `compute_OGW_info` rescales it with the
+This is only the raw statistic; the caller `compute_OGW_latlon` rescales it with the
 mountain height-width exponent `γ` and the height fraction `h_frac` to obtain the `hmax`
 and `hmin` the parameterization consumes. Ports the GFDL `get_hmax`.
 
@@ -529,63 +531,52 @@ function calc_hpoz_latlon(
         scale_distance
 
     ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
-    # Changed from /16 to /8 to match Fortran
+    # The east-west half-window is capped at nlon/8 columns, the cap of Garner's
+    # velocity-potential window (transform.f90, ngridx). His get_hmax.f90 caps this window
+    # at lx/16 instead. The cap binds only at high latitudes, where a fixed distance spans
+    # many columns: with lx/16 from roughly 77° at h_elem = 4 and 87° at h_elem = 16.
     ilon_range =
         min.(
             Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
             Int(round(length(lon) / 8)),
         )
 
-    hmax = zeros(size(elev))
+    hmax = zeros(FT, size(elev))
 
     # Precompute trigonometric values for arc distance calculation
     cosphi = cosd.(lat)
 
-    for i in eachindex(lon)
-        for j in eachindex(lat)
-            # TODO: irange may not need clipping at the boundaries since it is on the closed lat circle
-            irange =
-                max(i - ilon_range[j], 1):min(i + ilon_range[j], length(lon))
-            jrange =
-                max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
-
-            # Distance-weighted 4th moment calculation (matches Fortran)
-            # Pass 1: Compute weighted mean
+    # Each row's window spans ±ilon_range[j] columns and ±ilat_range[j] rows (fewer next
+    # to a pole). Longitude wraps around (mod1), as in `calc_velocity_potential`; the
+    # nlon/8 cap keeps the window shorter than the circle, so no column is counted twice.
+    # The weights depend only on the offsets and the row, so each row builds them once.
+    # Rows run on separate threads.
+    nlon = length(lon)
+    Threads.@threads for j in eachindex(lat)
+        ioffsets = (-ilon_range[j]):ilon_range[j]
+        jrange = max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
+        # Lorentzian weight w = 1/(1 + arc²/scale²), arc² in radians².
+        w = [
+            FT(1) / (
+                FT(1) +
+                ((deg2rad(ioffset * dlon) * cosphi[j])^2 + deg2rad(lat[j1] - lat[j])^2) /
+                (scale[j]^2)
+            ) for ioffset in ioffsets, j1 in jrange
+        ]
+        wt = sum(w)
+        for i in eachindex(lon)
+            # hpos = (weighted mean of (h − mean h)⁴)^(1/4), as in Garner's get_hmax.f90.
+            # Pass 1: weighted mean elevation
             hmn = FT(0)
-            wt = FT(0)
-
-            for j1 in jrange
-                for i1 in irange
-                    # Compute angular arc distance on sphere (in radians)
-                    # arc² is in radians² to match scale² units
-                    dlon_dist = deg2rad(lon[i1] - lon[i]) * cosphi[j]
-                    dlat_dist = deg2rad(lat[j1] - lat[j])
-                    arc2 = dlon_dist^2 + dlat_dist^2
-
-                    # Weight function: w = 1/(1 + arc²/scale²)
-                    w = FT(1) / (FT(1) + arc2 / (scale[j]^2))
-
-                    hmn += w * elev[i1, j1]
-                    wt += w
-                end
+            for (b, j1) in enumerate(jrange), (a, ioffset) in enumerate(ioffsets)
+                hmn += w[a, b] * elev[mod1(i + ioffset, nlon), j1]
             end
-            hmn = hmn / wt  # weighted mean elevation
-
-            # Pass 2: Compute weighted 4th moment
+            hmn = hmn / wt
+            # Pass 2: weighted 4th moment about it
             var = FT(0)
-            for j1 in jrange
-                for i1 in irange
-                    dlon_dist = deg2rad(lon[i1] - lon[i]) * cosphi[j]
-                    dlat_dist = deg2rad(lat[j1] - lat[j])
-                    arc2 = dlon_dist^2 + dlat_dist^2
-
-                    w = FT(1) / (FT(1) + arc2 / (scale[j]^2))
-
-                    var += w * (elev[i1, j1] - hmn)^4
-                end
+            for (b, j1) in enumerate(jrange), (a, ioffset) in enumerate(ioffsets)
+                var += w[a, b] * (elev[mod1(i + ioffset, nlon), j1] - hmn)^4
             end
-
-            # 4th root of weighted 4th moment
             hmax[i, j] = (var / wt)^FT(0.25)
         end
     end
@@ -594,7 +585,182 @@ function calc_hpoz_latlon(
 end
 
 """
-    compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac; α_smoothing = 0.15)
+    OGW_TOPOGRAPHY_SAMPLE_SPACING
+
+Target spacing [m] at which `compute_OGW_info` samples the raw elevation: about 7.5 km,
+every 4th point of the 1-arcminute (1.85 km) ETOPO grid. `ogw_topography_stride` samples
+finer when the smoothing window is shorter than 30 km.
+"""
+const OGW_TOPOGRAPHY_SAMPLE_SPACING = 7.5e3
+
+"""
+    ogw_topography_stride(smoothing_length_scale, earth_radius; nlon_raw = 21600,
+                          target_spacing = OGW_TOPOGRAPHY_SAMPLE_SPACING)
+
+Return the stride (in raw grid points) at which `compute_OGW_info` subsamples the raw
+elevation.
+
+The drag tensor is built from local slopes, and short, steep features carry most of them,
+so the sampling must stay fine whatever the smoothing window. The stride aims at
+`target_spacing` (7.5 km), or at a quarter of the smoothing scale when that is smaller, so
+a narrow window still holds a few points across. It is then rounded to the nearest divisor
+of `nlon_raw`, so the subsampled longitudes close the circle in equal steps, which the
+periodic gradients and windows assume. Garner's own preprocessing used the full
+1-arcminute grid (`topo_drag.F90`, `resolution = 60` points per degree); 7.5 km keeps
+the cost of the windowed sums affordable at coarse model resolutions, where the window
+is several hundred kilometres wide.
+
+# Arguments
+
+  - `smoothing_length_scale`: Smoothing scale `α·Δx` [m].
+  - `earth_radius`: Sphere radius [m].
+"""
+function ogw_topography_stride(
+    smoothing_length_scale,
+    earth_radius;
+    nlon_raw = 21600,
+    target_spacing = OGW_TOPOGRAPHY_SAMPLE_SPACING,
+)
+    raw_spacing = 2 * π * earth_radius / nlon_raw
+    spacing = min(target_spacing, smoothing_length_scale / 4)
+    stride_target = max(1, spacing / raw_spacing)
+    divisors = filter(d -> nlon_raw % d == 0, 1:nlon_raw)
+    return divisors[argmin(abs.(divisors .- stride_target))]
+end
+
+"""
+    latlon_block_size(Δh, lat, nlon, nlat, earth_radius) -> n
+
+Return the side `n` (in grid points) of the square blocks that `block_average_latlon` uses to
+average a lat-lon field over about one model grid spacing, so each model grid point
+draws on about one block. (A spectral element holds 4 × 4 grid points, so it spans about
+3 × 3 blocks.)
+
+`n` is the largest block whose north-south side `n·R·Δφ` is no larger than the model grid
+spacing `Δh` and that divides both `nlon` and `nlat`, so the blocks tile the grid and
+close the longitude circle. It is at least 1. The east-west side `n·R·Δλ·cos φ` shrinks
+poleward, so away from the tropics a block is narrower east-west than the grid spacing.
+
+For example, with the default α = 1.0, `compute_OGW_info` uses a 7.4 km grid
+(5400 × 2700 points), and `n` is 25 (185 km) at `h_elem = 16`, 12 at 30 and 6 at 60.
+A smaller α gives a finer grid and a larger `n`.
+
+# Arguments
+
+  - `Δh`: Model grid spacing [m], from `Spaces.node_horizontal_length_scale`.
+  - `lat`: Latitude vector of the lat-lon grid [degrees], equally spaced.
+  - `nlon`, `nlat`: Grid size.
+  - `earth_radius`: Sphere radius [m].
+"""
+function latlon_block_size(Δh, lat, nlon, nlat, earth_radius)
+    Δy = earth_radius * deg2rad(lat[2] - lat[1])
+    n_target = max(1, floor(Int, Δh / Δy))
+    return maximum(m -> (nlon % m == 0 && nlat % m == 0) ? m : 1, 1:n_target)
+end
+
+"""
+    compute_OGW_latlon(elev, lon, lat, earth_radius, γ;
+                       smoothing_length_scale, block_size = 1)
+
+Compute the orographic drag input on the lat-lon grid of `elev` and average it over blocks
+of `block_size × block_size` points.
+
+Returns `(; lon, lat, hpos, t11, t12, t21, t22)` on the block-center grid, all `Float64`.
+Inputs are copied to `Float64` first (the windowed sums and finite differences lose
+accuracy in `Float32`), so `elev` is not modified. `compute_OGW_info` calls this
+function, then `regrid_OGW_latlon` converts `hpos` into `hmax` and `hmin` on the model grid
+points.
+
+Steps, in order:
+
+ 1. `calc_hpoz_latlon` gives the fourth-moment statistic `h₀`; `hpos = max(0, h₀)^(2 − γ)`.
+ 2. `calc_velocity_potential` gives `χ`, smoothed at `smoothing_length_scale`.
+ 3. `calc_orographic_tensor` gives `t11`, `t21`, `t12`, `t22` from `χ` and the unsmoothed
+    elevation (clipped at sea level), so the gradients keep the full terrain detail.
+ 4. `block_average_latlon` takes the area-weighted mean of `hpos` and of the four tensor
+    entries over each block. A single point is a poor stand-in for the area around a grid
+    point: the tensor `−∇χ (∇h)ᵀ` has rank one, so it is never negative definite and is
+    zero where the elevation is flat. That would switch the drag off for some wind
+    directions, and over the sea next to a coast for all of them. The block mean is
+    negative definite on 99.9% of the land area at `h_elem = 16`.
+
+With `block_size = 1` there is no averaging and the fields are the point values.
+
+# Arguments
+
+  - `elev`: Surface elevation on the lat-lon grid [m], indexed `[lon, lat]`.
+  - `lon`, `lat`: Coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
+  - `γ`: Mountain height-width exponent [-].
+
+# Keyword Arguments
+
+  - `smoothing_length_scale`: Window scale of the `hpos` and `χ` sums [m].
+  - `block_size = 1`: Block side in grid points; must divide both grid dimensions
+    (`latlon_block_size`).
+"""
+function compute_OGW_latlon(
+    elev,
+    lon,
+    lat,
+    earth_radius,
+    γ;
+    smoothing_length_scale,
+    block_size = 1,
+)
+    # Float64 copies (see the docstring); `Array{Float64}` always copies, so the
+    # sea-level clipping below never reaches the caller.
+    elev = Array{Float64}(elev)
+    lon, lat = Array{Float64}(lon), Array{Float64}(lat)
+    earth_radius, γ = Float64(earth_radius), Float64(γ)
+    smoothing_length_scale = Float64(smoothing_length_scale)
+    h₀ = calc_hpoz_latlon(elev, lon, lat, earth_radius; smoothing_length_scale)
+    hpos = @. max(0.0, h₀)^(2.0 - γ)
+    χ = calc_velocity_potential(
+        elev,
+        lon,
+        lat,
+        earth_radius;
+        smoothing_length_scale,
+        n_smoothing_cells = nothing,
+    )
+    t11, t21, t12, t22 = calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
+
+    if block_size > 1
+        lon_b, lat_b, hpos = block_average_latlon(hpos, lon, lat, block_size)
+        t11, t21, t12, t22 = map((t11, t21, t12, t22)) do t
+            block_average_latlon(t, lon, lat, block_size)[3]
+        end
+    else
+        lon_b, lat_b = lon, lat
+    end
+
+    return (; lon = lon_b, lat = lat_b, hpos, t11, t12, t21, t22)
+end
+
+"""
+    ogw_hmax_from_hpos(hpos, γ, h_frac)
+
+Return the maximum obstacle height `hmax` [m] for `hpos = max(0, h₀)^(2 − γ)`, by
+inverting the definition of `hpos`:
+`hmax = (hpos·(γ + 2)/(2γ)·(1 − h_frac^(2γ))/(1 − h_frac^(γ + 2)))^(1/(2 − γ))`.
+The minimum height is `hmin = h_frac·hmax`. A negative `hpos` (rounding in an
+interpolation) gives zero.
+
+For `0 < γ < 1` the conversion is concave in `hpos`, so averaging or interpolating `hpos`
+and then converting gives a larger `hmax` than the reverse order. It is applied after the
+regridding, as in GFDL.
+"""
+function ogw_hmax_from_hpos(hpos, γ, h_frac)
+    FT = typeof(hpos)
+    return (
+        max(hpos, zero(FT)) * (γ + FT(2)) / (FT(2) * γ) *
+        (FT(1) - h_frac^(FT(2) * γ)) / (FT(1) - h_frac^(γ + FT(2)))
+    )^(FT(1) / (FT(2) - γ))
+end
+
+"""
+    compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac; α_smoothing = 1.0)
 
 Run the offline preprocessing pipeline that turns raw elevation into orographic drag input.
 
@@ -602,22 +768,25 @@ Returns `(; hmax, hmin, t11, t12, t21, t22)` on the surface cell-center space of
 is the entry point of the offline path; the result is normally written to an HDF5 artifact
 by `write_computed_drag!` and loaded at runtime rather than recomputed.
 
-The smoothing scale is derived from the target grid: `α_smoothing` times the node
-horizontal length scale of `Y`, and the raw elevation is subsampled by
-`skip_pt = smoothing_length_scale/(4·Δ_raw)` so the source resolution matches. Less
-smoothing gives stronger drag.
+The smoothing scale is derived from the target grid: `α_smoothing` times the grid
+spacing of `Y` (`Spaces.node_horizontal_length_scale`). The raw elevation is subsampled at
+about 7.5 km, or finer when the smoothing scale is shorter than 30 km
+(`ogw_topography_stride`), so the slopes in the tensor keep the same detail at every model
+resolution. The windowed sums run on several threads when Julia has them.
+
+The elevation, its coordinates and every lat-lon step compute in `Float64`, whatever the
+model float type. The results become the model float type only on the model grid points: the
+regridding in step 2 interpolates in the model float type, and `hmax`, `hmin` and the
+tensor are stored in it.
 
 Steps, in order:
 
- 1. `calc_hpoz_latlon` gives the raw fourth-moment statistic `h₀`, which is rescaled with
-    `γ` and `h_frac` into `hmax` and `hmin = h_frac·hmax`.
- 2. `calc_velocity_potential` gives `χ`, smoothed at the same scale for numerical
-    stability.
- 3. `calc_orographic_tensor` gives `t11`, `t21`, `t12`, `t22` from `χ` and the *unsmoothed*
-    elevation, so the tensor gradients keep the full terrain detail.
- 4. The six fields are written to a temporary NetCDF file and regridded onto the model grid
-    by `regrid_OGW_info`, which reuses the GPU-capable `SpaceVaryingInput` path; the
-    temporary file is then removed.
+ 1. `compute_OGW_latlon` computes `hpos` and the tensor on the subsampled lat-lon grid
+    and averages them over blocks of about one model grid spacing (`latlon_block_size`),
+    so each model grid point gets the mean over about one block, not a single point value.
+ 2. `regrid_OGW_latlon` interpolates `hpos` and the tensor onto the model grid points,
+    converts `hpos` into `hmax` and `hmin` there, and sets the tensor to zero poleward of
+    88°.
 
 # Arguments
 
@@ -629,7 +798,8 @@ Steps, in order:
 
 # Keyword Arguments
 
-  - `α_smoothing = 0.15`: Smoothing scale as a fraction of the target grid spacing [-].
+  - `α_smoothing = 1.0`: Smoothing scale as a fraction of the target grid spacing [-]; the
+    ClimaParams default `ogw_smoothing_scale_fraction`.
 
 See the *Orographic Gravity Waves* page for the pipeline diagram.
 """
@@ -639,112 +809,121 @@ function compute_OGW_info(
     earth_radius,
     γ,
     h_frac;
-    α_smoothing = 0.15,  # tunable: smoothing scale as fraction of grid resolution
+    α_smoothing = 1.0,  # tunable: smoothing scale as fraction of grid resolution
 )
-    # obtain lat, lon, elevation from the elev_data
-    FT = Spaces.undertype(Spaces.axes(Y.c))
     ctx = ClimaComms.context(Y.c)
+    earth_radius = Float64(earth_radius)
 
-    # Extract GCM grid resolution for grid-aware smoothing
+    # The smoothing scale and the averaging blocks follow the model grid spacing.
     hspace = Spaces.horizontal_space(Spaces.axes(Y.c))
-    Δh_GCM = FT(Spaces.node_horizontal_length_scale(hspace))
+    Δh_GCM = Float64(Spaces.node_horizontal_length_scale(hspace))
+    smoothing_length_scale = Float64(α_smoothing) * Δh_GCM
 
-    # Auto-compute smoothing parameters based on GCM grid resolution
-    # The smoothing scale should be a fraction of the GCM grid scale
-    smoothing_length_scale = α_smoothing * Δh_GCM
+    nlon_raw = 21600
+    skip_pt = ogw_topography_stride(smoothing_length_scale, earth_radius; nlon_raw)
 
-    # Determine skip_pt based on desired resolution relative to grid
-    # Raw data is ~10km (21600×10800), we want to downsample appropriately
-    # For a 400km grid with α=0.1, smoothing ~40km, so skip_pt ~4-6
-    raw_data_resolution = FT(2 * π * earth_radius / 21600)  # ~10 km
-    skip_pt = max(1, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
-
-    ClimaComms.iamroot(ctx) &&
-        @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
-
-    # Apply smoothing for hmax and chi, but not for elevation used in drag tensors
-    smoothing_length_scale_chi = smoothing_length_scale  # Smooth chi for numerical stability
-    smoothing_length_scale_elev = nothing  # No smoothing for tensor gradients (keep raw elevation)
-
-    # The lat-lon preprocessing (elevation read + Hilbert transform + tensor) is
-    # identical on every rank, so run it once on root and broadcast the result. Each
-    # rank still writes its own temporary NetCDF and calls `regrid_OGW_info` below,
-    # which is a distributed operation that must run on all ranks.
+    # The lat-lon steps (reading the elevation, velocity potential, tensor, block means)
+    # give the same result on every rank, so root runs them once and broadcasts the
+    # result. The regridding below (`regrid_OGW_latlon`) must run on all ranks.
     latlon_info = if ClimaComms.iamroot(ctx)
         # Strided read: slice the on-disk variables directly so only the subsampled
         # elements are loaded.
-        nt = NCDataset(elev_data, "r") do ds
-            lon = FT.(ds["lon"][1:skip_pt:end])
-            lat = FT.(ds["lat"][1:skip_pt:end])
-            elev = FT.(ds["z"][1:skip_pt:end, 1:skip_pt:end])
+        (; lon, lat, elev) = NCDataset(elev_data, "r") do ds
+            length(ds["lon"]) == nlon_raw || error(
+                "Expected $nlon_raw longitudes in the elevation data, got $(length(ds["lon"])).",
+            )
+            lon = Float64.(ds["lon"][1:skip_pt:end])
+            lat = Float64.(ds["lat"][1:skip_pt:end])
+            elev = Float64.(ds["z"][1:skip_pt:end, 1:skip_pt:end])
             (; lon, lat, elev)
         end
-        (; lon, lat, elev) = nt
-
-        # compute hmax and hmin (with grid-aware smoothing)
-        # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
-        # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
-        # less smoothing -> stronger drag
-        @info "skip_pt = $skip_pt"
-        @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
-        hpoz = calc_hpoz_latlon(
+        block_size = latlon_block_size(Δh_GCM, lat, size(elev)..., earth_radius)
+        @info(
+            "Grid-aware OGWD preprocessing",
+            Δh_GCM,
+            smoothing_length_scale,
+            skip_pt,
+            α_smoothing,
+            block_size,
+        )
+        compute_OGW_latlon(
             elev,
             lon,
             lat,
-            earth_radius;
-            smoothing_length_scale = smoothing_length_scale,
+            earth_radius,
+            γ;
+            smoothing_length_scale,
+            block_size,
         )
-        hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
-        hmax = @. (
-            abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) /
-            (FT(1) - h_frac^(γ + FT(2)))
-        )^(FT(1) / (FT(2) - γ))
-        hmin = hmax .* h_frac
-
-        # compute χ (no smoothing if chi_length_scale is nothing)
-        # less smoothing -> stronger drag
-        chi_length_scale = smoothing_length_scale_chi
-        # If no length scale, use n_smoothing_cells = 0 (no smoothing)
-        chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
-        @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
-        χ = calc_velocity_potential(
-            elev,
-            lon,
-            lat,
-            earth_radius;
-            smoothing_length_scale = chi_length_scale,
-            n_smoothing_cells = chi_n_cells,
-        )
-
-        # Optionally smooth elevation for tensor gradient computation
-        # (matches effective resolution of coarser Fortran elevation data)
-        elev_for_tensor = if smoothing_length_scale_elev !== nothing
-            @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
-            smooth_field_latlon(
-                copy(elev),
-                lon,
-                lat,
-                earth_radius;
-                smoothing_length_scale = smoothing_length_scale_elev,
-            )
-        else
-            elev
-        end
-
-        # compute orographic tensor (t11, t21, t12, t22)
-        t11, t21, t12, t22 =
-            calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
-
-        (; lon, lat, hmax, hmin, t11, t12, t21, t22)
     else
         nothing
     end
 
     # Broadcast the root-computed lat-lon fields to all ranks (no-op without MPI).
-    (; lon, lat, hmax, hmin, t11, t12, t21, t22) =
-        ClimaComms.bcast(ctx, latlon_info)
+    latlon_info = ClimaComms.bcast(ctx, latlon_info)
 
-    # create ClimaCore.Fields
+    return regrid_OGW_latlon(
+        axes(Fields.level(Y.c.ρ, 1)),
+        latlon_info,
+        γ,
+        h_frac,
+    )
+end
+
+"""
+    regrid_OGW_latlon(hspace, latlon_info, γ, h_frac)
+
+Regrid the lat-lon output of `compute_OGW_latlon` onto the model surface space `hspace`
+and turn it into the drag input.
+
+Returns `(; t11, t12, t21, t22, hmin, hmax)` as `Field`s on `hspace`. Steps, in order:
+
+ 1. `hpos` and the four tensor entries are written to a temporary NetCDF file in their own
+    float type (`Float64` from `compute_OGW_latlon`) and interpolated linearly between
+    block centers with the GPU-capable `SpaceVaryingInput` path (longitude periodic,
+    latitude flat), which converts them to the float type of `hspace`; the temporary
+    file is then removed.
+ 2. `hmax = ogw_hmax_from_hpos(hpos)` and `hmin = h_frac·hmax` are computed on the model
+    grid points from the interpolated `hpos`. GFDL `topo_drag` does the same: it remaps
+    `hpos` and converts it to `hmax` afterwards.
+ 3. After the interpolation, the tensor is set to zero at grid points poleward of 88°. The
+    lat-lon tensor is already zero there (`calc_orographic_tensor`), but the blocks next
+    to the pole straddle 88°, so the interpolation carries some of their value poleward.
+
+# Arguments
+
+  - `hspace`: Model surface space.
+  - `latlon_info`: `(; lon, lat, hpos, t11, t12, t21, t22)` on a lat-lon grid.
+  - `γ`: Mountain height-width exponent [-].
+  - `h_frac`: Ratio of the minimum to the maximum obstacle height [-].
+"""
+function regrid_OGW_latlon(hspace, latlon_info, γ, h_frac)
+    FT = Spaces.undertype(hspace)
+    (; lon, lat) = latlon_info
+    names = (:hpos, :t11, :t12, :t21, :t22)
+
+    temp_nc_file = tempname() * ".nc"
+    NCDataset(temp_nc_file, "c") do nc
+        defDim(nc, "lon", length(lon))
+        defDim(nc, "lat", length(lat))
+        defVar(nc, "lon", eltype(lon), ("lon",))[:] = lon
+        defVar(nc, "lat", eltype(lat), ("lat",))[:] = lat
+        # Chunking and compression keep HDF5 happy with full-resolution arrays.
+        chunk_size = (min(360, length(lon)), min(180, length(lat)))
+        for name in names
+            field = getproperty(latlon_info, name)
+            defVar(
+                nc,
+                String(name),
+                eltype(field),
+                ("lon", "lat");
+                chunksizes = chunk_size,
+                deflatelevel = 4,
+            )[:, :] = field
+        end
+    end
+
+    # The field order matches `regrid_OGW_info`, so the written drag files have one layout.
     topo_cg = fill(
         (;
             t11 = FT(0),
@@ -754,58 +933,28 @@ function compute_OGW_info(
             hmin = FT(0),
             hmax = FT(0),
         ),
-        axes(Fields.level(Y.c.ρ, 1)),
+        hspace,
     )
-
-    # Save the computed lat-lon data to a temporary NetCDF file
-    # This allows us to use the GPU-compatible SpaceVaryingInput infrastructure
-    # Using the pattern from remap_helpers.jl for consistency
-    temp_nc_file = tempname() * ".nc"
-    nc = NCDataset(temp_nc_file, "c")
-
-    # Define dimensions
-    defDim(nc, "lon", length(lon))
-    defDim(nc, "lat", length(lat))
-
-    # Define coordinate variables (required for SpaceVaryingInput)
-    nc_lon = defVar(nc, "lon", FT, ("lon",))
-    nc_lat = defVar(nc, "lat", FT, ("lat",))
-
-    # Define data variables with chunking and compression for large arrays
-    # This prevents HDF5 errors when writing full-resolution data (skip_pt=1)
-    chunk_size = (min(360, length(lon)), min(180, length(lat)))
-    nc_hmax =
-        defVar(nc, "hmax", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_hmin =
-        defVar(nc, "hmin", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t11 =
-        defVar(nc, "t11", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t12 =
-        defVar(nc, "t12", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t21 =
-        defVar(nc, "t21", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-    nc_t22 =
-        defVar(nc, "t22", FT, ("lon", "lat"); chunksizes = chunk_size, deflatelevel = 4)
-
-    # Write coordinate data
-    nc_lon[:] = lon
-    nc_lat[:] = lat
-
-    # Write field data
-    nc_hmax[:, :] = hmax
-    nc_hmin[:, :] = hmin
-    nc_t11[:, :] = t11
-    nc_t12[:, :] = t12
-    nc_t21[:, :] = t21
-    nc_t22[:, :] = t22
-
-    close(nc)
-
-    # Use the GPU-compatible regrid_OGW_info function to remap the data
-    topo_cg = regrid_OGW_info(Y, temp_nc_file)
-
-    # Clean up temporary file
+    regridder_kwargs = (;
+        extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat())
+    )
+    for name in (:t11, :t12, :t21, :t22)
+        input = SpaceVaryingInput(temp_nc_file, String(name), hspace; regridder_kwargs)
+        t = getproperty(topo_cg, name)
+        @. t = input
+    end
+    hpos = SpaceVaryingInput(temp_nc_file, "hpos", hspace; regridder_kwargs)
+    γ_FT, h_frac_FT = FT(γ), FT(h_frac)
+    @. topo_cg.hmax = ogw_hmax_from_hpos(hpos, γ_FT, h_frac_FT)
+    @. topo_cg.hmin = h_frac_FT * topo_cg.hmax
     rm(temp_nc_file; force = true)
+
+    # The tensor is zero poleward of 88° on the model grid too.
+    ᶜlat = Fields.coordinate_field(hspace).lat
+    for name in (:t11, :t12, :t21, :t22)
+        t = getproperty(topo_cg, name)
+        @. t = ifelse(abs(ᶜlat) > 88, zero(t), t)
+    end
 
     return topo_cg
 end
@@ -816,8 +965,9 @@ end
 Regrid orographic drag input from a lat-lon file onto the model's surface space.
 
 Returns `(; t11, t12, t21, t22, hmin, hmax)` as `Field`s on the surface cell-center space
-of `Y`. Called from `get_topo_info` for a GFDL restart, and from `compute_OGW_info` for
-freshly preprocessed data.
+of `Y`. Called from `get_topo_info` for a GFDL restart, whose file stores `hmax` and
+`hmin`, so these are interpolated as they are. Freshly preprocessed data goes through
+`regrid_OGW_latlon` instead, which interpolates `hpos`.
 
 The six variables are read by `get_topo_ll`, rewritten to a temporary two-dimensional
 NetCDF file, and interpolated with `SpaceVaryingInput`, which is GPU-capable. The
@@ -1043,9 +1193,10 @@ Build the filename and metadata that identify a preprocessed-drag output.
 
 Returns `(; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem)`,
 where `output_filename` is the extensionless
-`computed_drag_<topography>_<topo_smoothing>_<damping factor>_<h_elem>`. Every field of the
-topography configuration that changes the drag appears in the name, so two configurations
-cannot collide.
+`computed_drag_<topography>_<topo_smoothing>_<damping factor>_<h_elem>`. The shape
+parameters `γ`, `h_frac`, `α_smoothing` and the preprocessing version also change the drag
+but are not in the name; they are stored in the file's build record and checked when the
+file is read (`check_ogw_drag_stamp`).
 
 Shared by `write_computed_drag!`, which writes the file and its attributes, and
 `load_preprocessed_topography`, which reads it back.
@@ -1075,54 +1226,253 @@ end
 
 
 """
+    OGW_PREPROCESSING_VERSION
+
+Version number of the orographic drag preprocessing, written into every drag file and
+checked when a `raw_topo` run loads one.
+
+Increase it by one whenever a change to `compute_OGW_info` (or anything it calls) changes
+the drag. Then rebuild the `ogw_computed_drag_h*` artifacts and any local
+`computed_drag_*.hdf5` files: loading refuses a file with a different version.
+"""
+const OGW_PREPROCESSING_VERSION = 1
+
+"""
+    write_computed_drag!(
+        computed_drag,
+        comms_ctx;
+        topography,
+        topo_smoothing,
+        topography_damping_factor,
+        h_elem,
+        γ,
+        h_frac,
+        α_smoothing,
+        elevation_source,
+    )
+
+Write the preprocessed drag `computed_drag` to `<output_filename>.hdf5` in the working
+directory, with `output_filename` from `generate_drag_filename`, and return
+`output_filename`. These files are what the `ogw_computed_drag_h*` artifacts ship.
+
+Besides the field, the file stores two sets of attributes:
+
+  - the topography configuration: `topography`, `topo_smoothing`, `topo_damping_factor`,
+    `h_elem`;
+  - the build record, checked on load by `check_ogw_drag_stamp`: the preprocessing
+    version, `gamma`, `h_frac`, `alpha_smoothing`, the float type the fields are stored in
+    (`field_float_type`) and computed in (`compute_float_type`, always `Float64`), and the
+    elevation file name (`elevation_source`).
+
+# Arguments
+
+  - `computed_drag`: The result of `compute_OGW_info`, in the model float type.
+  - `comms_ctx`: Communications context for the HDF5 writer.
+
+# Keyword Arguments
+
+  - `topography`, `topo_smoothing`, `topography_damping_factor`, `h_elem`: The topography
+    configuration (see `generate_drag_filename`).
+  - `γ`, `h_frac`, `α_smoothing`: The shape parameters `compute_OGW_info` was called with.
+  - `elevation_source`: Name of the elevation file, e.g.
+    `basename(AA.earth_orography_file_path())`.
+"""
+function write_computed_drag!(
+    computed_drag,
+    comms_ctx;
+    topography,
+    topo_smoothing,
+    topography_damping_factor,
+    h_elem,
+    γ,
+    h_frac,
+    α_smoothing,
+    elevation_source,
+)
+    (; output_filename, topo_damping_factor) = generate_drag_filename(;
+        topography, topo_smoothing, topography_damping_factor, h_elem,
+    )
+    hdfwriter = InputOutput.HDF5Writer("$(output_filename).hdf5", comms_ctx)
+    file = hdfwriter.file
+    InputOutput.HDF5.write_attribute(file, "topography", topography)
+    InputOutput.HDF5.write_attribute(file, "topo_smoothing", topo_smoothing)
+    InputOutput.HDF5.write_attribute(file, "topo_damping_factor", topo_damping_factor)
+    InputOutput.HDF5.write_attribute(file, "h_elem", h_elem)
+    InputOutput.HDF5.write_attribute(
+        file,
+        "ogw_preprocessing_version",
+        OGW_PREPROCESSING_VERSION,
+    )
+    InputOutput.HDF5.write_attribute(file, "gamma", Float64(γ))
+    InputOutput.HDF5.write_attribute(file, "h_frac", Float64(h_frac))
+    InputOutput.HDF5.write_attribute(file, "alpha_smoothing", Float64(α_smoothing))
+    InputOutput.HDF5.write_attribute(
+        file,
+        "field_float_type",
+        string(eltype(computed_drag.hmax)),
+    )
+    InputOutput.HDF5.write_attribute(file, "compute_float_type", string(Float64))
+    InputOutput.HDF5.write_attribute(file, "elevation_source", string(elevation_source))
+
+    @info "Writing computed drag data to $(output_filename).hdf5"
+    InputOutput.write!(hdfwriter, computed_drag, "computed_drag")
+    Base.close(hdfwriter)
+    return output_filename
+end
+
+"""
+    check_ogw_drag_stamp(stamp, path; h_elem, γ = nothing, h_frac = nothing,
+                         α_smoothing = nothing)
+
+Check the build record of a preprocessed drag file against the run that loads it.
+
+`stamp` is the file's attributes as a `Dict` (see `read_ogw_drag_file`) and `path` the file
+name used in the messages. Raises an error when the build record is missing (a file written
+before files carried one), when its `ogw_preprocessing_version` differs from
+`OGW_PREPROCESSING_VERSION`, or when its `h_elem` differs from the run's. Warns when the
+run's `γ`, `h_frac`, or `α_smoothing` differ from the values the file was built with, since
+the stored `hmax`, `hmin`, and tensor do not follow the run's values; a parameter passed as
+`nothing` is not compared. A stored float type different from the run's is fine and only
+logged at the debug level.
+"""
+function check_ogw_drag_stamp(
+    stamp,
+    path;
+    h_elem,
+    γ = nothing,
+    h_frac = nothing,
+    α_smoothing = nothing,
+)
+    how_to_fix = "Rebuild the drag file with the current preprocessing (for the shipped \
+                  files, the ogw_computed_drag_h$(h_elem) artifact; a local \
+                  computed_drag_*.hdf5 file is loaded before the artifact, so delete or \
+                  rebuild it), or set \
+                  orographic_gravity_wave: \"raw_topo_online\" to compute the drag at \
+                  initialization."
+    haskey(stamp, "ogw_preprocessing_version") || error(
+        "Orographic drag file $(path) has no build record (no preprocessing version): it \
+         was written before files carried one, so it may not match the current \
+         preprocessing (version $(OGW_PREPROCESSING_VERSION)). $(how_to_fix)",
+    )
+    version = stamp["ogw_preprocessing_version"]
+    version == OGW_PREPROCESSING_VERSION || error(
+        "Orographic drag file $(path) was built with preprocessing version $(version), \
+         but this code expects version $(OGW_PREPROCESSING_VERSION). $(how_to_fix)",
+    )
+    stored_h_elem = get(stamp, "h_elem", nothing)
+    stored_h_elem == h_elem || error(
+        "Orographic drag file $(path) was built for h_elem = $(stored_h_elem), but the \
+         run has h_elem = $(h_elem). $(how_to_fix)",
+    )
+
+    # (name in messages, attribute name, run value)
+    shape_parameters = (
+        ("γ", "gamma", γ),
+        ("h_frac", "h_frac", h_frac),
+        ("α_smoothing", "alpha_smoothing", α_smoothing),
+    )
+    stale = String[]
+    for (name, key, value) in shape_parameters
+        isnothing(value) && continue
+        stored = stamp[key]
+        isapprox(Float64(value), stored; rtol = sqrt(eps(Float32))) ||
+            push!(stale, "$(name) = $(value) (file $(stored))")
+    end
+    isempty(stale) || @warn "orographic_gravity_wave = \"raw_topo\" loads the drag file \
+                             $(path), whose hmax, hmin and tensor were built with other \
+                             shape parameters, so the drag input will not reflect the \
+                             run's $(join(stale, ", ")). Use \"raw_topo_online\" to \
+                             recompute the drag input from the current parameters."
+    field_float_type = stamp["field_float_type"]
+    compute_float_type = stamp["compute_float_type"]
+    @debug "Orographic drag file float types" path field_float_type compute_float_type
+    return nothing
+end
+
+"""
+    read_ogw_drag_file(path, comms_ctx; h_elem, γ = nothing, h_frac = nothing,
+                       α_smoothing = nothing)
+
+Read the `computed_drag` field from the HDF5 drag file at `path`, after checking its
+build record with `check_ogw_drag_stamp` (the keywords are passed on to it).
+
+Used by every `raw_topo` load: `load_preprocessed_topography` and the artifact path of
+`compute_ogw_drag`.
+"""
+function read_ogw_drag_file(
+    path,
+    comms_ctx;
+    h_elem,
+    γ = nothing,
+    h_frac = nothing,
+    α_smoothing = nothing,
+)
+    reader = InputOutput.HDF5Reader(path, comms_ctx)
+    computed_drag = try
+        attributes = InputOutput.HDF5.attrs(reader.file)
+        stamp = Dict{String, Any}(key => attributes[key] for key in keys(attributes))
+        check_ogw_drag_stamp(stamp, path; h_elem, γ, h_frac, α_smoothing)
+        InputOutput.read_field(reader, "computed_drag")
+    finally
+        Base.close(reader)
+    end
+    return computed_drag
+end
+
+"""
     load_preprocessed_topography(; topography, topo_smoothing,
-                                 topography_damping_factor, h_elem)
-    load_preprocessed_topography(filename::String, comms_ctx = ClimaComms.SingletonCommsContext())
+                                 topography_damping_factor, h_elem,
+                                 γ = nothing, h_frac = nothing, α_smoothing = nothing)
+    load_preprocessed_topography(filename::String,
+                                 comms_ctx = ClimaComms.SingletonCommsContext();
+                                 h_elem, γ = nothing, h_frac = nothing,
+                                 α_smoothing = nothing)
 
 Read a preprocessed orographic drag field from an HDF5 file in the package root.
 The optional `comms_ctx` must be the run's MPI context on distributed runs so the
 field is read correctly.
 
-Returns the `computed_drag` field written by `write_computed_drag!`. The keyword method
-derives the filename from the topography configuration via `generate_drag_filename` and
-reads on a single-threaded CPU context; the `String` method takes the extensionless
-filename directly and reads with the supplied `comms_ctx`. A GPU run has to move the
-result with `move_topo_info_to_gpu`.
+Returns the `computed_drag` field written by `write_computed_drag!`, read with
+`read_ogw_drag_file`, so the file's build record is checked against `h_elem` and the
+shape parameters given (see `check_ogw_drag_stamp`). The keyword method derives the
+filename from the topography configuration via `generate_drag_filename` and reads on a
+single-threaded CPU context; the `String` method takes the extensionless filename directly
+and reads with the supplied `comms_ctx`. A GPU run has to move the result with
+`move_topo_info_to_gpu`.
 """
 function load_preprocessed_topography(;
     topography,
     topo_smoothing,
     topography_damping_factor,
     h_elem,
+    γ = nothing,
+    h_frac = nothing,
+    α_smoothing = nothing,
 )
     (; output_filename) = generate_drag_filename(;
         topography, topo_smoothing, topography_damping_factor, h_elem,
     )
-    @info "loading topography drag vector: $(output_filename)"
-
-    reader = InputOutput.HDF5Reader(
-        joinpath(@__DIR__, "../../../$(output_filename).hdf5"),
-        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
+    return load_preprocessed_topography(
+        output_filename,
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded());
+        h_elem, γ, h_frac, α_smoothing,
     )
-    computed_drag = InputOutput.read_field(reader, "computed_drag")
-
-    Base.close(reader)
-    return computed_drag
 end
 
 function load_preprocessed_topography(
     filename::String,
-    comms_ctx = ClimaComms.SingletonCommsContext(),
+    comms_ctx = ClimaComms.SingletonCommsContext();
+    h_elem,
+    γ = nothing,
+    h_frac = nothing,
+    α_smoothing = nothing,
 )
     @info "loading topography drag vector: $(filename)"
-    reader = InputOutput.HDF5Reader(
+    return read_ogw_drag_file(
         joinpath(@__DIR__, "../../../$(filename).hdf5"),
-        comms_ctx,
+        comms_ctx;
+        h_elem, γ, h_frac, α_smoothing,
     )
-    computed_drag = InputOutput.read_field(reader, "computed_drag")
-
-    Base.close(reader)
-    return computed_drag
 end
 
 """
@@ -1232,7 +1582,8 @@ pass removes the grid-scale aliasing tail. On 60 arc-second (about 1.85 km) inpu
 ETOPO 2022 the 2 km pass removes little, and the input grid itself sets the small-scale
 cutoff of the band.
 
-`elev` is indexed `[lon, lat]` and is not modified.
+`elev` is indexed `[lon, lat]` and is not modified. The filtering computes in `Float64`
+whatever the float type of `elev`, and the result is `Float64`.
 """
 function calc_filtered_orography_variance_latlon(
     elev,
@@ -1243,7 +1594,10 @@ function calc_filtered_orography_variance_latlon(
     Δ_large = 20000,
     δ = 1000,
 )
-    land_elev = max.(elev, zero(eltype(elev)))
+    # A sum of many weighted terms and a difference of two nearly equal smoothed fields:
+    # Float64 keeps the small band-pass signal.
+    land_elev = max.(Float64.(elev), 0.0)
+    lon, lat, earth_radius = Float64.(lon), Float64.(lat), Float64(earth_radius)
     smoothed_small = smooth_ifs_latlon(land_elev, lon, lat, earth_radius, Δ_small, δ)
     smoothed_large = smooth_ifs_latlon(land_elev, lon, lat, earth_radius, Δ_large, δ)
     @. smoothed_small = (smoothed_small - smoothed_large)^2
@@ -1294,24 +1648,26 @@ Follows the IFS definition (IFS Documentation CY47R1, Part IV, Section 11.3.3):
     orography on the lat-lon grid of the elevation file `elev_data` (NetCDF with `lon`, `lat`
     and elevation `z`).
  2. The result is averaged with `block_average_latlon` over blocks approximately the size of
-    the model's horizontal node spacing (step ii of the IFS definition, averaging over the
+    the model's horizontal grid spacing (step ii of the IFS definition, averaging over the
     target grid box). Since the drag is linear in `σ_flt²`, the variance rather than its
     square root is averaged.
  3. The block means are regridded onto the model surface with `SpaceVaryingInput`.
 
-Steps 1 and 2 run on the root process and are broadcast; step 3 runs on every process.
+Steps 1 and 2 run on the root process, in `Float64` whatever the model float type, and are
+broadcast; step 3 runs on every process and gives the model float type.
 """
 function compute_filtered_orography_variance(Y, elev_data, earth_radius)
     FT = Spaces.undertype(axes(Y.c))
     ctx = ClimaComms.context(Y.c)
     hspace = axes(Fields.level(Y.c.ρ, 1))
-    Δh_GCM = FT(
+    earth_radius = Float64(earth_radius)
+    Δh_GCM = Float64(
         Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c))),
     )
 
     latlon_variance = if ClimaComms.iamroot(ctx)
         (lon, lat, elev) = NCDataset(elev_data, "r") do ds
-            (FT.(ds["lon"][:]), FT.(ds["lat"][:]), FT.(ds["z"][:, :]))
+            (Float64.(ds["lon"][:]), Float64.(ds["lat"][:]), Float64.(ds["z"][:, :]))
         end
         @info "Computing the filtered-orography variance for TOFD" size(elev) Δh_GCM
         variance = calc_filtered_orography_variance_latlon(
@@ -1320,13 +1676,7 @@ function compute_filtered_orography_variance(Y, elev_data, earth_radius)
             lat,
             earth_radius,
         )
-        # Largest block, no larger than the model node spacing, that divides both dimensions.
-        Δy = FT(earth_radius) * deg2rad(lat[2] - lat[1])
-        n_target = max(1, floor(Int, Δh_GCM / Δy))
-        n = maximum(
-            m -> (size(elev, 1) % m == 0 && size(elev, 2) % m == 0) ? m : 1,
-            1:n_target,
-        )
+        n = latlon_block_size(Δh_GCM, lat, size(elev)..., earth_radius)
         block_average_latlon(variance, lon, lat, n)
     else
         nothing
@@ -1337,9 +1687,9 @@ function compute_filtered_orography_variance(Y, elev_data, earth_radius)
     NCDataset(temp_nc_file, "c") do nc
         defDim(nc, "lon", length(lon))
         defDim(nc, "lat", length(lat))
-        defVar(nc, "lon", FT, ("lon",))[:] = lon
-        defVar(nc, "lat", FT, ("lat",))[:] = lat
-        defVar(nc, "sigma2_flt", FT, ("lon", "lat"))[:, :] = variance
+        defVar(nc, "lon", Float64, ("lon",))[:] = lon
+        defVar(nc, "lat", Float64, ("lat",))[:] = lat
+        defVar(nc, "sigma2_flt", Float64, ("lon", "lat"))[:, :] = variance
     end
     regridder_kwargs =
         (; extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat()))
