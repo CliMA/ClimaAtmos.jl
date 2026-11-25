@@ -336,14 +336,35 @@ function dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
 end
 
 """
-    dg_updraft_w_penalty!(Yₜ, Y, p)
+    dg_w_jump_penalty(ᶠw, ᶠρ, ᶠuv, ᶠc, ε)
 
-Add a ρ-weighted face jump penalty on each updraft `w` at the shear speed
-`max(|{u_n}|, ε c)`, on interior faces of DG spaces.
+Return the ρ-weighted face jump penalty on the vertical velocity `ᶠw` at the
+shear speed `max(|{u_n}|, ε c)`, zero on the bottom and top faces.
 """
-function dg_updraft_w_penalty!(Yₜ, Y, p)
+function dg_w_jump_penalty(ᶠw, ᶠρ, ᶠuv, ᶠc, ε)
+    FT = eltype(ᶠw)
+    pen_w = Operators.lifting_correction(
+        shear_jump_penalty_lift,
+        FT,
+        ᶠw,
+        ᶠρ,
+        ᶠuv,
+        ᶠc,
+        one(FT),
+        ε,
+    )
+    return dg_zero_boundary_faces!(pen_w)
+end
+
+"""
+    dg_w_penalty!(Yₜ, Y, p; grid_mean)
+
+Add the `dg_w_jump_penalty` of each updraft `w`, and with `grid_mean` of the
+grid-mean `w`, to `Yₜ` on interior faces of DG spaces.
+"""
+function dg_w_penalty!(Yₜ, Y, p; grid_mean)
     n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
-    (n == 0 || !is_dg_horizontal(axes(Y.c))) && return nothing
+    ((n == 0 && !grid_mean) || !is_dg_horizontal(axes(Y.c))) && return nothing
     FT = Spaces.undertype(axes(Y.c))
     ε = FT(p.atmos.numerics.dg_vi_shear_floor)
     (ᶜuv, _) = dg_face_velocity_and_λ(Y, p)
@@ -351,20 +372,21 @@ function dg_updraft_w_penalty!(Yₜ, Y, p)
     ᶠρ = @. ᶠinterp(Y.c.ρ)
     ᶠuv = @. ᶠinterp(ᶜuv)
     ᶠc = @. ᶠinterp($(dg_sound_speed(Y, p)))
+    penalize!(ᶠu₃ₜ, ᶠu₃) = @. ᶠu₃ₜ += C3(
+        Geometry.WVector(
+            $(dg_w_jump_penalty(
+                (@. Geometry.WVector(ᶠu₃).components.data.:1),
+                ᶠρ,
+                ᶠuv,
+                ᶠc,
+                ε,
+            )),
+        ),
+        ᶠlg,
+    )
+    grid_mean && penalize!(Yₜ.f.u₃, Y.f.u₃)
     for j in 1:n
-        ᶠwʲ = @. Geometry.WVector(Y.f.sgsʲs.:($$j).u₃).components.data.:1
-        pen_w = Operators.lifting_correction(
-            shear_jump_penalty_lift,
-            FT,
-            ᶠwʲ,
-            ᶠρ,
-            ᶠuv,
-            ᶠc,
-            one(FT),
-            ε,
-        )
-        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            C3(Geometry.WVector($(dg_zero_boundary_faces!(pen_w))), ᶠlg)
+        penalize!(Yₜ.f.sgsʲs.:($j).u₃, Y.f.sgsʲs.:($j).u₃)
     end
     return nothing
 end
@@ -443,7 +465,7 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     # gradₕ volume terms in horizontal_dynamics_tendency!)
     ᶜKΦ = @. ᶜK + ᶜΦ - phi_r(thermo_params, ᶜp)
     dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
-    dg_updraft_w_penalty!(Yₜ, Y, p)
+    dg_w_penalty!(Yₜ, Y, p; grid_mean = false)
 
     if p.atmos.numerics.dg_vi_velocity_penalty === Val(:wave_selective)
         dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
@@ -1378,13 +1400,16 @@ end
     dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
 
 Add the flux-form advection, deep-atmosphere metric terms, and face jump
-penalty of the vertical velocity to `Yₜ`, for `dg_fddg_vertical = full_flux`.
+penalty of the grid-mean vertical velocity, and the horizontal flux-form
+advection and face jump penalty of each updraft vertical velocity, to `Yₜ`,
+for `dg_fddg_vertical = full_flux`.
 """
 function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
     FT = Spaces.undertype(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜJ = ᶜlg.J
     ᶜWJ = ᶜlg.WJ
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠu³) = p.precomputed
     ᶜz = Fields.coordinate_field(axes(Y.c)).z
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
@@ -1398,16 +1423,28 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
     ᶠw = @. Y.f.u₃.components.data.:1 / ᶠJv
     ᶠρJ = @. ᶠinterp(Y.c.ρ * ᶜJ)
     ᶠG = dg_zero_boundary_faces!(@. ᶠρJ * ᶠu³.components.data.:1)
+    ᶜρWJ = @. Y.c.ρ * ᶜWJ
 
-    ẇ_h = dg_w_horizontal_tendency(
-        volume_flux,
-        interface,
-        y,
-        ᶜdyρ,
-        ᶠw,
-        @. Y.c.ρ * ᶜWJ
-    )
-    ẇ = @. ẇ_h + $(dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ))
+    # face dissipation of w: ρ_f-weighted jump penalty at the shear speed
+    # max(|{u_n}|, ε c), with ρ_f the dual density of the kinetic energy
+    # ½ ρ_f w², so it is an exact kinetic-energy sink that conserves
+    # momentum and moves no mass (the KPEP gravity pairing is unchanged); the
+    # removed kinetic energy reappears as internal energy since E is fixed
+    # (LMARS upwinds w in its horizontal advection instead)
+    lmars = p.atmos.numerics.dg_interface_flux === Val(:lmars)
+    ε = FT(p.atmos.numerics.dg_vi_shear_floor)
+    ᶠρ_dual = @. ᶠρJ / ᶠJ
+    ᶠuv = @. ᶠinterp(ᶜuv)
+    ᶠc = @. ᶠinterp($(dg_sound_speed(Y, p)))
+    # horizontal flux-form advection of a face vertical velocity by the
+    # grid-mean mass flux, with its face dissipation
+    function horizontal_tendency(ᶠw)
+        ẇ = dg_w_horizontal_tendency(volume_flux, interface, y, ᶜdyρ, ᶠw, ᶜρWJ)
+        lmars || (@. ẇ += $(dg_w_jump_penalty(ᶠw, ᶠρ_dual, ᶠuv, ᶠc, ε)))
+        return ẇ
+    end
+
+    ẇ = @. $(horizontal_tendency(ᶠw)) + $(dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ))
 
     if !isnothing(p.core.ᶠf¹²)
         # deep-atmosphere metric pair −w uₕ / r ↔ +|uₕ|² / r
@@ -1423,29 +1460,6 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
         @. ẇ += ᶠcentripetal
     end
 
-    # face dissipation of w: ρ_f-weighted jump penalty at the shear speed
-    # max(|{u_n}|, ε c), with ρ_f the dual density of the kinetic energy
-    # ½ ρ_f w², so it is an exact kinetic-energy sink that conserves
-    # momentum and moves no mass (the KPEP gravity pairing is unchanged); the
-    # removed kinetic energy reappears as internal energy since E is fixed
-    # (LMARS upwinds w in its horizontal advection instead)
-    if p.atmos.numerics.dg_interface_flux !== Val(:lmars)
-        ε = FT(p.atmos.numerics.dg_vi_shear_floor)
-        ᶠJ = Fields.local_geometry_field(Y.f).J
-        ᶠρ_dual = @. ᶠρJ / ᶠJ
-        pen_w = Operators.lifting_correction(
-            shear_jump_penalty_lift,
-            FT,
-            ᶠw,
-            ᶠρ_dual,
-            (@. ᶠinterp(ᶜuv)),
-            (@. ᶠinterp($(dg_sound_speed(Y, p)))),
-            one(FT),
-            ε,
-        )
-        @. ẇ += $(dg_zero_boundary_faces!(pen_w))
-    end
-
     @. Yₜ.f.u₃ += Geometry.Covariant3Vector(ᶠJv * ẇ)
     # cancel the horizontal velocity the u₃ increment induces through the
     # terrain tilt
@@ -1455,6 +1469,15 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
         Geometry.WVector(ᶜa),
         ᶜlg,
     )
+
+    # the updrafts share the grid-mean horizontal velocity, so their w rides
+    # the same horizontal transport; their vertical exchange and curvature
+    # terms stay vector-invariant
+    for j in 1:n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
+        ᶠwʲ = @. Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠJv
+        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+            Geometry.Covariant3Vector(ᶠJv * $(horizontal_tendency(ᶠwʲ)))
+    end
     return nothing
 end
 

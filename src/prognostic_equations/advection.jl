@@ -44,10 +44,12 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         use_prognostic_tke(p.atmos.turbconv_model) &&
             dg_fddg_tke_advection!(Yₜ, Y, p)
         # the updraft ρaʲ and mseʲ ride the same density flux
-        if p.atmos.turbconv_model isa PrognosticEDMFX
+        p.atmos.turbconv_model isa PrognosticEDMFX &&
             dg_fddg_sgs_dynamics!(Yₜ, Y, p)
-            dg_updraft_w_penalty!(Yₜ, Y, p)
-        end
+        # with the vector-invariant vertical exchange, w and every wʲ get the
+        # same face jump penalty
+        p.atmos.numerics.dg_fddg_vertical === Val(:vi) &&
+            dg_w_penalty!(Yₜ, Y, p; grid_mean = true)
         return nothing
     end
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -253,6 +255,16 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
+    # With `dg_fddg_vertical = full_flux` the vertical transport of uₕ is the
+    # staggered flux form of dg_fddg_vertical_flux! and the horizontal
+    # advection of u₃ and of every u₃ʲ is the dual-grid flux form of
+    # dg_fddg_w_flux!, so the horizontal curls of u₃ and u₃ʲ are not added
+    # below, the ω¹² terms of u₃ are dropped and only the Coriolis terms stay.
+    fddg_vflux =
+        is_dg_horizontal(axes(Y.c)) &&
+        p.atmos.numerics.dg_equation_form === Val(:fddg) &&
+        p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
+
     if point_type <: Geometry.Abstract3DPoint
         if is_dg_horizontal(axes(Y.c))
             if p.atmos.numerics.dg_equation_form === Val(:fddg)
@@ -284,9 +296,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
     end
     if is_dg_horizontal(axes(Y.f))
-        dg_ω¹²_horizontal!(ᶠω¹², Y.f.u₃)
-        for j in 1:n
-            dg_ω¹²_horizontal!(ᶠω¹²ʲs.:($j), Y.f.sgsʲs.:($j).u₃)
+        if !fddg_vflux
+            dg_ω¹²_horizontal!(ᶠω¹², Y.f.u₃)
+            for j in 1:n
+                dg_ω¹²_horizontal!(ᶠω¹²ʲs.:($j), Y.f.sgsʲs.:($j).u₃)
+            end
         end
     else
         @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
@@ -301,15 +315,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
-
-    # With `dg_fddg_vertical = full_flux` the vertical transport of uₕ is the
-    # staggered flux form of dg_fddg_vertical_flux! and the advection of u₃ is
-    # the dual-grid flux form of dg_fddg_w_flux!, so the ω¹² terms are dropped
-    # here and only the Coriolis terms stay.
-    fddg_vflux =
-        is_dg_horizontal(axes(Y.c)) &&
-        p.atmos.numerics.dg_equation_form === Val(:fddg) &&
-        p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
 
     # Full vertical advection of passive tracers (such as liq, rai, etc) with the
     # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
