@@ -9,10 +9,10 @@ hyperdiff: ~
 apply_zhang_shu_limiter: false
 update_constrain_state_every: "stage"
 config: "sphere"
-h_elem: 30
+h_elem: 16
 z_elem: 63
 z_max: 50000.0
-dt: "30secs"
+dt: "120secs"
 rayleigh_sponge: true
 dz_bottom: 30.0
 dt_rad: "1hours"
@@ -23,22 +23,22 @@ curl_form_metric: true
 rad: "allskywithclear"
 insolation: "timevarying"
 surface_setup: "DefaultMoninObukhov"
-turbconv: "edonly_edmfx"
+  #turbconv: "edonly_edmfx"
 implicit_diffusion: true
 edmfx_sgs_diffusive_flux: true
-edmfx_sgs_horizontal_diffusive_flux: true
-edmfx_horizontal_diffusion: true
-  #turbconv: "prognostic_edmfx"
-  #prognostic_tke: true
-  #edmfx_entr_model: "Generalized"
-  #edmfx_detr_model: "Generalized"
-  #edmfx_nh_pressure: true
-  #edmfx_vertical_diffusion: true
-  #edmfx_filter: true
-  #edmfx_sgs_mass_flux: true
-toml: ["toml/longrun_aquaplanet.toml"]
-  #toml: ["toml/prognostic_edmfx.toml"]
-microphysics_model: "0M"
+edmfx_sgs_horizontal_diffusive_flux: false
+edmfx_horizontal_diffusion: false
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+  #toml: ["toml/longrun_aquaplanet.toml"]
+toml: ["toml/prognostic_edmfx_1M.toml"]
+microphysics_model: "1M"
 use_sgs_quadrature: true
 initial_condition: "WeatherModel"
 start_date: "20100701"
