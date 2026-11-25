@@ -301,11 +301,11 @@ microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
 cloud_liquid_terminal_velocity:
-  help: "Cloud liquid sedimentation velocity for 1M microphysics [`Fixed` (default), `Stokes`]"
-  value: "Fixed"
+  help: "Cloud liquid sedimentation velocity for 1M microphysics [`Fixed`, `Stokes` (default)]"
+  value: "Stokes"
 cloud_ice_terminal_velocity:
-  help: "Cloud ice sedimentation velocity for 1M microphysics [`Fixed` (default), `Chen2022` (Chen et al. 2022 small ice)]"
-  value: "Fixed"
+  help: "Cloud ice sedimentation velocity for 1M microphysics [`Fixed`, `Chen2022` (default, Chen et al. 2022 small ice)]"
+  value: "Chen2022"
 rain_terminal_velocity:
   help: "Rain sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 rain)]"
   value: "Chen2022"

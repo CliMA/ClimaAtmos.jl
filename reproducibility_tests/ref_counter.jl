@@ -1,4 +1,4 @@
-482
+483
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+483
+- Change default 1-moment cloud-liquid and cloud-ice terminal velocities from `Fixed`
+  to `Stokes` (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022`
+  (`cloud_ice_terminal_velocity: "Chen2022"`). Changes the output of 1M runs that use
+  the default cloud-condensate terminal velocities.
+
 482
 - `toml/default_parameters.toml` is applied to every run. Changes the output of
   the jobs that did not list it.
@@ -47,7 +53,6 @@
   `R = H √a`, instead of `α_d / (2 H) (1 / √aʲ + 1 / √a⁰)`: equal in exact
   arithmetic with the new parameters at their default `0`, but rounded
   differently, so prognostic EDMF jobs change by roundoff.
-
 479
 - Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
   its two cells, the non-orographic damping layer spans at least the top three cells,

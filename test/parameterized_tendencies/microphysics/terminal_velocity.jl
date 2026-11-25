@@ -37,30 +37,32 @@ include("../../test_helpers.jl")
 
             @testset "Mode selection" begin
                 (; water) = make_water(Dict())
-                @test water.terminal_velocity_liquid isa CA.FixedTerminalVelocity
-                @test water.terminal_velocity_ice isa CA.FixedTerminalVelocity
+                @test water.terminal_velocity_liquid isa CA.StokesTerminalVelocity
+                @test water.terminal_velocity_ice isa CA.Chen2022TerminalVelocity
                 @test water.terminal_velocity_rain isa CA.Chen2022TerminalVelocity
                 @test water.terminal_velocity_snow isa CA.Chen2022TerminalVelocity
 
                 (; water) = make_water(
                     Dict(
-                        "cloud_liquid_terminal_velocity" => "Stokes",
-                        "cloud_ice_terminal_velocity" => "Chen2022",
-                        "rain_terminal_velocity" => "Chen2022",
+                        "rain_terminal_velocity" => "Blk1M",
                         "snow_terminal_velocity" => "Blk1M",
                     ),
                 )
                 @test water.terminal_velocity_liquid isa CA.StokesTerminalVelocity
                 @test water.terminal_velocity_ice isa CA.Chen2022TerminalVelocity
-                @test water.terminal_velocity_rain isa CA.Chen2022TerminalVelocity
+                @test water.terminal_velocity_rain isa CA.Blk1MTerminalVelocity
                 @test water.terminal_velocity_snow isa CA.Blk1MTerminalVelocity
 
                 (; water) = make_water(
                     Dict(
+                        "cloud_liquid_terminal_velocity" => "Fixed",
+                        "cloud_ice_terminal_velocity" => "Fixed",
                         "rain_terminal_velocity" => "Fixed",
                         "snow_terminal_velocity" => "Fixed",
                     ),
                 )
+                @test water.terminal_velocity_liquid isa CA.FixedTerminalVelocity
+                @test water.terminal_velocity_ice isa CA.FixedTerminalVelocity
                 @test water.terminal_velocity_rain isa CA.FixedTerminalVelocity
                 @test water.terminal_velocity_snow isa CA.FixedTerminalVelocity
 
