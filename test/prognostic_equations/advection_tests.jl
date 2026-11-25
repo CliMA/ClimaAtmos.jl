@@ -42,7 +42,7 @@ include("../test_helpers.jl")
             "dt" => "10secs",
             "t_end" => "10secs",
             "ode_algo" => "SSP333",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "advection_updraft_sed_mse_test",
@@ -415,7 +415,7 @@ end
             "dt" => "10secs",
             "t_end" => "10secs",
             "ode_algo" => "SSP333",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "advection_column_max_test",

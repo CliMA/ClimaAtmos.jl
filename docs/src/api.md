@@ -300,6 +300,7 @@ ClimaAtmos.LargeScaleSubsidence
 ClimaAtmos.LargeScaleAdvection
 ClimaAtmos.HeldSuarezForcing
 ClimaAtmos.ISDACForcing
+ClimaAtmos.MPACEForcing
 ClimaAtmos.PrescribedFlow
 ClimaAtmos.ShipwayHill2012VelocityProfile
 ```

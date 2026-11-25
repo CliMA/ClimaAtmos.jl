@@ -36,6 +36,8 @@ end
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
     @test defaults.processes.cloud_ice_formation isa
           CMP.TemperatureDependentIceNumber
+    @test defaults.processes.snow_deposition_sublimation isa
+          CMP.DepositionWithoutCloudCondensate
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
 
@@ -96,7 +98,9 @@ end
     kk_mp = CA.Parameters.microphysics_1m_params(CA.ClimaAtmosParameters(kk_config))
     # the prescribed droplet number is the one the radiation effective radius uses
     @test kk_mp.process_params.rain_autoconversion.Nc ==
-          CA.Parameters.microphysics_cloud_params(CA.ClimaAtmosParameters(kk_config)).N_cloud_liquid_droplets
+          CA.Parameters.microphysics_cloud_params(
+        CA.ClimaAtmosParameters(kk_config),
+    ).N_cloud_liquid_droplets
     @test isnothing(yaml_processes.rain_snow_accretion)
 end
 
@@ -154,11 +158,33 @@ end
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
+        @test CAP.cloud_fraction_eps_rel(sq) == FT(0)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,
         (; sgs_displacement_truncation = 0.5),
     )
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; cloud_fraction_eps_rel = -0.05),
+    )
+    @test CAP.edmf_tail_entr_fraction(CA.TurbulenceConvectionParameters(Float64)) ==
+          0.5
+    for f in (0.0, -0.1, 1.5)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_tail_entr_fraction = f),
+        )
+    end
+    @test CAP.edmf_buoyancy_clear_env_weight(
+        CA.TurbulenceConvectionParameters(Float64),
+    ) == 0
+    for f_ev in (-0.1, 1.1)
+        @test_throws ArgumentError CA.TurbulenceConvectionParameters(
+            Float64,
+            (; edmf_buoyancy_clear_env_weight = f_ev),
+        )
+    end
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(
@@ -170,6 +196,9 @@ end
   [sgs_ice_uniform_fraction]
   value = 0.5
   type = "float"
+  [cloud_fraction_eps_rel]
+  value = 0.25
+  type = "float"
   """,
         )
         flush(io)
@@ -180,6 +209,7 @@ end
         sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
         @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.cloud_fraction_eps_rel(sq) == 0.25
         @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
     # The parameter log leaves out the superseded ClimaParams value of `c_Δx`,

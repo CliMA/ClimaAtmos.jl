@@ -12,4 +12,4 @@ microphysics_model: "0M"
 orographic_gravity_wave: "raw_topo"
 non_orographic_gravity_wave: true
 toml:
-  - "toml/flame_perf_gw.toml"
+  - "toml/default_parameters.toml"

@@ -2,7 +2,6 @@ import ClimaCalibrate
 import EnsembleKalmanProcesses as EKP
 import EnsembleKalmanProcesses.ParameterDistributions as PD
 
-import Distributed
 import JLD2
 import CairoMakie
 
@@ -38,15 +37,7 @@ make_observation_vec(
 # Create the observation series
 obs_vec = JLD2.load_object(obs_vec_filepath)
 minibatch_size = 1
-obs_series = EKP.ObservationSeries(
-    Dict(
-        "observations" => obs_vec,
-        "minibatcher" => ClimaCalibrate.minibatcher_over_samples(
-            length(obs_vec),
-            minibatch_size,
-        ),
-    ),
-)
+obs_series = ClimaCalibrate.observation_series_from_samples(obs_vec, minibatch_size)
 
 # Set seed for ensure reproducibility
 rng_seed = 1234
@@ -87,10 +78,11 @@ ekp = EKP.EnsembleKalmanProcess(
 )
 
 backend = ClimaCalibrate.JuliaBackend()
-# If we are using Slurm, then we will use the Distributed backend to parallelize
+# If we are using Slurm, then we will use the WorkerBackend to parallelize
 # the forward models.
 # The number of tasks in Slurm script should be equal to the number of ensemble
-# members
+# members, and the tasks should be on one node (`--nodes=1`), since the workers
+# run on the node of this script
 slurm_ntasks = parse(Int, get(ENV, "SLURM_NTASKS", "0"))
 # When using the WorkerBackend, you need to recompile everything again on the
 # workers. Since running the simulation is faster than compilation, it is better
@@ -103,8 +95,9 @@ if slurm_ntasks > 1 && !is_buildkite
     if ensemble_size != slurm_ntasks
         @warn "The ensemble size ($ensemble_size) is not the same as the number of Slurm tasks ($slurm_ntasks)"
     end
-    Distributed.addprocs(ClimaCalibrate.SlurmManager())
-    Distributed.@everywhere include($model_interface_filepath)
+    # One local worker per Slurm task, run on this node rather than submitted as new jobs
+    wait(ClimaCalibrate.add_workers(slurm_ntasks; cluster = :local))
+    ClimaCalibrate.@worker_setup include($model_interface_filepath)
     backend = ClimaCalibrate.WorkerBackend()
 end
 
@@ -119,7 +112,7 @@ eki = ClimaCalibrate.calibrate(
     interface.output_dir,
 )
 
-@info "Final constrained parameters:" EKP.get_ϕ_mean_final(prior, ekp)
+@info "Final constrained parameters:" EKP.get_ϕ_mean_final(prior, eki)
 @info "Final unconstrained parameters:" EKP.get_u_mean_final(eki)
 
 # You can inspect the final mean forward model evaluation as `OutputVar`s with

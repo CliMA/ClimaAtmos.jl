@@ -83,27 +83,27 @@ it.
 Any process that is not passed keeps its default, so
 `NonEquilibriumMicrophysics1M()` turns every process on with these variants:
 
-| Process                         | Default variant                   |
-|:------------------------------- |:--------------------------------- |
-| `cloud_liquid_formation`        | `CloudLiquidFormation()`          |
-| `cloud_ice_formation`           | `TemperatureDependentIceNumber()` |
-| `cloud_ice_melt`                | `CloudIceMelt()`                  |
-| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`   |
-| `rain_autoconversion`           | `Kessler1M()`                     |
-| `snow_autoconversion`           | `NoSupersaturation()`             |
-| `rain_condensation_evaporation` | `RainEvaporation()`               |
-| `snow_deposition_sublimation`   | `DepositionAndSublimation()`      |
-| `snow_melt`                     | `SnowMelt()`                      |
-| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`      |
-| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`      |
-| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`         |
-| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`         |
-| `rain_snow_accretion`           | `RainSnowAccretion()`             |
+| Process                         | Default variant                      |
+|:------------------------------- |:------------------------------------ |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`             |
+| `cloud_ice_formation`           | `TemperatureDependentIceNumber()`    |
+| `cloud_ice_melt`                | `CloudIceMelt()`                     |
+| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()`      |
+| `rain_autoconversion`           | `Kessler1M()`                        |
+| `snow_autoconversion`           | `NoSupersaturation()`                |
+| `rain_condensation_evaporation` | `RainEvaporation()`                  |
+| `snow_deposition_sublimation`   | `DepositionWithoutCloudCondensate()` |
+| `snow_melt`                     | `SnowMelt()`                         |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`         |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`         |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`            |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`            |
+| `rain_snow_accretion`           | `RainSnowAccretion()`                |
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-`get_microphysics_1m_options`). `cloud_ice_formation` overrides the
-`CMP.Microphysics1MOptions` default.
+`get_microphysics_1m_options`). `cloud_ice_formation` and
+`snow_deposition_sublimation` override the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 
@@ -141,7 +141,8 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         n_substeps_quad = 2,
         process_options...,
     )
-        # Override CM's `ConstantTimescale` ice formation default to match
+        # Override CM's `ConstantTimescale` ice formation and
+        # `DepositionAndSublimation` snow defaults to match
         # `default_config.yml`. `create_parameters.jl` splits
         # `cloud_liquid_formation`, `cloud_ice_formation`,
         # `rain_condensation_evaporation`, and `snow_deposition_sublimation`
@@ -150,6 +151,7 @@ struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
         # `implicit_microphysics`.
         processes = CMP.Microphysics1MOptions(;
             cloud_ice_formation = CMP.TemperatureDependentIceNumber(),
+            snow_deposition_sublimation = CMP.DepositionWithoutCloudCondensate(),
             process_options...,
         )
         return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
@@ -410,6 +412,17 @@ function MLCloud_constructor(model)
     static_model = Adapt.adapt_structure(SA.SArray, model)
     return MLCloud{typeof(static_model)}(static_model)
 end
+
+"""
+    build_mlcloud(nn_filepath, nn_param_vec)
+
+Build an `MLCloud` from the network architecture stored in the JLD2 file
+`nn_filepath` and the parameter vector `nn_param_vec`.
+
+The method is defined in the `ClimaAtmosFlux` extension, which is loaded when
+`Flux` is imported alongside `ClimaAtmos`.
+"""
+function build_mlcloud end
 
 """
     AbstractInsolation
@@ -1300,6 +1313,22 @@ case. Supplied by `Setups.ISDAC`, which `initial_condition: "ISDAC"` selects; th
 struct ISDACForcing end
 
 """
+    MPACEForcing{FT}(; u_nudge = -13, v_nudge = -3, τ_wind = 3600)
+
+Analytic horizontal-wind nudging for the M-PACE mixed-phase Arctic cloud case
+[Klein2009](@cite), relaxing `(u, v)` toward `(u_nudge, v_nudge)` [m/s], default
+`(-13, -3)` m/s, with timescale `τ_wind` [s], default `3600` s. Supplied by
+`Setups.MPACE`, which `initial_condition: "MPACE"` selects; the
+`external_forcing` key does not accept it.
+"""
+Base.@kwdef struct MPACEForcing{FT}
+    u_nudge::FT = FT(-13)
+    v_nudge::FT = FT(-3)
+    τ_wind::FT = FT(3600)
+end
+MPACEForcing(::Type{FT}) where {FT} = MPACEForcing{FT}()
+
+"""
     AbstractEnvBuoyGradClosure
 
 Closure used to convert environmental thermodynamic gradients into a buoyancy
@@ -2150,7 +2179,7 @@ usually supplied by a `Setups` case rather than set by hand.
 
   - `subsidence`: `nothing`, or a `LargeScaleSubsidence`.
   - `external_forcing`: `nothing`, or a forcing object
-    (`ExternalDrivenTVForcing`, `ISDACForcing`).
+    (`ExternalDrivenTVForcing`, `ISDACForcing`, `MPACEForcing`).
   - `ls_adv`: `nothing`, or a `LargeScaleAdvection`.
   - `advection_test`: Whether to run in pure tracer-advection test mode, in which
     the dynamics are frozen.

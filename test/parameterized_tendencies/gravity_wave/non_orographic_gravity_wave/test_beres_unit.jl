@@ -669,7 +669,7 @@ end
 # a sign or selection error in the explicit oracle below; a clean match confirms
 # the shipped reservoir form picks up every phase change with the right sign —
 # including the freezing terms (S_accr_lcl_sno_cold, S_accr_rai_sno_cold) and the
-# warm-arm melt (S_accr_rai_sno_warm) that a naive hand-selection omits.
+# warm-arm ice-rain melt (S_accr_melt_icl_rai) that a naive hand-selection omits.
 # ============================================================================
 
 # Independent oracle: the explicit canonical sum Q_lat = (1/cp) Σ_p L_p R_p,
@@ -712,8 +712,8 @@ function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
         src.S_melt_icl_lcl +
         src.S_melt_sno_rai +
         src.S_accr_melt_lcl_sno +
-        src.S_accr_melt_rai_sno +
-        src.S_accr_rai_sno_warm
+        src.S_accr_melt_icl_rai +
+        src.S_accr_melt_rai_sno
     q_liq_ice = Lf * (freeze - melt)
 
     return (q_vap_liq + q_vap_ice + q_liq_ice) / cp
@@ -728,8 +728,8 @@ const FREEZE_MELT_TERMS = (
     :S_melt_icl_lcl,
     :S_melt_sno_rai,
     :S_accr_melt_lcl_sno,
+    :S_accr_melt_icl_rai,
     :S_accr_melt_rai_sno,
-    :S_accr_rai_sno_warm,
 )
 
 @testset "Beres canonical latent heating: dual-formulation oracle" begin

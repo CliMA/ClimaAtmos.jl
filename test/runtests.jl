@@ -71,6 +71,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Consistent energy and water transport" begin @time include("prognostic_equations/consistent_transport_tests.jl") end
+    @safetestset "Deferred 1M tendencies" begin @time include("prognostic_equations/deferred_1m_tendency_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
 
     # Conservation tests
@@ -84,10 +85,12 @@ end
 if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
     @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
+    @safetestset "EDMFX updraft reference density" begin @time include("prognostic_equations/updraft_reference_density_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+    @safetestset "EDMFX tail entrainment" begin @time include("prognostic_equations/edmfx_tail_entrainment_tests.jl") end
 end
 
 # ============================================================================

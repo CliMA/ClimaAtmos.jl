@@ -256,7 +256,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `PrescribedSurface`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
-  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
+  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `MPACE`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -268,7 +268,7 @@ vertical_water_borrowing_species:
   help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_lcl, ρq_rai, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_lcl\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_lcl, ρq_rai, ρq_icl, ρq_sno)."
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `MLCloud`]. `MLCloud` needs Flux to be loaded (`import Flux`)."
   value: "quadrature"
 cloud_nn_architecture:
   help: "Cloud neural network architecture to use when `cloud_model` is set to `MLCloud` [`arch_2layers_8nodes.jld2` (default), etc.]"
@@ -334,8 +334,8 @@ rain_condensation_evaporation:
   help: "Rain condensation/evaporation option for 1M microphysics [`RainEvaporation` (default), ~]"
   value: "RainEvaporation"
 snow_deposition_sublimation:
-  help: "Snow sublimation/deposition option for 1M microphysics [`DepositionAndSublimation` (default), `SublimationOnly`, ~]"
-  value: "DepositionAndSublimation"
+  help: "Snow sublimation/deposition option for 1M microphysics [`DepositionWithoutCloudCondensate` (default; no deposition where cloud liquid or cloud ice is present), `DepositionAndSublimation`, `SublimationOnly`, ~]"
+  value: "DepositionWithoutCloudCondensate"
 snow_melt:
   help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
   value: "SnowMelt"
@@ -424,7 +424,7 @@ toml:
   value: []
 strict_params:
   help: "Raise an error if any overridden parameters are unused."
-  value: true
+  value: false
 strict_config:
   help: "If true, raise an error (instead of a warning) when the configuration contains keys that are not part of the default configuration. [`true`, `false` (default)]"
   value: false

@@ -74,7 +74,7 @@ function setup_diagnostics_and_writers(
         debug_tendency,
     ) = diagnostics_config
 
-    all_diagnostics = []
+    all_diagnostics = CAD.ScheduledDiagnostic[]
 
     num_points = if isnothing(interpolation_num_points)
         ClimaDiagnostics.Writers.default_num_points(axes(Y.c))
@@ -145,7 +145,10 @@ function setup_diagnostics_and_writers(
             if any(d -> get(d, "pressure_coordinates", false), dict_specs) &&
                length(writers) < 4
                 pressure_z_sampling = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
-                    p.precomputed.ᶜp, t_start,
+                    p.precomputed.ᶜp, t_start;
+                    pressure_intp_kwargs = (;
+                        method = ClimaCore.Remapping.LogLinearInPressure(),
+                    ),
                 )
                 pressure_space =
                     ClimaDiagnostics.Writers.pressure_space(pressure_z_sampling)

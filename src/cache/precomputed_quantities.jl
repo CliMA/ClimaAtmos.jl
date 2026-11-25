@@ -152,9 +152,9 @@ function implicit_precomputed_quantities(Y, atmos)
             precip_evap_scale_sno = ones(axes(Fields.level(Y.f, half))),
         ) : (;)
 
-    # 1M implicit cache: `set_implicit_precomputed_quantities!` rewrites
-    # `ᶜsgs_moments` (via `set_sgs_moments!`) and `ᶜmp_tendency_implicit*`
-    # (via `update_implicit_1m_tendency!`) from the current Newton iterate.
+    # 1M implicit cache: `ensure_1m_tendencies!` rewrites `ᶜsgs_moments` (via
+    # `set_sgs_moments!`) and `ᶜmp_tendency_implicit*` (via
+    # `update_implicit_1m_tendency!`) from the current Newton iterate.
     # Live here so autodiff gets Dual-typed copies. Allocation guards match
     # the write guards in `set_sgs_moments!` and `update_implicit_1m_tendency!`
     # (1M, and 1M + PrognosticEDMFX for the subdomain variants).
@@ -386,6 +386,14 @@ function precomputed_quantities(Y, atmos)
                 (; ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) : (;)
             )...,
             ᶜprecip_frac = zeros(axes(Y.c)),
+            # The cloud fraction of the PrognosticEDMFX environment before the
+            # updraft weighting, for the clear-air buoyancy reference
+            # (`set_updraft_reference_density_excess!`).
+            (
+                atmos.turbconv_model isa PrognosticEDMFX &&
+                atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
+                (; ᶜcloud_fraction⁰ = zeros(axes(Y.c))) : (;)
+            )...,
         ) : base
     else
         (;)
@@ -525,6 +533,9 @@ function precomputed_quantities(Y, atmos)
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜarea_bounding_entr_detrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
+            # Excess of the updraft reference density over the grid mean
+            # (`set_updraft_reference_density_excess!`).
+            ᶜρ_ref_excess = similar(Y.c, FT),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
             # Per-updraft surface conditions at level 1.
@@ -840,9 +851,10 @@ also refreshes the Smagorinsky-Lilly eddy viscosity and diffusivity.
 
 The 1M implicit tendency `ᶜmp_tendency_implicit*` is NOT refreshed here: it
 depends on the SGS covariances, which `set_explicit_precomputed_quantities!`
-owns. See `set_implicit_precomputed_quantities!` (the full version used by
-the Newton inner loop) and `set_precomputed_quantities!` (the step cache
-composite) for how the covariance-dependent piece is sequenced.
+owns. See `set_implicit_precomputed_quantities!` (the full version),
+`set_precomputed_quantities!` (the step cache composite), and
+`ensure_1m_tendencies!` (the evaluation in the Newton inner loop) for how the
+covariance-dependent piece is sequenced.
 
 This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface and at the model top (i.e., to enforce the impenetrable boundary
@@ -1019,25 +1031,107 @@ end
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
-Update all implicit precomputed quantities for `Y` at time `t`, used by the
-Newton inner loop (`cache_imp!`). Calls `set_implicit_precomputed_quantities_core!`
-and then — when `has_implicit_1m_microphysics(p)` — refreshes the SGS moments
-(because Newton moves `q_lcl + q_icl`, and `λ_lagrange` in `ᶜsgs_moments`
-follows that sum) and overwrites the implicit 1M condensation / sublimation
-tendency `ᶜmp_tendency_implicit*` at the Newton iterate.
+Update all implicit precomputed quantities for `Y` at time `t`. Calls
+`set_implicit_precomputed_quantities_core!` and then — when
+`has_implicit_1m_microphysics(p)` — refreshes the SGS moments (because Newton
+moves `q_lcl + q_icl`, and `λ_lagrange` in `ᶜsgs_moments` follows that sum)
+and overwrites the implicit 1M condensation / sublimation tendency
+`ᶜmp_tendency_implicit*` at `Y`. The Newton inner loop (`cache_imp!`) calls
+`set_implicit_precomputed_quantities_deferred!`, which leaves the 1M part to
+its readers.
 
 The SGS covariances `ᶜT′T′`, `ᶜq′q′`, `ᶜcorr_Tq`, `ᶜα` that
 `update_implicit_1m_tendency!` reads are frozen through the Newton solve at
 their last `set_explicit_precomputed_quantities!` values; only
 `ᶜsgs_moments` and the 1M BMT call track the iterate.
 """
-function set_implicit_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     if has_implicit_1m_microphysics(p)
         set_sgs_moments!(Y, p)
         update_implicit_1m_tendency!(
             Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
         )
+    end
+    p.scratch.sgs_moments_are_stale[] = false
+    p.scratch.implicit_1m_tendency_is_stale[] = false
+    return nothing
+end
+
+"""
+    set_implicit_precomputed_quantities_deferred!(Y, p, t)
+
+Update the implicit precomputed quantities for `Y` at time `t` and defer the
+SGS moments and the implicit 1M tendency to their first reader. This is the
+`cache_imp!` hook of the implicit stage.
+
+Calls `set_implicit_precomputed_quantities_core!` and marks `ᶜsgs_moments` and
+`ᶜmp_tendency_implicit*` out of date (`p.scratch.sgs_moments_are_stale`,
+`p.scratch.implicit_1m_tendency_is_stale`). `implicit_tendency!` and
+`update_jacobian!`, the Newton residual and Jacobian, evaluate them at the same
+`Y` (`ensure_1m_tendencies!`).
+
+`ClimaTimeSteppers` calls `cache_imp!` before the Newton solve, at each Newton
+iterate, and at the solved state before `post_newton_stage_update!`. With
+`update_cache_every = "stage"`, `cache!` follows the solve and overwrites both
+fields, so the call at the solved state evaluates neither. With
+`update_cache_every = "step"`, `remaining_tendency!` reads `ᶜsgs_moments` of
+the solved state and evaluates them (`ensure_sgs_moments!`).
+"""
+NVTX.@annotate function set_implicit_precomputed_quantities_deferred!(Y, p, t)
+    set_implicit_precomputed_quantities_core!(Y, p, t)
+    if has_implicit_1m_microphysics(p)
+        p.scratch.sgs_moments_are_stale[] = true
+        p.scratch.implicit_1m_tendency_is_stale[] = true
+    end
+    return nothing
+end
+
+"""
+    ensure_1m_tendencies!(Y, p)
+
+Evaluate the 1M tendencies that the stage hooks deferred, at the state `Y` of
+their reader: `ᶜsgs_moments` and the implicit tendency `ᶜmp_tendency_implicit*`
+(`set_implicit_precomputed_quantities_deferred!`,
+`set_precomputed_quantities_deferred!`), and the updraft tendency
+`ᶜmp_tendencyʲs` (`set_precomputed_quantities_deferred!`). Resets their flags
+in `p.scratch`. Called from the readers of the
+tendencies: `implicit_tendency!`, `update_jacobian!`, the first-column Jacobian
+summaries, and the `microphys` tendency diagnostic. A no-op when the tendencies
+are current. Returns `nothing`.
+
+`Y` and `p` span the full domain: the flags in `p.scratch` hold for all columns.
+"""
+NVTX.@annotate function ensure_1m_tendencies!(Y, p)
+    (; microphysics_model, turbconv_model) = p.atmos
+    if p.scratch.updraft_1m_tendency_is_stale[]
+        set_updraft_microphysics_tendency_cache!(
+            Y, p, microphysics_model, turbconv_model,
+        )
+        p.scratch.updraft_1m_tendency_is_stale[] = false
+    end
+    if p.scratch.implicit_1m_tendency_is_stale[]
+        # The implicit tendency reads `ᶜsgs_moments`.
+        ensure_sgs_moments!(Y, p)
+        update_implicit_1m_tendency!(Y, p, microphysics_model, turbconv_model)
+        p.scratch.implicit_1m_tendency_is_stale[] = false
+    end
+    return nothing
+end
+
+"""
+    ensure_sgs_moments!(Y, p)
+
+Evaluate `ᶜsgs_moments` at the state `Y` of their reader when
+`set_implicit_precomputed_quantities_deferred!` deferred them, and leave the
+implicit 1M tendency deferred. Called from `add_remaining_tendency!`, whose SGS
+diffusive flux of the cloud condensate reads the moments; a no-op when they are
+current. Returns `nothing`.
+"""
+function ensure_sgs_moments!(Y, p)
+    if p.scratch.sgs_moments_are_stale[]
+        set_sgs_moments!(Y, p)
+        p.scratch.sgs_moments_are_stale[] = false
     end
     return nothing
 end
@@ -1051,16 +1145,24 @@ current state `Y`. This is only called before each evaluation of
 `implicit_tendency!` and `remaining_tendency!`.
 
 Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
-and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
-precipitation terminal velocities (unless they depend on the state, in which case
-`set_implicit_precomputed_quantities_core!` sets them; see
-`state_dependent_precipitation_velocities`), the microphysics tendency cache,
-surface precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
-Smagorinsky-Lilly quantities (each step only when the corresponding model
-component is active). Reads the implicit precomputed quantities, so it must follow
-`set_implicit_precomputed_quantities_core!` at the same state. Returns `nothing`.
+and cloud fraction, the EDMFX closures that depend on the environment cloud
+fraction (`set_prognostic_edmf_draft_closures!`), face diffusivities, the
+master mixing length `ᶜl_mix`, precipitation terminal velocities (unless they
+depend on the state, in which case `set_implicit_precomputed_quantities_core!`
+sets them; see `state_dependent_precipitation_velocities`), the microphysics
+tendency cache, surface precipitation fluxes, and, when
+`p.atmos.diff_mode == Explicit()`, the Smagorinsky-Lilly quantities (each step
+only when the corresponding model component is active). Reads the implicit
+precomputed quantities, so it must follow
+`set_implicit_precomputed_quantities_core!` at the same state. Returns
+`nothing`.
+
+`defer_updraft_microphysics = Val(true)` leaves the updraft tendency of the 1M
+scheme to its reader (`set_microphysics_tendency_cache!`).
 """
-NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_explicit_precomputed_quantities!(
+    Y, p, t, defer_updraft_microphysics::Val = Val(false),
+)
     (; turbconv_model) = p.atmos
 
     FT = eltype(p.params)
@@ -1078,6 +1180,12 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+
+    # The draft closures, whose buoyancy reference reads the environment cloud
+    # fraction from the update above.
+    if turbconv_model isa PrognosticEDMFX
+        set_prognostic_edmf_draft_closures!(Y, p)
+    end
 
     # Face-native diffusivities. Need the final cloud fraction from the
     # covariance/cloud-fraction update above.
@@ -1121,6 +1229,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p,
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
+        defer_updraft_microphysics,
     )
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
@@ -1161,9 +1270,9 @@ Calls, in order:
     against the fresh SGS covariances. `set_sgs_moments!` is NOT called
     here: step 2 already left `ᶜsgs_moments` current.
 
-The Newton inner loop (`cache_imp!`) calls the full
-`set_implicit_precomputed_quantities!` instead, which bundles the 1M
-refresh with step 1 since the covariances are frozen through Newton.
+The time stepper calls `set_precomputed_quantities_deferred!` (`cache!`) and
+`set_implicit_precomputed_quantities_deferred!` (`cache_imp!`), which leave the
+1M tendencies that only the implicit solve reads to `ensure_1m_tendencies!`.
 """
 function set_precomputed_quantities!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
@@ -1173,5 +1282,39 @@ function set_precomputed_quantities!(Y, p, t)
             Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
         )
     end
+    p.scratch.sgs_moments_are_stale[] = false
+    p.scratch.implicit_1m_tendency_is_stale[] = false
+    return nothing
+end
+
+"""
+    set_precomputed_quantities_deferred!(Y, p, t)
+
+Update the precomputed quantities for `Y` at time `t` and defer the 1M
+tendencies that the next implicit stage overwrites before it reads them. This
+is the `cache!` hook of the time stepper.
+
+Calls `set_implicit_precomputed_quantities_core!` and
+`set_explicit_precomputed_quantities!`, and marks two tendencies out of date in
+`p.scratch`:
+
+  - The implicit 1M tendency `ᶜmp_tendency_implicit*`, which the Newton solve
+    of the next stage evaluates at its own iterates.
+  - The updraft 1M tendency `ᶜmp_tendencyʲs` of `PrognosticEDMFX` with
+    `updraft_picard_rounds > 0`, which
+    `update_updraft_microphysics_tendency_cache!` writes in
+    `initialize_implicit_stage_problem!` before that solve reads it.
+
+A reader that follows with no implicit stage in between (such as
+`fully_explicit_tendency!`) evaluates them at the same `Y`
+(`ensure_1m_tendencies!`), so its result is that of
+`set_precomputed_quantities!`.
+"""
+function set_precomputed_quantities_deferred!(Y, p, t)
+    set_implicit_precomputed_quantities_core!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t, Val(true))
+    # `set_explicit_precomputed_quantities!` evaluated `ᶜsgs_moments`.
+    p.scratch.sgs_moments_are_stale[] = false
+    p.scratch.implicit_1m_tendency_is_stale[] = has_implicit_1m_microphysics(p)
     return nothing
 end

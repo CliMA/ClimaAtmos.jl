@@ -2,7 +2,9 @@
 Checks `solve_sgs_updraft_tracers_implicit_stage_analytic!`, the semi-implicit
 upwind predictor for the updraft scalars in the EDMFX implicit stage, against
 the recurrence its docstring states: upwind advection with the round's `u₃`,
-entrainment toward the environment value, the explicit and implicit 1M
+entrainment toward the environment value, the tail-entrainment sources of
+`mse` and `q_tot` (`tail_entrainment_increments`, on by default), the explicit
+and implicit 1M
 microphysics sources evaluated at the transported state (from
 `ᶜmp_tendencyʲs` and `ᶜmp_tendency_implicitʲs`), and the cell-1 surface
 relaxation of `mse` and `q_tot`. A nonzero covariant `u₃` at the surface face,
@@ -51,7 +53,7 @@ column(f) = vec(Array(parent(f)))
             "dt" => "1secs",
             "t_end" => "10secs",
             "ode_algo" => "ARS222",
-            "toml" => [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+            "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
             "output_default_diagnostics" => false,
         );
         job_id = "edmfx_tracer_predictor_test",
@@ -148,6 +150,33 @@ column(f) = vec(Array(parent(f)))
         ) + p.precomputed.ᶜturb_entrʲs.:(1)
     ε = column(ᶜtmp)
     @test all(>(0), ε)
+    # Tail-entrainment sources `ε_dyn Δχ_tail` of `mse` and `q_tot`, with the
+    # dynamical entrainment `ε_dyn` only (turbulent entrainment draws
+    # environment-mean air).
+    f_tail = FT(CAP.edmf_tail_entr_fraction(p.params))
+    tail_fields = CA.tail_entrainment_fields(p, f_tail)
+    @test !isempty(tail_fields)
+    (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = tail_fields
+    ᶜε_dyn = Fields.Field(FT, axes(Y.c))
+    @. ᶜε_dyn = CA.compute_entrainment(
+        p.precomputed.ᶜentr_vel_scaleʲs.:(1),
+        p.precomputed.ᶜentr_nonvel_rateʲs.:(1),
+        p.precomputed.ᶜarea_bounding_entr_detrʲs.:(1),
+        CA.ᶜinterp(ᶠw),
+    )
+    ᶜρa⁰ = Fields.Field(FT, axes(Y.c))
+    @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
+    thp_tail = CAP.thermodynamics_params(p.params)
+    ᶜtail = @. CA.tail_entrainment_increments(
+        thp_tail, f_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+        ᶜcorr_Tq, ᶜρa⁰, sgsʲ.ρa, ᶜε_dyn, p.dt,
+    )
+    ε_dyn = column(ᶜε_dyn)
+    tail_src = Dict{Any, Vector{FT}}(
+        @name(mse) => ε_dyn .* column(ᶜtail.mse),
+        @name(q_tot) => ε_dyn .* column(ᶜtail.q_tot),
+    )
+    @test any(!=(0), tail_src[@name(mse)])
     nz = length(α)
     ρa₁ = column(sgsʲ.ρa)[1]
     ρʲ₁ = column(p.precomputed.ᶜρʲs.:(1))[1]
@@ -183,15 +212,17 @@ column(f) = vec(Array(parent(f)))
     @test !isnothing(mp_imp.processes.rain_condensation_evaporation)
     @test !isnothing(mp_imp.processes.snow_deposition_sublimation)
 
-    # Transport-only result of the recurrence, swept bottom to top.
+    # Transport-only result of the recurrence, swept bottom to top. The
+    # `q_tot` numerator including its tail source is floored at zero.
     function predicted_transport(χ_name; α = α, ε = ε, r_sfc = r_sfc)
         χ_new = similar(α)
         χ_prev = zero(FT)
+        tail = get(tail_src, χ_name, zeros(FT, nz))
         for i in 1:nz
             r = i == 1 && sfc_forced(χ_name) ? r_sfc : zero(FT)
-            num =
-                χ_old[χ_name][i] / dtγ + ε[i] * χ⁰[χ_name][i] +
-                r * χ_sfc(χ_name) + α[i] * χ_prev
+            num_entr = χ_old[χ_name][i] / dtγ + ε[i] * χ⁰[χ_name][i] + tail[i]
+            χ_name === @name(q_tot) && (num_entr = max(zero(FT), num_entr))
+            num = num_entr + r * χ_sfc(χ_name) + α[i] * χ_prev
             χ_new[i] = num / (1 / dtγ + α[i] + ε[i] + r)
             χ_prev = χ_new[i]
         end
@@ -825,7 +856,7 @@ column(f) = vec(Array(parent(f)))
                     "t_end" => "2secs",
                     "ode_algo" => "ARS222",
                     "toml" =>
-                        [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                        [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
                     "output_default_diagnostics" => false,
                 );
                 job_id = "edmfx_nomf_imp_$(imp_mp)",

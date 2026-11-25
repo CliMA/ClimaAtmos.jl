@@ -73,8 +73,11 @@ jacobian_cache(alg, Y, atmos; verbose) =
 Base.zero(jacobian::Jacobian) = jacobian
 
 # ClimaTimeSteppers.jl calls this to set the Jacobian before each linear solve.
-NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
-    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
+NVTX.@annotate function update_jacobian!(jacobian, Y, p, dtγ, t)
+    # The Jacobian reads the 1M tendencies that the stage hooks deferred.
+    ensure_1m_tendencies!(Y, p)
+    return update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
+end
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
 NVTX.@annotate LinearAlgebra.ldiv!(
@@ -108,6 +111,8 @@ returned as-is. This defines a standardized format for comparing different
 types of Jacobians in tests and debugging plots.
 """
 function first_column_block_arrays(alg::SparseJacobian, Y, p, dtγ, t)
+    # The Jacobian reads the 1M tendencies that the stage hooks deferred.
+    ensure_1m_tendencies!(Y, p)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)
     column_p = first_column_view(p)
@@ -135,6 +140,9 @@ implicit tendency in the first column of `Y`. Used to rescale the block arrays
 from `first_column_block_arrays` into comparable relative units.
 """
 function first_column_rescaling_arrays(Y, p, t)
+    # Evaluate the deferred 1M tendencies in all columns before the
+    # single-column `implicit_tendency!` resets their flags.
+    ensure_1m_tendencies!(Y, p)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)
     column_p = first_column_view(p)

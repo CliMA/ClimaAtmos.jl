@@ -25,4 +25,8 @@ if .buildkite/should_skip_merge_queue.sh; then
 fi
 
 echo "--- Uploading full pipeline"
+# Shared depot pinned to the version published at upload time.
+shared="${BUILDKITE_BUILD_PATH}/climaatmos-ci/depot/shared"
+SHARED_DEPOT="$(readlink -f "$shared" || echo "$shared")"
+export SHARED_DEPOT
 buildkite-agent pipeline upload .buildkite/full_pipeline.yml

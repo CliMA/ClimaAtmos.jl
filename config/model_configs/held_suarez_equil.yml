@@ -7,4 +7,4 @@ vert_diff: "VerticalDiffusion"
 rad: "held_suarez"
 microphysics_model: "0M"
 reproducibility_test: true
-toml: [toml/sphere_held_suarez.toml]
+toml: [toml/default_parameters.toml]

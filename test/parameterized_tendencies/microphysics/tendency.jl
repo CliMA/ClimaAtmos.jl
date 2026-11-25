@@ -143,7 +143,7 @@ end
                 "t_end" => "10secs",
                 "ode_algo" => "SSP333",
                 "toml" =>
-                    [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                    [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
                 "output_default_diagnostics" => false,
             );
             job_id = "tendency_0M_prognostic_edmfx",

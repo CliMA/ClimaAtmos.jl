@@ -1,5 +1,3 @@
-using Flux
-import JLD2
 import CloudMicrophysics as CM
 
 """
@@ -91,8 +89,9 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`. Routed by `implicit_microphysics`
     the same way as `cloud_liquid_formation`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`. Routed by
-    `implicit_microphysics` the same way as `cloud_liquid_formation`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`,
+    `"DepositionWithoutCloudCondensate"` (no snow deposition where cloud liquid or cloud ice is
+    present). Routed by `implicit_microphysics` the same way as `cloud_liquid_formation`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
     `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
@@ -175,6 +174,8 @@ function get_microphysics_1m_options(parsed_args)
             "SublimationOnly" => CMP.SublimationOnly(),
             "DepositionAndSublimation" =>
                 CMP.DepositionAndSublimation(),
+            "DepositionWithoutCloudCondensate" =>
+                CMP.DepositionWithoutCloudCondensate(),
         ),
         "snow_deposition_sublimation",
     )
@@ -804,13 +805,9 @@ function get_cloud_model(parsed_args, params)
             @clima_artifact("cloud_fraction_nn"),
             parsed_args["cloud_nn_architecture"],
         )
-        nn_model_data = JLD2.load(nn_filepath)
-        nn_architecture = nn_model_data["re"]
-
         nn_param_vec = FT.(CAP.cloud_fraction_param_vec(params))
         # build the model
-        cf_nn_model = nn_architecture(nn_param_vec)
-        MLCloud_constructor(cf_nn_model)
+        build_mlcloud(nn_filepath, nn_param_vec)
     else
         error("Invalid cloud_model $(cloud_model)")
     end

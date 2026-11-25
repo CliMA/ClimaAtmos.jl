@@ -185,6 +185,17 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
+  - `edmf_tail_entr_fraction`: Fraction `f` in `(0, 1]` of the environment's
+    subgrid `(T, q_tot)` distribution, ranked by moist static energy, whose
+    mean the dynamical EDMF entrainment draws (`tail_entrainment_increments`):
+    `1/2` (default) is the upper half, and `1` entrains the environment mean [-].
+  - `edmf_buoyancy_clear_env_weight`: Weight `f_ev ∈ [0, 1]` of the clear part
+    of the environment in the density the updraft buoyancy is referenced to,
+    under 1M microphysics (`set_updraft_reference_density_excess!`): the
+    reference removes the fraction `f_ev (1 − cf⁰)` of the environment cloud
+    condensate and its latent heat, with `cf⁰` the environment cloud fraction
+    of the SGS closure. `1` gives the clear-fraction blend; `0` (default)
+    references the grid-mean density [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -230,6 +241,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
     edmfx_updraft_kh_diffusion_factor::FT
+    edmf_tail_entr_fraction::FT
+    edmf_buoyancy_clear_env_weight::FT
 end
 
 """
@@ -339,6 +352,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the cloud-fraction
     width (`_sgs_augmented_sigma`) and on the updraft cover width
     (`_updraft_cloud_fraction`) [kg/kg].
+  - `cloud_fraction_eps_rel`: Floor `ε_rel ≥ 0` on the cloud-fraction width as
+    a fraction of the subsaturation deficit `δ_sub = max(0, −μ_S)`,
+    `σ_aug = √((α σ_S)² + (ε_rel δ_sub)² + σ_abs²)` (`_sgs_augmented_sigma`):
+    cloud cover of order one in subsaturated air takes condensate of order
+    `ε_rel δ_sub`. The default `0` leaves the absolute floor alone [-].
   - `sgs_cloud_species_constant_timescales`: Switch for the 1M scheme. A
     positive value makes the Damköhler factor of the variance fidelity
     (`sgs_microphysics_relaxation_time`) and the cloud-species flux blend
@@ -380,6 +398,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_fidelity_updraft_coeff::FT
     sgs_fidelity_updraft_min::FT
     cloud_fraction_sigma_abs::FT
+    cloud_fraction_eps_rel::FT
     sgs_cloud_species_constant_timescales::FT
     cloud_condensate_relative_variance_floor::FT
 end

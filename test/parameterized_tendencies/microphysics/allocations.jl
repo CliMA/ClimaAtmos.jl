@@ -86,16 +86,16 @@ end
 
 function _allocs_cloud_fraction_simple()
     FT = Float64
-    σ_abs = FT(1e-7)
+    σ_floor = CA.CloudFractionFloor(FT(1e-7), FT(0))
     CA._compute_cloud_fraction(
-        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), σ_abs,
+        FT(5e-5), FT(-1e-4), FT(3.16e-4), FT(1), σ_floor,
     )
     return @allocated CA._compute_cloud_fraction(
         FT(5e-5),
         FT(-1e-4),
         FT(3.16e-4),
         FT(1),
-        σ_abs,
+        σ_floor,
     )
 end
 
@@ -110,7 +110,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0)
     α = FT(1)
-    σ_abs = FT(1e-7)
+    σ_floor = CA.CloudFractionFloor(FT(1e-7), FT(0))
     c = FT(3)
     CA._compute_cloud_fraction(
         thp,
@@ -124,7 +124,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        σ_abs,
+        σ_floor,
         c,
     )
     return @allocated CA._compute_cloud_fraction(
@@ -139,7 +139,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        σ_abs,
+        σ_floor,
         c,
     )
 end
@@ -218,6 +218,21 @@ function _allocs_sgs_moments_curvature(thp, quad, ::Type{FT}) where {FT}
     return @allocated ClimaAtmos._compute_sgs_moments(
         args..., q_tot, FT(4e-4), FT(-3e-4),
     )
+end
+
+function _allocs_sigma_S_and_beta_T(thp, ::Type{FT}) where {FT}
+    ρ = FT(1.1347)
+    T = FT(283.8034)
+    T′T′ = FT(6.9575e-3)
+    q′q′ = FT(2.0623e-9)
+    corr = FT(1.0)
+    σ_S = ClimaAtmos._sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr)
+    ClimaAtmos.sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr)
+    a_σ = @allocated ClimaAtmos._sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr)
+    a_β = @allocated ClimaAtmos.sgs_temperature_regression(
+        thp, T, ρ, σ_S, T′T′, q′q′, corr,
+    )
+    return a_σ + a_β
 end
 
 function _allocs_conditional_1m(thp, cmp, quad, ::Type{FT}, T = FT(285)) where {FT}
@@ -330,6 +345,8 @@ end
                     tomli = CP.create_toml_dict(FTi)
                     thpi = TD.Parameters.ThermodynamicsParameters(tomli)
                     cmpi = CMP.Microphysics1MParams(tomli)
+                    _allocs_sigma_S_and_beta_T(thpi, FTi)
+                    @test _allocs_sigma_S_and_beta_T(thpi, FTi) == 0
                     qi = ClimaAtmos.SGSQuadrature(
                         FTi;
                         quadrature_order = 3,

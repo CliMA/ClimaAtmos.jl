@@ -859,5 +859,15 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
         # F₀ * exp(-κ * (LWP_zₜ - ᶠLWP_z)) + F₁ * exp(-κ * ᶠLWP_z),
     ))  # = -∂F/∂z = ρ cₚ ∂T/∂t (longwave radiation)
 
+    (; turbconv_model) = p.atmos
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                ᶜdivᵥ(Geometry.WVector(radiation_flux)) / ᶜρʲs.:($$j)
+        end
+    end
+
     return nothing
 end

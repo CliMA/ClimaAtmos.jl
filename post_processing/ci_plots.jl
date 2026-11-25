@@ -1377,6 +1377,8 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_trmm_column},
     Val{:prognostic_edmfx_trmm_column_short_dt},
     Val{:prognostic_edmfx_bomex_tracerA_column},
+    Val{:prognostic_edmfx_isdac_column},
+    Val{:prognostic_edmfx_mpace_column},
 }
 
 """
@@ -1621,8 +1623,9 @@ function make_plots(
             "S_acnv_lcl_rai", "S_acnv_icl_sno",
             "S_accr_lcl_rai", "S_accr_lcl_sno_cold", "S_accr_lcl_sno_warm",
             "S_accr_melt_lcl_sno",
-            "S_accr_icl_rai", "S_accr_freeze_icl_rai", "S_accr_icl_sno",
-            "S_accr_rai_sno_cold", "S_accr_rai_sno_warm", "S_accr_melt_rai_sno",
+            "S_accr_icl_rai", "S_accr_melt_icl_rai", "S_accr_freeze_icl_rai",
+            "S_accr_icl_sno",
+            "S_accr_rai_sno_cold", "S_accr_melt_rai_sno",
             "S_phase_change_vap_rai", "S_phase_change_vap_sno",
             "S_melt_icl_lcl", "S_melt_sno_rai",
         ]
@@ -1986,10 +1989,10 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
             "S_accr_lcl_sno_warm",
             "S_accr_melt_lcl_sno",
             "S_accr_icl_rai",
+            "S_accr_melt_icl_rai",
             "S_accr_freeze_icl_rai",
             "S_accr_icl_sno",
             "S_accr_rai_sno_cold",
-            "S_accr_rai_sno_warm",
             "S_accr_melt_rai_sno",
             "S_phase_change_vap_rai",
             "S_phase_change_vap_sno",

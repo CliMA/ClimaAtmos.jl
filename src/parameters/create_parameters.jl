@@ -664,6 +664,14 @@ function TurbulenceConvectionParameters(
     FT = CP.float_type(toml_dict)
     provisional_defaults = (;
         edmfx_updraft_kh_diffusion_factor = FT(1),
+        # Tail entrainment (`tail_entrainment_increments`): the dynamical
+        # entrainment draws the upper half, in moist static energy, of the
+        # environment; fraction 1 = environment-mean air.
+        edmf_tail_entr_fraction = FT(0.5),
+        # Weight of the clear part of the environment in the updraft buoyancy
+        # reference density (`set_updraft_reference_density_excess!`): 0 = the
+        # grid-mean density, 1 = the clear-fraction blend.
+        edmf_buoyancy_clear_env_weight = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -677,6 +685,16 @@ function TurbulenceConvectionParameters(
         )
     parameters =
         merge(parameters, provisional_defaults, provisional_params, overrides)
+    f_tail = parameters.edmf_tail_entr_fraction
+    # The entrained air is the mean of a nonempty top fraction of the
+    # environment, at most all of it.
+    0 < f_tail <= 1 || throw(
+        ArgumentError("edmf_tail_entr_fraction must lie in (0, 1]; got $f_tail"),
+    )
+    f_ev = parameters.edmf_buoyancy_clear_env_weight
+    0 <= f_ev <= 1 || throw(
+        ArgumentError("edmf_buoyancy_clear_env_weight must lie in [0, 1]; got $f_ev"),
+    )
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
@@ -695,8 +713,8 @@ provisional parameters (the cloud-species timescale switch, the
 displacement-closure scales, the precipitation placement and the radiative
 condensate inhomogeneity) take the defaults set here and are read from
 `toml_dict` only when a run or calibration TOML defines them; the provisional
-default of `sgs_variance_horizontal_scale_factor` supersedes its ClimaParams
-value the same way.
+defaults of `sgs_variance_horizontal_scale_factor` and `cloud_fraction_eps_rel`
+supersede their ClimaParams values the same way.
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -731,9 +749,10 @@ function SGSQuadratureParameters(
     # Provisional parameters: defaults set here ahead of ClimaParams. Each is
     # read from the run/calibration toml when defined there and otherwise
     # falls back to the default below, which for a parameter that ClimaParams
-    # already defines (`sgs_variance_horizontal_scale_factor`) supersedes the
-    # ClimaParams default. Such a parameter is kept out of `name_map`, so the
-    # parameter log does not record the superseded ClimaParams value.
+    # already defines (`sgs_variance_horizontal_scale_factor`,
+    # `cloud_fraction_eps_rel`) supersedes the ClimaParams default. Such a
+    # parameter is kept out of `name_map`, so the parameter log does not
+    # record the superseded ClimaParams value.
     # TODO: promote each default to ClimaParams (and the name_map above) once
     # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
@@ -798,6 +817,12 @@ function SGSQuadratureParameters(
         # the liquid water path of overcast marine stratocumulus. Applied to all
         # cloud types; ice and convective clouds are likely more inhomogeneous.
         cloud_condensate_relative_variance_floor = FT(0.25),
+        # Floor on the cloud-fraction width as a fraction of the subsaturation
+        # deficit (`_sgs_augmented_sigma`): 0 = the absolute floor alone.
+        # TODO: ClimaParams defines `cloud_fraction_eps_rel` with default 0.02
+        # and describes it as the scale of a `q_sat` term; update the default
+        # and the description there when this default moves to ClimaParams.
+        cloud_fraction_eps_rel = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
@@ -843,6 +868,7 @@ function SGSQuadratureParameters(
     for (name, value) in (
         (:sgs_fidelity_updraft_coeff, parameters.sgs_fidelity_updraft_coeff),
         (:sgs_fidelity_updraft_min, parameters.sgs_fidelity_updraft_min),
+        (:cloud_fraction_eps_rel, parameters.cloud_fraction_eps_rel),
     )
         value >= 0 || throw(ArgumentError("$name must be non-negative; got $value"))
     end

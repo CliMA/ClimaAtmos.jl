@@ -1,4 +1,4 @@
-469
+479
 
 # **README**
 #
@@ -32,6 +32,61 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+479
+- Gravity-wave drag: each layer's non-orographic drag is divided by the mean mass of
+  its two cells, the non-orographic damping layer spans at least the top three cells,
+  the non-orographic drag is limited by its magnitude instead of per component, and the
+  buoyancy frequency in the bottom and top cells uses a one-sided `dT/dz`
+  (non-orographic and orographic). Changes the output of every run with gravity-wave
+  drag enabled.
+
+478
+- Update to CloudMicrophysics 0.51: 1-moment rain collisions ramp rain freezing below freezing (`temperature_rain_collision_snow`), melt collected cloud ice above freezing (`S_accr_melt_icl_rai`), and melt snow in rain collisions only thermally; the other 1-moment tendencies change by roundoff.
+
+477
+- Switching off snow deposition growth when in clouds
+
+476
+- `toml/default_parameters.toml` sets `cloud_fraction_eps_rel = 0.05`, the
+  floor of the cloud-fraction width at 5% of the subsaturation deficit, which
+  lowers the cloud fraction of trace condensate in subsaturated air. Changes
+  the output of the moist jobs that use this TOML with the `quadrature` cloud
+  model.
+
+475
+- `toml/default_parameters.toml` (renamed from `prognostic_edmfx_1M.toml`)
+  replaces most case parameter files.
+
+474
+- 1M `PrognosticEDMFX`: `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` set `edmf_buoyancy_clear_env_weight =
+  1`, so the updraft buoyancy is referenced to the clear part of the
+  environment, blended with its mean by the environment clear fraction.
+  Changes the output of the jobs that use these TOMLs.
+
+473
+- `prognostic_edmfx_1M.toml` matches ClimaCoupler's `amip_progedmf_1m.toml`:
+  Changes the output of every job that uses this parameter file.
+
+472
+- Tail entrainment on by default for the prognostic EDMF updraft
+  (`edmf_tail_entr_fraction = 0.5`). Changes the output of every
+  prognostic EDMF job with SGS covariances.
+
+471
+- The linearized saturation-excess width `σ_S` is evaluated as
+  `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`, and the temperature
+  regression on the saturation excess clamps the correlation of `T′` and `S′`
+  to `[−1, 1]`. Changes the output of runs that use `σ_S` (the
+  truncated-Gaussian cloud fraction and the 1M SGS closures): at rounding
+  level in general, and in the node temperatures where `σ_q ≈ γ σ_T` and
+  `corr ≈ 1`.
+
+470
+- Turbulent lateral entrainment `turb_entr_param_vec = [0.007, 400.0]` in
+  `prognostic_edmfx_1M.toml` and `prognostic_edmfx_1M_mlcloud.toml`. Changes the
+  output of every job that uses these parameter files.
+
 469
 - Non-orographic gravity-wave drag (AD99 and Beres): waves unstable at the launch
   level deposit their momentum in the first layer above it instead of being dropped,

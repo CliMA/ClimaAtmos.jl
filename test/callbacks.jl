@@ -111,3 +111,14 @@ end
 end
 
 # query functions
+
+@testset "Warning when a drag interval is not a whole number of steps" begin
+    @test_logs (:warn, r"not a whole number") CA.warn_if_not_whole_steps(
+        "dt_nogw", "400secs", 120.0,
+    )
+    @test_logs (:warn, r"shorter than") CA.warn_if_not_whole_steps(
+        "dt_nogw", "60secs", 120.0,
+    )
+    @test_logs CA.warn_if_not_whole_steps("dt_nogw", "360secs", 120.0)
+    @test_logs CA.warn_if_not_whole_steps("dt_nogw", "Inf", 120.0)
+end

@@ -6,4 +6,4 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
-toml: [toml/longrun_aquaplanet_1M.toml]
+toml: [toml/default_parameters.toml]

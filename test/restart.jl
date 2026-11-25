@@ -57,9 +57,12 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     simulation = CA.get_simulation(CA.AtmosConfig(test_dict; job_id, comms_ctx))
     CA.solve_atmos!(simulation)
 
-    # Check re-importing the same state
+    # Check re-importing the same state. The checkpoints within the first day
+    # are named `day0.<seconds>.hdf5`.
     restart_dir = simulation.output_dir
-    @test isfile(joinpath(restart_dir), "day0.3.hdf5")
+    t_end = Int(CA.time_to_seconds(test_dict["t_end"]))
+    dt_save = Int(CA.time_to_seconds(test_dict["dt_save_state_to_disk"]))
+    @test isfile(joinpath(restart_dir, "day0.$(t_end).hdf5"))
 
     # Reset random seed for RRTMGP
     Random.seed!(1234)
@@ -136,8 +139,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     # Reset random seed for RRTMGP
     Random.seed!(1234)
 
-    restart_file = joinpath(simulation.output_dir, "day0.2.hdf5")
-    @test isfile(joinpath(restart_dir), "day0.2.hdf5")
+    restart_file = joinpath(simulation.output_dir, "day0.$(t_end - dt_save).hdf5")
+    @test isfile(restart_file)
     # Restart from specific file
     config2 = CA.AtmosConfig(
         merge(test_dict, Dict("restart_file" => restart_file));
@@ -301,6 +304,66 @@ if MANYTESTS
             end
         end
     end
+    # 1M PrognosticEDMFX column with the clear-air updraft buoyancy reference,
+    # whose draft closures read the environment cloud fraction of the same
+    # cache update. In DYCOMS RF01, a stratocumulus deck condenses within
+    # seconds, and the reference density excess becomes nonzero at its
+    # partly cloudy edges, which the test checks. The case runs on CPUs only:
+    # 1M PrognosticEDMFX exceeds the 4 KiB kernel-parameter limit of the P100
+    # GPUs in `set_precipitation_velocities!`.
+    if "column" in grids && device isa ClimaComms.AbstractCPUDevice
+        edmf_1m_output_loc =
+            ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
+        edmf_1m_output_loc = ClimaComms.bcast(comms_ctx, edmf_1m_output_loc)
+        maybe_wait_filesystem(comms_ctx, edmf_1m_output_loc)
+        edmf_1m_job_id = "column_1M_prognostic_edmfx_dycoms_rf01"
+        edmf_1m_test_dict = merge(
+            YAML.load_file(
+                joinpath(
+                    @__DIR__,
+                    "../config/model_configs/prognostic_edmfx_dycoms_rf01_column.yml",
+                ),
+            ),
+            Dict(
+                "test_dycore_consistency" => true,
+                "reproducible_restart" => true,
+                "check_nan_every" => 3,
+                "log_progress" => false,
+                # The deck forms within the first steps; after 30 s its edges
+                # hold enough liquid for a nonzero excess in Float32.
+                "dt" => "10secs",
+                "t_end" => "30secs",
+                "dt_save_state_to_disk" => "10secs",
+                "enable_diagnostics" => false,
+                "debug_tendency_diagnostics" => false,
+                "toml" => [
+                    joinpath(@__DIR__, "../toml/default_parameters.toml"),
+                ],
+                "output_dir" => joinpath(edmf_1m_output_loc, edmf_1m_job_id),
+            ),
+        )
+        push!(
+            TESTING,
+            (;
+                test_dict = edmf_1m_test_dict,
+                job_id = edmf_1m_job_id,
+                # The `RadiationDYCOMS` cache is written by its tendency, which
+                # does not run when the state is only read.
+                more_ignore = [
+                    :ᶜκρq,
+                    :∫_0_∞_κρq,
+                    :ᶠ∫_0_z_κρq,
+                    :isoline_z_ρ_ρq,
+                    :ᶠradiation_flux,
+                ],
+                check = simulation ->
+                    maximum(
+                        abs,
+                        parent(simulation.integrator.p.precomputed.ᶜρ_ref_excess),
+                    ) > 0,
+            ),
+        )
+    end
 else
     amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
     amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
@@ -342,7 +405,7 @@ else
             "radiation_reset_rng_seed" => true,
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
-                joinpath(@__DIR__, "../toml/prognostic_edmfx.toml"),
+                joinpath(@__DIR__, "../toml/default_parameters.toml"),
                 joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),
@@ -358,7 +421,8 @@ else
     )
 end
 
-@test all(
-    @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore)[1] for
-    t in TESTING
-)
+@test all(TESTING) do t
+    (success, simulation) =
+        @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore)
+    success && (!hasproperty(t, :check) || t.check(simulation))
+end

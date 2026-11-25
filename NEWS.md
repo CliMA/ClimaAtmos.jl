@@ -3,6 +3,129 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Set `Setups.ISDAC` surface sensible and latent heat
+  fluxes to zero (`shf = 0`, `lhf = 0`) per Ovchinnikov et al. (2014), Appendix
+  A2 (previously `MoninObukhov(; z0 = 4e-4)` computed interactive surface heat
+  and moisture fluxes from `T_sfc = 267 K`, altering existing ISDAC runs such as
+  `les_isdac_box.yml`), apply `RadiationISDAC` longwave heating consistently to
+  `PrognosticEDMFX` updraft MSE, and add the `Setups.MPACE` single-layer Arctic
+  mixed-phase cloud setup (`MPACEForcing`, `prognostic_edmfx_isdac_column.yml`,
+  and `prognostic_edmfx_mpace_column.yml`).
+- ![][badge-💥breaking] ![][badge-🔥behavioralΔ] Update to CloudMicrophysics 0.51.
+  In 1-moment rain collisions with cloud ice and snow, collected rain freezes over a linear
+  temperature ramp below freezing (`temperature_rain_collision_snow`), collected cloud ice
+  melts into rain at and above freezing, and snow melts only by the sensible heat of the
+  collected rain. In 1M process diagnostics (`mp1m_`, `mp1mup_`, `mp1men_`),
+  `*_S_accr_rai_sno_warm` is removed and `*_S_accr_melt_icl_rai` is added.
+- ![][badge-🚀performance] The parameter structs of CloudMicrophysics 0.51 are defined with
+  `ClimaParams.@params`, so that they hold their values in a type parameter and GPU kernels do
+  not allocate any registers or parameter memory for them. Its 1-moment tendencies do less work
+  per point.
+- ![][badge-🐛bugfix] Non-orographic gravity-wave drag (AD99 and Beres) now deposits
+  exactly the momentum each layer gives up on stretched and deep-atmosphere grids. Each
+  layer's flux is divided by the mean mass of the two cells it spans (the model's own
+  `ρ·J/ΔA`, which grows with height on a deep-atmosphere grid) before being split between
+  them, so the flux is per unit area of the bottom face. It was divided by
+  `√(ρ_k ρ_{k+1})·Δz`, which left a second-order error on uniform and stretched grids and,
+  on deep-atmosphere grids, an error equal to the area growth from the surface (about 1.6%
+  at 50 km). This changes the results of every run with `non_orographic_gravity_wave`
+  enabled.
+- ![][badge-✨feature/enhancement] A warning is logged when `dt_nogw` or `dt_ogw` is not a
+  whole number of model steps, giving the actual times between drag updates.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave drag is limited by the magnitude
+  of the drag vector, 3e-3·√2 m/s² as in the orographic scheme, so it keeps its direction
+  where the limit binds. Each component was clipped to ±3e-3 m/s² separately, which rotated
+  the drag. Non-finite values are still set to zero, and a `@debug` check reports them.
+- ![][badge-🔥behavioralΔ] The non-orographic gravity-wave damping layer, which receives
+  the momentum flux escaping the model top, now always spans at least the top three cells.
+  With fewer levels above `nogw_damp_pressure` (e.g. the default 30 km top and 85 Pa), it was
+  one or two top cells; a warning is now logged in that case. Single columns use the top three
+  cells instead of the top cell.
+- ![][badge-🐛bugfix] The non-orographic and orographic gravity-wave buoyancy frequency in
+  the bottom and top cells now uses the one-sided `dT/dz` across the face to the neighbouring
+  cell. Previously it was about half of that, as the boundary face took the end-cell
+  temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
+  too high in the bottom cell (where temperature falls with height). This changes the
+  results of every run with either scheme enabled.
+
+0.43.0
+------
+- ![][badge-🔥behavioralΔ] ![][badge-🚀performance] Update to CloudMicrophysics 0.50.
+  1-moment snow deposition defaults to `DepositionWithoutCloudCondensate` (no snow
+  deposition where cloud liquid or cloud ice is present; sublimation is unchanged), and
+  pointwise 1-moment all-zero early exits are delegated to
+  `CloudMicrophysics.BulkMicrophysicsTendencies`.
+- ![][badge-✨feature/enhancement] Subsaturation-deficit floor of the
+  cloud-fraction width (provisional parameter `cloud_fraction_eps_rel`,
+  `ε_rel`): `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, which
+  makes the cloud fraction of subsaturated air vanish with its condensate. The
+  default `0` supersedes the ClimaParams value `0.02` and leaves results
+  unchanged; `toml/default_parameters.toml` sets it to `0.05`.
+- ![][badge-✨feature/enhancement] Parameter files listed under the `toml` key
+  are merged in order, and a parameter set in more than one file takes the
+  value from the last one with a warning. A case file can list only its differences:
+  `toml: [toml/default_parameters.toml, my_case.toml]`.
+- ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` is renamed to
+  `toml/default_parameters.toml`. Most jobs are changed to use this toml.
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Clear-environment
+  updraft buoyancy reference for 1M `PrognosticEDMFX` (provisional parameter
+  `edmf_buoyancy_clear_env_weight`, `f_ev ∈ [0, 1]`, default `0`): updrafts
+  rise through the clear part of the environment, so the updraft buoyancy
+  (`ᶜρ_diffʲs`) is taken against the grid-mean density plus the density excess
+  of the environment with the fraction `f_ev (1 − cf⁰)` of its cloud liquid
+  and ice, and their latent heat, removed, where `cf⁰` is the environment cloud
+  fraction of the SGS closure (`set_updraft_reference_density_excess!`). The
+  excess vanishes in clear and overcast environments. It enters the updraft
+  momentum and area solves and the entrainment closures, which run after the
+  cloud-fraction update of the same state, so restarts are reproducible;
+  the pressure work in the updraft `mse` equation keeps the grid-mean density.
+  `toml/prognostic_edmfx_1M.toml` and `toml/prognostic_edmfx_1M_mlcloud.toml`
+  set `f_ev = 1`, which changes the results of the 1M EDMFX column jobs,
+  `larcform1_1M_prognostic_edmfx`, and the 1M aquaplanet, AMIP target, and
+  benchmark configurations; the 2M RICO job, which also reads the 1M TOML,
+  ignores the weight.
+- ![][badge-💥breaking] Flux is now a weak dependency, The `ClimaAtmosFlux`
+  extension builds the `MLCloud` network (`build_mlcloud`) and loads when `Flux`
+  is imported alongside ClimaAtmos. Configurations with `cloud_model: "MLCloud"`
+  need `import Flux` before the simulation is built.
+- ![][badge-🔥behavioralΔ] Tail entrainment for the prognostic EDMF updraft
+  (provisional parameter `edmf_tail_entr_fraction`, default `0.5`): the air
+  drawn in by the dynamical entrainment is the mean of the top fraction, in
+  moist static energy, of the environment's Gaussian subgrid `(T, q_tot)`
+  distribution instead of the environment mean (`tail_entrainment_increments`).
+  The default entrains the upper half; `1` restores environment-mean
+  entrainment, as do configurations without SGS covariances.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The linearized saturation-excess
+  width `σ_S` (`_sgs_linear_sigma_S`) is evaluated as
+  `sqrt((σ_q − γ σ_T)² + 2 γ σ_T σ_q (1 − corr))`. The expanded form
+  `σ_q² − 2 γ corr σ_T σ_q + γ² σ_T²` lost its significant digits where
+  `σ_q ≈ γ σ_T` and `corr ≈ 1`, which `Float32` runs reached in cloud layers.
+  The temperature regression on the saturation excess
+  (`sgs_temperature_regression`) clamps the correlation of `T′` and `S′` to
+  `[−1, 1]`, which keeps the node temperatures of the 1M conditional-moment
+  rule within `σ_T |S′| / σ_S` of the mean. With `σ_S` collapsed to its floor,
+  nodes reached the temperature floor and formed cloud ice in warm clouds. The
+  variance fidelity `ᶜα` takes its `σ_S` from `_sgs_linear_sigma_S`.
+- [#4995](https://github.com/CliMA/ClimaAtmos.jl/pull/4995)
+  ![][badge-🚀performance] 1M: the time-stepper hooks defer the tendencies that
+  only the implicit solve reads. The SGS moments and the implicit 1M tendency
+  were evaluated at every `cache_imp!` and `cache!` call (three times per
+  implicit stage), and the updraft tendency of `PrognosticEDMFX` at every
+  `cache!` call. `implicit_tendency!` and `update_jacobian!` now evaluate them
+  at the same state when they read them (`ensure_1m_tendencies!`), so results
+  are unchanged. `set_precomputed_quantities!` and
+  `set_implicit_precomputed_quantities!` evaluate everything.
+- [#4995](https://github.com/CliMA/ClimaAtmos.jl/pull/4995)
+  ![][badge-🚀performance] 1M: cells without cloud condensate in which every
+  process rate of the bulk parameter set vanishes at all quadrature nodes
+  (`BMT.no_rates`) skip the node rule. With `implicit_microphysics: true`,
+  whose bulk set holds no vapor exchange, those cells hold only rain, or only
+  snow at or below freezing.
+- ![][badge-🔥behavioralΔ] `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml` set the turbulent lateral entrainment
+  `turb_entr_param_vec = [c₁, c₂] = [0.007, 400.0]` (was `[0.001, 1e5]`), so the
+  rate `c₁ exp(-c₂ a)` mixes tracers of narrow updrafts (`a ≲ 0.01`) with the
+  environment and leaves broad updrafts undiluted.
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
   sublimation of the precipitation flux (`precipitation_evaporation_0m:
   "Kessler"`, default off). Evaporated precipitation returns the energy it was
