@@ -1,4 +1,4 @@
-480
+481
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+481
+- Orographic gravity-wave drag matched to GFDL `topo_drag` with AM4 production
+  settings and new `raw_topo` drag files (smoothing fraction 1.0, 7.5 km sampling,
+  cell-averaged tensor and hpos, Float64 preprocessing, and build record). Changes
+  the output of every run with orographic gravity-wave drag.
+
 480
 - EDMF form drag computed from the plume radius, `α_d / 2 (1 / Rʲ + 1 / R⁰)` with
   `R = H √a`, instead of `α_d / (2 H) (1 / √aʲ + 1 / √a⁰)`: equal in exact
