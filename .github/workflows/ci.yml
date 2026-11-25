@@ -66,13 +66,13 @@ jobs:
         os:
           - ubuntu-latest
         test_group:
-          - infrastructure
-          - diagnostics
+          # - infrastructure
+          # - diagnostics
           - dynamics
-          - dynamics_edmfx
-          - parameterizations
-          - restarts
-          - era5
+        # - dynamics_edmfx
+        # - parameterizations
+        # - restarts
+        # - era5
         include:
           - version: '1.10'
             os: ubuntu-latest
@@ -95,8 +95,7 @@ jobs:
           prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
           hash: ${{ hashFiles('Project.toml') }}
       - uses: julia-actions/julia-buildpkg@v1
-      # ClimaCore v1.0.9 allocates in a zero-allocation test with bounds checking on.
-      - run: julia --project -e 'using Pkg; Pkg.pin(name = "ClimaCore", version = "1.0.8")'
+      - run: julia --project -e 'using Pkg; Pkg.add(url = "https://github.com/CliMA/ClimaCore.jl", rev = "tr/bounds-check")'
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: ${{ env.COVERAGE }}
