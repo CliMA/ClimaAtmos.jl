@@ -232,6 +232,96 @@ terminal_velocity(
 )
 
 """
+    shaft_weighted_terminal_velocity(
+        terminal_velocity_fn, var_name, ρ, q, β_p, a_p, a_floor,
+    )
+
+Return the terminal velocity that carries the sedimentation flux of a 1-moment
+species placed on the subgrid precipitation shaft of the quadrature
+microphysics (`sgs_placement_factor`).
+
+A fraction `β_p` of the mean specific humidity `q` of the species is confined
+to the shaft, of area fraction `a_s = max(a_p, a_floor)`, the same shaft width
+`microphysics_tendencies_1m` uses. The shaft holds `φ_in q` and the rest of the
+cell holds `φ_out q`, with
+
+    φ_in = (1 − β_p) + β_p / a_s,    φ_out = 1 − β_p,
+
+so that `a_s φ_in + (1 − a_s) φ_out = 1`. The two zones fall at their own
+terminal velocities, and the sum of their fluxes is `ρ q w_eff` with the
+mass-weighted mean velocity
+
+    w_eff = a_s φ_in w(ρ, φ_in q) + (1 − a_s) φ_out w(ρ, φ_out q).
+
+`w_eff` equals `w(ρ, q)` when `β_p = 0`, when `a_s = 1`, or when `w` is
+constant. For a power law `w ∝ q^b` with `b > 0`, `w_eff` exceeds `w(ρ, q)`.
+
+# Arguments
+
+  - `terminal_velocity_fn`: Callable `(var_name, ρ, q) -> w` [m/s].
+  - `var_name`: `MatrixFields.FieldName` naming the species.
+  - `ρ`: Air density [kg/m³].
+  - `q`: Mean specific humidity of the species [kg/kg]; negative values count
+    as zero.
+  - `β_p`: Fraction of the species on the shaft (`sgs_precip_incloud_fraction`)
+    [-].
+  - `a_p`: Overlap precipitation fraction (`ᶜprecip_frac`) [-].
+  - `a_floor`: Smallest shaft width (`sgs_precip_fraction_floor`) [-].
+
+# Returns
+
+Terminal velocity [m/s], positive downward.
+"""
+@inline function shaft_weighted_terminal_velocity(
+    terminal_velocity_fn::F,
+    var_name,
+    ρ,
+    q,
+    β_p,
+    a_p,
+    a_floor,
+) where {F}
+    FT = typeof(ρ)
+    q_pos = max(zero(q), q)
+    a_s = clamp(max(a_p, a_floor), eps(FT), one(FT))
+    φ_out = one(FT) - β_p
+    φ_in = φ_out + β_p / a_s
+    w_in = terminal_velocity_fn(var_name, ρ, φ_in * q_pos)
+    w_out = terminal_velocity_fn(var_name, ρ, φ_out * q_pos)
+    return a_s * φ_in * w_in + (one(FT) - a_s) * φ_out * w_out
+end
+
+"""
+    on_precip_shaft(var_name)
+
+Whether the quadrature microphysics places the 1-moment species `var_name` on
+the subgrid precipitation shaft: `true` for rain and snow.
+"""
+on_precip_shaft(::MatrixFields.FieldName) = false
+on_precip_shaft(
+    ::Union{MatrixFields.FieldName{(:q_rai,)}, MatrixFields.FieldName{(:q_sno,)}},
+) = true
+
+"""
+    precip_shaft_options(atmos, params)
+
+Return the precipitation shaft placement for the 1-moment sedimentation
+velocities as `(; β_p, a_floor, shaft_placement)`. `shaft_placement` is `true`
+where `microphysics_tendencies_1m` places rain and snow on the shaft, that is,
+under SGS quadrature with `sgs_precip_incloud_fraction > 0`; `β_p` and
+`a_floor` are then `sgs_precip_incloud_fraction` and
+`sgs_precip_fraction_floor`, validated by `sgs_microphysics_options`.
+"""
+function precip_shaft_options(atmos, params)
+    FT = eltype(params)
+    not_quadrature(atmos.sgs_quadrature) &&
+        return (; β_p = zero(FT), a_floor = one(FT), shaft_placement = false)
+    opts = sgs_microphysics_options(params)
+    β_p = opts.precip_incloud_fraction
+    return (; β_p, a_floor = opts.precip_frac_floor, shaft_placement = β_p > 0)
+end
+
+"""
     gs_terminal_velocity(
         ::NonEquilibriumMicrophysics1M, tv_mode, var_name, params, ρwχ, ρχ,
     )

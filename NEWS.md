@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
+  snow sediment at the mass-weighted mean of the terminal velocities in the
+  precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),
+  consistent with the shaft placement of the microphysics rates
+  (`sgs_precip_incloud_fraction`, default `1`). In a shaft at the default floor of `0.1`
+  of the cell, rain falls 1.2-1.7x faster (more for lighter rain) and snow ~1.2x faster
+  than the same mass spread over the cell.
 - ![][badge-✨feature/enhancement] The 1-moment cloud liquid and cloud ice terminal
   velocities can be evaluated at the in-cloud specific humidity `q / clamp(CF, c_min, 1)`,
   with `c_min` the new parameter `sgs_cloud_sedimentation_cf_floor` in `(0, 1]`. `q` and
