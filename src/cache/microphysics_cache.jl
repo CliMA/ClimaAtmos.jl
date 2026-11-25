@@ -2007,22 +2007,26 @@ end
 """
     set_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
-Compute the surface fluxes of rain and snow and the column-integrated
-precipitation energy tendency. Returns `nothing`.
+Compute the surface fluxes of rain and snow, the energy they carry, and the
+column-integrated precipitation energy tendency. Returns `nothing`.
 
 Mutates `p.precomputed.surface_rain_flux` and `p.precomputed.surface_snow_flux`
-[kg/m²/s], and `p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The
-sign convention is upward-positive, so all three are negative when precipitation
-reaches the surface.
+[kg/m²/s], `p.precomputed.surface_rain_energy_flux` and
+`p.precomputed.surface_snow_energy_flux` [W/m²], and
+`p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The sign convention
+is upward-positive, so all are negative when precipitation reaches the surface.
+The rain and snow energy fluxes sum to `col_integrated_precip_energy_tendency`.
+Rain includes sedimenting cloud liquid and snow includes sedimenting cloud ice.
 
 Dispatch on `microphysics_model`:
 
   - `EquilibriumMicrophysics0M`: the fluxes are column integrals of the
     density-weighted `q_tot` sink `ᶜρ_dq_tot_dt` plus the below-cloud
     evaporation `ᶜprecip_evap`, partitioned into rain and snow by the freezing
-    temperature; the energy tendency is the column integral of
-    `ᶜρ_de_tot_dt` plus the evaporation energy `ᶜprecip_evap.ρe_evap_rai` and
-    `ᶜprecip_evap.ρe_evap_sno`. The evaporated water returns the energy it was
+    temperature; the rain and snow energy fluxes are the column integrals of
+    `ᶜρ_de_tot_dt`, partitioned in the same way, plus the evaporation energy
+    `ᶜprecip_evap.ρe_evap_rai` and `ᶜprecip_evap.ρe_evap_sno`, respectively.
+    The evaporated water returns the energy it was
     removed from the air with, so the energy tendency is that of the water
     reaching the surface and is zero (to roundoff) when all precipitation
     evaporates. Per column, the evaporation of rain (snow), its water and
@@ -2045,6 +2049,12 @@ Dispatch on `microphysics_model`:
     `T_post_imp!` evaluate the pointwise formula at the current iterate, while
     the post-step `cache!` refresh (and the explicit stage 1 that precedes any
     implicit stage) sees the stage-weighted sum.
+    In both cases, the snow energy flux is that of cloud ice and snow alone:
+    their mass fluxes times the level-1 ice internal energy, geopotential, and
+    sedimentation kinetic energy, with the `PrognosticEDMFX` updraft and
+    environment correction (`set_surface_snow_energy_flux!`, or its
+    stage-weighted sum). The rain energy flux is the total minus the snow
+    energy flux, so a column without ice or snow has no snow energy flux.
   - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
     `ρq_rim`, and `ρb_rim` are not yet accounted for.
   - Default: no-op.
@@ -2062,6 +2072,7 @@ function set_precipitation_surface_fluxes!(
     (; ᶜT) = p.precomputed
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; surface_rain_energy_flux, surface_snow_energy_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
 
     (; ᶜprecip_evap, precip_evap_scale_rai, precip_evap_scale_sno) =
@@ -2091,18 +2102,20 @@ function set_precipitation_surface_fluxes!(
         col_integrated_precip_evap_sno,
         max(-surface_snow_flux, 0),
     )
+    # energy carried by rain and snow, partitioned in the same way
+    ᶜ3d_rain_energy = @. lazy(
+        ifelse(ᶜT >= T_freeze, ᶜρ_de_tot_dt, FT(0)) +
+        precip_evap_scale_rai * ᶜprecip_evap.ρe_evap_rai,
+    )
+    ᶜ3d_snow_energy = @. lazy(
+        ifelse(ᶜT < T_freeze, ᶜρ_de_tot_dt, FT(0)) +
+        precip_evap_scale_sno * ᶜprecip_evap.ρe_evap_sno,
+    )
+    Operators.column_integral_definite!(surface_rain_energy_flux, ᶜ3d_rain_energy)
+    Operators.column_integral_definite!(surface_snow_energy_flux, ᶜ3d_snow_energy)
     # total column energy source for surface energy balance
-    ᶜ3d_energy = @. lazy(
-        ᶜρ_de_tot_dt +
-        (
-            precip_evap_scale_rai * ᶜprecip_evap.ρe_evap_rai +
-            precip_evap_scale_sno * ᶜprecip_evap.ρe_evap_sno
-        ),
-    )
-    Operators.column_integral_definite!(
-        col_integrated_precip_energy_tendency,
-        ᶜ3d_energy,
-    )
+    @. col_integrated_precip_energy_tendency =
+        surface_rain_energy_flux + surface_snow_energy_flux
     return nothing
 end
 
@@ -2163,6 +2176,7 @@ function accumulate_stage_precipitation_surface_fluxes!(
         surface_rain_flux_accum,
         surface_snow_flux_accum,
         col_integrated_precip_energy_tendency_accum,
+        surface_snow_energy_flux_accum,
     ) = p.scratch
     idx = precip_stage_idx[]
     k = idx >= n_imp_stages ? 1 : idx + 1
@@ -2207,15 +2221,22 @@ function accumulate_stage_precipitation_surface_fluxes!(
         f_sno * sfc_precip_lin_state.e_sno +
         f_icl * sfc_precip_lin_state.e_icl,
     )
+    f_snow_energy = @. lazy(
+        sfc_precip_lin_state.f_e_sgs_sno +
+        f_sno * sfc_precip_lin_state.e_sno +
+        f_icl * sfc_precip_lin_state.e_icl,
+    )
 
     if k == 1
         @. surface_rain_flux_accum = b_k * f_rain
         @. surface_snow_flux_accum = b_k * f_snow
         @. col_integrated_precip_energy_tendency_accum = b_k * f_energy
+        @. surface_snow_energy_flux_accum = b_k * f_snow_energy
     else
         @. surface_rain_flux_accum += b_k * f_rain
         @. surface_snow_flux_accum += b_k * f_snow
         @. col_integrated_precip_energy_tendency_accum += b_k * f_energy
+        @. surface_snow_energy_flux_accum += b_k * f_snow_energy
     end
     return nothing
 end
@@ -2226,7 +2247,15 @@ function set_precipitation_surface_fluxes!(
     microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
+    (; surface_rain_energy_flux, surface_snow_energy_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    sfc_space = axes(sfc_J)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+
     if eltype(Y) === eltype(p.params) &&
        has_precip_stage_accumulator(p) &&
        !p.atmos.numerics.reproducible_restart &&
@@ -2235,43 +2264,105 @@ function set_precipitation_surface_fluxes!(
         @. surface_snow_flux = p.scratch.surface_snow_flux_accum
         @. col_integrated_precip_energy_tendency =
             p.scratch.col_integrated_precip_energy_tendency_accum
-        return nothing
+        @. surface_snow_energy_flux = p.scratch.surface_snow_energy_flux_accum
+    else
+        (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+
+        # Jacobian-weighted extrapolation from interior to surface, consistent
+        # with the reconstruction of density on cell faces,
+        # ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+        int_J = sfc_lev(ᶜJ)
+        int_ρ = sfc_lev(Y.c.ρ)
+        int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+        int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+        int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+        int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+        sfc_wᵣ = sfc_lev(ᶜwᵣ)
+        sfc_wₛ = sfc_lev(ᶜwₛ)
+        sfc_wₗ = sfc_lev(ᶜwₗ)
+        sfc_wᵢ = sfc_lev(ᶜwᵢ)
+        sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
+        sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
+
+        @. surface_rain_flux =
+            sfc_ρ * (
+                max(specific(int_ρq_rai, int_ρ), zero(int_ρ)) * (-sfc_wᵣ) +
+                max(specific(int_ρq_lcl, int_ρ), zero(int_ρ)) * (-sfc_wₗ)
+            )
+        @. surface_snow_flux =
+            sfc_ρ * (
+                max(specific(int_ρq_sno, int_ρ), zero(int_ρ)) * (-sfc_wₛ) +
+                max(specific(int_ρq_icl, int_ρ), zero(int_ρ)) * (-sfc_wᵢ)
+            )
+        @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
+        set_surface_snow_energy_flux!(surface_snow_energy_flux, Y, p, sfc_lev)
     end
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
+    @. surface_rain_energy_flux =
+        col_integrated_precip_energy_tendency - surface_snow_energy_flux
+
+    return nothing
+end
+
+"""
+    set_surface_snow_energy_flux!(dest, Y, p, sfc_lev)
+
+Write into the surface-level field `dest` the energy flux of cloud ice and snow
+through the bottom cell face [W/m²], upward-positive. Each species carries its
+level-1 ice internal energy, geopotential, and sedimentation kinetic energy
+relative to the air, and with `PrognosticEDMFX` the updraft and environment
+correction of `set_sfc_sgs_precip_energy_flux!`; this is the ice part of the
+energy flux that sedimentation removes from the column. The correction is
+omitted when `Y` carries dual numbers, since its scratch fields are
+floating-point. Overwrites `p.scratch.c_lev1_uvw` when present. `sfc_lev(x)`
+views level 1 of a center field on the surface space.
+"""
+function set_surface_snow_energy_flux!(dest, Y, p, sfc_lev)
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜu, ᶜwᵢ, ᶜwₛ) = p.precomputed
+    thp = CAP.thermodynamics_params(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    sfc_J = Fields.level(ᶠJ, Fields.half)
-    sfc_space = axes(sfc_J)
-
-    # Jacobian-weighted extrapolation from interior to surface, consistent with
-    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
     int_J = sfc_lev(ᶜJ)
-    int_ρ = sfc_lev(Y.c.ρ)
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    J_ratio = @. lazy(int_J / sfc_J)
     int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-    sfc_wᵣ = sfc_lev(ᶜwᵣ)
-    sfc_wₛ = sfc_lev(ᶜwₛ)
-    sfc_wₗ = sfc_lev(ᶜwₗ)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+    int_T = sfc_lev(ᶜT)
+    int_Φ = sfc_lev(ᶜΦ)
+    # Convert the velocity on the center space before slicing it to the surface.
+    int_uvw =
+        if eltype(Y) === eltype(p.params) && hasproperty(p.scratch, :c_lev1_uvw)
+            @. p.scratch.c_lev1_uvw = Geometry.UVWVector($(Fields.level(ᶜu, 1)))
+            Fields.Field(Fields.field_values(p.scratch.c_lev1_uvw), axes(dest))
+        else
+            int_u = sfc_lev(ᶜu)
+            @. lazy(Geometry.UVWVector(int_u))
+        end
     sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
-    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
 
-    @. surface_rain_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_rai, int_ρ), zero(int_ρ)) * (-sfc_wᵣ) +
-            max(specific(int_ρq_lcl, int_ρ), zero(int_ρ)) * (-sfc_wₗ)
+    if eltype(Y) === eltype(p.params)
+        gm = (;
+            sfc_lev, J_ratio, int_T, int_uvw,
+            int_ρq_lcl = sfc_lev(Y.c.ρq_lcl), int_ρq_icl,
+            int_ρq_rai = sfc_lev(Y.c.ρq_rai), int_ρq_sno,
+            sfc_wₗ = sfc_lev(p.precomputed.ᶜwₗ), sfc_wᵢ,
+            sfc_wᵣ = sfc_lev(p.precomputed.ᶜwᵣ), sfc_wₛ,
         )
-    @. surface_snow_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_sno, int_ρ), zero(int_ρ)) * (-sfc_wₛ) +
-            max(specific(int_ρq_icl, int_ρ), zero(int_ρ)) * (-sfc_wᵢ)
+        set_sfc_sgs_precip_energy_flux!(
+            dest, Y, p, p.atmos.turbconv_model, gm, TD.Ice(),
         )
-    @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
-
+    else
+        fill!(dest, zero(eltype(dest)))
+    end
+    e_int_ice = @. lazy(TD.internal_energy_ice(thp, int_T))
+    @. dest +=
+        -J_ratio * (
+            sfc_wᵢ * max(zero(int_T), int_ρq_icl) *
+            (e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wᵢ, int_uvw)) +
+            sfc_wₛ * max(zero(int_T), int_ρq_sno) *
+            (e_int_ice + int_Φ + sedimentation_kinetic_energy(sfc_wₛ, int_uvw))
+        )
     return nothing
 end
 
