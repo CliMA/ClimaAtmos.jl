@@ -1150,8 +1150,9 @@ fraction (`set_prognostic_edmf_draft_closures!`), face diffusivities, the
 master mixing length `ᶜl_mix`, precipitation terminal velocities (unless they
 depend on the state alone, in which case
 `set_implicit_precomputed_quantities_core!` sets them; see
-`state_dependent_precipitation_velocities` and
-`sedimentation_reads_cloud_fraction`), the microphysics tendency cache, surface
+`state_dependent_precipitation_velocities`,
+`sedimentation_reads_cloud_fraction`, and
+`sedimentation_reads_precip_fraction`), the microphysics tendency cache, surface
 precipitation fluxes, and, when
 `p.atmos.diff_mode == Explicit()`, the Smagorinsky-Lilly quantities (each step
 only when the corresponding model component is active). Reads the implicit
@@ -1213,10 +1214,11 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF
     # updrafts, unless `set_implicit_precomputed_quantities_core!` already set them
-    # at this state. Velocities that read the cloud fraction are set here from the
-    # cloud fraction of the update above, so that they depend on `Y` alone.
+    # at this state. Velocities that read the cloud or precipitation fraction are
+    # set here from the update above, so that they depend on `Y` alone.
     if !state_dependent_precipitation_velocities(p.atmos) ||
-       sedimentation_reads_cloud_fraction(p.atmos, p.params)
+       sedimentation_reads_cloud_fraction(p.atmos, p.params) ||
+       sedimentation_reads_precip_fraction(p.atmos, p.params)
         set_precipitation_velocities!(
             Y,
             p,

@@ -130,6 +130,18 @@ sedimentation_reads_cloud_fraction(atmos, params) =
     CAP.sgs_cloud_sedimentation_cf_floor(params) < 1
 
 """
+    sedimentation_reads_precip_fraction(atmos, params)
+
+Whether `set_precipitation_velocities!` reads the precipitation fraction
+`ᶜprecip_frac`: the 1M scheme with rain and snow placed on the precipitation
+shaft (`precip_shaft_options`). `set_explicit_precomputed_quantities!` then sets
+the velocities after it has updated the precipitation fraction.
+"""
+sedimentation_reads_precip_fraction(atmos, params) =
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+    precip_shaft_options(atmos, params).shaft_placement
+
+"""
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Update the grid-mean precipitation terminal velocities and cloud sedimentation
@@ -158,6 +170,13 @@ fraction `ᶜcloud_fraction⁰`. Both are those of the last
 `set_covariance_cache_and_cloud_fraction!`. The velocity multiplies the mean
 condensate, so the sedimentation flux is the in-cloud flux weighted by the
 cloud fraction.
+
+For the 1M scheme under SGS quadrature, the grid-mean and environment rain and
+snow velocities are the mass-weighted means over the precipitation shaft of the
+microphysics and the rest of the cell (`shaft_weighted_terminal_velocity`,
+`precip_shaft_options`), with the precipitation fraction `ᶜprecip_frac` of the
+last `set_covariance_cache_and_cloud_fraction!`; the updraft velocities use the
+updraft means.
 """
 function set_precipitation_velocities!(Y, p, _, _)
     (; ᶜwₕhₜ) = p.precomputed
@@ -204,6 +223,11 @@ function set_precipitation_velocities!(
         ρ,
         q,
     )
+    (; β_p, a_floor, shaft_placement) = precip_shaft_options(atmos, params)
+    shaft_terminal_velocity_function(name, ρ, q, a_p) =
+        shaft_weighted_terminal_velocity(
+            terminal_velocity_function, name, ρ, q, β_p, a_p, a_floor,
+        )
 
     microphysics_tracers = (
         (@name(q_lcl), @name(ᶜwₗ)),
@@ -223,6 +247,11 @@ function set_precipitation_velocities!(
                 χ_name,
                 ᶜρ,
                 incloud_specific_humidity(ᶜρχ / ᶜρ, ᶜcloud_fraction, cf_floor),
+            )
+        elseif shaft_placement && on_precip_shaft(χ_name)
+            (; ᶜprecip_frac) = p.precomputed
+            @. ᶜw = shaft_terminal_velocity_function(
+                χ_name, ᶜρ, ᶜρχ / ᶜρ, ᶜprecip_frac,
             )
         else
             @. ᶜw = terminal_velocity_function(χ_name, ᶜρ, max(zero(ᶜρ), ᶜρχ / ᶜρ))
@@ -283,6 +312,15 @@ function set_precipitation_velocities!(
         ρ,
         q,
     )
+    (; β_p, a_floor, shaft_placement) =
+        precip_shaft_options(p.atmos, params)
+    shaft_terminal_velocity_function(name, ρ, q, a_p) =
+        shaft_weighted_terminal_velocity(
+            terminal_velocity_function, name, ρ, q, β_p, a_p, a_floor,
+        )
+    # The column loop needs a field in the slot of `ᶜprecip_frac` even when
+    # the shaft placement is off; `ᶜp` has the same type and is unread then.
+    ᶜa_p = shaft_placement ? p.precomputed.ᶜprecip_frac : ᶜp
 
     # Fuse the column loop across all 4 species and the final WVec outputs so
     # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
@@ -298,10 +336,10 @@ function set_precipitation_velocities!(
     DataLayouts.foreach_column(
         ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
         Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
-        ᶜcloud_fraction⁰,
+        ᶜcloud_fraction⁰, ᶜa_p,
     ) do ᶜw_pairs, ᶜwₕhₜ,
     Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
-    ᶜcloud_fraction⁰
+    ᶜcloud_fraction⁰, ᶜa_p
         ᶜρ⁰ = @. max(
             eps_FT,
             TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
@@ -335,6 +373,10 @@ function set_precipitation_velocities!(
                         ᶜρ⁰,
                         incloud_specific_humidity(ᶜχ⁰, ᶜcloud_fraction⁰, cf_floor),
                     )
+            elseif shaft_placement && on_precip_shaft(χ_name)
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ *
+                    shaft_terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰, ᶜa_p)
             else
                 @. ᶜw =
                     ᶜρa⁰χ⁰ *
@@ -978,8 +1020,9 @@ end
 Whether the sedimentation velocities of the microphysics model depend on the state,
 so that `update_implicit_microphysics_cache!` refreshes them at every Newton iterate
 and `set_explicit_precomputed_quantities!`, which follows it at the same state, does
-not set them again unless they read the cloud fraction it updates
-(`sedimentation_reads_cloud_fraction`). This holds for the non-equilibrium schemes,
+not set them again unless they read the cloud fraction or the precipitation
+fraction it updates (`sedimentation_reads_cloud_fraction`,
+`sedimentation_reads_precip_fraction`). This holds for the non-equilibrium schemes,
 except for the 1M scheme with a `FixedTerminalVelocity` for every species.
 """
 state_dependent_precipitation_velocities(atmos) =

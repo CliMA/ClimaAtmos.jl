@@ -185,6 +185,48 @@ include("../../test_helpers.jl")
                     @test w_ic(0.005) == w_ic(0.02)
                 end
             end
+
+            @testset "Shaft-weighted rain and snow velocities" begin
+                (; water, params) = make_water(Dict())
+                mm = water.microphysics_model
+                cmc = CAP.microphysics_cloud_params(params)
+                cmp = CAP.microphysics_1m_params(params)
+                chen(name, ρ, q) = CA.terminal_velocity(
+                    mm, CA.Chen2022TerminalVelocity(), name, params, cmc, cmp, ρ, q,
+                )
+                fixed(name, ρ, q) = CA.terminal_velocity(
+                    mm, CA.FixedTerminalVelocity(), name, params, cmc, cmp, ρ, q,
+                )
+                w_shaft(tv, name, q, β_p, a_p) = CA.shaft_weighted_terminal_velocity(
+                    tv, name, FT(1), FT(q), FT(β_p), FT(a_p), FT(0.1),
+                )
+                for name in (@name(q_rai), @name(q_sno)), q in (1e-5, 1e-3)
+                    w_mean = chen(name, FT(1), FT(q))
+                    # No placement, a full-cell shaft, or a constant velocity
+                    # leave the velocity of the mean.
+                    @test w_shaft(chen, name, q, 0, 0.3) ≈ w_mean
+                    @test w_shaft(chen, name, q, 1, 1) ≈ w_mean
+                    @test w_shaft(fixed, name, q, 1, 0.3) ≈ fixed(name, FT(1), FT(q))
+                    # The concentrated shaft falls faster, more so for a
+                    # narrower shaft, and the floor bounds the width.
+                    @test w_shaft(chen, name, q, 1, 0.5) > w_mean
+                    @test w_shaft(chen, name, q, 1, 0.2) > w_shaft(chen, name, q, 1, 0.5)
+                    @test w_shaft(chen, name, q, 1, 0.01) == w_shaft(chen, name, q, 1, 0.1)
+                    # Zone fluxes: shaft at `φ_in q`, remainder at `φ_out q`.
+                    (β_p, a_s) = (FT(0.6), FT(0.25))
+                    (φ_in, φ_out) = (1 - β_p + β_p / a_s, 1 - β_p)
+                    flux_zones =
+                        a_s * φ_in * FT(q) * chen(name, FT(1), φ_in * FT(q)) +
+                        (1 - a_s) * φ_out * FT(q) * chen(name, FT(1), φ_out * FT(q))
+                    @test FT(q) * w_shaft(chen, name, q, β_p, a_s) ≈ flux_zones
+                    # Negative humidities count as zero.
+                    @test w_shaft(chen, name, -q, 1, 0.3) == w_shaft(chen, name, 0, 1, 0.3)
+                end
+                @test CA.on_precip_shaft(@name(q_rai))
+                @test CA.on_precip_shaft(@name(q_sno))
+                @test !CA.on_precip_shaft(@name(q_lcl))
+                @test !CA.on_precip_shaft(@name(q_icl))
+            end
         end
     end
 end

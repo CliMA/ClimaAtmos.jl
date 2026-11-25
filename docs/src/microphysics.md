@@ -102,6 +102,14 @@ cloud fraction. With `PrognosticEDMFX`, `q` and `CF` are those of the
 environment; the updrafts sediment cloud condensate at their own mean specific
 humidity.
 
+Under SGS quadrature, the one-moment microphysics places a fraction of the rain
+and snow on a subgrid precipitation shaft (`sgs_precip_incloud_fraction`,
+`sgs_precip_fraction_floor`), and the two species sediment at the mass-weighted
+mean of the terminal velocities in the shaft and in the rest of the cell
+(`shaft_weighted_terminal_velocity`). Because the terminal velocity increases
+with the specific humidity of the species, precipitation concentrated in the
+shaft falls faster than the same mass spread over the cell.
+
 Sedimentation is treated implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
 results in sedimentation terms for density and total energy. In the Newton

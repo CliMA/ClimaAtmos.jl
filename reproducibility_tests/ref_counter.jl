@@ -1,4 +1,4 @@
-480
+481
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+481
+- 1-moment rain and snow sediment at the mass-weighted terminal velocity of the
+  subgrid precipitation shaft and the rest of the cell
+  (`shaft_weighted_terminal_velocity`). Changes the output of every 1M run
+  under SGS quadrature.
+
 480
 - EDMF form drag computed from the plume radius, `α_d / 2 (1 / Rʲ + 1 / R⁰)` with
   `R = H √a`, instead of `α_d / (2 H) (1 / √aʲ + 1 / √a⁰)`: equal in exact
