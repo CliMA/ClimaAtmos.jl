@@ -1,0 +1,112 @@
+# Runs the ClimaAtmos test groups of `test/runtests.jl`, one job per group.
+#
+# ClimaAtmos's own `ci.yml` calls this workflow with `develop-caller: false`
+# to test the checked-out commit. Upstream packages call it to run the ClimaAtmos tests:
+#
+#   jobs:
+#     climaatmos:
+#       permissions:
+#         actions: write   # prunes old depot caches on pushes to main
+#         contents: read
+#       uses: CliMA/ClimaAtmos.jl/.github/workflows/test-groups.yml@main
+#
+# The caller's checkout is added to the ClimaAtmos environment with
+# `Pkg.develop`, so the caller's version must satisfy ClimaAtmos's `[compat]`.
+name: test-groups
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: Julia version to test with.
+        type: string
+        default: '1.13'
+      test-groups:
+        description: >-
+          JSON list of `TEST_GROUP` values from `test/runtests.jl`. The default
+          is the list that ClimaAtmos's CI runs on every pull request.
+        type: string
+        default: >-
+          ["infrastructure", "diagnostics", "dynamics", "dynamics_edmfx",
+          "parameterizations", "restarts", "era5"]
+      develop-caller:
+        description: >-
+          Test the ClimaAtmos commit `atmos-repository@atmos-ref` with the
+          calling repository's checkout developed into its environment. With
+          `false`, test the calling repository itself, which must be ClimaAtmos.
+        type: boolean
+        default: true
+      atmos-repository:
+        description: ClimaAtmos repository to test when `develop-caller` is true.
+        type: string
+        default: CliMA/ClimaAtmos.jl
+      atmos-ref:
+        description: ClimaAtmos branch, tag, or commit to test when `develop-caller` is true.
+        type: string
+        default: main
+      coverage:
+        description: Collect coverage and upload it to Codecov.
+        type: boolean
+        default: false
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+jobs:
+  test:
+    name: ${{ matrix.test_group }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        test_group: ${{ fromJSON(inputs.test-groups) }}
+    env:
+      TEST_GROUP: ${{ matrix.test_group }}
+      # EDMFX simulation tests are compile-bound, coverage instrumentation
+      # increases their wall time
+      COVERAGE: ${{ inputs.coverage && matrix.test_group != 'dynamics_edmfx' }}
+    steps:
+      # ClimaAtmos goes at the workspace root in both modes, so that `--project`
+      # and the local `./.github/actions` resolve to ClimaAtmos.
+      - if: ${{ !inputs.develop-caller }}
+        uses: actions/checkout@v7
+      - if: inputs.develop-caller
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.atmos-repository }}
+          ref: ${{ inputs.atmos-ref }}
+      - if: inputs.develop-caller
+        uses: actions/checkout@v7
+        with:
+          path: _upstream
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ inputs.julia-version }}
+      # One depot per Julia version, shared by the test groups, which have the
+      # same dependencies.
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: ${{ inputs.develop-caller && 'climaatmos-downstream' || 'ci' }}-julia${{ inputs.julia-version }}-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml') }}
+      - if: inputs.develop-caller
+        run: julia --color=yes --project -e 'using Pkg; Pkg.develop(path = "_upstream")'
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: ${{ env.COVERAGE }}
+      - uses: julia-actions/julia-processcoverage@v1
+        if: env.COVERAGE == 'true'
+      - uses: codecov/codecov-action@v7
+        if: env.COVERAGE == 'true'
+        with:
+          file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}

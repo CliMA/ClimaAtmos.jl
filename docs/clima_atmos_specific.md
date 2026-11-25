@@ -67,6 +67,12 @@ variable (default `all`). `Pkg.test` inherits the calling process's environment,
 TEST_GROUP=parameterizations julia +1.13 --project -e 'import Pkg; Pkg.test()'
 ```
 
+The list of groups that GitHub CI runs lives in the default `test-groups` input of
+`.github/workflows/test-groups.yml`, a reusable workflow that `ci.yml` calls.
+Upstream packages call the same workflow
+(`uses: CliMA/ClimaAtmos.jl/.github/workflows/test-groups.yml@main`) to run
+every group against their own checkout.
+
 ### Test layout
 
   - `test/config/`, `test/diagnostics/`, `test/prognostic_equations/`, `test/parameterized_tendencies/`, `test/conservation/` mostly mirror the source layout.
