@@ -20,7 +20,7 @@ Allocate the orographic gravity wave (OGW) cache for the state `Y`.
 
 Returns an empty `NamedTuple` when the model is disabled. Otherwise the cache holds the
 shape parameters in `ogw_params`, the orographic drag input `topo_info`, the per-column
-base-flux and Froude-number fields, the saturation profile `topo_ᶜτ_sat`/`topo_ᶠτ_sat`, and
+base-flux and Froude-number fields, the face saturation profile `topo_ᶠτ_sat`, and
 the accumulated forcings `ᶜuforcing`/`ᶜvforcing` [m/s²].
 
 `topo_info` is loaded by `get_topo_info` unless the caller supplies it, which lets a
@@ -34,6 +34,15 @@ orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     orographic_gravity_wave_cache(Y, atmos.orographic_gravity_wave)
 
 orographic_gravity_wave_cache(Y, ::Nothing) = (;)
+
+# Shape parameters the shipped `raw_topo` (`ogw_computed_drag_h*`) artifacts were
+# generated with, i.e. the ClimaParams defaults for `ogw_mountain_height_width_exponent`,
+# `ogw_critical_height_threshold`, and `ogw_smoothing_scale_fraction`. Each drag file also
+# stores the values it was built with, and loading it warns when the run's values differ
+# (`check_ogw_drag_stamp`).
+const RAW_TOPO_ARTIFACT_γ = 0.4
+const RAW_TOPO_ARTIFACT_H_FRAC = 0.1
+const RAW_TOPO_ARTIFACT_α_SMOOTHING = 1.0
 
 """
     get_topo_info(Y, ogw::OrographicGravityWave)
@@ -60,53 +69,12 @@ A `NamedTuple` of surface-level `Field`s: the effective maximum and minimum subg
 obstacle heights `hmax`, `hmin` [m], and the four components `t11`, `t12`, `t21`, `t22` of
 the orographic tensor `T = −∇χ (∇h)ᵀ`, stored with `tᵢⱼ = −∂χ/∂xⱼ · ∂h/∂xᵢ`.
 """
-# Shape parameters the shipped `raw_topo` (`ogw_computed_drag_h*`) artifacts were
-# generated with, i.e. the ClimaParams defaults for `ogw_mountain_height_width_exponent`,
-# `ogw_critical_height_threshold`, and `ogw_smoothing_scale_fraction`.
-const RAW_TOPO_ARTIFACT_γ = 0.4
-const RAW_TOPO_ARTIFACT_H_FRAC = 0.1
-const RAW_TOPO_ARTIFACT_α_SMOOTHING = 0.15
-
-"""
-    warn_if_stale_raw_topo_artifact(ogw)
-
-Warn when `raw_topo` is used for Earth topography with `γ`, `h_frac`, or `α_smoothing` that
-differ from the values the shipped artifact was built with.
-
-The `raw_topo` artifact fixes `hmax`, `hmin`, and the drag tensor at generation time, so
-overriding these parameters leaves the drag input inconsistent with the runtime physics
-(which does use the current parameters). Switch to `raw_topo_online` to rebuild the drag
-input from the current parameters. Only Earth topography loads an artifact, so no warning is
-issued for the analytical test topographies.
-"""
-function warn_if_stale_raw_topo_artifact(ogw)
-    (ogw.topography == Val(:Earth) || ogw.topography == Val(:NoWarp)) ||
-        return nothing
-    FT = typeof(ogw.h_frac)
-    stale = String[]
-    isapprox(ogw.γ, FT(RAW_TOPO_ARTIFACT_γ)) ||
-        push!(stale, "γ = $(ogw.γ) (artifact $(RAW_TOPO_ARTIFACT_γ))")
-    isapprox(ogw.h_frac, FT(RAW_TOPO_ARTIFACT_H_FRAC)) ||
-        push!(stale, "h_frac = $(ogw.h_frac) (artifact $(RAW_TOPO_ARTIFACT_H_FRAC))")
-    isapprox(ogw.α_smoothing, FT(RAW_TOPO_ARTIFACT_α_SMOOTHING)) || push!(
-        stale,
-        "α_smoothing = $(ogw.α_smoothing) (artifact $(RAW_TOPO_ARTIFACT_α_SMOOTHING))",
-    )
-    isempty(stale) && return nothing
-    @warn "orographic_gravity_wave = \"raw_topo\" loads a preprocessed artifact built at \
-           the default shape parameters, so the drag input will not reflect the \
-           overridden $(join(stale, ", ")). Use \"raw_topo_online\" to recompute the drag \
-           input from the current parameters."
-    return nothing
-end
-
 function get_topo_info(Y, ogw::OrographicGravityWave)
     if ogw.topo_info == Val(:gfdl_restart)
         topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == Val(:raw_topo)
-        warn_if_stale_raw_topo_artifact(ogw)
         earth_radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
@@ -115,7 +83,9 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             Y,
             earth_radius,
             ogw.topography,
+            ogw.γ,
             ogw.h_frac,
+            ogw.α_smoothing,
         )
     elseif ogw.topo_info == Val(:raw_topo_online)
         earth_radius =
@@ -132,7 +102,8 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
         )
     else
         error(
-            "topo_info must be Val(:gfdl_restart), Val(:raw_topo), or Val(:raw_topo_online)",
+            "topo_info must be Val(:gfdl_restart), Val(:raw_topo), or \
+             Val(:raw_topo_online)",
         )
     end
     return topo_info
@@ -156,8 +127,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
     # The TOFD drag coefficient depends only on the grid and the orography, so it is
     # built once here and combined with the current wind every step. Its input, the
     # filtered-orography variance, is computed from the Earth elevation data, so TOFD is
-    # on only when the model surface is Earth's (topography = Earth); with NoWarp the
-    # surface is flat and has no orography for TOFD to act on.
+    # on only when the model surface is Earth's (topography = Earth).
     ᶜtofd_Cd = zero(Y.c.ρ)
     if !iszero(a_tofd)
         uses_earth_orography =
@@ -199,7 +169,6 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
             topo_ϵ = ϵ,
             topo_a_tofd = a_tofd,
         ),
-        topo_ᶜτ_sat = Fields.Field(FT, axes(Y.c)),
         topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
         topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
         topo_τ_x = similar(Fields.level(Y.c.ρ, 1)),
@@ -252,7 +221,8 @@ Prepares the inputs the forcing routine needs and then calls
   - The physical horizontal wind components from `Y.c.uₕ`.
 
 Reads `p.precomputed.ᶜp`, `ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and clobbers
-`p.scratch.ᶠtemp_scalar` along with the scratch fields listed for
+`p.scratch.ᶠtemp_scalar`, `ᶜtemp_scalar_3` and `ᶜtemp_scalar_4` (the wind components)
+along with the scratch fields listed for
 `orographic_gravity_wave_forcing!`. Described in [garner2005](@cite); see the
 *Orographic Gravity Waves* page for the derivations.
 """
@@ -295,8 +265,13 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) *
         (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    @. ᶜbuoyancy_frequency =
-        ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
+    eps_FT = eps(FT)
+    # Floor N² at eps to avoid tiny or negative values before taking the square root.
+    @. ᶜbuoyancy_frequency = ifelse(
+        ᶜbuoyancy_frequency < eps_FT,
+        sqrt(eps_FT),
+        sqrt(abs(ᶜbuoyancy_frequency)),
+    )
     @. ᶠbuoyancy_frequency = ᶠinterp(ᶜbuoyancy_frequency)
 
     # face pressure, from which the non-propagating drag takes each cell's
@@ -304,9 +279,11 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶠp = p.scratch.ᶠtemp_scalar
     ogw_face_pressure!(ᶠp, ᶜp, ᶜρ, ᶜz, ᶠz, grav)
 
-    # prepare physical uv input variables for gravity_wave_forcing()
-    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    # avoids allocation of 3D fields
+    ᶜu = p.scratch.ᶜtemp_scalar_3
+    ᶜv = p.scratch.ᶜtemp_scalar_4
+    @. ᶜu = u_component(Geometry.UVVector(Y.c.uₕ))
+    @. ᶜv = v_component(Geometry.UVVector(Y.c.uₕ))
 
     @. ᶜuforcing = 0
     @. ᶜvforcing = 0
@@ -332,7 +309,8 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
 
     @debug begin
         # Checkpoint 2b: Check computed forcing magnitude
-        @info "  Computed forcing: u_max=$(maximum(abs, ᶜuforcing)) m/s², v_max=$(maximum(abs, ᶜvforcing)) m/s²"
+        @info "  Computed forcing: u_max=$(maximum(abs, ᶜuforcing)) m/s², \
+               v_max=$(maximum(abs, ᶜvforcing)) m/s²"
 
         # Warn if forcing is very large (>0.01 m/s² = 1 cm/s² is already strong)
         max_forcing = max(maximum(abs, ᶜuforcing), maximum(abs, ᶜvforcing))
@@ -458,7 +436,7 @@ Steps, in order:
  2. `calc_base_flux!` evaluates the low-level flow at `z_pbl` and splits the base
     momentum flux into the linear, propagating, and non-propagating parts `τ_l`, `τ_p`,
     `τ_np`.
- 3. `calc_saturation_profile!` marches the propagating flux `τ_sat(z)` upward.
+ 3. `calc_saturation_profile!` marches the propagating flux `τ_sat(z)` upward on faces.
  4. `calc_propagate_forcing!` converts `dτ_sat/dz` into a tendency, and
     `calc_nonpropagating_forcing!` adds the blocked-flow tendency from the first cell
     above the PBL-top cell up to the reference level.
@@ -501,7 +479,7 @@ function orographic_gravity_wave_forcing!(
         topo_τ_np,
     ) =
         p.orographic_gravity_wave
-    (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
+    (; topo_ᶠτ_sat) = p.orographic_gravity_wave
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
         p.orographic_gravity_wave
     (; topo_ᶠVτ, values_at_z_pbl, topo_info) = p.orographic_gravity_wave
@@ -514,7 +492,7 @@ function orographic_gravity_wave_forcing!(
     # cell above it and counts its phase from that cell's top face (GFDL topo_drag:
     # kpbl, zhalf(kpbl)), which calc_nonpropagating_forcing! needs as a face-level
     # field.
-    get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+    get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶠp, ᶜT, ᶜz, grav, cp_d)
     blocked_layer_start_height!(topo_ᶠz_blocked_start, topo_ᶜz_pbl, ᶠz)
 
     # compute base flux at the planetary boundary layer height
@@ -553,7 +531,6 @@ function orographic_gravity_wave_forcing!(
         topo_FrU_clp,
         topo_FrU_max,
         topo_FrU_min,
-        topo_ᶜτ_sat,
         topo_τ_x,
         topo_τ_y,
         topo_τ_p,
@@ -564,9 +541,11 @@ function orographic_gravity_wave_forcing!(
         ᶜρ,
         u_phy,
         v_phy,
-        ᶜp,
+        ᶠp,
         ᶜbuoyancy_frequency,
         ᶜz,
+        ᶠz,
+        p.scratch.ᶠtemp_field_level,
     )
 
     # compute drag tendencies due to propagating part
@@ -605,6 +584,7 @@ function orographic_gravity_wave_forcing!(
         ᶜwtsum,
         #
         ᶠp,
+        ᶜp,
         ᶠbuoyancy_frequency,
         ᶠz,
         ᶠdz,
@@ -616,14 +596,18 @@ function orographic_gravity_wave_forcing!(
     @debug begin
         if any(!isfinite, ᶜuforcing) || any(!isfinite, ᶜvforcing)
             @error "Non-finite OGWD forcing before the magnitude limiter!"
-            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), has_inf=$(any(isinf, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
-            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), has_inf=$(any(isinf, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
+            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), \
+                    has_inf=$(any(isinf, ᶜuforcing)), min=$(minimum(ᶜuforcing)), \
+                    max=$(maximum(ᶜuforcing))"
+            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), \
+                    has_inf=$(any(isinf, ᶜvforcing)), min=$(minimum(ᶜvforcing)), \
+                    max=$(maximum(ᶜvforcing))"
             error("OGWD produced non-finite forcing - aborting")
         end
     end
 
-    # Limit the forcing magnitude as a numerical safety rail for the explicit
-    # application, preserving its direction: the (u, v) vector is scaled by
+    # Limit the forcing magnitude as a safety check on the cached forcing, preserving
+    # its direction: the (u, v) vector is scaled by
     # min(1, F_max/|F|), so the drag stays antiparallel to the flow where the limiter
     # binds (clipping each component separately would rotate it). The scale is
     # materialized first so scaling ᶜuforcing does not change the |F| seen by
@@ -748,50 +732,39 @@ end
 """
     calc_nonpropagating_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_np, ᶠVτ, ᶠz_start,
                                  ᶠz_ref, ᶠp_ref, ᶜmask, ᶜweights, ᶜdiff, ᶜwtsum,
-                                 ᶠp, ᶠN, ᶠz, ᶠdz, grav)
+                                 ᶠp, ᶜp, ᶠN, ᶠz, ᶠdz, grav)
 
-Add the blocked-flow (non-propagating) orographic drag to the forcing fields.
+Add the blocked-flow (non-propagating) orographic drag to `ᶜuforcing` and `ᶜvforcing`
+[m/s²]. Called from `orographic_gravity_wave_forcing!` after `calc_propagate_forcing!`;
+`ᶠz_ref`, `ᶠp_ref`, `ᶜmask`, `ᶜweights`, `ᶜdiff`, and `ᶜwtsum` are scratch.
 
-Increments `ᶜuforcing` and `ᶜvforcing` [m/s²] and fills the working fields `ᶠz_ref`,
-`ᶠp_ref`, `ᶜmask`, `ᶜweights`, `ᶜdiff`, and `ᶜwtsum`. Called from
-`orographic_gravity_wave_forcing!` after `calc_propagate_forcing!`.
+Steps, as in GFDL `topo_drag`:
 
-The drag is confined to a layer that starts in the first cell above the PBL-top cell and
-ends at a reference level `z_ref`, and is distributed within it by pressure weighting,
-which concentrates it near the surface. No cell of the PBL gets blocked drag, as in GFDL
-`topo_drag`, whose blocked layer runs from `kref` down to `kpbl`, the first level above
-the PBL. `z_start` is `ᶠz_start`, the top face of that lowest blocked cell (GFDL
-`zhalf(kpbl)`). `z_ref` is the first face above `z_start` at which the accumulated
-vertical phase of a stationary hydrostatic wave, `Σ Δz·N/V_τ` over the layers from
-`z_start` upward, exceeds `π`, i.e. half a vertical wavelength. Each layer uses `N` and
-`V_τ` at its upper face, with `N` clamped to `[0.7e-2, 1.7e-2]` 1/s and `V_τ` floored at
-1 m/s so the layer depth stays physical. If the phase never reaches `π`, or `z_start` is
-the model top face, `z_ref` is the model top face. If `z_start` is `Inf` (no cell above
-the PBL-top cell), `z_ref` is `Inf` and the column gets no blocked drag.
-
-The mask keeps the cells whose top face is at or above `z_start` and whose bottom face is
-below `z_ref`, so the lowest blocked cell is always in it, and drops cells of zero or `NaN`
-weight, which contribute nothing to the pressure-weighted sum or would propagate `NaN`.
-The tendency is then `g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to
-zero in columns where the mask is empty or the weight sum is `NaN`. `Δp` is each cell's own pressure thickness, the difference of `ᶠp`
-across its two faces, and `wtsum = Σ Δp·weight`, both as in GFDL `topo_drag`, so the
-column-integrated blocked stress `Σ (du/dt)·Δp/g` equals `τ_x·τ_np/τ_l` exactly.
+ 1. The blocked layer starts in the first cell above the PBL-top cell, so no
+    PBL cell gets blocked drag. `ᶠz_start` is the top face of the top-most PBL cell.
+ 2. The layer ends at `z_ref`, the first face above `z_start` where the wave phase
+    `Σ Δz·N/V_τ` exceeds `π` (half a vertical wavelength). Each layer uses `N` and `V_τ` at
+    its top face, with `N` kept within `[0.7e-2, 1.7e-2]` s⁻¹ and `V_τ` floored at 1 m/s. If
+    the phase never reaches `π`, `z_ref` is the model top. If `z_start` is `Inf` (no cell
+    above the PBL-top cell), so is `z_ref`, and the column gets no blocked drag.
+ 3. A cell is in the blocking layer if its top face is at or above `z_start` and its bottom face is
+    below `z_ref`. Its weight is its center pressure minus the pressure at `z_ref`, so the drag is largest near the ground. Cells with zero or
+    `NaN` weight are dropped.
+ 4. The drag is `g·τ_x·τ_np/(τ_l·wtsum)·weight` (and the same with `τ_y`), where
+    `wtsum = Σ Δp·weight` and `Δp` is the cell's pressure thickness from `ᶠp`. The column
+    total `Σ (du/dt)·Δp/g` is then exactly `τ_x·τ_np/τ_l`. A column with no cell in the
+    layer, or with a `NaN` `wtsum` (which throws a warning), gets no blocked drag.
 
 # Arguments
 
-  - `τ_x`, `τ_y`: Zonal and meridional components of the base momentum flux, from
-    `calc_base_flux!`.
-  - `τ_l`, `τ_np`: Corrected linear drag and non-propagating drag, from `calc_base_flux!`.
-  - `ᶠVτ`: Wind projected onto the drag direction, at faces [m/s].
-  - `ᶠz_start`: Height of the top face of the lowest blocked cell, the cell just above the
-    PBL-top cell, on the face level space, from `blocked_layer_start_height!` [m].
-  - `ᶠp`: Pressure at faces, from `ogw_face_pressure!` [Pa].
+  - `τ_x`, `τ_y`, `τ_l`, `τ_np`: Base-flux components, linear drag, and non-propagating
+    drag, from `calc_base_flux!`.
+  - `ᶠVτ`: Wind along the drag direction at faces [m/s].
+  - `ᶠz_start`: Top face of the lowest blocked cell, from `blocked_layer_start_height!` [m].
+  - `ᶠp`, `ᶜp`: Pressure at faces (from `ogw_face_pressure!`) and cell centers [Pa].
   - `ᶠN`: Buoyancy frequency at faces [1/s].
+  - `ᶠz`, `ᶠdz`: Face heights and the cell thickness at faces [m].
   - `grav`: Gravitational acceleration [m/s²].
-
-# Notes
-
-A `NaN` in the weight sum is warned about but not treated as fatal.
 
 Described in [garner2005](@cite); see the *Orographic Gravity Waves* page.
 """
@@ -814,6 +787,7 @@ function calc_nonpropagating_forcing!(
     ᶜwtsum,
     #
     ᶠp,
+    ᶜp,
     ᶠN,
     ᶠz,
     ᶠdz,
@@ -893,7 +867,11 @@ function calc_nonpropagating_forcing!(
     # so the ≥ comparison is exact.
     @. ᶜmask =
         isone(ᶜtop_bias.((ᶠz .>= ᶠz_start))) .&& isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
-    @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
+    # Weight: cell-center pressure minus the pressure at z_ref (GFDL topo_drag:
+    # `weight = pfull(k) - pref`). ᶠp_ref (one value per column) is
+    # relabelled as a center-level field.
+    ᶜp_ref = Fields.Field(Fields.field_values(ᶠp_ref), axes(Fields.level(ᶜp, 1)))
+    @. ᶜweights = ᶜp - ᶜp_ref
     # Each cell's own pressure thickness (GFDL topo_drag: dp = phalf(k+1) - phalf(k))
     @. ᶜdiff = ᶜbottom_bias(ᶠp) - ᶜtop_bias(ᶠp)
 
@@ -912,7 +890,7 @@ function calc_nonpropagating_forcing!(
         return acc + wtsum_field
     end
 
-    if any(isnan.(ᶜwtsum))
+    if any(isnan, ᶜwtsum)
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
@@ -937,9 +915,9 @@ end
 Fill `ᶜCd` [m⁻¹] with the turbulent orographic form drag (TOFD) coefficient of
 [beljaars2004](@cite).
 
-TOFD represents the form drag of orography with horizontal scales below about 5 km, too small
-to launch resolved gravity waves. The deceleration is `∂u/∂t = −C_d(z)·|U|·u` with the IFS
-form of the scheme (IFS Documentation CY47R1, Part IV, Eqs. 3.58 to 3.60)
+TOFD represents the form drag of orography with horizontal scales below about 5 km, too
+small to launch resolved gravity waves. The deceleration is `∂u/∂t = −C_d(z)·|U|·u` with the
+IFS form of the scheme (IFS Documentation CY47R1, Part IV, Eqs. 3.58 to 3.60)
 
 ```
 C_d(z) = a_tofd · α · β · C_md · C_corr · 2.109 · exp[−(z/1500)^{1.5}] · a₂ · z^{−1.2},
@@ -948,18 +926,18 @@ a₂ = σ_flt² · k₁^{n₁−n₂} / (I_H · k_flt^{n₁}),
 
 where `z` is the height above the local surface (floored at 1 m so `z^{−1.2}` stays finite)
 and `σ_flt²` is the variance of the band-pass-filtered orography from
-`compute_filtered_orography_variance`. The constants are those of the IFS:
-`α = 35` (the large-eddy-simulation value 12 of Beljaars et al., multiplied by 1.7² in the IFS
-tuning), `β = 1`, `C_md = 0.005`, `C_corr = 0.6`, the orography spectrum slopes `n₁ = −1.9`
-and `n₂ = −2.8` with the break at `k₁ = 0.003 m⁻¹`, and the filter integral
-`I_H = 0.00102 m⁻¹` and representative wavenumber `k_flt = 0.00035 m⁻¹` of the band pass that
-defines `σ_flt`. The profile concentrates the drag in the lowest ~1 km, below the PBL-top
-layer where the propagating and blocked components act.
+`compute_filtered_orography_variance`. The constants are those of the IFS: `α = 35` (the
+large-eddy-simulation value 12 of Beljaars et al., multiplied by 1.7² in the IFS tuning),
+`β = 1`, `C_md = 0.005`, `C_corr = 0.6`, the orography spectrum slopes `n₁ = −1.9` and
+`n₂ = −2.8` with the break at `k₁ = 0.003 m⁻¹`, and the filter integral `I_H = 0.00102 m⁻¹`
+and representative wavenumber `k_flt = 0.00035 m⁻¹` of the band pass that defines `σ_flt`.
+The profile concentrates the drag in the lowest ~1 km, below the PBL-top layer where the
+propagating and blocked components act.
 
 `C_d` depends only on the grid and the orography, so it is computed once when the cache is
 built; `orographic_gravity_wave_apply_tendency!` combines it with the current wind through
-`tofd_implicit_rate`. `a_tofd` scales the IFS amplitude: `1` reproduces the IFS and `0` gives
-`C_d ≡ 0`.
+`tofd_implicit_rate`. `a_tofd` scales the IFS amplitude: `1` reproduces the IFS and `0`
+gives `C_d ≡ 0`.
 
 # Arguments
 
@@ -1025,14 +1003,16 @@ end
 
 Add the propagating (vertically radiating) orographic drag to the forcing fields.
 
-Decrements `ᶜuforcing` and `ᶜvforcing` [m/s²] by `(τ_x/τ_l)·(1/ρ)·dτ_sat/dz` and the `τ_y`
-counterpart, writes the vertical derivative into `dτ_sat_dz`, and returns `nothing`. The
-loss of saturated flux with height is exactly the momentum the breaking wave returns to the
-flow, hence the minus sign.
+Where the saturated flux `τ_sat` (from `calc_saturation_profile!`) falls with height, the
+waves break and give that momentum to the flow. The drag is `(1/ρ)·dτ_sat/dz`, split between
+`ᶜuforcing` and `ᶜvforcing` [m/s²] by `τ_x/τ_l` and `τ_y/τ_l`.
 
-The tendency vanishes below the PBL top, where `calc_saturation_profile!` holds `τ_sat`
-constant at `τ_p`. Called from `orographic_gravity_wave_forcing!`; `dτ_sat_dz` is a scratch
-field.
+The drag in a cell comes from how much the flux drops across it, from its bottom face to its
+top face. Up to the bottom face of the first cell above the PBL, `τ_sat` stays at the
+launched flux `τ_p`, so there is no drop and no breaking drag in the PBL. The flux still
+left at the model top is spread back over the whole column in proportion to each cell's
+pressure thickness (as in GFDL), which gives every cell, the PBL included, a small drag.
+Called from `orographic_gravity_wave_forcing!`; `dτ_sat_dz` is a scratch field.
 """
 function calc_propagate_forcing!(
     ᶜuforcing,
@@ -1044,8 +1024,7 @@ function calc_propagate_forcing!(
     dτ_sat_dz,
     ᶜρ,
 )
-    dτ_sat_dz .=
-        Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1
+    @. dτ_sat_dz = w_component(Geometry.WVector(ᶜgradᵥ(τ_sat)))
 
     @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτ_sat_dz
     @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτ_sat_dz
@@ -1053,7 +1032,7 @@ function calc_propagate_forcing!(
 end
 
 """
-    get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
+    get_pbl_z!(result, ᶜp, ᶠp, ᶜT, ᶜz, grav, cp_d)
 
 Compute the planetary boundary layer (PBL) top height of each column.
 
@@ -1062,14 +1041,15 @@ Mutates `result`, setting it to the height of the highest cell center satisfying
  1. `p ≥ 0.5·p_sfc`, which restricts the search to the lower atmosphere, and
  2. `T_sfc + T_boost − T > (g/c_pd)·(z − z_sfc)` with `T_boost = 1.5` K,
 
-where the surface values are those of the lowest cell center. Within the well-mixed
-boundary layer, turbulent mixing keeps the profile at or steeper than the dry adiabat, so
-the second inequality holds; it fails in the stably stratified free atmosphere above, which
-marks the transition. The temperature boost improves the estimate near the surface. The
-lowest cell center always qualifies (its left side is `T_boost > 0` and its right side is
-zero), so if no higher level qualifies, `result` is the lowest cell center height, and the
-blocked drag starts in the second cell, as GFDL `topo_drag` does with its fallback
-`kpbl = kdim - 1`.
+where `p_sfc` is the bottom face pressure (GFDL `topo_drag`:
+`ppbl = (1 − max_pbl_frac)·phalf(kdim+1)`) and `T_sfc`, `z_sfc` are those of the lowest
+cell center. Within the well-mixed boundary layer, turbulent mixing keeps the profile at or
+steeper than the dry adiabat, so the second inequality holds; it fails in the stably
+stratified free atmosphere above, which marks the transition. The temperature boost improves
+the estimate near the surface. The lowest cell center always qualifies (its left side is
+`T_boost > 0` and its right side is zero), so if no higher level qualifies, `result` is the
+lowest cell center height, and the blocked drag starts in the second cell, as GFDL
+`topo_drag` does with its fallback `kpbl = kdim - 1`.
 
 Called from `orographic_gravity_wave_forcing!`. Implemented with
 `Operators.column_reduce!` so it runs on the GPU.
@@ -1078,6 +1058,7 @@ Called from `orographic_gravity_wave_forcing!`. Implemented with
 
   - `result`: Surface-level output field for the PBL top height [m]; overwritten.
   - `ᶜp`: Pressure at cell centers [Pa].
+  - `ᶠp`: Pressure at faces [Pa]; only the bottom face is used.
   - `ᶜT`: Temperature at cell centers [K].
   - `ᶜz`: Geometric height of cell centers [m].
   - `grav`: Gravitational acceleration [m/s²].
@@ -1085,11 +1066,16 @@ Called from `orographic_gravity_wave_forcing!`. Implemented with
 
 See the *Orographic Gravity Waves* page.
 """
-function get_pbl_z!(result, ᶜp, ᶜT, ᶜz, grav, cp_d)
+function get_pbl_z!(result, ᶜp, ᶠp, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(ᶜp)
 
-    # Get surface values (first level values)
-    p_sfc = Fields.level(ᶜp, 1)
+    # Surface pressure: the bottom-face pressure, relabelled as a center-level field (one
+    # value per column, same layout). Surface temperature and height: the lowest cell
+    # center.
+    p_sfc = Fields.Field(
+        Fields.field_values(Fields.level(ᶠp, half)),
+        axes(Fields.level(ᶜp, 1)),
+    )
     T_sfc = Fields.level(ᶜT, 1)
     z_sfc = Fields.level(ᶜz, 1)
 
@@ -1159,41 +1145,57 @@ end
 
 
 """
+    ogw_source_level_values!(values_at_z_pbl, ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl)
+
+Set `values_at_z_pbl` to `(ρ, u, v, N)` at the OGW source level of each column: the first
+cell center above `z_pbl`, i.e., the cell just above the PBL-top cell (the PBL-top cell is
+the one whose center is `z_pbl`, from `get_pbl_z!`). This is GFDL `topo_drag`'s `kpbl`, the
+first layer above the PBL, where its `base_flux` reads the low-level wind; it is also the
+lowest cell of the blocked layer (`blocked_layer_start_height!`). If no center lies above
+`z_pbl`, the top cell is used. Implemented with `Operators.column_reduce!`, with a flag
+that locks the values at the first center above `z_pbl`, so it runs on the GPU.
+"""
+function ogw_source_level_values!(values_at_z_pbl, ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl)
+    FT = eltype(ᶜρ)
+    input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl))
+    Operators.column_reduce!(
+        values_at_z_pbl,
+        input;
+        init = (FT(0), FT(0), FT(0), FT(0), false),
+        transform = values -> (values[1], values[2], values[3], values[4]),
+    ) do accumulated, (ρ, u, v, N, z_col, z_target)
+        # once a center above z_pbl has been taken, keep it; until then follow the column
+        accumulated[5] && return accumulated
+        return (ρ, u, v, N, z_col > z_target)
+    end
+    return nothing
+end
+
+"""
     calc_base_flux!(τ_x, τ_y, τ_l, τ_p, τ_np, U_sat, FrU_sat, FrU_clp, FrU_max, FrU_min,
                     z_pbl, values_at_z_pbl, ogw_params, topo_info,
                     ᶜρ, u_phy, v_phy, ᶜz, ᶜN)
 
-Compute the base momentum flux at the PBL top and split it into drag components.
+Compute the momentum flux the mountains launch at the source level (the first cell above the
+PBL) and split it into its parts. Called from `orographic_gravity_wave_forcing!`; the
+arguments before `z_pbl` are outputs, `values_at_z_pbl` is scratch.
 
-Mutates all of `τ_x`, `τ_y`, `τ_l`, `τ_p`, `τ_np`, `U_sat`, `FrU_sat`, `FrU_clp`,
-`FrU_max`, `FrU_min`, and the working tuple field `values_at_z_pbl`, and returns `nothing`.
-Called from `orographic_gravity_wave_forcing!`.
-
-The low-level flow is sampled at the source level, the highest cell center with
-`z ≤ z_pbl`, giving `(ρ_pbl, u_pbl, v_pbl, N_pbl)`. The linear base flux is
-`τ = ρ_pbl·N_pbl·⟨T⟩ᵀ·V_pbl`, evaluated componentwise as
-`τ_x = ρ_pbl·N_pbl·(t11·u_pbl + t21·v_pbl)` and
-`τ_y = ρ_pbl·N_pbl·(t12·u_pbl + t22·v_pbl)`.
-
-`V_τ` is the low-level wind projected onto the drag direction, and the saturation velocity
-is `U_sat = sqrt(ρ_pbl/ρ_scale · V_τ³/(N_pbl·L₀))`, the largest wave amplitude the flow can
-carry before breaking. Together with the obstacle Froude numbers
-`Fr_{max,min} = max(0, h_{max,min})·N_pbl/V_τ` it defines the `FrU` limits, `FrU_clp`
-marking the saturation point.
-
-The drag is then obtained by integrating an assumed power-law distribution of subgrid
-obstacle heights: `τ_l` over the whole range, `τ_p` over the unsaturated part (linear waves
-that propagate), and `τ_np` over the saturated part (blocked flow forced around the
-obstacles). Finally `τ_np` is divided by `max(Fr_crit, Fr_max)`, converting it to drag per
-unit blocked depth, with `Fr_crit` as a floor so short mountains, which block nothing, do
-not blow the division up.
+ 1. Read `ρ`, `u`, `v`, `N` at the source level.
+ 2. Linear flux: `τ_x = ρ·N·(t11·u + t21·v)`, `τ_y = ρ·N·(t12·u + t22·v)`.
+ 3. `U_sat = sqrt(ρ/ρ_scale · V_τ³/(N·L₀))`, the largest wave the flow can carry before
+    breaking (`V_τ`: the wind along the drag direction), and the Froude limits from `hmax`
+    and `hmin`.
+ 4. Integrate over the assumed spread of mountain heights: `τ_l` over all of them, `τ_p`
+    over those low enough to launch propagating waves, `τ_np` over the taller ones, whose
+    flow is blocked. `τ_np` is divided by `max(Fr_crit, Fr_max)`, giving drag per unit
+    blocked depth. The floor keeps short mountains from blowing it up.
 
 # Arguments
 
   - `z_pbl`: PBL top height per column [m].
   - `values_at_z_pbl`: Four-slot tuple field holding `(ρ, u, v, N)` at the source level.
-  - `ogw_params`: Shape and scale parameters `Fr_crit`, `ρscale`, `L0`, `a0`, `a1`, `γ`, `β`,
-    `ϵ`.
+  - `ogw_params`: Shape and scale parameters `Fr_crit`, `ρscale`, `L0`, `a0`, `a1`, `γ`,
+    `β`, `ϵ`.
   - `topo_info`: Orographic input `hmax`, `hmin`, and the tensor components.
   - `ᶜN`: Buoyancy frequency at cell centers [1/s].
 
@@ -1242,22 +1244,9 @@ function calc_base_flux!(
     β = topo_β
     ϵ = topo_ϵ
 
-    input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl))
+    ogw_source_level_values!(values_at_z_pbl, ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl)
 
-    Operators.column_reduce!(
-        values_at_z_pbl,
-        input;
-        init = (FT(0.0), FT(0.0), FT(0.0), FT(0.0)),
-    ) do (ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, z_col, z_target)
-
-        # Check if current level height is at or above z_pbl
-        # Use the last valid level that satisfies z_col <= z_target
-        if z_col <= z_target
-            return (ρ, u, v, N)
-        else
-            return (ρ_acc, u_acc, v_acc, N_acc)
-        end
-    end
+    eps_FT = eps(FT)
 
     # These are views
     ρ_pbl = values_at_z_pbl.:1
@@ -1272,8 +1261,8 @@ function calc_base_flux!(
     # Calculate Vτ using field operations
     Vτ = @. lazy(
         max(
-            eps(FT),
-            -(u_pbl * τ_x + v_pbl * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
+            eps_FT,
+            -(u_pbl * τ_x + v_pbl * τ_y) / max(eps_FT, sqrt(τ_x^2 + τ_y^2)),
         ),
     )
 
@@ -1287,7 +1276,7 @@ function calc_base_flux!(
     # Calculate FrU values
     @. FrU_sat = Fr_crit * U_sat
     @. FrU_min = Fr_min * U_sat
-    @. FrU_max = max(Fr_max * U_sat, FrU_min + eps(FT))
+    @. FrU_max = max(Fr_max * U_sat, FrU_min + eps_FT)
     @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
 
     # Calculate drag components
@@ -1309,7 +1298,8 @@ function calc_base_flux!(
             (γ - ϵ - β)
         )
 
-    # Apply scaling
+    # Drag per unit blocked depth; the Fr_crit floor keeps short mountains from
+    # blowing it up
     @. τ_np = τ_np / max(Fr_crit, Fr_max)
 
     return nothing
@@ -1317,34 +1307,28 @@ end
 
 """
     calc_saturation_profile!(ᶠτ_sat, ᶠVτ, U_sat, FrU_sat, FrU_clp, FrU_max, FrU_min,
-                             ᶜτ_sat, τ_x, τ_y, τ_p, z_pbl, ogw_params,
-                             ᶜρ, u_phy, v_phy, ᶜp, ᶜN, ᶜz)
+                             τ_x, τ_y, τ_p, z_pbl, ogw_params,
+                             ᶜρ, u_phy, v_phy, ᶠp, ᶜN, ᶜz, ᶠz, ᶠτ_top)
 
-Compute the vertical profile of saturated momentum flux for the propagating component.
+Compute the saturated momentum flux `ᶠτ_sat` on cell faces: the most flux the waves can
+carry at each height. Where it falls with height, the waves break and deposit drag
+(`calc_propagate_forcing!`). Built on faces, as in GFDL `topo_drag`. Called from
+`orographic_gravity_wave_forcing!`; `ᶠVτ` and `ᶠτ_top` are scratch.
 
-Mutates `ᶜτ_sat`, `ᶠτ_sat`, and `ᶠVτ`, and returns `nothing`. Only the propagating part
-needs a profile; the non-propagating part stays the scalar `τ_np` and is distributed by
-pressure weighting in `calc_nonpropagating_forcing!`. Called from
-`orographic_gravity_wave_forcing!`.
+Going up the column, face by face:
 
-At each cell center `V_τ` is the wind projected onto the drag direction and `L₁` is an
-effective obstacle width, `L₀` rescaled by the flow curvature
-`1 − 2·V_τ·d²V_τ/N²` and clamped to `[0.5, 2]·L₀`. A column accumulator then carries the
-saturation velocity upward as
-`U_sat[k] = min(U_sat[k-1], sqrt(ρ/ρ_scale · V_τ³/(N·L₁)))`, seeded at the lowest level
-with the base-flux `U_sat`. The `min` makes `U_sat` monotonically non-increasing: a wave
-can lose flux to breaking but never recover it.
+ 1. Up to the bottom face of the source cell (the first cell above the PBL), `τ_sat` is the
+    launched flux `τ_p`, so no breaking drag forms in the PBL.
+ 2. Above it, the saturation velocity `U_sat = sqrt(ρ/ρ_scale · V_τ³/(N·L₁))` uses the face
+    wind along the drag direction `V_τ`, `N` and `ρ`, and is kept no larger than the value
+    below: a wave can lose flux, never regain it. `L₁` is the obstacle width `L₀` adjusted
+    for the wind's curvature, kept within `[0.5, 2]·L₀`.
+ 3. `τ_sat` is the launched-flux integral redone with this smaller `U_sat`.
+ 4. The top face copies the face below.
 
-Below the PBL top (`z ≤ z_pbl`) the profile is held at the base-flux value `τ_p`, so its
-derivative vanishes there and the propagating tendency is confined to the free atmosphere.
-Above it, the same obstacle-distribution integral as `τ_p` is re-evaluated with the lowered
-breaking line `FrU_sat = Fr_crit·U_sat[k]`, the launch-level values `FrU_sat0`, `FrU_clp0`
-being retained from `calc_base_flux!`.
-
-If the wave reaches the model top without breaking (`τ_sat[end] > 0`), the residual is
-removed from the whole column with a pressure weighting `(p_sfc − p)/(p_sfc − p_top)`, so
-momentum is conserved; the correction is skipped when `τ_sat[end] ≤ 0`. Finally `τ_sat` and
-`V_τ` are interpolated to faces for the routines that need them there.
+The flux left at the top is then removed from the whole column in proportion to pressure,
+so the column's total propagating drag equals `τ_p`. This gives every cell, the PBL
+included, a small drag.
 
 Described in [garner2005](@cite); see the *Orographic Gravity Waves* page for the
 integrals.
@@ -1358,7 +1342,6 @@ function calc_saturation_profile!(
     FrU_clp,
     FrU_max,
     FrU_min,
-    ᶜτ_sat,
     τ_x,
     τ_y,
     τ_p,
@@ -1369,159 +1352,172 @@ function calc_saturation_profile!(
     ᶜρ,
     u_phy,
     v_phy,
-    ᶜp,
+    ᶠp,
     ᶜN,
     ᶜz,
+    ᶠz,
+    ᶠτ_top,
 )
     # Extract parameters from tuple
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) =
         ogw_params
 
     FT = eltype(Fr_crit)
+    eps_FT = eps(FT)
+    zero_FT = zero(FT)
     γ = topo_γ
     β = topo_β
     ϵ = topo_ϵ
 
-    # Calculate Vτ at cell centers using field operations
-    ᶜVτ = @. lazy(
-        max(
-            eps(FT),
-            (-(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))),
-        ),
-    )
+    # Wind projected onto the drag direction at cell centers, keeping its sign
+    ᶜVτ_signed =
+        @. lazy(-(u_phy * τ_x + v_phy * τ_y) / max(eps_FT, sqrt(τ_x^2 + τ_y^2)))
+    # Face V_τ: average the signed wind first, then floor it, as GFDL does. Flooring first
+    # would zero a reversed wind and therefore overstate the face wind next to a critical
+    # level.
+    @. ᶠVτ = max(eps_FT, ᶠinterp(ᶜVτ_signed))
 
     # Second vertical derivatives of the wind, at cell centers
-    d2udz = lazy.(ᶜd2dz2(u_phy))
-    d2vdz = lazy.(ᶜd2dz2(v_phy))
-    # Project them onto the drag direction, as for Vτ above; this feeds L1
-    d2Vτdz = @. lazy(
-        max(
-            eps(FT),
-            -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
+    d2udz = ᶜd2dz2(u_phy)
+    d2vdz = ᶜd2dz2(v_phy)
+    # Curvature of the wind profile along the drag direction (its second derivative in
+    # height), used for L1. It is positive where the wind is weakest compared with the
+    # levels above and below, which narrows the obstacle width, and negative where the wind
+    # is strongest, as in a jet, which widens it (GFDL). It is set to zero from the
+    # surface up to the PBL-top cell, and in the top cell.
+    z_top_center = Fields.level(ᶜz, Spaces.nlevels(axes(ᶜz)))
+    ᶜd2Vτdz = @. lazy(
+        ifelse(
+            (ᶜz <= z_pbl) | (ᶜz >= z_top_center),
+            zero_FT,
+            -(d2udz * τ_x + d2vdz * τ_y) / max(eps_FT, sqrt(τ_x^2 + τ_y^2)),
         ),
     )
 
-    # Effective obstacle width L1: L0 rescaled by the flow curvature, clamped
-    L1 = @. lazy(
+    # Each face takes the average of the two cells around it: curvature, N, and density.
+    ᶠd2Vτdz = @. lazy(ᶠinterp(ᶜd2Vτdz))
+    ᶠN = @. lazy(ᶠinterp(ᶜN))
+    ᶠρ = @. lazy(ᶠinterp(ᶜρ))
+
+    # Obstacle width L1: L0 rescaled by the wind curvature, kept within [0.5, 2]·L0. The
+    # factor 2 on the curvature term is GFDL's `samp` (the AM4 production setting).
+    # `samp` will be moved to ClimaParams.
+    ᶠL1 = @. lazy(
         topo_L0 *
-        max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * d2Vτdz / ᶜN^2)),
+        max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2)),
     )
 
-    # Local saturation-velocity ceiling at each cell center
-    U_k_field = @. lazy(sqrt(ᶜρ / topo_ρscale * ᶜVτ^3 / ᶜN / L1))
+    # Local saturation-velocity ceiling at each face
+    ᶠU_local = @. lazy(sqrt(ᶠρ / topo_ρscale * ᶠVτ^3 / ᶠN / ᶠL1))
 
-    z_surf = Fields.level(ᶜz, 1)
-    # Create combined input for column_accumulate
+    # The base-flux values are one per column, stored on the first center level. Relabel
+    # them as face-level fields (same layout) so they can be evaluated with the face fields.
+    face_level = axes(Fields.level(ᶠz, half))
+    on_face_level(x) = Fields.Field(Fields.field_values(x), face_level)
+    z_pbl_f = on_face_level(z_pbl)
+    U_sat_f = on_face_level(U_sat)
+    τ_p_f = on_face_level(τ_p)
+    FrU_sat0_f = on_face_level(FrU_sat)
+    FrU_clp0_f = on_face_level(FrU_clp)
+    FrU_max_f = on_face_level(FrU_max)
+    FrU_min_f = on_face_level(FrU_min)
+    z_top_face = Fields.level(ᶠz, Spaces.nlevels(axes(ᶠz)) - half)
+
     input = @. lazy(
         tuple(
-            FrU_clp,
-            FrU_sat,
-            U_k_field,
-            FrU_max,
-            FrU_min,
+            ᶠU_local,
+            ᶠz,
+            z_top_face,
+            z_pbl_f,
+            U_sat_f,
+            τ_p_f,
+            FrU_sat0_f,
+            FrU_clp0_f,
+            FrU_max_f,
+            FrU_min_f,
             Fr_crit,
-            z_surf,
-            ᶜz,
-            z_pbl,
             topo_a0,
-            τ_p,
-            U_sat,
         ),
     )
 
-    # Zero the result field before the accumulator overwrites it level by level
-    fill!(ᶜτ_sat, 0.0)
-
+    # Walk up the faces from the ground. The accumulator tracks: the flux τ_sat, the
+    # smallest U_sat so far, a flag for passing the ground face, and a flag for passing the
+    # first face above z_pbl (above which waves may break).
     Operators.column_accumulate!(
-        ᶜτ_sat,
+        ᶠτ_sat,
         input;
-        init = (FT(0.0), FT(0.0), FT(0.0), FT(0.0)),
+        init = (FT(0), FT(0), false, false),
         transform = first,
-    ) do (tau_sat_val, U_sat_val, local_FrU_sat, local_FrU_clp),
+    ) do (τ_below, U_run, started, passed),
     (
-        FrU_clp0,
+        U_local,
+        z_face,
+        z_top,
+        z_target,
+        U_sat0,
+        τ_p,
         FrU_sat0,
-        U,
+        FrU_clp0,
         FrU_max,
         FrU_min,
         Fr_crit_val,
-        z_surf,
-        z_col,
-        z_target,
-        topo_a0,
-        τ_p,
-        U_sat,
+        a0,
     )
+        is_top = z_face == z_top
+        # Seed at the bottom face; the bottom and top faces do not enter the minimum
+        U_run = ifelse(started, ifelse(is_top, U_run, min(U_run, U_local)), U_sat0)
+        # Hold τ_p up to and including the first face above z_pbl, i.e., the bottom face of
+        # the source cell
+        hold = !passed
+        passed = passed | (z_face > z_target)
 
-        if z_col == z_surf
-            U_sat_val = U_sat
-        end
-
-        U_sat_val = min(U_sat_val, U)
-        local_FrU_sat = Fr_crit_val * U_sat_val  # Use local variable instead
-        local_FrU_clp = min(FrU_max, max(FrU_min, local_FrU_sat))  # Use local variable instead
-
-        if z_col <= z_target
-            tau_sat_val = τ_p
-        else
-            tau_sat_val =
-                topo_a0 * (
-                    (local_FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) /
-                    (2 + γ - ϵ) +
-                    local_FrU_sat^2 *
-                    FrU_sat0^β *
-                    (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β) +
-                    local_FrU_sat^2 *
-                    (FrU_clp0^(γ - ϵ) - local_FrU_clp^(γ - ϵ)) / (γ - ϵ)
-                )
-        end
-
-        return (tau_sat_val, U_sat_val, local_FrU_sat, local_FrU_clp)
+        local_FrU_sat = Fr_crit_val * U_run
+        local_FrU_clp = min(FrU_max, max(FrU_min, local_FrU_sat))
+        τ_new =
+            a0 * (
+                (local_FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+                local_FrU_sat^2 *
+                FrU_sat0^β *
+                (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β) +
+                local_FrU_sat^2 *
+                (FrU_clp0^(γ - ϵ) - local_FrU_clp^(γ - ϵ)) / (γ - ϵ)
+            )
+        # The model-top face takes the value of the face below it
+        τ_face = ifelse(hold, τ_p, ifelse(is_top, τ_below, τ_new))
+        return (τ_face, U_run, true, passed)
     end
 
-    top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
-    p_surf = Fields.level(ᶜp, 1)
-    p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
+    # Spread the flux left at the model top over the whole column as drag (GFDL
+    # `keep_residual_flux`): each face loses a pressure-weighted share of the leftover
+    # flux, accumulating from none of it at the surface to all of it at the top.
+    n_faces = Spaces.nlevels(axes(ᶠτ_sat))
 
-    zero_val = FT(0.0)
-
-    input = @. lazy(tuple(top_values, ᶜτ_sat, p_surf, p_top, ᶜp, zero_val))
-
-    Operators.column_accumulate!(
-        ᶜτ_sat,
-        input;
-        init = FT(0.0),
-        transform = identity,
-    ) do τ_sat_val, (top_values, ᶜτ_sat, p_surf, p_top, ᶜp, zero_val)
-
-        τ_sat_val = ᶜτ_sat
-
-        if top_values > zero_val
-            τ_sat_val -= (top_values * (p_surf - ᶜp) / (p_surf - p_top))
-        end
-
-        return τ_sat_val
-    end
-
-    @. ᶠτ_sat = ᶠinterp(ᶜτ_sat)
-    @. ᶠVτ = ᶠinterp(ᶜVτ)
+    # Copy the top value to scratch first, because the update overwrites the top face.
+    Fields.field_values(ᶠτ_top) .=
+        Fields.field_values(Fields.level(ᶠτ_sat, n_faces - half))
+    p_sfc = Fields.level(ᶠp, half)
+    p_top = Fields.level(ᶠp, n_faces - half)
+    @. ᶠτ_sat = ᶠτ_sat - ᶠτ_top * (p_sfc - ᶠp) / (p_sfc - p_top)
 
     return nothing
 end
 
 
 """
-    compute_ogw_drag(Y, earth_radius, topography, h_frac)
+    compute_ogw_drag(Y, earth_radius, topography, γ, h_frac, α_smoothing)
 
 Build the orographic drag input for the configured topography.
 
 Returns `(; hmax, hmin, t11, t21, t12, t22)` on the surface cell-center space. Called from
 `get_topo_info` for `topo_info = Val(:raw_topo)`.
 
-For Earth topography (`Val(:Earth)` or `Val(:NoWarp)`) the drag was computed offline by the
+For Earth topography (`Val(:Earth)`) the drag was computed offline by the
 preprocessing pipeline, so this loads it: first a local
 `computed_drag_Earth_false_1_<h_elem>.hdf5` if present, otherwise the matching
-`ogw_computed_drag_h*` ClimaArtifact for the resolution.
+`ogw_computed_drag_h*` ClimaArtifact for the resolution. Both go through
+`read_ogw_drag_file`, which errors when the file's build record is missing or its
+preprocessing version or `h_elem` differ from this code and run, and warns when `γ`,
+`h_frac`, or `α_smoothing` differ from the values stored in the file.
 
 For the analytical test topographies (`DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`,
 `Cosine2d`, `Cosine3d`) the tensor is instead computed at startup with ClimaCore horizontal
@@ -1537,7 +1533,11 @@ of 88°S, where the grid convergence makes the horizontal gradients unreliable.
   - `Y`: Prognostic state, used only for its spaces and communications context.
   - `earth_radius`: Sphere radius [m].
   - `topography`: `Val` of the configured topography name.
+  - `γ`: Mountain height-width exponent [-]; for Earth topography only compared with the
+    file's build record.
   - `h_frac`: Ratio of the minimum to the maximum obstacle height [-].
+  - `α_smoothing`: Smoothing scale as a fraction of the model grid spacing [-]; only
+    compared with the file's build record.
 
 # Notes
 
@@ -1547,7 +1547,9 @@ function compute_ogw_drag(
     Y,
     earth_radius,
     topography,
+    γ,
     h_frac,
+    α_smoothing,
 )
     FT = eltype(Y)
     center_space = axes(Y.c)
@@ -1562,7 +1564,7 @@ function compute_ogw_drag(
 
     cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
 
-    if topography == Val(:Earth) || topography == Val(:NoWarp)
+    if topography == Val(:Earth)
         # Try local file first (for development when preprocessing has been run)
         local_filename = "computed_drag_Earth_false_1_$(h_elem)"
         local_path = joinpath(pkgdir(@__MODULE__), "$(local_filename).hdf5")
@@ -1571,33 +1573,30 @@ function compute_ogw_drag(
             @info "Loading computed drag from local file: $(local_path)"
             topo_info = load_preprocessed_topography(
                 local_filename,
-                ClimaComms.context(Y.c),
+                ClimaComms.context(Y.c);
+                h_elem,
+                γ,
+                h_frac,
+                α_smoothing,
             )
 
-            @debug begin
-                # Checkpoint 1: Validate loaded drag tensor
-                @info "OGWD drag tensor loaded from LOCAL FILE (h_elem=$(h_elem)):"
-                @info "  hmax: min=$(minimum(parent(topo_info.hmax))), max=$(maximum(parent(topo_info.hmax))), mean=$(sum(parent(topo_info.hmax))/length(parent(topo_info.hmax)))"
-                @info "  t11: min=$(minimum(parent(topo_info.t11))), max=$(maximum(parent(topo_info.t11)))"
-                @info "  NaN/Inf: hmax_nan=$(any(isnan, parent(topo_info.hmax))), t11_inf=$(any(isinf, parent(topo_info.t11)))"
-            end
+            @debug topo_info_summary(topo_info, "LOCAL FILE", h_elem)
         else
             # Fall back to ClimaArtifacts
             @info "Local file not found, loading from ClimaArtifacts (h_elem=$(h_elem))..."
             artifact_path =
                 AA.ogw_computed_drag_file_path(; h_elem, context = ClimaComms.context(Y.c))
             @info "Loading from: $(artifact_path)"
-            reader = InputOutput.HDF5Reader(artifact_path, ClimaComms.context(Y.c))
-            topo_info = InputOutput.read_field(reader, "computed_drag")
-            Base.close(reader)
+            topo_info = read_ogw_drag_file(
+                artifact_path,
+                ClimaComms.context(Y.c);
+                h_elem,
+                γ,
+                h_frac,
+                α_smoothing,
+            )
 
-            @debug begin
-                # Checkpoint 1: Validate loaded drag tensor
-                @info "OGWD drag tensor loaded from ARTIFACT (h_elem=$(h_elem)):"
-                @info "  hmax: min=$(minimum(topo_info.hmax)), max=$(maximum(topo_info.hmax)), mean=$(sum(parent(topo_info.hmax))/length(parent(topo_info.hmax)))"
-                @info "  t11: min=$(minimum(topo_info.t11)), max=$(maximum(topo_info.t11))"
-                @info "  NaN/Inf: hmax_nan=$(any(isnan, topo_info.hmax)), t11_inf=$(any(isinf, topo_info.t11))"
-            end
+            @debug topo_info_summary(topo_info, "ARTIFACT", h_elem)
         end
 
         return set_topo_info_target_space(topo_info, ᶜsurface_space)
@@ -1642,13 +1641,12 @@ function compute_ogw_drag(
     dhdx = ∇ₕhmax.components.data.:1
     dhdy = ∇ₕhmax.components.data.:2
 
-    # Handle drag vector elements at the antarctic region
+    # Zero the tensor south of 88°S, where the grid converges and gradients are unreliable
     @. dχdx = ifelse(cg_lat < FT(-88), 0, dχdx)
     @. dχdy = ifelse(cg_lat < FT(-88), 0, dχdy)
 
-    # We convert the face-centered drag vector elements to cell-centered
-    # quantities as these are used to compute the physics associated with the
-    # orographic gravity wave drag in the cell.
+    # Relabel the bottom-face values onto the surface center space (same layout), where
+    # the drag is computed.
     hmax = Fields.Field(Fields.field_values(hmax), ᶜsurface_space)
     hmin = Fields.Field(Fields.field_values(hmin), ᶜsurface_space)
     t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), ᶜsurface_space)
@@ -1660,13 +1658,24 @@ function compute_ogw_drag(
 
 end
 
+# Debug message summarizing the loaded drag input. `sum` of a ClimaCore field is an area
+# integral, so `sum(hmax) / sum(one, hmax)` is the area-weighted mean.
+function topo_info_summary(topo_info, source, h_elem)
+    (; hmax, t11) = topo_info
+    return "OGWD drag tensor loaded from $(source) (h_elem=$(h_elem)):\n\
+              hmax: min=$(minimum(hmax)), max=$(maximum(hmax)), \
+            mean=$(sum(hmax) / sum(one, hmax))\n\
+              t11: min=$(minimum(t11)), max=$(maximum(t11))\n\
+              NaN/Inf: hmax_nan=$(any(isnan, hmax)), t11_inf=$(any(isinf, t11))"
+end
+
 """
     compute_ogw_drag_online(Y, earth_radius, topography, γ, h_frac, α_smoothing)
 
 Build the orographic drag input `(; hmax, hmin, t11, t12, t21, t22)` at initialization by
 running the preprocessing pipeline directly, rather than reading a stored artifact.
 
-For Earth topography (`Val(:Earth)` or `Val(:NoWarp)`) this calls `compute_OGW_info` on the
+For Earth topography (`Val(:Earth)`) this calls `compute_OGW_info` on the
 raw ETOPO elevation (`AA.earth_orography_file_path`), so the result reflects the run's
 resolution together with `γ`, `h_frac`, and `α_smoothing`. The neighborhood statistics are
 computed on the host and regridded onto the model surface space with the GPU-capable
@@ -1693,8 +1702,9 @@ function compute_ogw_drag_online(
     h_frac,
     α_smoothing,
 )
-    if topography == Val(:Earth) || topography == Val(:NoWarp)
-        @info "Computing orographic gravity wave drag input at initialization (raw_topo_online)" α_smoothing
+    if topography == Val(:Earth)
+        @info "Computing orographic gravity wave drag input at initialization \
+               (raw_topo_online)" α_smoothing
         elevation_data =
             AA.earth_orography_file_path(context = ClimaComms.context(Y.c))
         return compute_OGW_info(
@@ -1706,7 +1716,7 @@ function compute_ogw_drag_online(
             α_smoothing,
         )
     end
-    return compute_ogw_drag(Y, earth_radius, topography, h_frac)
+    return compute_ogw_drag(Y, earth_radius, topography, γ, h_frac, α_smoothing)
 end
 
 
@@ -1716,21 +1726,21 @@ end
 Return the lazy second vertical derivative of a center-valued scalar, at cell centers.
 
 Composed as `ᶜddz ∘ ᶠddz`, so the intermediate first derivative lives at faces and the
-stencil is compact. Used by `calc_saturation_profile!` for the flow curvature.
+stencil is compact. Both steps are lazy, so no field is allocated. Used by
+`calc_saturation_profile!` for the flow curvature.
 """
-ᶜd2dz2(ᶜscalar) =
-    lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar))).components.data.:1)
+ᶜd2dz2(ᶜscalar) = ᶜddz(ᶠddz(ᶜscalar))
 
 """
     ᶜddz(ᶠscalar)
 
 Return the lazy vertical derivative of a face-valued scalar, at cell centers [·/m].
 """
-ᶜddz(ᶠscalar) = lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1)
+ᶜddz(ᶠscalar) = @. lazy(w_component(Geometry.WVector(ᶜgradᵥ(ᶠscalar))))
 
 """
     ᶠddz(ᶜscalar)
 
 Return the lazy vertical derivative of a center-valued scalar, at cell faces [·/m].
 """
-ᶠddz(ᶜscalar) = lazy.(Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1)
+ᶠddz(ᶜscalar) = @. lazy(w_component(Geometry.WVector(ᶠgradᵥ(ᶜscalar))))

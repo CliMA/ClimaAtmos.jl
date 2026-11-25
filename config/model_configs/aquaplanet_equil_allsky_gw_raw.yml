@@ -4,6 +4,8 @@ approximate_linear_solve_iters: 1
 rad: "allskywithclear"
 dt_save_state_to_disk: "1days"
 orographic_gravity_wave: "raw_topo"
+topography: "Earth"
+topo_smoothing: true
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
 time_varying_trace_gases: ["CO2", "O3"]

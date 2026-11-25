@@ -10,6 +10,11 @@ rad: "allskywithclear"
 vert_diff: "VerticalDiffusion"
 microphysics_model: "0M"
 orographic_gravity_wave: "raw_topo"
+topography: "Earth"
+topo_smoothing: true
 non_orographic_gravity_wave: true
+# Update both gravity-wave drags every step, so the measured step includes their compute.
+dt_ogw: "1secs"
+dt_nogw: "1secs"
 toml:
   - "toml/default_parameters.toml"

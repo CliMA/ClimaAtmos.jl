@@ -19,6 +19,8 @@ approximate_linear_solve_iters: 2
 microphysics_model: "0M"
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "raw_topo"
+topography: "Earth"
+topo_smoothing: true
 t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/default_parameters.toml]

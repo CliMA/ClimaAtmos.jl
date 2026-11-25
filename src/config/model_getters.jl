@@ -581,11 +581,17 @@ key.
     HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
     initialization, and `"gfdl_restart"` regrids the GFDL restart file.
 
-Any other value raises an error.
+Any other value raises an error, and so does any orographic gravity wave with
+`topography: "NoWarp"`.
 """
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     isnothing(ogw_name) && return nothing
+    parsed_args["topography"] == "NoWarp" && error(
+        """orographic_gravity_wave = "$ogw_name" needs a surface with topography, but \
+        topography is "NoWarp" (flat). Set topography (e.g. "Earth") or \
+        orographic_gravity_wave: ~.""",
+    )
     return if ogw_name == "raw_topo" ||
               ogw_name == "raw_topo_online" ||
               ogw_name == "gfdl_restart"
