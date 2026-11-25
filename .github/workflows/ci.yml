@@ -48,70 +48,32 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The test-group list lives in test-groups.yml, which upstream packages also
+  # call to run these tests in their downstream tests
   test:
-    name: ci ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.test_group }}
+    name: ci 1.13
     needs: decide
     if: needs.decide.outputs.skip != 'true'
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      julia-version: '1.13'
+      develop-caller: false
+      coverage: true
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.13'
-        # Ubuntu only. `main` then exercises the required jobs that gate a 
-        # pull request, so the workflow badge means "the required checks are 
-        # green". 
-        os:
-          - ubuntu-latest
-        test_group:
-          - infrastructure
-          - diagnostics
-          - dynamics
-          - dynamics_edmfx
-          - parameterizations
-          - restarts
-          - era5
-        include:
-          - version: '1.10'
-            os: ubuntu-latest
-            test_group: infrastructure
-    env:
-      TEST_GROUP: ${{ matrix.test_group }}
-      # EDMFX simulation tests are compile-bound, coverage instrumentation
-      # increases their wall time
-      COVERAGE: ${{ matrix.test_group != 'dynamics_edmfx' }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v3
-        with:
-          version: ${{ matrix.version }}
-      # One depot per Julia version, shared by the test groups, which have the
-      # same dependencies.
-      - id: depot
-        uses: ./.github/actions/julia-depot-restore
-        with:
-          prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
-          hash: ${{ hashFiles('Project.toml') }}
-      - uses: julia-actions/julia-buildpkg@v1
-      # ClimaCore v1.0.9 allocates in a zero-allocation test with bounds checking on.
-      - run: julia --project -e 'using Pkg; Pkg.pin(name = "ClimaCore", version = "1.0.8")'
-      - uses: julia-actions/julia-runtest@v1
-        with:
-          coverage: ${{ env.COVERAGE }}
-      - uses: julia-actions/julia-processcoverage@v1
-        if: env.COVERAGE == 'true'
-      - uses: codecov/codecov-action@v7
-        if: env.COVERAGE == 'true'
-        with:
-          file: lcov.info
-          token: ${{secrets.CODECOV_TOKEN}}
-      - uses: ./.github/actions/julia-depot-save
-        if: ${{ !cancelled() }}
-        with:
-          key: ${{ steps.depot.outputs.key }}
-          cache-hit: ${{ steps.depot.outputs.cache-hit }}
+  test-julia-1_10:
+    name: ci 1.10
+    needs: decide
+    if: needs.decide.outputs.skip != 'true'
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      julia-version: '1.10'
+      test-groups: '["infrastructure"]'
+      develop-caller: false
+      coverage: true
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # Musica supports Julia 1.11 and 1.12, so its test runs in its own
   # environment on 1.12.
@@ -143,20 +105,23 @@ jobs:
   # jobs, so a reused merge-queue build (matrix skipped) still reports green.
   ci-required:
     name: ci-required
-    needs: [decide, test]
+    needs: [decide, test, test-julia-1_10]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          if [[ "${{ needs.decide.result }}" != "success" ]]; then
+      - env:
+          DECIDE: ${{ needs.decide.result }}
+          SKIP: ${{ needs.decide.outputs.skip }}
+          RESULTS: ${{ needs.test.result }} ${{ needs.test-julia-1_10.result }}
+        run: |
+          if [[ "$DECIDE" != "success" ]]; then
             echo "decide job did not succeed"; exit 1
           fi
-          if [[ "${{ needs.test.result }}" == "success" ]]; then
+          if [[ "$RESULTS" == "success success" ]]; then
             echo "ci matrix passed"; exit 0
           fi
-          if [[ "${{ needs.test.result }}" == "skipped" && \
-                "${{ needs.decide.outputs.skip }}" == "true" ]]; then
+          if [[ "$RESULTS" == "skipped skipped" && "$SKIP" == "true" ]]; then
             echo "ci matrix reused from an already-green PR head"; exit 0
           fi
-          echo "ci matrix did not pass (result=${{ needs.test.result }})"
+          echo "ci matrix did not pass (results: $RESULTS)"
           exit 1
