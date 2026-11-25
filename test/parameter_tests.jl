@@ -157,6 +157,7 @@ end
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(1)
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
+        @test CAP.sgs_cloud_sedimentation_cf_floor(sq) == FT(1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
         @test CAP.cloud_fraction_eps_rel(sq) == FT(0)
     end

@@ -95,6 +95,41 @@ function fill_column_max!(ᶜw_max, ᶜw)
 end
 
 """
+    incloud_specific_humidity(q, cf, cf_floor)
+
+In-cloud specific humidity `max(q, 0) / clamp(cf, cf_floor, 1)` [kg/kg] of a
+condensate species with mean specific humidity `q` that is confined to the
+cloud fraction `cf`. The floor `cf_floor ∈ (0, 1]` bounds the concentration
+factor by `1 / cf_floor`; `cf_floor = 1` returns the mean `max(q, 0)`.
+"""
+@inline incloud_specific_humidity(q, cf, cf_floor) =
+    max(zero(q), q) / clamp(cf, cf_floor, one(cf_floor))
+
+"""
+    is_cloud_condensate(χ_name)
+
+Whether the tracer `χ_name` is cloud liquid or cloud ice, the species that the
+cloud fraction confines.
+"""
+is_cloud_condensate(::MatrixFields.FieldName) = false
+is_cloud_condensate(
+    ::Union{MatrixFields.FieldName{(:q_lcl,)}, MatrixFields.FieldName{(:q_icl,)}},
+) = true
+
+"""
+    sedimentation_reads_cloud_fraction(atmos, params)
+
+Whether `set_precipitation_velocities!` reads the cloud fraction: the 1M scheme
+with `sgs_cloud_sedimentation_cf_floor < 1`, which evaluates the cloud liquid
+and cloud ice velocities at the in-cloud specific humidity.
+`set_explicit_precomputed_quantities!` then sets the velocities after it has
+updated the cloud fraction.
+"""
+sedimentation_reads_cloud_fraction(atmos, params) =
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+    CAP.sgs_cloud_sedimentation_cf_floor(params) < 1
+
+"""
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Update the grid-mean precipitation terminal velocities and cloud sedimentation
@@ -114,6 +149,15 @@ For `PrognosticEDMFX`, the per-subdomain velocities (`ᶜwₗʲs`, `ᶜwᵢʲs`,
 `ᶜwₛʲs`, ...) are also computed, and the grid-mean velocities are mass-weighted
 averages over the subdomains, so that the grid-scale flux equals the sum of the
 sub-grid-scale fluxes.
+
+With `sgs_cloud_sedimentation_cf_floor < 1`, the 1M cloud liquid and cloud ice
+terminal velocities are evaluated at the in-cloud specific humidity
+(`incloud_specific_humidity`): of the grid mean with the cloud fraction
+`ᶜcloud_fraction`, or, for `PrognosticEDMFX`, of the environment with its cloud
+fraction `ᶜcloud_fraction⁰`. Both are those of the last
+`set_covariance_cache_and_cloud_fraction!`. The velocity multiplies the mean
+condensate, so the sedimentation flux is the in-cloud flux weighted by the
+cloud fraction.
 """
 function set_precipitation_velocities!(Y, p, _, _)
     (; ᶜwₕhₜ) = p.precomputed
@@ -126,11 +170,13 @@ function set_precipitation_velocities!(
     microphysics_model::NonEquilibriumMicrophysics1M,
     _,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ, ᶜT, ᶜu, ᶜcloud_fraction) = p.precomputed
     (; ᶜΦ) = p.core
     ᶜρ = Y.c.ρ
     atmos = p.atmos
     params = p.params
+    cf_floor = CAP.sgs_cloud_sedimentation_cf_floor(params)
+    use_incloud = sedimentation_reads_cloud_fraction(atmos, params)
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
@@ -172,7 +218,15 @@ function set_precipitation_velocities!(
 
         ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-        @. ᶜw = terminal_velocity_function(χ_name, ᶜρ, max(zero(ᶜρ), ᶜρχ / ᶜρ))
+        if use_incloud && is_cloud_condensate(χ_name)
+            @. ᶜw = terminal_velocity_function(
+                χ_name,
+                ᶜρ,
+                incloud_specific_humidity(ᶜρχ / ᶜρ, ᶜcloud_fraction, cf_floor),
+            )
+        else
+            @. ᶜw = terminal_velocity_function(χ_name, ᶜρ, max(zero(ᶜρ), ᶜρχ / ᶜρ))
+        end
 
         # The energy flux carries the same clamped mass as the sedimentation
         # flux in `implicit_vertical_advection_tendency!`, so a negative cell
@@ -197,11 +251,13 @@ function set_precipitation_velocities!(
     (; ᶜp) = p.precomputed
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs, ᶜuʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜcloud_fraction⁰) = p.precomputed
     # `velocity_mode` reads the terminal velocity modes from the water model, so
     # the loop does not capture the whole `p.atmos`, which is not a bits type.
     water = p.atmos.water
     params = p.params
+    cf_floor = CAP.sgs_cloud_sedimentation_cf_floor(params)
+    use_incloud = sedimentation_reads_cloud_fraction(p.atmos, params)
 
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
@@ -242,8 +298,10 @@ function set_precipitation_velocities!(
     DataLayouts.foreach_column(
         ((ᶜwₗ, ᶜwₗʲs), (ᶜwᵢ, ᶜwᵢʲs), (ᶜwᵣ, ᶜwᵣʲs), (ᶜwₛ, ᶜwₛʲs)), ᶜwₕhₜ,
         Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
+        ᶜcloud_fraction⁰,
     ) do ᶜw_pairs, ᶜwₕhₜ,
-    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰
+    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰,
+    ᶜcloud_fraction⁰
         ᶜρ⁰ = @. max(
             eps_FT,
             TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
@@ -270,9 +328,18 @@ function set_precipitation_velocities!(
 
             ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
-            @. ᶜw =
-                ᶜρa⁰χ⁰ *
-                terminal_velocity_function(χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
+            if use_incloud && is_cloud_condensate(χ_name)
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ * terminal_velocity_function(
+                        χ_name,
+                        ᶜρ⁰,
+                        incloud_specific_humidity(ᶜχ⁰, ᶜcloud_fraction⁰, cf_floor),
+                    )
+            else
+                @. ᶜw =
+                    ᶜρa⁰χ⁰ *
+                    terminal_velocity_function(χ_name, ᶜρ⁰, max(zero(Yc.ρ), ᶜχ⁰))
+            end
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
             for j in draft_indices
@@ -911,8 +978,9 @@ end
 Whether the sedimentation velocities of the microphysics model depend on the state,
 so that `update_implicit_microphysics_cache!` refreshes them at every Newton iterate
 and `set_explicit_precomputed_quantities!`, which follows it at the same state, does
-not set them again. This holds for the non-equilibrium schemes, except for the 1M
-scheme with a `FixedTerminalVelocity` for every species.
+not set them again unless they read the cloud fraction it updates
+(`sedimentation_reads_cloud_fraction`). This holds for the non-equilibrium schemes,
+except for the 1M scheme with a `FixedTerminalVelocity` for every species.
 """
 state_dependent_precipitation_velocities(atmos) =
     state_dependent_precipitation_velocities(atmos.microphysics_model, atmos)

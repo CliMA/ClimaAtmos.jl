@@ -89,6 +89,19 @@ All microphysics tracers sediment with a bulk (group) sedimentation velocity.
 The sedimentation velocity can be parameterized via CloudMicrophysics.jl or
 specified as a fixed value for each tracer.
 
+Cloud condensate that fills only part of a cell is more concentrated within the
+cloud than in the cell mean, and its particles are larger and fall faster: the
+1-moment velocities of cloud liquid (Stokes) and cloud ice (Chen et al., 2022)
+take the mean particle size from the specific humidity and the prescribed
+number concentration of cloudy air. With the parameter `sgs_cloud_sedimentation_cf_floor` set below
+its default of 1, these velocities are evaluated at the in-cloud specific
+humidity `q / clamp(CF, c_min, 1)`, where `CF` is the cloud fraction and
+`c_min` is the value of the parameter. The velocity multiplies the mean
+condensate, so the sedimentation flux is the in-cloud flux weighted by the
+cloud fraction. With `PrognosticEDMFX`, `q` and `CF` are those of the
+environment; the updrafts sediment cloud condensate at their own mean specific
+humidity.
+
 Sedimentation is treated implicitly through a first-order upwinding scheme.
 Because all tracers are part of the working fluid, their sedimentation
 results in sedimentation terms for density and total energy. In the Newton

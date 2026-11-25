@@ -334,6 +334,13 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
     placement uses, in `(0, 1]`; the default `0.1` keeps the shaft at least
     a tenth of the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `sgs_cloud_sedimentation_cf_floor`: Lower bound `c_min` on the cloud
+    fraction `c_eff = clamp(CF, c_min, 1)` that concentrates the mean cloud
+    liquid and cloud ice `q` into the in-cloud value `q / c_eff` at which
+    their 1-moment terminal velocities are evaluated
+    (`set_precipitation_velocities!`), in `(0, 1]`. `CF` and `q` are those of
+    the cell or, for `PrognosticEDMFX`, of the environment. The default `1`
+    evaluates the terminal velocities at the mean `q` [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -398,6 +405,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_precip_incloud_fraction::FT
     sgs_precip_overlap_decay::FT
     sgs_precip_fraction_floor::FT
+    sgs_cloud_sedimentation_cf_floor::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     condensation_evaporation_timescale::FT
