@@ -200,11 +200,18 @@ function temporary_quantities(
         sgs_moments_are_stale = Base.RefValue(false),
         implicit_1m_tendency_is_stale = Base.RefValue(false),
         updraft_1m_tendency_is_stale = Base.RefValue(false),
-        # DSS buffer for the element-filtered gradient invariant of the geometric SGS
-        # variance (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
+        # DSS buffers for the three horizontal-gradient invariants of the
+        # geometric SGS variance (`set_covariance_cache_and_cloud_fraction!`,
+        # `hgrad_invariant!`); `nothing` on spaces that need no DSS.
         ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,
+        ᶜscalar_dss_buffer_2 = (uses_covariances(atmos) && do_dss(center_space)) ?
+                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
+                               nothing,
+        ᶜscalar_dss_buffer_3 = (uses_covariances(atmos) && do_dss(center_space)) ?
+                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
+                               nothing,
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(

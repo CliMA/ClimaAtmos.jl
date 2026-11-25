@@ -18,6 +18,10 @@ main
   (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022` for cloud ice
   (`cloud_ice_terminal_velocity: "Chen2022"`), matching the state-dependent
   `Chen2022` defaults used for rain and snow.
+- ![][badge-🚀performance] Batch the three horizontal-gradient-invariant DSS
+  exchanges in `set_covariance_cache_and_cloud_fraction!` and the passive SGS
+  tracer Laplacian DSS exchanges in `hyperdiffusion_tendency!` into single
+  `Spaces.weighted_dss!` passes.
 - ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
   snow sediment at the mass-weighted mean of the terminal velocities in the
   precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),

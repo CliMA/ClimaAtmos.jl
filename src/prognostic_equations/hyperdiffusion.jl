@@ -40,7 +40,7 @@ allocates `ᶜ∇²u`, the energy-split fields `ᶜ∇²T`, `ᶜ∇²Φ`, and `�
 and an enthalpy-weighted effective total water, never on a lumped `h_tot`),
 `ᶜ∇²specific_tracers`, the corresponding per-updraft fields for
 `PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs`, plus
-`ᶜ∇²sgs_tracerʲs` when the state carries SGS tracers; the updrafts share
+`ᶜ∇²sgs_tracerʲs` when the state has passive SGS tracers; the updrafts share
 `ᶜ∇²Φ`),
 `ᶜ∇²tke` when the turbulence-convection model carries prognostic TKE, and DSS
 ghost buffers when the space requires DSS. For `PrognosticEDMFX`, also allocates
@@ -80,9 +80,22 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
     # used in `apply_hyperdiffusion_tendency!` for the u₃ⱼ tendency, but the
     # C12 components are still needed in the outer `wcurlₕ(C123(curlₕ(⋅)))`
     # under non-orthogonal metrics (topography).
+    sgs_passive_names =
+        turbconv_model isa PrognosticEDMFX ?
+        hyperdiffused_sgs_tracer_names(Y) : ()
+    sgs_passive_syms =
+        unrolled_map(MatrixFields.extract_first, sgs_passive_names)
     sgs_tracer_hyperdiff =
-        turbconv_model isa PrognosticEDMFX && !isempty(sgs_tracer_names(Y)) ?
-        (; ᶜ∇²sgs_tracerʲs = similar(Y.c, NTuple{n, FT})) : (;)
+        !isempty(sgs_passive_syms) ?
+        (;
+            ᶜ∇²sgs_tracerʲs = similar(
+                Y.c,
+                NamedTuple{
+                    sgs_passive_syms,
+                    NTuple{length(sgs_passive_syms), NTuple{n, FT}},
+                },
+            ),
+        ) : (;)
     sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -385,8 +398,9 @@ Return the tuple of `field => ghost_buffer` pairs that must be DSSed between the
 
 Covers the dynamics fields (`ᶜ∇²u`, the energy-split `ᶜ∇²T`, `ᶜ∇²Φ`, and
 `ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when active, and the per-updraft counterparts `ᶜ∇²uʲs`,
-`ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs` for `PrognosticEDMFX`) and the grid-scale tracer
-field `ᶜ∇²specific_tracers`.
+`ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs` for `PrognosticEDMFX`), the grid-scale tracer
+field `ᶜ∇²specific_tracers`, and `ᶜ∇²sgs_tracerʲs` when passive SGS tracers are
+active.
 Called from `hyperdiffusion_tendency!`, which passes the pairs to
 `ClimaCore.Spaces.weighted_dss!`.
 """
@@ -425,24 +439,28 @@ function dss_hyperdiffusion_tendency_pairs(p)
     core_tracer_pairs =
         has_passive_tracers ?
         (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
-    return (dynamics_pairs..., core_tracer_pairs...)
+    sgs_tracer_pairs =
+        hasproperty(p.hyperdiff, :ᶜ∇²sgs_tracerʲs) ?
+        (p.hyperdiff.ᶜ∇²sgs_tracerʲs => buffer.ᶜ∇²sgs_tracerʲs,) : ()
+    return (dynamics_pairs..., core_tracer_pairs..., sgs_tracer_pairs...)
 end
 
 """
     prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
-Compute the horizontal Laplacians of the specific grid-scale tracers and store
-them in `p.hyperdiff`, ready to be DSSed.
+Compute the horizontal Laplacians of the passive grid-scale and SGS tracers and
+store them in `p.hyperdiff`, ready to be DSSed.
 
-Fills `ᶜ∇²specific_tracers` with `∇²(ρχ/ρ)` for every passive grid-scale tracer.
-Updraft tracers are handled separately, through the shared `ᶜ∇²sgs_tracerʲs`
-scratch field. Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t`
+Fills `ᶜ∇²specific_tracers` with `∇²(ρχ/ρ)` for every passive grid-scale tracer
+and, under `PrognosticEDMFX`, `ᶜ∇²sgs_tracerʲs` with `∇²χʲ` for every passive
+SGS tracer. Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t`
 are unused. The fields written here must be DSSed (see
-`dss_hyperdiffusion_tendency_pairs`) before `apply_tracer_hyperdiffusion_tendency!`
-is called. Called from `hyperdiffusion_tendency!`. Returns `nothing`.
+`dss_hyperdiffusion_tendency_pairs`) before
+`apply_tracer_hyperdiffusion_tendency!` is called. Called from
+`hyperdiffusion_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff) = p.atmos
+    (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
     (; ᶜ∇²specific_tracers) = p.hyperdiff
@@ -450,6 +468,18 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     foreach_gs_tracer(Y, ᶜ∇²specific_tracers) do ᶜρχ, ᶜ∇²χ, ρχ_name
         is_hyperdiffused_passive_tracer(ρχ_name) || return
         @. ᶜ∇²χ = wdivₕ(gradₕ(specific(ᶜρχ, Y.c.ρ)))
+    end
+    sgs_passive_names = hyperdiffused_sgs_tracer_names(Y)
+    if turbconv_model isa PrognosticEDMFX && !isempty(sgs_passive_names)
+        (; ᶜ∇²sgs_tracerʲs) = p.hyperdiff
+        n = n_mass_flux_subdomains(turbconv_model)
+        unrolled_foreach(sgs_passive_names) do χ_name
+            ᶜ∇²χʲs = MatrixFields.get_field(ᶜ∇²sgs_tracerʲs, χ_name)
+            for j in 1:n
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                @. ᶜ∇²χʲs.:($$j) = wdivₕ(gradₕ(ᶜχʲ))
+            end
+        end
     end
     return nothing
 end
@@ -464,6 +494,13 @@ const hyperdiffusion_excluded_sgs_names = sgs_sedimenting_tracer_candidates
 # Whether the grid-mean tracer `ρχ_name` takes the generic ∇⁴ tracer tendency.
 is_hyperdiffused_passive_tracer(ρχ_name) =
     ρχ_name != @name(ρq_tot) && !(ρχ_name in hyperdiffusion_excluded_gs_names)
+
+# Whether the SGS tracer `χ_name` takes the generic ∇⁴ tracer tendency.
+is_hyperdiffused_sgs_tracer(χ_name) =
+    !(χ_name in hyperdiffusion_excluded_sgs_names)
+
+hyperdiffused_sgs_tracer_names(Y) =
+    unrolled_filter(is_hyperdiffused_sgs_tracer, sgs_tracer_names(Y))
 
 """
     apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -483,8 +520,8 @@ Increments (each with a minus sign):
   - Every passive (non-microphysics) grid-mean tracer `Yₜ.c.ρχ`:
     `ν₄_scalar * ∇⋅(ρ ∇∇²χ)`.
   - For `PrognosticEDMFX`, `Yₜ.c.sgsʲs.:(j).q_tot` and the compensating
-    `Yₜ.c.sgsʲs.:(j).ρa` term, plus every auto-discovered SGS tracer (with its own
-    prep → DSS → apply cycle through the shared scratch field `ᶜ∇²sgs_tracerʲs`).
+    `Yₜ.c.sgsʲs.:(j).ρa` term, plus every passive SGS tracer from
+    `ᶜ∇²sgs_tracerʲs`.
 
 Requires DSS to have been applied to the pairs from
 `dss_hyperdiffusion_tendency_pairs`; does nothing when `p.atmos.hyperdiff` is
@@ -648,23 +685,15 @@ function passive_tracer_hyperdiffusion_tendency!(
         is_hyperdiffused_passive_tracer(ρχ_name) || return
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
-    isempty(sgs_tracer_names(Y)) && return nothing
+    sgs_passive_names = hyperdiffused_sgs_tracer_names(Y)
+    (p.atmos.turbconv_model isa PrognosticEDMFX && !isempty(sgs_passive_names)) ||
+        return nothing
     (; ᶜ∇²sgs_tracerʲs) = p.hyperdiff
-    for χ_name in sgs_tracer_names(Y)
-        χ_name in hyperdiffusion_excluded_sgs_names && continue
-        for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            @. ᶜ∇²sgs_tracerʲs.:($$j) = wdivₕ(gradₕ(ᶜχʲ))
-        end
-        if do_dss(axes(Y.c))
-            Spaces.weighted_dss!(
-                ᶜ∇²sgs_tracerʲs =>
-                    p.hyperdiff.hyperdiffusion_ghost_buffer.ᶜ∇²sgs_tracerʲs,
-            )
-        end
+    unrolled_foreach(sgs_passive_names) do χ_name
+        ᶜ∇²χʲs = MatrixFields.get_field(ᶜ∇²sgs_tracerʲs, χ_name)
         for j in 1:n
             ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-            @. ᶜχʲₜ -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²sgs_tracerʲs.:($$j)))
+            @. ᶜχʲₜ -= ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²χʲs.:($$j)))
         end
     end
     return nothing

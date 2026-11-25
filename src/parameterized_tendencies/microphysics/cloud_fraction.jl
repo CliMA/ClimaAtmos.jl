@@ -67,11 +67,15 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             @. ᶜinv_θ = lumpedₕ(norm_sqr(ᶜ∇θ))
             @. ᶜinv_θq = lumpedₕ(dot(Geometry.Contravariant12Vector(ᶜ∇θ), ᶜ∇q))
         end
-        buf = p.scratch.ᶜscalar_dss_buffer
-        if buf !== nothing
-            Spaces.weighted_dss!(ᶜinv_q, buf)
-            Spaces.weighted_dss!(ᶜinv_θ, buf)
-            Spaces.weighted_dss!(ᶜinv_θq, buf)
+        buf1 = p.scratch.ᶜscalar_dss_buffer
+        if !isnothing(buf1)
+            buf2 = p.scratch.ᶜscalar_dss_buffer_2
+            buf3 = p.scratch.ᶜscalar_dss_buffer_3
+            Spaces.weighted_dss!(
+                ᶜinv_q => buf1,
+                ᶜinv_θ => buf2,
+                ᶜinv_θq => buf3,
+            )
         end
     end
 

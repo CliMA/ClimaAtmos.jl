@@ -14,7 +14,7 @@ using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, MatrixFields
+import ClimaCore: Fields, MatrixFields, Spaces
 const TD = CA.TD
 
 include("../test_helpers.jl")
@@ -149,4 +149,101 @@ end
         (δh_water - δh_d) * Yₜ.c.sgsʲs.:(1).q_tot
     @test maximum(abs, parent(ᶜerr_up)) <=
           FT(1e-10) * maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse))
+
+    # With only microphysics SGS tracers active, no passive SGS tracer buffer is
+    # allocated or DSSed.
+    @test isempty(CA.hyperdiffused_sgs_tracer_names(Y))
+    @test !hasproperty(p.hyperdiff, :ᶜ∇²sgs_tracerʲs)
+end
+
+@noinline function _alloc_sgs_hyperdiff_dss!(p)
+    return @allocated begin
+        pairs = CA.dss_hyperdiffusion_tendency_pairs(p)
+        Spaces.weighted_dss!(last(pairs))
+    end
+end
+
+@testset "Passive SGS tracer hyperdiffusion batched DSS and 0 B allocations" begin
+    for FT in (Float32, Float64)
+        config = CA.AtmosConfig(
+            Dict{String, Any}(
+                "config" => "box",
+                "initial_condition" => "Bomex",
+                "FLOAT_TYPE" => string(FT),
+                "turbconv" => "prognostic_edmfx",
+                "edmfx_entr_model" => "Generalized",
+                "edmfx_detr_model" => "Generalized",
+                "edmfx_sgs_mass_flux" => true,
+                "edmfx_sgs_diffusive_flux" => true,
+                "edmfx_vertical_diffusion" => true,
+                "edmfx_nh_pressure" => true,
+                "prognostic_tke" => true,
+                "microphysics_model" => "0M",
+                "chemistry_model" => "passive",
+                "x_max" => 6400.0,
+                "x_elem" => 2,
+                "y_max" => 6400.0,
+                "y_elem" => 2,
+                "z_max" => 3000.0,
+                "z_elem" => 6,
+                "z_stretch" => false,
+                "dt" => "1secs",
+                "t_end" => "10secs",
+                "output_default_diagnostics" => false,
+            );
+            job_id = "hyperdiffusion_passive_sgs_$FT",
+        )
+        (; Y, p, simulation) = generate_test_simulation(config)
+        t = simulation.integrator.t
+        @test CA.do_dss(axes(Y.c))
+        @test CA.hyperdiffused_sgs_tracer_names(Y) == (MatrixFields.@name(q_gas_A),)
+        @test hasproperty(p.hyperdiff, :ᶜ∇²sgs_tracerʲs)
+
+        ᶜcoord = Fields.coordinate_field(Y.c)
+        @. Y.c.ρq_gas_A =
+            Y.c.ρ *
+            FT(1e-5) *
+            (
+                FT(1) +
+                FT(0.3) *
+                sin(FT(2π) * ᶜcoord.x / FT(6400)) *
+                cos(FT(4π) * ᶜcoord.y / FT(6400)) *
+                (FT(1) + ᶜcoord.z / FT(3000))
+            )
+        @. Y.c.sgsʲs.:(1).q_gas_A =
+            FT(2e-5) * (
+                FT(1) +
+                FT(0.4) *
+                cos(FT(2π) * ᶜcoord.x / FT(6400)) *
+                sin(FT(2π) * ᶜcoord.y / FT(6400)) *
+                cos(FT(π) * ᶜcoord.z / FT(3000))
+            )
+        CA.set_precomputed_quantities!(Y, p, t)
+
+        Yₜ = zero(Y)
+        Yₜ_lim = zero(Y)
+        CA.hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+        # Reference single-tracer two-pass ∇⁴ operator with standalone DSS.
+        (; ν₄_scalar) = CA.ν₄(p.atmos.hyperdiff, Y)
+        ref_lap = similar(Y.c, FT)
+        ref_buf = Spaces.create_dss_buffer(ref_lap)
+        @. ref_lap = CA.wdivₕ(CA.gradₕ(Y.c.sgsʲs.:(1).q_gas_A))
+        Spaces.weighted_dss!(ref_lap => ref_buf)
+        ref_tend = similar(Y.c, FT)
+        ref_tend .= zero(FT)
+        @. ref_tend -= ν₄_scalar * CA.wdivₕ(CA.gradₕ(ref_lap))
+
+        @test maximum(abs, parent(ref_tend)) > zero(FT)
+        @test all(parent(Yₜ_lim.c.sgsʲs.:(1).q_gas_A) .=== parent(ref_tend))
+
+        @test last(CA.dss_hyperdiffusion_tendency_pairs(p)) === (
+            p.hyperdiff.ᶜ∇²sgs_tracerʲs =>
+                p.hyperdiff.hyperdiffusion_ghost_buffer.ᶜ∇²sgs_tracerʲs
+        )
+        if Base.JLOptions().check_bounds != 1
+            _alloc_sgs_hyperdiff_dss!(p)
+            @test _alloc_sgs_hyperdiff_dss!(p) == 0
+        end
+    end
 end
