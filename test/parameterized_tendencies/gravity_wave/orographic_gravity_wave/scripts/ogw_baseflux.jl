@@ -10,8 +10,8 @@ import ClimaAtmos.Thermodynamics as TD
 import ClimaAtmos.Parameters as CAP
 import ClimaCore: Fields, Geometry, Operators, Spaces, Grids, Utilities, to_cpu, InputOutput
 
-include("../gw_remap_plot_utils.jl")
-include("ogw_test_utils.jl")
+include(joinpath(@__DIR__, "..", "..", "gw_remap_plot_utils.jl"))
+include(joinpath(@__DIR__, "ogw_script_utils.jl"))
 
 FT = Float64
 ᶜgradᵥ = Operators.GradientF2C()

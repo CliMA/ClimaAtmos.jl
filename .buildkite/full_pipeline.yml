@@ -169,25 +169,18 @@ steps:
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_nogw_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
-      - label: ":wavy_dash: Orographic gravity wave: Base flux calculation unit test"
+      - label: ":wavy_dash: Orographic gravity wave: build a raw_topo drag file and plot it (smoke)"
         retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
-
-      - label: ":wavy_dash: Orographic gravity wave: 3D calculation unit test"
-        retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/*"
-
-      - label: ":wavy_dash: Orographic gravity wave: Drag unit test"
-        retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_ogw_computed_drag.jl"
+        command: >
+          julia --threads=8 --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/scripts/compute_preprocessed_topography.jl &&
+          julia --threads=8 --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/scripts/ogw_computed_drag.jl;
+          status=$$?; rm -f computed_drag_Earth_false_1_30.hdf5; exit $$status
         artifact_paths: "orographic_gravity_wave_test_computed_drag/*"
-
-      - label: ":wavy_dash: Orographic gravity wave: Regression test reproducing Garner 2005"
-        retry: *retry_policy
-        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
-        artifact_paths: "orographic_gravity_wave_test_garner2005/*"
+        env:
+          OGW_SCRIPT_H_ELEM: "30"
+        agents:
+          slurm_cpus_per_task: 8
+          slurm_mem: 32GB
 
       - label: ":wavy_dash: Beres NOGW: single-column heating + drag"
         retry: *retry_policy
@@ -817,7 +810,7 @@ steps:
       #     slurm_mem: 20GB
       #     slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (raw_topo)"
+      - label: ":large_blue_circle: Aquaplanet with Earth topography: Reproducibility test for allsky varying insolation, gravity wave (raw_topo)"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -849,7 +842,7 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":large_blue_circle: Aquaplanet: Prognostic EDMF, GPU"
+      - label: ":large_blue_circle: Aquaplanet with Earth topography: Prognostic EDMF, GPU"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl

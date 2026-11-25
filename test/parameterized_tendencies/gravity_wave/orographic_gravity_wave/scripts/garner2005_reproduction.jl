@@ -61,8 +61,8 @@ using CairoMakie
 using Statistics
 using NCDatasets
 
-include("../gw_remap_plot_utils.jl")
-include("ogw_test_utils.jl")
+include(joinpath(@__DIR__, "..", "..", "gw_remap_plot_utils.jl"))
+include(joinpath(@__DIR__, "ogw_script_utils.jl"))
 
 #######################################
 # TEST SELECTION
@@ -233,7 +233,10 @@ thermo_params = CAP.thermodynamics_params(params)
 cp_d = CAP.cp_d(params)
 ᶜp = p.precomputed.ᶜp
 ᶜT = p.precomputed.ᶜT
-CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+ᶠz = Fields.coordinate_field(Y.f).z
+ᶠp = similar(ᶠz)
+CA.ogw_face_pressure!(ᶠp, ᶜp, Y.c.ρ, ᶜz, ᶠz, grav)
+CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶠp, ᶜT, ᶜz, grav, cp_d)
 
 #######################################
 # FIGURE 1: Americas
@@ -1637,7 +1640,10 @@ if should_run(:figure4)
     cp_d = CAP.cp_d(params)
     ᶜp = p.precomputed.ᶜp
     ᶜT = p.precomputed.ᶜT
-    CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶠp = similar(ᶠz)
+    CA.ogw_face_pressure!(ᶠp, ᶜp, Y.c.ρ, ᶜz, ᶠz, grav)
+    CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶠp, ᶜT, ᶜz, grav, cp_d)
 
     # Set idealized values for Figure 4 on the new simulation's fields
     @. u_phy = FT(10.0)
@@ -2177,13 +2183,18 @@ if should_run(:figure7)
     )
 
     # Get additional cache fields needed for saturation profile
-    (; topo_ᶜτ_sat, topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
+    (; topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
+    # The saturation profile lives on faces; its cell-center average is plotted
+    topo_ᶜτ_sat = similar(Y.c.ρ)
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
 
     # Use idealized pressure field (consistent with idealized density)
     ᶜp_idealized = similar(Y.c.ρ)
     @. ᶜp_idealized = garner_fig7_pressure_profile(ᶜz_field)
     ᶜp = ᶜp_idealized
+    ᶠp_idealized = similar(ᶠz_field)
+    CA.ogw_face_pressure!(ᶠp_idealized, ᶜp, Y.c.ρ, ᶜz_field, ᶠz_field, grav)
+    ᶠτ_top_scratch = similar(Fields.level(ᶠz_field, Utilities.half))
 
     # Extract height array for plotting (convert to km)
     # Use VIJFH indexing: [:,1,1,1,1] extracts first column (all vertical levels)
@@ -2272,7 +2283,6 @@ if should_run(:figure7)
         topo_FrU_clp,
         topo_FrU_max,
         topo_FrU_min,
-        topo_ᶜτ_sat,
         topo_τ_x,
         topo_τ_y,
         topo_τ_p,
@@ -2281,10 +2291,13 @@ if should_run(:figure7)
         Y.c.ρ,
         u_phy,
         v_phy,
-        ᶜp,
+        ᶠp_idealized,
         ᶜbuoyancy_frequency,
         ᶜz_field,
+        ᶠz_field,
+        ᶠτ_top_scratch,
     )
+    topo_ᶜτ_sat .= CA.ᶜinterp.(topo_ᶠτ_sat)
 
     # Extract saturation profile using VIJFH indexing (first column)
     τ_sat_col_A = parent(topo_ᶜτ_sat)[:, 1, 1, 1, 1]
@@ -2366,7 +2379,6 @@ if should_run(:figure7)
         topo_FrU_clp,
         topo_FrU_max,
         topo_FrU_min,
-        topo_ᶜτ_sat,
         topo_τ_x,
         topo_τ_y,
         topo_τ_p,
@@ -2375,10 +2387,13 @@ if should_run(:figure7)
         Y.c.ρ,
         u_phy,
         v_phy,
-        ᶜp,
+        ᶠp_idealized,
         ᶜbuoyancy_frequency,
         ᶜz_field,
+        ᶠz_field,
+        ᶠτ_top_scratch,
     )
+    topo_ᶜτ_sat .= CA.ᶜinterp.(topo_ᶠτ_sat)
 
     # Extract saturation profile using VIJFH indexing (first column)
     τ_sat_col_B = parent(topo_ᶜτ_sat)[:, 1, 1, 1, 1]
