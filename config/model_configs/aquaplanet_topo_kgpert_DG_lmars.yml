@@ -2,7 +2,7 @@ horizontal_discretization: "DG"
 dg_equation_form: "fddg"
 dg_volume_flux: "kg_kpep"
 dg_interface_flux: "lmars"
-dg_lmars_floor: 0.0 # pure LMARS; e.g. 0.05 floors the contact speed and upwind rate at 0.05 c
+dg_lmars_floor: 0.05 # floors the contact speed and upwind rate at 0.05 c; 0 is pure LMARS
 dg_fddg_vertical: "full_flux"
 dg_tracer_penalty: "advective" # unused with lmars: tracers are upwinded by the LMARS mass flux
 hyperdiff: ~

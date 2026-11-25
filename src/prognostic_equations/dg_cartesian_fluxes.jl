@@ -323,10 +323,12 @@ function (d::LMARSDissipation)(normal, y⁻, y⁺)
     r = lmars_carried_rate(ρ̄ * (un⁻ + un⁺) / 2 - Dρ / 2, y⁻, y⁺, d.ε)
     h⁻ = y⁻.e + y⁻.p / y⁻.ρ
     h⁺ = y⁺.e + y⁺.p / y⁺.ρ
+    # acoustic pressure correction p* − {p} = −a/2 and its work on {u_n}, so
+    # the kinetic energy it removes on each side reappears there as heat
     a = ρ̄ * c̄ * (un⁺ - un⁻)
     return (
         ρ = Dρ,
-        ρe = Dρ * (h⁻ + h⁺) / 2 + r * (h⁺ - h⁻),
+        ρe = Dρ * (h⁻ + h⁺) / 2 + r * (h⁺ - h⁻) + a * (un⁻ + un⁺) / 2,
         ρu1 = Dρ * (y⁻.u1 + y⁺.u1) / 2 + r * (y⁺.u1 - y⁻.u1) + a * n1,
         ρu2 = Dρ * (y⁻.u2 + y⁺.u2) / 2 + r * (y⁺.u2 - y⁻.u2) + a * n2,
         ρu3 = Dρ * (y⁻.u3 + y⁺.u3) / 2 + r * (y⁺.u3 - y⁻.u3) + a * n3,

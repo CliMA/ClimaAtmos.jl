@@ -162,7 +162,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_vi_shear_floor = FT(get(parsed_args, "dg_vi_shear_floor", 0.05))
     dg_vi_shear_floor >= 0 ||
         error("dg_vi_shear_floor must be nonnegative, got $dg_vi_shear_floor")
-    dg_lmars_floor = FT(get(parsed_args, "dg_lmars_floor", 0))
+    dg_lmars_floor = FT(get(parsed_args, "dg_lmars_floor", 0.05))
     dg_lmars_floor >= 0 ||
         error("dg_lmars_floor must be nonnegative, got $dg_lmars_floor")
     (dg_vi_velocity_penalty != :rusanov && dg_equation_form != :vi) &&

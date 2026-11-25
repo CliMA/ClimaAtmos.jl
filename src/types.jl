@@ -2016,7 +2016,7 @@ types for compile-time dispatch.
     `prandtl_number = 1.0`. Pass `nothing` to disable hyperdiffusion.
   - `dg_vi_velocity_penalty = :rusanov`: `:rusanov` or `:wave_selective`.
   - `dg_vi_shear_floor = 0.05`: floor ε of the shear speed `max(|u_n|, ε c)`.
-  - `dg_lmars_floor = 0`: floor ε of the LMARS contact speed.
+  - `dg_lmars_floor = 0.05`: floor ε of the LMARS contact speed.
   - `dg_vi_interface_flux = :rusanov`: `:rusanov`, `:rusanov_moist`, or `:es`.
   - `dg_tracer_penalty = :acoustic`: `:acoustic` or `:advective`.
   - `dg_fddg_vertical = :vi`: `:vi` or `:full_flux`.
@@ -2050,7 +2050,7 @@ function AtmosNumerics(;
     dg_interface_flux = :roe_eos,
     dg_vi_velocity_penalty = :rusanov,
     dg_vi_shear_floor = 0.05,
-    dg_lmars_floor = 0.0,
+    dg_lmars_floor = 0.05,
     dg_vi_interface_flux = :rusanov,
     dg_tracer_penalty = :acoustic,
     dg_fddg_vertical = :vi,
