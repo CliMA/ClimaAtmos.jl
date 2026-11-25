@@ -7,4 +7,3 @@ vert_diff: "VerticalDiffusion"
 rad: "held_suarez"
 microphysics_model: "0M"
 reproducibility_test: true
-toml: [toml/default_parameters.toml]

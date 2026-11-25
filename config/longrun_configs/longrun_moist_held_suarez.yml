@@ -5,4 +5,3 @@ microphysics_model: "0M"
 vert_diff: "VerticalDiffusion"
 rad: "held_suarez"
 dt_save_state_to_disk: "30days"
-toml: [toml/default_parameters.toml]

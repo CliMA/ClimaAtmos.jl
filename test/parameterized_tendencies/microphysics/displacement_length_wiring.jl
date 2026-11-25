@@ -30,7 +30,7 @@ bomex_column_config(job_id, tomls) = CA.AtmosConfig(
         "z_stretch" => false,
         "dt" => "1secs",
         "t_end" => "10secs",
-        "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml"), tomls...],
+        "toml" => [tomls...],
         "output_default_diagnostics" => false,
     );
     job_id,

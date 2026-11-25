@@ -26,7 +26,7 @@ dt_nogw: "400secs"
 # This job is unstable when running for longer
 t_end: "1hours"
 dt_save_state_to_disk: "Inf"
-toml: [toml/default_parameters.toml, toml/nogw_verification_grid.toml]
+toml: [toml/nogw_verification_grid.toml]
 output_default_diagnostics: false
 diagnostics:
   - short_name: [pr, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_zbot, nogw_ztop]

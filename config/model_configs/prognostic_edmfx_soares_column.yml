@@ -21,6 +21,5 @@ dz_top: 450.0
 perturb_initstate: false
 dt: "5secs"
 t_end: "8hours"
-toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 100]
 ode_algo: "ARS222"

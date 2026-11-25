@@ -22,7 +22,6 @@ y_elem: 2
 dt: 120secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
-toml: [toml/default_parameters.toml]
 netcdf_interpolation_num_points: [2, 2, 28]
 ode_algo: "ARS222"
 debug_tendency_diagnostics: true

@@ -38,7 +38,6 @@ deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
         "dt" => "60secs",
         "t_end" => "30mins",
         "ode_algo" => "ARS222",
-        "toml" => [joinpath(pkgdir(CA), "toml", "default_parameters.toml")],
         "output_default_diagnostics" => false,
     );
     job_id = "deferred_1m_tendency_test",

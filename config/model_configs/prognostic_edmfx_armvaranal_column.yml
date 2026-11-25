@@ -30,7 +30,7 @@ dt: "120secs"
 dt_rad: "120mins"
 t_end: "4days"
 ode_algo: "ARS222"
-toml: [toml/default_parameters.toml, toml/prognostic_edmfx_varanal_sgp.toml]
+toml: [toml/prognostic_edmfx_varanal_sgp.toml]
 rad: allskywithclear
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

@@ -21,4 +21,3 @@ edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "0M"
-toml: [toml/default_parameters.toml]

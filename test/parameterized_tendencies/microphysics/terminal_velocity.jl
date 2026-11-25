@@ -250,8 +250,7 @@ function cloud_sedimentation_column(job_id, extra)
                 "cloud_liquid_terminal_velocity" => "Stokes",
                 "cloud_ice_terminal_velocity" => "Chen2022",
                 "z_stretch" => false,
-                "toml" =>
-                    [joinpath(pkgdir(CA), "toml", "default_parameters.toml"), toml],
+                "toml" => [toml],
                 "output_default_diagnostics" => false,
             ),
             extra,

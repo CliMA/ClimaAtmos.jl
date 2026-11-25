@@ -34,6 +34,19 @@ import CloudMicrophysics as CM
 import SurfaceFluxes as SF
 
 """
+    DEFAULT_PARAMS_FILEPATH
+
+Path to `toml/default_parameters.toml`, the ClimaAtmos defaults for
+atmosphere-only parameters.
+
+`AtmosConfig` layers this file over the ClimaParams defaults and under the
+files listed under the `toml` config key. Shared constants (thermodynamics,
+surface fluxes, radiation, planet) stay in ClimaParams.
+"""
+const DEFAULT_PARAMS_FILEPATH =
+    joinpath(pkgdir(Parameters), "toml", "default_parameters.toml")
+
+"""
     AbstractClimaAtmosParameters
 
 Supertype of the top-level ClimaAtmos parameter sets, aliased `ACAP`.
@@ -175,7 +188,8 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `max_area_limiter_scale`: Rate coefficient of the maximum-area limiter in
     detrainment [1/s].
   - `max_area_limiter_power`: Exponent of the maximum-area limiter [-].
-  - `cloud_fraction_param_vec`: Data-driven cloud-fraction parameter vector [-].
+  - `cloud_fraction_param_vec`: Data-driven cloud-fraction parameter vector,
+    held as a `Val` type parameter and read through its accessor [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
     friction-velocity contribution in the surface mass-flux blend [-].
   - `convective_zi`: Prescribed convective boundary-layer depth `z_i` used in the
@@ -814,8 +828,11 @@ for var in fieldnames(TCPS)
     @eval $var(ps::ACAP) = $var(turbconv_params(ps))
 end
 for fn in fieldnames(TCPS)
+    fn == :cloud_fraction_param_vec && continue
     @eval $(fn)(ps::ATCP) = ps.$(fn)
 end
+cloud_fraction_param_vec(ps::ATCP) = val_parameter(ps.cloud_fraction_param_vec)
+val_parameter(::Val{x}) where {x} = x
 
 # Forward SGS quadrature parameters in the same way.
 const SQPS = SGSQuadratureParameters

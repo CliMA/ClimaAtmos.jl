@@ -11,5 +11,3 @@ vert_diff: "VerticalDiffusion"
 microphysics_model: "0M"
 orographic_gravity_wave: "raw_topo"
 non_orographic_gravity_wave: true
-toml:
-  - "toml/default_parameters.toml"

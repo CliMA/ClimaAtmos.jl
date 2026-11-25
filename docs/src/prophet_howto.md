@@ -115,18 +115,18 @@ practical consequences:
 
 ## Parameters
 
-Closure parameters live in ClimaParams and are overridden through the `toml:`
-key:
+Closure parameters live in ClimaParams. `toml/default_parameters.toml` (shared
+by the 0M and 1M jobs) is applied to every run, and the `toml:` key overrides
+it:
 
 ```yaml
-toml: [toml/default_parameters.toml]
+toml: [my_closures.toml]
 ```
 
 The tuned sets in `toml/` are the starting point:
-`default_parameters.toml` (shared by the 0M and 1M jobs),
-`prognostic_edmfx_calibrated.toml`, and case-specific files such as
-`prognostic_edmfx_gcmdriven.toml`, which hold only a case's differences and are
-listed after `default_parameters.toml`.
+`default_parameters.toml`, `prognostic_edmfx_calibrated.toml`, and
+case-specific files such as `prognostic_edmfx_gcmdriven.toml`, which hold only
+a case's differences from `default_parameters.toml`.
 [Closures](prophet_closures.md#Parameters) maps each symbol in the formulation
 onto its ClimaParams name.
 

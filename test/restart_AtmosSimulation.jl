@@ -20,12 +20,7 @@ include("restart_utils.jl")
 function amip_target(context, output_dir)
     FT = Float32
 
-    param_dict =
-        ClimaParams.create_toml_dict(
-            FT;
-            override_file = "toml/default_parameters.toml",
-        )
-    params = CA.ClimaAtmosParameters(param_dict)
+    params = CA.ClimaAtmosParameters(FT)
 
     deep_atmosphere = true
     cloud = CA.InteractiveCloudInRadiation()

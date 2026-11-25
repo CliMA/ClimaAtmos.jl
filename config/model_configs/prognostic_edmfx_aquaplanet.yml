@@ -15,7 +15,6 @@ approximate_linear_solve_iters: 2
 microphysics_model: "0M"
 t_end: 1hours
 dt_save_state_to_disk: 600secs
-toml: [toml/default_parameters.toml]
 output_default_diagnostics: false
 reproducibility_test: true
 diagnostics:

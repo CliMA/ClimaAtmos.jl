@@ -47,7 +47,6 @@ import ClimaCore.Geometry as Geometry
     # σ_x = 2500 m (both in toml/nogw_beres_test.toml).
     toml_override = Dict(
         "toml" => [
-            joinpath(@__DIR__, "../../../../toml/default_parameters.toml"),
             joinpath(@__DIR__, "../../../../toml/nogw_beres_test.toml"),
         ],
     )
