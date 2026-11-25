@@ -504,6 +504,12 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    # Updraft radius of the form drag, for the TKE-driven turbulent entrainment.
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
+    c_R = CAP.pressure_drag_plume_radius_slope(turbconv_params)
+    R_max = CAP.pressure_drag_plume_radius_max(turbconv_params)
 
     entr_model = p.atmos.edmfx_model.entr_model
     zero_FT = FT(0)
@@ -585,7 +591,14 @@ NVTX.@annotate function set_prognostic_edmf_draft_closures!(Y, p)
                 zero_FT,
                 entr_model,
             )
-            @. ᶜturb_entrʲ = turbulent_entrainment(turbconv_params, ᶜaʲ)
+            @. ᶜturb_entrʲ = turbulent_entrainment(
+                turbconv_params,
+                ᶜaʲ,
+                ᶜz,
+                z_sfc,
+                ᶜtke,
+                plume_radius(scale_height, ᶜaʲ, a_min, a_max, ᶜz, z_sfc, c_R, R_max),
+            )
 
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 

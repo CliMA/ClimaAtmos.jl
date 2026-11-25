@@ -506,3 +506,24 @@ end
         end
     end
 end
+
+@testset "Turbulent entrainment: TKE term and height taper" begin
+    for FT in (Float32, Float64)
+        # Off by default: the height and TKE arguments change nothing.
+        tc_def = CA.TurbulenceConvectionParameters(FT)
+        @test CA.turbulent_entrainment(
+            tc_def, FT(0.002), FT(5000), FT(0), FT(0.5), FT(300),
+        ) === CA.turbulent_entrainment(tc_def, FT(0.002))
+        # `2 c_e √tke / R` adds to the area term; the sum decays as
+        # `exp(-((z - z_sfc) / H_t)^2)`.
+        tc = CA.TurbulenceConvectionParameters(
+            FT,
+            (; turb_entr_tke_coeff = FT(0.5), turb_entr_height_scale = FT(3500)),
+        )
+        tke, R = FT(0.64), FT(400)
+        e0 = CA.turbulent_entrainment(tc, FT(0.002), FT(0), FT(0), tke, R)
+        @test e0 ≈ CA.turbulent_entrainment(tc, FT(0.002)) + 2 * FT(0.5) * sqrt(tke) / R
+        @test CA.turbulent_entrainment(tc, FT(0.002), FT(5000), FT(0), tke, R) ≈
+              e0 * exp(-(FT(5000) / FT(3500))^2)
+    end
+end

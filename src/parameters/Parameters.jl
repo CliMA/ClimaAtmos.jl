@@ -202,6 +202,15 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     `ref_H` the pressure scale height; `0` (default) turns the term off [-].
   - `entr_subsat_power`: Exponent `p ≥ 1` on the draft–environment
     relative-humidity contrast `max(0, RHʲ - RH⁰ʲ)` (`2` by default) [-].
+  - `turb_entr_height_scale`: Gaussian height scale `H_t` of the taper
+    `exp(-((z - z_sfc) / H_t)²)` of `turbulent_entrainment`; `0` (default) is
+    no taper [m].
+  - `turb_entr_tke_coeff`: Coefficient `c_e` of the TKE-driven turbulent
+    entrainment `2 c_e √tke / R`, with `R` from `plume_radius`; `0` (default)
+    is off [-].
+  - `pressure_drag_plume_radius_slope`, `pressure_drag_plume_radius_max`: Slope
+    `c_R` [-] and cap `R_max` [m] of the minimum updraft radius
+    `min(c_R (z − z_sfc), R_max)` in `plume_radius`; `0` (default) is off.
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -251,6 +260,10 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     edmf_buoyancy_clear_env_weight::FT
     entr_subsat_coeff::FT
     entr_subsat_power::FT
+    turb_entr_height_scale::FT
+    turb_entr_tke_coeff::FT
+    pressure_drag_plume_radius_slope::FT
+    pressure_drag_plume_radius_max::FT
 end
 
 """

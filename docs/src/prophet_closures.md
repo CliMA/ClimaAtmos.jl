@@ -105,15 +105,24 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
     or of a learned closure.
 
 A separate *turbulent* entrainment rate, which does not scale with the draft
-velocity and decays as the draft fills the cell,
+velocity,
 
 ```math
-E_{\mathrm{turb}}^j = \varepsilon_{t} \exp(-c_t a^j) ,
+E_{\mathrm{turb}}^j = \left[ \varepsilon_{t} \exp(-c_t a^j)
+  + \frac{2 c_e \sqrt{\kappa_{\mathrm{iso}}}}{r^j} \right]
+  \exp\!\left[-\left(\frac{z - z_s}{H_t}\right)^2\right] ,
 ```
 
 is added to the dynamical rate in the scalar tendencies
 (`turbulent_entrainment`; ``(\varepsilon_t, c_t)`` are the two entries of
-`turb_entr_param_vec`).
+`turb_entr_param_vec`). The first term decays as the draft fills the cell. The
+second is the exchange across the draft edge by the isotropic turbulence the
+draft is embedded in: an edge velocity ``c_e \sqrt{\kappa_{\mathrm{iso}}}`` on
+the perimeter ``2 \pi r^j`` of a draft of cross section ``\pi (r^j)^2``, with
+``c_e`` = `turb_entr_tke_coeff` (default `0`, off) and ``r^j`` the draft
+radius of the form drag below (`plume_radius`). The Gaussian taper with height
+``H_t`` = `turb_entr_height_scale` above the surface ``z_s`` is off for
+``H_t = 0`` (default).
 
 Detrainment (`edmfx_detr_model: "Generalized"`,
 [`BuoyancyVelocityDetrainment`](@ref ClimaAtmos.BuoyancyVelocityDetrainment))
@@ -222,7 +231,7 @@ form drag,
 ```math
 d^j = a^0 \, d_c^j \, (w^j - w^0) |w^j - w^0| , \qquad
 d_c^j = \frac{\alpha_d}{2 H}
-  \left( \frac{1}{\sqrt{\mathrm{clamp}(a^j, a_{\min}, a_{\max})}}
+  \left( \frac{1}{\sqrt{\mathrm{clamp}(a^j, a_{\mathrm{lb}}, a_{\max})}}
        + \frac{1}{\sqrt{\mathrm{clamp}(a^0, 1 - a_{\max}, 1)}} \right) ,
 ```
 
@@ -231,9 +240,15 @@ with ``\alpha_d`` = `pressure_normalmode_drag_coeff` and
 `edmfx_nh_pressure` and contributes a quadratic sink to the stage equation for
 ``w^j``. This is the pairwise form above for the draft–environment pair with
 ``r^m = H \sqrt{a^m}``, so the harmonic mean gives the sum of ``1/\sqrt{a}``
-terms. The two subdomains are floored differently: the draft radius may shrink
-to ``a_{\min}``, so ``r^j \to 0`` and the drag on a vanishing draft diverges,
-but the environment is clamped from below at ``1 - a_{\max}``. Because the
+terms. The two subdomains are floored differently. The draft area is bounded
+below by ``a_{\mathrm{lb}} = \min(\max(a_{\min}, (r_{\min}/H)^2), a_{\max})``,
+with the minimum draft radius
+``r_{\min} = \min(c_R \max(0, z - z_s), r_{\max})`` growing linearly with height
+above the surface at slope ``c_R`` = `pressure_drag_plume_radius_slope` up to
+``r_{\max}`` = `pressure_drag_plume_radius_max` (`plume_radius`). With
+these at their default `0`, ``a_{\mathrm{lb}} = a_{\min}``, so ``r^j \to 0``
+and the drag on a vanishing draft diverges. The environment is clamped from
+below at ``1 - a_{\max}``. Because the
 vertical-velocity solve runs before the area solve, it can be handed an
 extrapolated ``a^0`` outside ``[0, 1]``, and the clamp keeps the drag finite
 there; with the default ``a_{\max} = 0.7`` the environment factor never exceeds
