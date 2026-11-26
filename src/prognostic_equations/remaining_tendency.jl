@@ -1,26 +1,56 @@
 """
-    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    start_hyperdiffusion_tendency!(Y, p)
 
-Orchestrate the prep → DSS → apply sequence of the hyperdiffusion tendencies.
-
-Calls `prep_tracer_hyperdiffusion_tendency!` and `prep_hyperdiffusion_tendency!`
-to fill the `∇²` cache fields, DSSes them (via `dss_hyperdiffusion_tendency_pairs`)
-when the space requires DSS and hyperdiffusion is active, and then calls
-`apply_tracer_hyperdiffusion_tendency!` and `apply_hyperdiffusion_tendency!`.
-
-Tracer tendencies accumulate into `Yₜ_lim`, which is subject to the tracer
-limiters, while momentum, energy, and TKE tendencies accumulate into `Yₜ`. Called
-from `remaining_tendency!`.
+Begin the hyperdiffusion tendencies: fill the packed Laplacian field
+`p.hyperdiff.ᶜ∇²` (`prep_hyperdiffusion_tendency!`) and, when the space requires
+DSS, start its halo exchange, so that independent work can run while the
+messages are in flight. `finish_hyperdiffusion_tendency!` completes the DSS and
+adds the tendencies. Does nothing when `p.atmos.hyperdiff` is `nothing`. Returns
+`nothing`.
 """
-NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
-    prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    if do_dss(axes(Y.c)) && !isnothing(p.atmos.hyperdiff)
-        pairs = dss_hyperdiffusion_tendency_pairs(p)
-        Spaces.weighted_dss!(pairs...)
+NVTX.@annotate function start_hyperdiffusion_tendency!(Y, p)
+    isnothing(p.atmos.hyperdiff) && return nothing
+    prep_hyperdiffusion_tendency!(Y, p)
+    if do_dss(axes(Y.c))
+        (; ᶜ∇², hyperdiffusion_ghost_buffer) = p.hyperdiff
+        Spaces.weighted_dss_start!(ᶜ∇², hyperdiffusion_ghost_buffer)
+    end
+    return nothing
+end
+
+"""
+    finish_hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Complete the DSS of `p.hyperdiff.ᶜ∇²` started by
+`start_hyperdiffusion_tendency!` and add the hyperdiffusion tendencies
+(`apply_tracer_hyperdiffusion_tendency!` and `apply_hyperdiffusion_tendency!`).
+Tracer tendencies accumulate into `Yₜ_lim`, which is subject to the tracer
+limiters, while momentum, energy, and TKE tendencies accumulate into `Yₜ`.
+Returns `nothing`.
+"""
+NVTX.@annotate function finish_hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    isnothing(p.atmos.hyperdiff) && return nothing
+    if do_dss(axes(Y.c))
+        (; ᶜ∇², hyperdiffusion_ghost_buffer) = p.hyperdiff
+        Spaces.weighted_dss_internal!(ᶜ∇², hyperdiffusion_ghost_buffer)
+        Spaces.weighted_dss_ghost!(ᶜ∇², hyperdiffusion_ghost_buffer)
     end
     apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+Add the hyperdiffusion tendencies, with no other work overlapping the DSS of the
+Laplacians: `start_hyperdiffusion_tendency!` followed by
+`finish_hyperdiffusion_tendency!`. Returns `nothing`.
+"""
+NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    start_hyperdiffusion_tendency!(Y, p)
+    finish_hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    return nothing
 end
 
 """
@@ -33,7 +63,10 @@ accumulates, in order:
 
  1. `horizontal_advection_tendency!`: `horizontal_tracer_advection_tendency!` (into
     `Yₜ_lim`) and `horizontal_dynamics_tendency!` in one slab loop.
- 2. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
+ 2. The hyperdiffusion tendencies (tracer part into `Yₜ_lim`). Their Laplacians
+    are computed, and their DSS halo exchange is started, before the horizontal
+    advection, which runs while the messages are in flight
+    (`start_hyperdiffusion_tendency!` and `finish_hyperdiffusion_tendency!`).
  3. `explicit_vertical_advection_tendency!`.
  4. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
 
@@ -62,8 +95,12 @@ function add_remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     ensure_sgs_moments!(Y, p)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
+    # The horizontal advection reads only `Y` and precomputed quantities, so it
+    # can run while the halo exchange of the hyperdiffusion Laplacians is in
+    # flight; the tendencies still accumulate in the same order.
+    start_hyperdiffusion_tendency!(Y, p)
     horizontal_advection_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    finish_hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ

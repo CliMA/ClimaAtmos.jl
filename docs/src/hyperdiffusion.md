@@ -54,9 +54,12 @@ continuous elements ClimaAtmos uses; see
 [Completing a tendency across elements](@ref)). This removes the
 discontinuities across element boundaries and preserves the discrete inner
 product, so the operation remains globally conservative. In the code, this is the split between
-`prep_hyperdiffusion_tendency!`, which computes and DSSes the Laplacians into
-cache fields, and `apply_hyperdiffusion_tendency!`, which takes the second
-derivative.
+`prep_hyperdiffusion_tendency!`, which computes all Laplacians into one
+struct-valued cache field, and `apply_hyperdiffusion_tendency!` and
+`apply_tracer_hyperdiffusion_tendency!`, which take the second derivative. The
+single field needs a single DSS, whose halo exchange runs while the horizontal
+advection tendencies are computed (`start_hyperdiffusion_tendency!` and
+`finish_hyperdiffusion_tendency!`).
 
 ## Water: partitioning to the suspended species
 
