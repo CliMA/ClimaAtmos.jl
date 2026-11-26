@@ -3757,21 +3757,18 @@ struct Coupled1MGridMeanSweep{
     cf_floor::FT
 end
 
-@inline function (
-    sw::Coupled1MGridMeanSweep{
-        HasSGS,
-        HasPrecipFrac,
-        HasPrecipShaft,
-        HasIncloudSed,
-    }
-)
-    (
-        Yc_col,
-        geom_col,
-        pre_col,
-        sgs_col,
-        sfc_col,
-    ) where {HasSGS, HasPrecipFrac, HasPrecipShaft, HasIncloudSed}
+@inline function (sw::Coupled1MGridMeanSweep{
+    HasSGS,
+    HasPrecipFrac,
+    HasPrecipShaft,
+    HasIncloudSed,
+})(
+    Yc_col,
+    geom_col,
+    pre_col,
+    sgs_col,
+    sfc_col,
+) where {HasSGS, HasPrecipFrac, HasPrecipShaft, HasIncloudSed}
     FT = typeof(sw.dt)
     tps = _unwrapped(sw.tps)
     mp = _unwrapped(sw.mp)
@@ -4448,29 +4445,26 @@ struct Coupled1MEDMFXColumnSweep{
     a_min::FT
 end
 
-@inline function (
-    sw::Coupled1MEDMFXColumnSweep{
-        HasSGS,
-        HasPrecipFrac,
-        HasPrecipShaft,
-        HasIncloudSed,
-        HasEnvAcnvVel,
-    }
-)
-    (
-        Yc_col,
-        geom_col,
-        pre_col,
-        edmf_col,
-        sgs_col,
-        sfc_col,
-    ) where {
-        HasSGS,
-        HasPrecipFrac,
-        HasPrecipShaft,
-        HasIncloudSed,
-        HasEnvAcnvVel,
-    }
+@inline function (sw::Coupled1MEDMFXColumnSweep{
+    HasSGS,
+    HasPrecipFrac,
+    HasPrecipShaft,
+    HasIncloudSed,
+    HasEnvAcnvVel,
+})(
+    Yc_col,
+    geom_col,
+    pre_col,
+    edmf_col,
+    sgs_col,
+    sfc_col,
+) where {
+    HasSGS,
+    HasPrecipFrac,
+    HasPrecipShaft,
+    HasIncloudSed,
+    HasEnvAcnvVel,
+}
     FT = typeof(sw.dt)
     tps = _unwrapped(sw.tps)
     mp = _unwrapped(sw.mp)

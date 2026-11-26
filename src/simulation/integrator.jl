@@ -251,7 +251,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                 ),
                 Wfact = update_jacobian!,
             )
-            cache_imp! = set_implicit_precomputed_quantities_deferred!
+            cache_imp! = set_implicit_precomputed_quantities!
         else
             # `prescribed_flow` is an experimental case where the flow is prescribed,
             # so implicit tendencies are treated explicitly to avoid treatment of sound waves
@@ -262,7 +262,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
         T_post_imp! = nothing
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
-            cache! = set_precomputed_quantities_deferred!, cache_imp!,
+            cache! = set_precomputed_quantities!, cache_imp!,
             lim! = limiters_func!,
             dss!, constrain_state!,
             update_cache = update_cache_signal_handler(update_cache_every),
