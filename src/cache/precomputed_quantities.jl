@@ -990,8 +990,17 @@ Refresh end-of-step precomputed quantities after post-step `dss!` and
 (`sfc_conditions.ρ_flux_uₕ`, `ρ_flux_h_tot`, `ρ_flux_q_tot`) or bottom
 precipitation fluxes (`surface_rain_flux`, `surface_snow_flux`,
 `col_integrated_precip_energy_tendency`).
+
+When `p.atmos.numerics.reproducible_restart` is `true`, delegates to
+`set_precomputed_quantities!(Y, p, t)` so end-of-step `sfc_conditions` and
+precipitation velocities depend only on `(Y, t)` and match a fresh restart from
+checkpoint `Y`.
 """
 function set_end_of_step_precomputed_quantities!(Y, p, t)
+    if p.atmos.numerics.reproducible_restart
+        set_precomputed_quantities!(Y, p, t)
+        return nothing
+    end
     set_implicit_precomputed_quantities_core!(Y, p, t)
     set_explicit_precomputed_quantities!(Y, p, t; update_sfc = false)
     return nothing
