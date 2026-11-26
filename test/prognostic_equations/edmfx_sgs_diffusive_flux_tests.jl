@@ -456,6 +456,8 @@ include("../test_helpers.jl")
     CA.set_precomputed_quantities!(Y, p, t)
 
     jac = CA.Jacobian(CA.ManualSparseJacobian(), Y, p.atmos)
+    # The Krylov work vectors are allocated only with `krylov = true`.
+    @test !hasproperty(jac.cache, :ΔY_krylov)
     matrix = jac.cache.matrix
     for state_name in (
         @name(c.ρq_lcl),

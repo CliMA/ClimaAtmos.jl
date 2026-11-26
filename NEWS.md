@@ -30,6 +30,10 @@ main
   field, `p.scratch.ᶜhgrad_invariants` (whose components are `ᶜtemp_scalar_5`,
   `temp_data`, and `ᶜtemp_scalar_6`), and one DSS. `hgrad_invariant!` and
   `hgrad_cross_invariant!` take only the output and input fields.
+- ![][badge-🚀performance] The Jacobian allocates its two Krylov work vectors
+  only when `use_krylov_method` is set. In multi-process runs, only the root
+  process reads `graceful_exit.dat`, every 100 steps, and broadcasts the result,
+  so all ranks stop at the same step.
 - ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
   snow sediment at the mass-weighted mean of the terminal velocities in the
   precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),

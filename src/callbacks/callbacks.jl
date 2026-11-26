@@ -349,19 +349,30 @@ end
 
 Return whether the user has asked the running simulation to stop.
 
-Checked after every timestep. To request a stop, edit `{output_dir}/graceful_exit.dat` and
-change its contents from `0` to `1`; the simulation then terminates through the
-integrator, so the final state and diagnostics are still written. The file is created,
-holding `0`, on the first call if it does not exist, and reset to `0` if its contents
-cannot be parsed.
+To request a stop, edit `{output_dir}/graceful_exit.dat` and change its contents from
+`0` to `1`; the simulation then terminates through the integrator, so the final state and
+diagnostics are still written. Only the root process reads the file
+(`read_graceful_exit_request`) and broadcasts the answer, so all MPI ranks stop at the
+same step and the shared filesystem sees one read per check.
 
-Used as the condition of the callback built by `graceful_exit_callback`.
-
-!!! note
-
-    This may not be reliable for MPI jobs, where ranks poll the file independently.
+Used as the condition of the callback built by `graceful_exit_callback`, which sets how
+often it is checked.
 """
 function maybe_graceful_exit(output_dir, integrator)
+    comms_ctx = ClimaComms.context(integrator.u.c)
+    requested =
+        ClimaComms.iamroot(comms_ctx) && read_graceful_exit_request(output_dir)
+    return ClimaComms.bcast(comms_ctx, requested)
+end
+
+"""
+    read_graceful_exit_request(output_dir)
+
+Return whether `{output_dir}/graceful_exit.dat` holds a nonzero digit. The file is
+created, holding `0`, if it does not exist, and reset to `0` if its contents cannot be
+parsed. See `maybe_graceful_exit`.
+"""
+function read_graceful_exit_request(output_dir)
     file = joinpath(output_dir, "graceful_exit.dat")
     if isfile(file)
         open(file, "r") do io
@@ -379,6 +390,7 @@ function maybe_graceful_exit(output_dir, integrator)
     else
         ispath(output_dir) || mkpath(output_dir)
         open(io -> print(io, 0), file, "w")
+        return false
     end
 end
 """
