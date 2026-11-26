@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🚀performance] Models other than `PrognosticEDMFX` register no
+  `initialize_imp!` stage hook, so ClimaTimeSteppers applies one state DSS per
+  implicit stage fewer (3 of 10 per `ARS343` step), and one `constrain_state!`
+  fewer with `update_constrain_state_every = "dss"`. The stage-weighted
+  precipitation accumulator restarts its stage index in `post_newton_stage_update!`.
+  Results with horizontal DSS change at roundoff, and by more where
+  `TracerNonnegativityElementConstraint` limits tracers at the pre-implicit DSS
+  (`"dss"`) or before an implicit first stage (`SSP222`, `SSP322`, `SSP332`,
+  `SSP433`), as the Newton solve then starts from the limited state.
 - ![][badge-🔥behavioralΔ] Change the default 1-moment cloud-condensate terminal
   velocities from `Fixed` to `Stokes` for cloud liquid
   (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022` for cloud ice

@@ -18,29 +18,12 @@ precipitation accumulator (`n_imp_stages > 0`).
     p.scratch.n_imp_stages > 0
 
 """
-    reset_precip_stage_accumulator!(p)
-
-Reset `p.scratch.precip_stage_idx` to `0` when it has reached `n_imp_stages`,
-i.e. at the first implicit stage of a new timestep. A no-op when the
-stage-weighted precipitation accumulator is not active in `p.scratch`.
-"""
-@inline function reset_precip_stage_accumulator!(p)
-    if has_precip_stage_accumulator(p)
-        if p.scratch.precip_stage_idx[] >= p.scratch.n_imp_stages
-            p.scratch.precip_stage_idx[] = 0
-        end
-    end
-    return nothing
-end
-
-"""
     initialize_implicit_stage_problem!(Y, p, dtγ)
 
 Prepare the state `Y` for an IMEX implicit stage with step fraction `dtγ`,
-registered as the `initialize_imp!` hook of `ClimaODEFunction`. Resets the
-implicit-stage index for the stage-weighted precipitation surface-flux
-accumulator at the first implicit stage of a timestep, and is otherwise a no-op
-unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
+registered as the `initialize_imp!` hook of `ClimaODEFunction` when
+`p.atmos.turbconv_model isa PrognosticEDMFX` (`initialize_implicit_stage_hook`)
+and a no-op for other models.
 
 For `PrognosticEDMFX`:
 
@@ -91,7 +74,6 @@ refreshes the draft thermodynamics and buoyancy, and restores the snapshot of
 the draft scalars.
 """
 NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
-    reset_precip_stage_accumulator!(p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
     (; microphysics_model, turbconv_model, edmfx_model) = p.atmos
@@ -274,6 +256,26 @@ NVTX.@annotate function initialize_implicit_stage_problem!(Y, p, dtγ)
     end
     return nothing
 end
+
+"""
+    initialize_implicit_stage_hook(turbconv_model)
+
+Return the `initialize_imp!` hook of `ClimaODEFunction`:
+`initialize_implicit_stage_problem!` for `PrognosticEDMFX` and `nothing` for
+other turbulence-convection models. After a non-`nothing` hook,
+`ClimaTimeSteppers` applies DSS to the stage state, fires `constrain_state!`
+for the `"dss"` update frequency, and refreshes `cache_imp!`; with `nothing`,
+it refreshes only `cache_imp!` (from the second stage on), and the Newton solve
+starts from the stage state after the pre-implicit DSS and `constrain_state!`.
+That state is continuous unless `constrain_state!` limits tracers element by
+element (`TracerNonnegativityElementConstraint`) at the pre-implicit DSS
+(`update_constrain_state_every = "dss"`) or at the end of the previous step
+(tableaus with an implicit first stage); the post-Newton DSS makes the solved
+state continuous in either case.
+"""
+initialize_implicit_stage_hook(_) = nothing
+initialize_implicit_stage_hook(::PrognosticEDMFX) =
+    initialize_implicit_stage_problem!
 
 """
     warm_start_grid_mean_tracers!(Y, p)

@@ -2039,12 +2039,17 @@ Dispatch on `microphysics_model`:
     sedimentation fluxes from `p.scratch`. Otherwise, the fluxes are evaluated
     at the bottom cell face from the level-1 specific humidities and terminal
     velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
-    extrapolation of density to the surface. Because
-    `reset_precip_stage_accumulator!` resets `precip_stage_idx` to `0` at the
-    first implicit stage's entry, intermediate calls before the final stage's
-    `T_post_imp!` evaluate the pointwise formula at the current iterate, while
-    the post-step `cache!` refresh (and the explicit stage 1 that precedes any
-    implicit stage) sees the stage-weighted sum.
+    extrapolation of density to the surface.
+    `accumulate_stage_precipitation_surface_fluxes!` restarts
+    `precip_stage_idx` at `1` in the `T_post_imp!` of the first implicit stage
+    of a step, so the post-step `cache!` refresh sees the stage-weighted sum,
+    which the fields keep through the next step's first implicit Newton solve;
+    calls between that stage's `T_post_imp!` and the final one evaluate the
+    pointwise formula at the current iterate. Within a step, the slab-ocean
+    tendency of the 1M, 2M, and 2MP3 schemes evaluates its pointwise flux from
+    `(Y, p)` and reads these fields only under automatic differentiation or
+    for states without the four condensate species, for which this method
+    evaluates the pointwise formula.
   - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
     `ρq_rim`, and `ρb_rim` are not yet accounted for.
   - Default: no-op.

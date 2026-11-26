@@ -1,4 +1,4 @@
-483
+484
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+484
+- Models other than `PrognosticEDMFX` register no `initialize_imp!` hook, which
+  removes one state DSS per implicit stage. Changes the output of jobs with
+  horizontal DSS at roundoff.
+
 483
 - Change default 1-moment cloud-liquid and cloud-ice terminal velocities from `Fixed`
   to `Stokes` (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022`

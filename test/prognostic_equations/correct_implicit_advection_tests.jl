@@ -406,6 +406,19 @@ end
         jacobian = CA.AutoSparseJacobian(),
     ).scratch.compensate_explicit_scalar_advection
 
+    # Without `PrognosticEDMFX`, no `initialize_imp!` hook is registered, and
+    # `post_newton_stage_update!` advances the stage index of the accumulator
+    # through `1:n_imp_stages` once per step.
+    @test simulation.integrator.sol.prob.f.initialize_imp! === nothing
+    n_imp = p.scratch.n_imp_stages
+    @test n_imp == 3
+    Yₜ_stage = similar(Y)
+    p.scratch.precip_stage_idx[] = n_imp
+    for k in (1:n_imp..., 1)
+        CA.post_newton_stage_update!(Yₜ_stage, Y, p, t)
+        @test p.scratch.precip_stage_idx[] == k
+    end
+
     # Stage-weighted precipitation surface flux conservation across full IMEX
     # steps (`ARS343` with `T_post_imp!`).
     @. Y = Y_init
@@ -476,6 +489,9 @@ end
         @test abs(P_diag - P_actual_q) * FT(86400) < FT(1e-9)
         @test abs(P_diag - P_actual_ρ) * FT(86400) < FT(1e-7)
         @test abs(E_diag - E_actual) < FT(1e-8)
+        @test p.scratch.precip_stage_idx[] == n_imp
+        @test Array(parent(p.precomputed.surface_rain_flux)) ==
+              Array(parent(p.scratch.surface_rain_flux_accum))
     end
 
     p.scratch.precip_stage_idx[] = 1
@@ -603,8 +619,9 @@ end
 
 @testset "SlabOceanSST precipitation budget and EDMF surface SGS energy" begin
     # 1. SlabOceanSST + 1M conserves column water and energy across full IMEX
-    # steps on both `ARS343` and `SSP333` (`a_{11} = 0, b_1 ≠ 0`).
-    for algo_name in ("ARS343", "SSP333")
+    # steps on `ARS343`, `SSP333` (`a_{11} = 0, b_1 ≠ 0`), and `SSP222`
+    # (`a_{11} ≠ 0`, whose first-stage solve reuses the end-of-step `cache!`).
+    for algo_name in ("ARS343", "SSP333", "SSP222")
         slab_cfg = CA.AtmosConfig(
             Dict(
                 "config" => "column",
@@ -640,7 +657,7 @@ end
         w0 = Array(parent(col_q))[1] + Array(parent(Y.sfc.water))[1]
         e0 = Array(parent(col_e))[1] + C_slab * Array(parent(Y.sfc.T))[1]
 
-        integ = if algo_name == "SSP333"
+        integ = if algo_name in ("SSP333", "SSP222")
             # `ClimaTimeSteppers` IMEX-SSPRK steps with plain floating-point `t`
             # rather than `ITime`.
             CTS.init(

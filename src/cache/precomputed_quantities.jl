@@ -1071,8 +1071,10 @@ Calls `set_implicit_precomputed_quantities_core!` and marks `ᶜsgs_moments` and
 `update_jacobian!`, the Newton residual and Jacobian, evaluate them at the same
 `Y` (`ensure_1m_tendencies!`).
 
-`ClimaTimeSteppers` calls `cache_imp!` before the Newton solve, at each Newton
-iterate, and at the solved state before `post_newton_stage_update!`. With
+`ClimaTimeSteppers` calls `cache_imp!` before the Newton solve (from the second
+stage on without an `initialize_imp!` hook; a first-stage solve reuses the
+end-of-step `cache!`), at each Newton iterate, and at the solved state before
+`post_newton_stage_update!`. With
 `update_cache_every = "stage"`, `cache!` follows the solve and overwrites both
 fields, so the call at the solved state evaluates neither. With
 `update_cache_every = "step"`, `remaining_tendency!` reads `ᶜsgs_moments` of
