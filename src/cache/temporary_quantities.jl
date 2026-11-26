@@ -182,7 +182,7 @@ function temporary_quantities(
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
-        ᶜtemp_scalar_7 = Fields.Field(FT, center_space), # ᶜq_precip of the environment in the cloud fraction
+        ᶜtemp_scalar_7 = Fields.Field(FT, center_space), # ᶜq_precip of the environment in the cloud fraction; ᶜw⁰ of the environment 1M autoconversion
         precipitation_surface_flux_accumulator_quantities(
             Y,
             atmos,

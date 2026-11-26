@@ -408,6 +408,18 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `condensation_evaporation_timescale` and
     `sublimation_deposition_timescale`; `0` (default) uses the per-cell
     relaxation times of the 1M processes (`cloud_species_relaxation_time`) [-].
+  - `sgs_env_autoconversion_updraft_velocity_weight`: Weight `c_w` of the
+    area-weighted mean updraft velocity in the vertical velocity at which the
+    `Kessler1M` rain autoconversion of the `PrognosticEDMFX` environment is
+    evaluated for condensate detrained from updrafts
+    (`env_autoconversion_velocity`). With this weight and
+    `sgs_env_autoconversion_detrained_velocity` both `0` (default), the
+    autoconversion is evaluated at the environment vertical velocity [-].
+  - `sgs_env_autoconversion_detrained_velocity`: Velocity `w_d` added to the
+    weighted updraft velocity in `env_autoconversion_velocity`, for detrained
+    condensate that has outlived its drafts; `0` by default [m/s]. This
+    velocity and `c_w` act relative to the `Kessler1M` velocity scale
+    `rain_autoconversion_velocity_scale`.
   - `cloud_condensate_relative_variance_floor`: Relative variance of an
     unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
     truncated-Gaussian in-cloud distribution in the radiative
@@ -445,6 +457,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_sigma_abs::FT
     cloud_fraction_eps_rel::FT
     sgs_cloud_species_constant_timescales::FT
+    sgs_env_autoconversion_updraft_velocity_weight::FT
+    sgs_env_autoconversion_detrained_velocity::FT
     cloud_condensate_relative_variance_floor::FT
 end
 

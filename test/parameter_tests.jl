@@ -160,6 +160,8 @@ end
         @test CAP.sgs_cloud_sedimentation_cf_floor(sq) == FT(1)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
         @test CAP.cloud_fraction_eps_rel(sq) == FT(0)
+        @test CAP.sgs_env_autoconversion_updraft_velocity_weight(sq) == FT(0)
+        @test CAP.sgs_env_autoconversion_detrained_velocity(sq) == FT(0)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,
@@ -168,6 +170,14 @@ end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,
         (; cloud_fraction_eps_rel = -0.05),
+    )
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; sgs_env_autoconversion_updraft_velocity_weight = -0.5),
+    )
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; sgs_env_autoconversion_detrained_velocity = -1.0),
     )
     @test CAP.edmf_tail_entr_fraction(CA.TurbulenceConvectionParameters(Float64)) ==
           0.5
