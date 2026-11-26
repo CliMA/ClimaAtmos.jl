@@ -166,7 +166,6 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Y, p)
     thermo_params = CAP.thermodynamics_params(p.params)
     is_edmf = turbconv_model isa PrognosticEDMFX
     draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
-    diffuse_tke = use_prognostic_tke(turbconv_model)
     nonequilibrium_val = Val(microphysics_model isa NonEquilibriumMicrophysics)
     gs_names = hyperdiffused_gs_tracer_names(Y)
     sgs_names = is_edmf ? hyperdiffused_sgs_tracer_names(Y) : ()
@@ -207,7 +206,9 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Y, p)
                 )
             end
         end
-        if diffuse_tke
+        # Branch on the packed field's components, which are known at compile
+        # time, so the GPU kernel never compiles an access to a missing one.
+        if MatrixFields.has_field(ᶜ∇², @name(tke))
             ᶜ∇²tke = ᶜ∇².tke
             @. ᶜ∇²tke = wdivₕ(gradₕ(specific(Yc.ρtke, Yc.ρ)))
         end
