@@ -2137,42 +2137,38 @@ end
         HasBlend,
         HasTailEntr,
     },
-    u3_new,
-    ᶜρa1_fv,
-    JF1_fv,
-    ε_tot_fv,
-    b_work_col,
-    tail_qt_fv,
-    u3_in,
-    ρa1_in,
-    ᶜρ_fv,
-    ᶜρ1_fv,
-    ᶜρ_diff1_fv,
-    ᶜρ_ref_excess_fv,
-    ᶜevs_fv,
-    ᶜenr_fv,
-    ᶜρtke_fv,
-    ᶜT0_fv,
-    tail_fvs,
-    ᶜlg_fv,
-    ᶜJ_fv,
-    ᶜz_fv,
-    z_sfc_val,
-    ᶠlg_fv,
-    ᶠdz_fv,
-    ᶠz_fv,
-    ᶠgradΦ_fv,
-    ᶜgradΦ_fv,
-    ᶠuh3_fv,
-    d11,
-    u1_blk,
-    l1_blk,
-    r1_blk,
-    x1_blk,
-    E_sfc,
-    Δt,
-    nz::Int,
+    out,
+    state,
+    geom,
+    wk,
 ) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
+    (; u3_new, ᶜρa1_fv, JF1_fv, ε_tot_fv, b_work_col, tail_qt_fv) = out
+    (;
+        u3_in,
+        ρa1_in,
+        ᶜρ_fv,
+        ᶜρ1_fv,
+        ᶜρ_diff1_fv,
+        ᶜρ_ref_excess_fv,
+        ᶜevs_fv,
+        ᶜenr_fv,
+        ᶜρtke_fv,
+        ᶜT0_fv,
+        tail_fvs,
+    ) = state
+    (;
+        ᶜlg_fv,
+        ᶜJ_fv,
+        ᶜz_fv,
+        z_sfc_val,
+        ᶠlg_fv,
+        ᶠdz_fv,
+        ᶠz_fv,
+        ᶠgradΦ_fv,
+        ᶜgradΦ_fv,
+        ᶠuh3_fv,
+    ) = geom
+    (; d11, u1_blk, l1_blk, r1_blk, x1_blk, E_sfc, Δt, nz) = wk
     FT = typeof(E_sfc)
     ε = eps(FT)
     tcp = sw.turbconv_params
@@ -2991,13 +2987,8 @@ end
     Yf_col,
     geom_col,
     pre_col,
-    sfc_col,
     edmf_col,
-    ftilde_col,
-    blend_pre_col,
-    tail_col,
-    scratch_s_col,
-    scratch_v_col,
+    scratch_col,
 ) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
     FT = typeof(sw.Δt)
     Δt = sw.Δt
@@ -3015,16 +3006,18 @@ end
     ᶠu31_fv = Fields.field_values(Yf_col.sgsʲs.:(1).u₃)
 
     ᶜlg_fv = Fields.field_values(geom_col.ᶜlg)
-    ᶜJ_fv = Fields.field_values(geom_col.ᶜJ)
-    ᶜz_fv = Fields.field_values(geom_col.ᶜz)
-    z_sfc_val = Fields.field_values(geom_col.z_sfc)[]
+    ᶜJ_fv = Fields.field_values(geom_col.ᶜlg.J)
+    ᶜz_fv = Fields.field_values(geom_col.ᶜlg.coordinates.z)
     ᶠlg_fv = Fields.field_values(geom_col.ᶠlg)
+    ᶠz_fv = Fields.field_values(geom_col.ᶠlg.coordinates.z)
+    z_sfc_val = ᶠz_fv[1]
     ᶠdz_fv = Fields.field_values(geom_col.ᶠdz)
     ᶜΦ_fv = Fields.field_values(geom_col.ᶜΦ)
     ᶠgradΦ_fv = Fields.field_values(geom_col.ᶠgradᵥ_ᶜΦ)
     ᶜgradΦ_fv = Fields.field_values(geom_col.ᶜgradᵥ_ᶠΦ)
     ᶠuh3_fv = Fields.field_values(geom_col.ᶠuₕ³)
     ᶜK_fv = Fields.field_values(pre_col.ᶜK)
+    sfc_col = pre_col.sfc
     ᶜK1_fv = Fields.field_values(edmf_col.ᶜK1)
     ᶜK0_fv = Fields.field_values(edmf_col.ᶜK0)
     ᶜT0_fv = Fields.field_values(edmf_col.ᶜT0)
@@ -3034,15 +3027,14 @@ end
     ᶜevs_fv = Fields.field_values(edmf_col.ᶜevs1)
     ᶜenr_fv = Fields.field_values(edmf_col.ᶜenr1)
     ᶠK_h_fv = Fields.field_values(pre_col.ᶠK_h)
-    ᶠz_fv = Fields.field_values(geom_col.ᶠz)
     tail_fvs = if HasTailEntr
         (
-            Fields.field_values(tail_col.ᶜqt0),
-            Fields.field_values(tail_col.ᶜql0),
-            Fields.field_values(tail_col.ᶜqi0),
-            Fields.field_values(tail_col.ᶜTT),
-            Fields.field_values(tail_col.ᶜqq),
-            Fields.field_values(tail_col.ᶜcorr),
+            Fields.field_values(edmf_col.ᶜqt0),
+            Fields.field_values(edmf_col.ᶜql0),
+            Fields.field_values(edmf_col.ᶜqi0),
+            Fields.field_values(edmf_col.ᶜTT),
+            Fields.field_values(edmf_col.ᶜqq),
+            Fields.field_values(edmf_col.ᶜcorr),
         )
     else
         ()
@@ -3051,27 +3043,27 @@ end
     nz = Spaces.nlevels(axes(Yc_col.ρ))
 
     # Scratch aliases (`ρa1_prev` holds `ε_tot`, `JF1` holds `V1` after pass 1)
-    ρa1_in = Fields.field_values(scratch_s_col.ρa1_in)
-    ρa0_in = Fields.field_values(scratch_s_col.ρa0_in)
-    ρa1_prev = Fields.field_values(scratch_s_col.ρa1_prev)
-    ρa0_new = Fields.field_values(scratch_s_col.ρa0_new)
-    b_work_col = Fields.field_values(scratch_s_col.E_col)
-    extra_src1_col = Fields.field_values(scratch_s_col.D_col)
-    tail_qt_fv = Fields.field_values(scratch_s_col.empty_reg)
+    ρa1_in = Fields.field_values(scratch_col.ρa1_in)
+    ρa0_in = Fields.field_values(scratch_col.ρa0_in)
+    ρa1_prev = Fields.field_values(scratch_col.ρa1_prev)
+    ρa0_new = Fields.field_values(scratch_col.ρa0_new)
+    b_work_col = Fields.field_values(scratch_col.E_col)
+    extra_src1_col = Fields.field_values(scratch_col.D_col)
+    tail_qt_fv = Fields.field_values(scratch_col.empty_reg)
 
-    JF1_fv = Fields.field_values(scratch_s_col.JF1)
-    JF1_rel_fv = Fields.field_values(scratch_s_col.JF1_rel)
-    JF0_rel_fv = Fields.field_values(scratch_s_col.JF0_rel)
+    JF1_fv = Fields.field_values(scratch_col.JF1)
+    JF1_rel_fv = Fields.field_values(scratch_col.JF1_rel)
+    JF0_rel_fv = Fields.field_values(scratch_col.JF0_rel)
 
-    uv_c = scratch_v_col.uv_c.components.data
-    st_c = scratch_v_col.st_c.components.data
-    c12_c = scratch_v_col.c12_c.components.data
-    c3_c = scratch_v_col.c3_c.components.data
-    ct123_c = scratch_v_col.ct123_c.components.data
-    uvw_c = scratch_v_col.uvw_c.components.data
-    uv_f = scratch_v_col.uv_f.components.data
-    st_f = scratch_v_col.st_f.components.data
-    c123_f = scratch_v_col.c123_f.components.data
+    uv_c = scratch_col.uv_c.components.data
+    st_c = scratch_col.st_c.components.data
+    c12_c = scratch_col.c12_c.components.data
+    c3_c = scratch_col.c3_c.components.data
+    ct123_c = scratch_col.ct123_c.components.data
+    uvw_c = scratch_col.uvw_c.components.data
+    uv_f = scratch_col.uv_f.components.data
+    st_f = scratch_col.st_f.components.data
+    c123_f = scratch_col.c123_f.components.data
 
     α_face_fv = Fields.field_values(uv_f.:(1))
     u3_in = Fields.field_values(uv_f.:(2))
@@ -3159,14 +3151,10 @@ end
     n_picard = has_draft ? Int(sw.n_picard) : 0
 
     # Arguments shared by the `u₃¹` and `ρa¹` solves of the Picard rounds and of
-    # the final sweep.
-    u3_ρa_args = (
-        u3_new,
-        ᶜρa1_fv,
-        JF1_fv,
-        ε_tot_fv,
-        b_work_col,
-        tail_qt_fv,
+    # the final sweep, grouped into NamedTuples so `_step_edmf_u3_and_rhoa!`
+    # stays well under Julia's tuple-splat specialization limit.
+    u3_out = (; u3_new, ᶜρa1_fv, JF1_fv, ε_tot_fv, b_work_col, tail_qt_fv)
+    u3_state = (;
         u3_in,
         ρa1_in,
         ᶜρ_fv,
@@ -3178,6 +3166,8 @@ end
         ᶜρtke_fv,
         ᶜT0_fv,
         tail_fvs,
+    )
+    u3_geom = (;
         ᶜlg_fv,
         ᶜJ_fv,
         ᶜz_fv,
@@ -3188,17 +3178,10 @@ end
         ᶠgradΦ_fv,
         ᶜgradΦ_fv,
         ᶠuh3_fv,
-        d11,
-        u1_blk,
-        l1_blk,
-        r1_blk,
-        x1_blk,
-        E_sfc,
-        Δt,
-        nz,
     )
+    u3_wk = (; d11, u1_blk, l1_blk, r1_blk, x1_blk, E_sfc, Δt, nz)
     for _picard in 1:n_picard
-        _step_edmf_u3_and_rhoa!(sw, u3_ρa_args...)
+        _step_edmf_u3_and_rhoa!(sw, u3_out, u3_state, u3_geom, u3_wk)
 
         @inbounds begin
             V1_fv[1] = zero(FT)
@@ -3521,7 +3504,7 @@ end
         end
     end
 
-    _step_edmf_u3_and_rhoa!(sw, u3_ρa_args...)
+    _step_edmf_u3_and_rhoa!(sw, u3_out, u3_state, u3_geom, u3_wk)
 
     # Write final u₃¹, relative SGS mass fluxes `JF1_rel = -JF0_rel`,
     # contravariant updraft volume flux `V1_fv`, and SGS flux weight
@@ -3538,7 +3521,7 @@ end
                 Jρ_gm_f =
                     (ᶜρ_fv[f - 1] * ᶜJ_fv[f - 1] + ᶜρ_fv[f] * ᶜJ_fv[f]) / 2
                 _extensive_face_flux(
-                    Fields.field_values(ftilde_col)[f],
+                    Fields.field_values(pre_col.ᶠF̃)[f],
                     ᶠlg_fv[f],
                 ) / max(Jρ_gm_f, ε)
             else
@@ -3998,7 +3981,7 @@ end
         # 3) q_lcl, q_icl (with optional donor-limited blended flux when 1M + ρtke)
         _solve_edmf_cloud_species!(
             Val(true), Val(HasBlend), sw, ᶜql1_fv, ᶜρql_fv, A0_ql_fv,
-            Yc_col, blend_pre_col, edmf_col, pre_col, ᶜΦ_fv,
+            Yc_col, edmf_col, edmf_col, pre_col, ᶜΦ_fv,
             ᶜqt1_fv, ᶜρqt_fv, ᶜql1_fv, ᶜqi1_fv, ᶜρql_fv, ᶜρqi_fv,
             χ1_in, χ0_in, ρa1_in, ρa0_in, ᶜρa1_fv, ρa0_new, ᶜρ_fv,
             V1_fv, ε_tot_fv, JF1_rel_fv, JF0_rel_fv, G1_fv, G0_fv, G0_b_fv,
@@ -4007,7 +3990,7 @@ end
         )
         _solve_edmf_cloud_species!(
             Val(false), Val(HasBlend), sw, ᶜqi1_fv, ᶜρqi_fv, A0_qi_fv,
-            Yc_col, blend_pre_col, edmf_col, pre_col, ᶜΦ_fv,
+            Yc_col, edmf_col, edmf_col, pre_col, ᶜΦ_fv,
             ᶜqt1_fv, ᶜρqt_fv, ᶜql1_fv, ᶜqi1_fv, ᶜρql_fv, ᶜρqi_fv,
             χ1_in, χ0_in, ρa1_in, ρa0_in, ᶜρa1_fv, ρa0_new, ᶜρ_fv,
             V1_fv, ε_tot_fv, JF1_rel_fv, JF0_rel_fv, G1_fv, G0_fv, G0_b_fv,
@@ -4332,13 +4315,8 @@ end
     Y,
     geom,
     pre,
-    sfc_conditions,
     edmf,
-    ftilde_arg,
-    blend_pre,
-    tail_arg,
-    scratch_s,
-    scratch_v,
+    scratch,
     opts,
     cmp,
 ) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
@@ -4395,13 +4373,8 @@ end
         Y.f,
         geom,
         pre,
-        sfc_conditions,
         edmf,
-        ftilde_arg,
-        blend_pre,
-        tail_arg,
-        scratch_s,
-        scratch_v;
+        scratch;
         shmem = Val(:none),
     )
     return nothing
@@ -4417,61 +4390,29 @@ end
     geom,
     pre,
     edmf,
-    ftilde_arg,
-    blend_pre,
-    scratch_s,
-    scratch_v,
+    scratch,
     opts,
     cmp_cf,
 ) where {HasQ, HasNonEquil, FtildeMode, HasBlend}
     tail_fields = tail_entrainment_fields(p, opts.f_tail)
     if !isempty(tail_fields)
-        tail_arg = (;
-            ᶜqt0 = tail_fields[2],
-            ᶜql0 = tail_fields[3],
-            ᶜqi0 = tail_fields[4],
-            ᶜTT = tail_fields[5],
-            ᶜqq = tail_fields[6],
-            ᶜcorr = tail_fields[7],
+        edmf_all = merge(
+            edmf,
+            (;
+                ᶜqt0 = tail_fields[2],
+                ᶜql0 = tail_fields[3],
+                ᶜqi0 = tail_fields[4],
+                ᶜTT = tail_fields[5],
+                ᶜqq = tail_fields[6],
+                ᶜcorr = tail_fields[7],
+            ),
         )
         _run_edmf_twostream_column!(
-            vq,
-            vne,
-            vft,
-            vb,
-            Val(true),
-            Y,
-            geom,
-            pre,
-            p.precomputed.sfc_conditions,
-            edmf,
-            ftilde_arg,
-            blend_pre,
-            tail_arg,
-            scratch_s,
-            scratch_v,
-            opts,
-            cmp_cf,
+            vq, vne, vft, vb, Val(true), Y, geom, pre, edmf_all, scratch, opts, cmp_cf,
         )
     else
         _run_edmf_twostream_column!(
-            vq,
-            vne,
-            vft,
-            vb,
-            Val(false),
-            Y,
-            geom,
-            pre,
-            p.precomputed.sfc_conditions,
-            edmf,
-            ftilde_arg,
-            blend_pre,
-            (),
-            scratch_s,
-            scratch_v,
-            opts,
-            cmp_cf,
+            vq, vne, vft, vb, Val(false), Y, geom, pre, edmf, scratch, opts, cmp_cf,
         )
     end
     return nothing
@@ -4487,9 +4428,7 @@ end
     geom,
     pre,
     edmf,
-    ftilde_arg,
-    scratch_s,
-    scratch_v,
+    scratch,
     opts,
 ) where {HasQ, HasNonEquil, FtildeMode}
     dev = ClimaComms.device(Y.c)
@@ -4497,40 +4436,14 @@ end
         p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
         _fold(dev, CAP.cloud_formation_1m_params(opts.params)) : nothing
     if has_blend
+        edmf_blend =
+            merge(edmf, (; p.precomputed.ᶜl_mix, p.precomputed.ᶜsgs_moments))
         _dispatch_edmf_tail!(
-            vq,
-            vne,
-            vft,
-            Val(true),
-            Y,
-            p,
-            geom,
-            pre,
-            edmf,
-            ftilde_arg,
-            (; p.precomputed.ᶜl_mix, p.precomputed.ᶜsgs_moments),
-            scratch_s,
-            scratch_v,
-            opts,
-            cmp_cf,
+            vq, vne, vft, Val(true), Y, p, geom, pre, edmf_blend, scratch, opts, cmp_cf,
         )
     else
         _dispatch_edmf_tail!(
-            vq,
-            vne,
-            vft,
-            Val(false),
-            Y,
-            p,
-            geom,
-            pre,
-            edmf,
-            ftilde_arg,
-            (),
-            scratch_s,
-            scratch_v,
-            opts,
-            cmp_cf,
+            vq, vne, vft, Val(false), Y, p, geom, pre, edmf, scratch, opts, cmp_cf,
         )
     end
     return nothing
@@ -4546,25 +4459,12 @@ end
     geom,
     pre,
     edmf,
-    scratch_s,
-    scratch_v,
+    scratch,
     opts,
 ) where {HasQ, HasNonEquil}
     if isnothing(ᶠF̃)
         _dispatch_edmf_blend!(
-            vq,
-            vne,
-            Val(:none),
-            has_blend,
-            Y,
-            p,
-            geom,
-            pre,
-            edmf,
-            (),
-            scratch_s,
-            scratch_v,
-            opts,
+            vq, vne, Val(:none), has_blend, Y, p, geom, pre, edmf, scratch, opts,
         )
     else
         _dispatch_edmf_blend!(
@@ -4575,11 +4475,9 @@ end
             Y,
             p,
             geom,
-            pre,
+            merge(pre, (; ᶠF̃)),
             edmf,
-            ᶠF̃,
-            scratch_s,
-            scratch_v,
+            scratch,
             opts,
         )
     end
@@ -4642,23 +4540,17 @@ function step_edmf_and_env_turbulence!(
 
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜJ = ᶜlg.J
-    ᶜz = Fields.coordinate_field(Y.c).z
     ᶠlg = Fields.local_geometry_field(Y.f)
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶠz = Fields.coordinate_field(Y.f).z
-    z_sfc = Fields.level(ᶠz, Fields.half)
     z_max = !isnothing(rayleigh_sponge) ? FT(Spaces.z_max(axes(ᶠz))) : zero(FT)
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     geom = (;
         ᶜlg,
-        ᶜJ,
-        ᶜz,
-        z_sfc,
         ᶠlg,
         ᶠdz,
-        ᶠz,
         ᶠuₕ³,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
@@ -4670,6 +4562,7 @@ function step_edmf_and_env_turbulence!(
         p.precomputed.ᶠK_h,
         ᶜT1 = p.precomputed.ᶜTʲs.:(1),
         ᶠu3_gm = p.precomputed.ᶠu³,
+        sfc = p.precomputed.sfc_conditions,
     )
     edmf = (;
         ᶜK1 = p.precomputed.ᶜKʲs.:(1),
@@ -4708,6 +4601,7 @@ function step_edmf_and_env_turbulence!(
         st_f = p.scratch.ᶠtemp_strain,
         c123_f = p.scratch.ᶠtemp_C123,
     )
+    scratch_edmf = merge(scratch_s, scratch_v)
     sgsflux_upw_mode =
         _sgsflux_upw_mode(p.atmos.numerics.edmfx_sgsflux_upwinding)
     updraft_upw_mode =
@@ -4743,18 +4637,18 @@ function step_edmf_and_env_turbulence!(
         if has_nonequil
             _dispatch_edmf_ftilde!(
                 Val(true), Val(true), ᶠF̃, has_blend,
-                Y, p, geom, pre, edmf, scratch_s, scratch_v, opts,
+                Y, p, geom, pre, edmf, scratch_edmf, opts,
             )
         else
             _dispatch_edmf_ftilde!(
                 Val(true), Val(false), ᶠF̃, false,
-                Y, p, geom, pre, edmf, scratch_s, scratch_v, opts,
+                Y, p, geom, pre, edmf, scratch_edmf, opts,
             )
         end
     else
         _dispatch_edmf_ftilde!(
             Val(false), Val(false), ᶠF̃, false,
-            Y, p, geom, pre, edmf, scratch_s, scratch_v, opts,
+            Y, p, geom, pre, edmf, scratch_edmf, opts,
         )
     end
 
