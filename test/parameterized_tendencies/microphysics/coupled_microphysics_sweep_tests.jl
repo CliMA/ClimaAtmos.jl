@@ -2084,12 +2084,22 @@ _is_cpu_state(Y) = ClimaComms.device(Y.c) isa ClimaComms.AbstractCPUDevice
                             atol,
                         )
                     end
-                    # Warm-air gate: CloudMicrophysics routes every cloud ice +
-                    # rain collision to snow and freezes rain; at
-                    # `T ≥ T_freeze` the sweep sends the collected ice to rain
-                    # and freezes none.
-                    S_icl_rai = r.S_accr_icl_rai_cold + r.S_accr_icl_rai_warm
-                    @test isapprox(S_icl_rai, b.S_accr_icl_rai; rtol, atol)
+                    # Warm-air gate: at `T ≥ T_freeze`, cloud ice + rain melts the
+                    # collected ice into rain (`b.S_accr_melt_icl_rai`) and
+                    # freezes no rain; below freezing, both transfer to snow
+                    # (`b.S_accr_icl_rai`, `b.S_accr_freeze_icl_rai`).
+                    @test isapprox(
+                        r.S_accr_icl_rai_cold,
+                        b.S_accr_icl_rai;
+                        rtol,
+                        atol,
+                    )
+                    @test isapprox(
+                        r.S_accr_icl_rai_warm,
+                        b.S_accr_melt_icl_rai;
+                        rtol,
+                        atol,
+                    )
                     if T >= T_frz
                         n_warm += 1
                         @test r.S_accr_icl_rai_cold == zero(FT)
