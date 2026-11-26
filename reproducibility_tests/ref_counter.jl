@@ -1,4 +1,4 @@
-483
+484
 
 # **README**
 #
@@ -32,6 +32,16 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+484
+- Hyperdiffusion Laplacians are computed in one fused slab loop and DSSed as one
+  packed field, overlapped with horizontal advection; the cloud-fraction gradient
+  invariants are DSSed as one packed field. The DSS of the vector Laplacians
+  `∇²u` and `∇²uʲ` as components of the packed field rounds differently from
+  their standalone DSS on x86 CPUs with AVX2 and FMA (differences of 1e-7 of
+  the field maximum; bitwise identical on ARM and on x86 without AVX), so
+  `prognostic_edmfx_aquaplanet` changes by roundoff on the CI CPUs.
+  https://buildkite.com/clima/climaatmos-ci/builds/33021
+
 483
 - Change default 1-moment cloud-liquid and cloud-ice terminal velocities from `Fixed`
   to `Stokes` (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022`

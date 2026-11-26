@@ -14,7 +14,7 @@ using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, MatrixFields
+import ClimaCore: Fields, MatrixFields, Spaces
 const TD = CA.TD
 
 include("../test_helpers.jl")
@@ -149,4 +149,162 @@ end
         (δh_water - δh_d) * Yₜ.c.sgsʲs.:(1).q_tot
     @test maximum(abs, parent(ᶜerr_up)) <=
           FT(1e-10) * maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse))
+
+    # With only microphysics SGS tracers active, no passive SGS tracer buffer is
+    # allocated or DSSed.
+    @test isempty(CA.hyperdiffused_sgs_tracer_names(Y))
+    @test !hasproperty(p.hyperdiff, :ᶜ∇²sgs_tracerʲs)
+end
+
+# The Laplacians of the packed field `p.hyperdiff.ᶜ∇²`, each computed with its
+# own broadcast over the whole space and DSSed on its own.
+function reference_laplacians(Y, p)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜu, ᶜT, ᶜp, ᶜuʲs, ᶜTʲs) = p.precomputed
+    (; ᶜΦ) = p.core
+    FT = eltype(Y)
+    ᶜT_r = @. CA.air_temperature_reference(thermo_params, ᶜp)
+    ᶜq_tot_r = @. CA.q_tot_r(thermo_params, ᶜp)
+    ref = (;
+        u = @.(
+            CA.C123(CA.wgradₕ(CA.divₕ(ᶜu))) -
+            CA.C123(CA.wcurlₕ(CA.C123(CA.curlₕ(ᶜu))))
+        ),
+        T = @.(CA.wdivₕ(CA.gradₕ(ᶜT - ᶜT_r))),
+        Φ = @.(CA.wdivₕ(CA.gradₕ(ᶜΦ - CA.phi_r(thermo_params, ᶜp)))),
+        q_tot_eff = @.(
+            CA.wdivₕ(CA.gradₕ(CA.specific(Y.c.ρq_tot, Y.c.ρ) - ᶜq_tot_r))
+        ),
+        tke = @.(CA.wdivₕ(CA.gradₕ(CA.specific(Y.c.ρtke, Y.c.ρ)))),
+        q_gas_A = @.(CA.wdivₕ(CA.gradₕ(CA.specific(Y.c.ρq_gas_A, Y.c.ρ)))),
+        u¹ = @.(
+            CA.C123(CA.wgradₕ(CA.divₕ(ᶜuʲs.:(1)))) -
+            CA.C123(CA.wcurlₕ(CA.C123(CA.curlₕ(ᶜuʲs.:(1)))))
+        ),
+        T¹ = @.(CA.wdivₕ(CA.gradₕ(ᶜTʲs.:(1) - ᶜT_r))),
+        q_tot_eff¹ = @.(CA.wdivₕ(CA.gradₕ(Y.c.sgsʲs.:(1).q_tot - ᶜq_tot_r))),
+        q_gas_A¹ = @.(CA.wdivₕ(CA.gradₕ(Y.c.sgsʲs.:(1).q_gas_A))),
+    )
+    foreach(field -> Spaces.weighted_dss!(field), ref)
+    return ref
+end
+
+bitwise_equal(a, b) = all(parent(a) .=== parent(b))
+
+@noinline _alloc_start_hyperdiffusion!(Y, p) =
+    @allocated CA.start_hyperdiffusion_tendency!(Y, p)
+@noinline function _alloc_finish_hyperdiffusion_dss!(p)
+    (; ᶜ∇², hyperdiffusion_ghost_buffer) = p.hyperdiff
+    return @allocated begin
+        Spaces.weighted_dss_internal!(ᶜ∇², hyperdiffusion_ghost_buffer)
+        Spaces.weighted_dss_ghost!(ᶜ∇², hyperdiffusion_ghost_buffer)
+    end
+end
+
+@testset "Packed hyperdiffusion Laplacians: one DSS, bitwise parity, 0 B allocations" begin
+    for FT in (Float32, Float64)
+        config = CA.AtmosConfig(
+            Dict{String, Any}(
+                "config" => "box",
+                "initial_condition" => "Bomex",
+                "FLOAT_TYPE" => string(FT),
+                "turbconv" => "prognostic_edmfx",
+                "edmfx_entr_model" => "Generalized",
+                "edmfx_detr_model" => "Generalized",
+                "edmfx_sgs_mass_flux" => true,
+                "edmfx_sgs_diffusive_flux" => true,
+                "edmfx_vertical_diffusion" => true,
+                "edmfx_nh_pressure" => true,
+                "prognostic_tke" => true,
+                "microphysics_model" => "0M",
+                "chemistry_model" => "passive",
+                "x_max" => 6400.0,
+                "x_elem" => 2,
+                "y_max" => 6400.0,
+                "y_elem" => 2,
+                "z_max" => 3000.0,
+                "z_elem" => 6,
+                "z_stretch" => false,
+                "dt" => "1secs",
+                "t_end" => "10secs",
+                "output_default_diagnostics" => false,
+            );
+            job_id = "hyperdiffusion_packed_$FT",
+        )
+        (; Y, p, simulation) = generate_test_simulation(config)
+        t = simulation.integrator.t
+        @test CA.do_dss(axes(Y.c))
+        @test CA.hyperdiffused_gs_tracer_names(Y) == (MatrixFields.@name(ρq_gas_A),)
+        @test CA.hyperdiffused_sgs_tracer_names(Y) == (MatrixFields.@name(q_gas_A),)
+        @test propertynames(p.hyperdiff.ᶜ∇²) == (
+            :u, :T, :Φ, :q_tot_eff, :specific_tracers, :tke,
+            :uʲs, :Tʲs, :q_tot_effʲs, :sgs_tracerʲs,
+        )
+        # The named Laplacians are views of the packed field.
+        p.hyperdiff.ᶜ∇²T .= FT(1)
+        @test all(isequal(FT(1)), parent(p.hyperdiff.ᶜ∇².T))
+
+        # Perturb every input along all three dimensions, so that a Laplacian
+        # read from the wrong component or level would not match.
+        ᶜcoord = Fields.coordinate_field(Y.c)
+        ᶜpert = @. FT(1) +
+           FT(0.02) *
+           sin(FT(2π) * ᶜcoord.x / FT(6400)) *
+           cos(FT(4π) * ᶜcoord.y / FT(6400)) *
+           (FT(1) + ᶜcoord.z / FT(3000))
+        @. Y.c.ρe_tot *= ᶜpert
+        @. Y.c.ρq_tot *= FT(2) - ᶜpert
+        @. Y.c.ρtke = Y.c.ρ * FT(0.5) * ᶜpert
+        @. Y.c.uₕ *= ᶜpert
+        @. Y.c.ρq_gas_A = Y.c.ρ * FT(1e-5) * ᶜpert^2
+        @. Y.c.sgsʲs.:(1).q_gas_A =
+            FT(2e-5) * (
+                FT(1) +
+                FT(0.4) *
+                cos(FT(2π) * ᶜcoord.x / FT(6400)) *
+                sin(FT(2π) * ᶜcoord.y / FT(6400)) *
+                cos(FT(π) * ᶜcoord.z / FT(3000))
+            )
+        @. Y.c.sgsʲs.:(1).q_tot *= ᶜpert
+        @. Y.c.sgsʲs.:(1).mse *= ᶜpert
+        CA.set_precomputed_quantities!(Y, p, t)
+
+        # Compare the DSSed Laplacians before the apply functions, which
+        # overwrite `∇²u` and `∇²uʲs` with `∇⁴u` and `∇⁴uʲs`.
+        CA.start_hyperdiffusion_tendency!(Y, p)
+        (; ᶜ∇², hyperdiffusion_ghost_buffer) = p.hyperdiff
+        Spaces.weighted_dss_internal!(ᶜ∇², hyperdiffusion_ghost_buffer)
+        Spaces.weighted_dss_ghost!(ᶜ∇², hyperdiffusion_ghost_buffer)
+        ref = reference_laplacians(Y, p)
+        @test maximum(abs, parent(ref.q_gas_A¹)) > zero(FT)
+        @test bitwise_equal(ᶜ∇².u, ref.u)
+        @test bitwise_equal(ᶜ∇².T, ref.T)
+        @test bitwise_equal(ᶜ∇².Φ, ref.Φ)
+        @test bitwise_equal(ᶜ∇².q_tot_eff, ref.q_tot_eff)
+        @test bitwise_equal(ᶜ∇².tke, ref.tke)
+        @test bitwise_equal(ᶜ∇².specific_tracers.q_gas_A, ref.q_gas_A)
+        @test bitwise_equal(ᶜ∇².uʲs.:(1), ref.u¹)
+        @test bitwise_equal(ᶜ∇².Tʲs.:(1), ref.T¹)
+        @test bitwise_equal(ᶜ∇².q_tot_effʲs.:(1), ref.q_tot_eff¹)
+        @test bitwise_equal(ᶜ∇².sgs_tracerʲs.q_gas_A.:(1), ref.q_gas_A¹)
+
+        Yₜ = zero(Y)
+        Yₜ_lim = zero(Y)
+        CA.hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+
+        # Reference SGS tracer tendency from the separately DSSed Laplacian.
+        (; ν₄_scalar) = CA.ν₄(p.atmos.hyperdiff, Y)
+        ref_tend = similar(Y.c, FT)
+        ref_tend .= zero(FT)
+        @. ref_tend -= ν₄_scalar * CA.wdivₕ(CA.gradₕ(ref.q_gas_A¹))
+        @test maximum(abs, parent(ref_tend)) > zero(FT)
+        @test bitwise_equal(Yₜ_lim.c.sgsʲs.:(1).q_gas_A, ref_tend)
+
+        if Base.JLOptions().check_bounds != 1
+            _alloc_start_hyperdiffusion!(Y, p)
+            _alloc_finish_hyperdiffusion_dss!(p)
+            @test _alloc_start_hyperdiffusion!(Y, p) == 0
+            @test _alloc_finish_hyperdiffusion_dss!(p) == 0
+        end
+    end
 end
