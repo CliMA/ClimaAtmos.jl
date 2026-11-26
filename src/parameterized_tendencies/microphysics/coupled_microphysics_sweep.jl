@@ -1457,7 +1457,14 @@ end
         )
         c_sno_raw = if q_v_p - q_si < -FT(4) * q_tol
             max(zero(FT), S_vap_sno / (q_v_p - q_si))
-        elseif (q_v_p - q_si > FT(4) * q_tol) && !is_warm
+        elseif (q_v_p - q_si > FT(4) * q_tol) &&
+               !is_warm &&
+               !CM1._snow_deposition_blocked(
+                   procs.snow_deposition_sublimation,
+                   tps,
+                   micro,
+                   thermo,
+               )
             max(zero(FT), S_vap_sno / (q_v_p - q_si))
         else
             δ_probe_i = -max(FT(1e-3) * q_si, FT(16) * q_tol)
@@ -3757,13 +3764,14 @@ end
         HasPrecipShaft,
         HasIncloudSed,
     }
-)(
-    Yc_col,
-    geom_col,
-    pre_col,
-    sgs_col,
-    sfc_col,
-) where {HasSGS, HasPrecipFrac, HasPrecipShaft, HasIncloudSed}
+)
+    (
+        Yc_col,
+        geom_col,
+        pre_col,
+        sgs_col,
+        sfc_col,
+    ) where {HasSGS, HasPrecipFrac, HasPrecipShaft, HasIncloudSed}
     FT = typeof(sw.dt)
     tps = _unwrapped(sw.tps)
     mp = _unwrapped(sw.mp)
@@ -4448,20 +4456,21 @@ end
         HasIncloudSed,
         HasEnvAcnvVel,
     }
-)(
-    Yc_col,
-    geom_col,
-    pre_col,
-    edmf_col,
-    sgs_col,
-    sfc_col,
-) where {
-    HasSGS,
-    HasPrecipFrac,
-    HasPrecipShaft,
-    HasIncloudSed,
-    HasEnvAcnvVel,
-}
+)
+    (
+        Yc_col,
+        geom_col,
+        pre_col,
+        edmf_col,
+        sgs_col,
+        sfc_col,
+    ) where {
+        HasSGS,
+        HasPrecipFrac,
+        HasPrecipShaft,
+        HasIncloudSed,
+        HasEnvAcnvVel,
+    }
     FT = typeof(sw.dt)
     tps = _unwrapped(sw.tps)
     mp = _unwrapped(sw.mp)
@@ -7473,7 +7482,212 @@ function _launch_coupled_1m_sweep!(
     return nothing
 end
 
-_bool_val(x::Bool) = x ? Val(true) : Val(false)
+# Static boolean-to-Val cascade avoids passing >4 Union{Val{true},Val{false}}
+# arguments at once, keeping dynamic dispatch and CPU heap allocations at 0 B.
+@inline function _dispatch_1m_ea!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    ::Val{false},
+    v_pf::Val,
+    v_ps::Val,
+    v_ics::Val,
+    ::Bool,
+)
+    return _launch_coupled_1m_sweep!(
+        Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+        q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+        Val(false), v_pf, v_ps, v_ics, Val(false),
+    )
+end
+@inline function _dispatch_1m_ea!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    v_sgs::Val{true},
+    v_pf::Val,
+    v_ps::Val,
+    v_ics::Val,
+    has_ea::Bool,
+)
+    return if has_ea
+        _launch_coupled_1m_sweep!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, v_ps, v_ics, Val(true),
+        )
+    else
+        _launch_coupled_1m_sweep!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, v_ps, v_ics, Val(false),
+        )
+    end
+end
+@inline function _dispatch_1m_ics!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    v_sgs::Val,
+    v_pf::Val,
+    v_ps::Val,
+    has_ics::Bool,
+    has_ea::Bool,
+)
+    return if has_ics
+        _dispatch_1m_ea!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, v_ps, Val(true), has_ea,
+        )
+    else
+        _dispatch_1m_ea!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, v_ps, Val(false), has_ea,
+        )
+    end
+end
+@inline _dispatch_1m_ps!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    v_sgs::Val{false},
+    v_pf::Val,
+    ::Bool,
+    has_ics::Bool,
+    has_ea::Bool,
+) = _dispatch_1m_ics!(
+    Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+    q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+    v_sgs, v_pf, Val(false), has_ics, has_ea,
+)
+@inline function _dispatch_1m_ps!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    v_sgs::Val{true},
+    v_pf::Val,
+    has_ps::Bool,
+    has_ics::Bool,
+    has_ea::Bool,
+)
+    return if has_ps
+        _dispatch_1m_ics!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, Val(true), has_ics, has_ea,
+        )
+    else
+        _dispatch_1m_ics!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, v_pf, Val(false), has_ics, has_ea,
+        )
+    end
+end
+@inline function _dispatch_1m_pf!(
+    Y,
+    p,
+    dt,
+    turbconv_model,
+    sgs_quad,
+    vcmp_up,
+    vcmp,
+    vtps,
+    vc,
+    sgs_opts,
+    q_precip_min,
+    f_decay,
+    cf_floor,
+    c_w,
+    w_d,
+    a_min,
+    v_sgs::Val,
+    has_pf::Bool,
+    has_ps::Bool,
+    has_ics::Bool,
+    has_ea::Bool,
+)
+    return if has_pf
+        _dispatch_1m_ps!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, Val(true), has_ps, has_ics, has_ea,
+        )
+    else
+        _dispatch_1m_ps!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            v_sgs, Val(false), has_ps, has_ics, has_ea,
+        )
+    end
+end
 
 @inline function _dispatch_coupled_1m_sweep!(
     Y,
@@ -7498,29 +7712,19 @@ _bool_val(x::Bool) = x ? Val(true) : Val(false)
     has_ics::Bool,
     has_ea::Bool,
 )
-    return _launch_coupled_1m_sweep!(
-        Y,
-        p,
-        dt,
-        turbconv_model,
-        sgs_quad,
-        vcmp_up,
-        vcmp,
-        vtps,
-        vc,
-        sgs_opts,
-        q_precip_min,
-        f_decay,
-        cf_floor,
-        c_w,
-        w_d,
-        a_min,
-        _bool_val(has_sgs),
-        _bool_val(has_pf),
-        _bool_val(has_ps),
-        _bool_val(has_ics),
-        _bool_val(has_ea),
-    )
+    return if has_sgs
+        _dispatch_1m_pf!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            Val(true), has_pf, has_ps, has_ics, has_ea,
+        )
+    else
+        _dispatch_1m_pf!(
+            Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
+            q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
+            Val(false), has_pf, has_ps, has_ics, has_ea,
+        )
+    end
 end
 
 _step_coupled_microphysics_sedimentation!(
@@ -7568,7 +7772,8 @@ function _step_coupled_microphysics_sedimentation_1m!(
     has_ps = has_sgs && (sgs_opts.precip_incloud_fraction > zero(FT))
     c_w = FT(CAP.sgs_env_autoconversion_updraft_velocity_weight(p.params))
     w_d = FT(CAP.sgs_env_autoconversion_detrained_velocity(p.params))
-    a_min = turbconv_model isa PrognosticEDMFX ?
+    a_min =
+        turbconv_model isa PrognosticEDMFX ?
         FT(CAP.min_area(CAP.turbconv_params(p.params))) : zero(FT)
     has_ea =
         has_sgs &&
