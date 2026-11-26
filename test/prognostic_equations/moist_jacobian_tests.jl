@@ -219,7 +219,6 @@ end
             CA.set_implicit_precomputed_quantities!(Y_in, p, t)
             CA.implicit_tendency!(Yₜ_buf, Y_in, p, t)
             @. R_out = dtγ * Yₜ_buf - Y_in
-            return nothing
         end
 
         col_names = (
@@ -726,7 +725,6 @@ end
             CA.horizontal_tracer_advection_tendency!(Yₜ_out, Y_in, p, t)
             CA.horizontal_dynamics_tendency!(Yₜ_out, Y_in, p, t)
             Spaces.weighted_dss!(Yₜ_out.c)
-            return nothing
         end
 
         project_mode! = function (col_out, Yₜ_p, Yₜ_m, inv_2h)
@@ -740,7 +738,6 @@ end
             arr_um = reshape(parent(MatrixFields.get_field(Yₜ_m, u₁_name)), z_elem, :)
             col_out[idx_u1] .=
                 ((arr_up .- arr_um) * w_sin) .* (inv_2h / norm_sin)
-            return nothing
         end
 
         # Perturb scalar modes (`cos(k_h x)`) and `u₁_name` (`sin(k_h x)`).

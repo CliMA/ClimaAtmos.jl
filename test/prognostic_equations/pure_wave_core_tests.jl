@@ -235,7 +235,6 @@ end
             CA.set_implicit_precomputed_quantities!(Y_in, p, t)
             CA.implicit_tendency!(Yₜ_buf, Y_in, p, t)
             @. R_out = dtγ * Yₜ_buf - Y_in
-            return nothing
         end
 
         blocks = Dict{Tuple{Any, Any}, Matrix{Float64}}()

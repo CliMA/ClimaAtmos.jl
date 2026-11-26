@@ -239,12 +239,14 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     )
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state, cache)
-    # The velocity of the environment tendency (`set_environment_1m_tendency!`).
-    ᶜw⁰ = if uses_env_autoconversion_velocity(cmp, cache.params)
-        ᶜenv_autoconversion_velocity(state, cache, ᶜq_lcl⁰, ᶜq_icl⁰)
-    else
-        @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
-    end
+    # Environment autoconversion velocity (`env_autoconversion_velocity`).
+    ᶜw⁰ =
+        if hasproperty(cache.precomputed, :ᶜsgs_moments) &&
+           uses_env_autoconversion_velocity(cmp, cache.params)
+            ᶜenv_autoconversion_velocity(state, cache, ᶜq_lcl⁰, ᶜq_icl⁰)
+        else
+            @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
+        end
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     return @. lazy(

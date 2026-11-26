@@ -76,25 +76,6 @@ long as it is small but safely above underflow.
 ϵ_numerics(FT) = cbrt(floatmin(FT))
 
 """
-    fill_column_max!(ᶜw_max, ᶜw)
-
-Fill `ᶜw_max[i]` with the running maximum of `ᶜw` over the levels at and above
-cell `i` (`max_{j ≥ i} ᶜw[j]`), using one top-down sweep of
-`Operators.column_accumulate!`. At the top this is just `ᶜw[top]`; at the
-bottom it is the full column max. Used by the implicit sedimentation
-Jacobian (`update_sedimentation_jacobian!`, `update_sgs_advection_jacobian!`)
-as a cheap overestimate of the upwind-donor rain velocity that stays nonzero
-wherever rain exists anywhere above the current cell — enough to keep the
-receiver-cell super-diagonal from collapsing without the cost of a second
-sweep to flatten the result to a true scalar column max. Device-portable
-(CPU/GPU).
-"""
-function fill_column_max!(ᶜw_max, ᶜw)
-    Operators.column_accumulate!(max, ᶜw_max, ᶜw; reverse = true)
-    return nothing
-end
-
-"""
     incloud_specific_humidity(q, cf, cf_floor)
 
 In-cloud specific humidity `max(q, 0) / clamp(cf, cf_floor, 1)` [kg/kg] of a
@@ -130,18 +111,6 @@ sedimentation_reads_cloud_fraction(atmos, params) =
     CAP.sgs_cloud_sedimentation_cf_floor(params) < 1
 
 """
-    sedimentation_reads_precip_fraction(atmos, params)
-
-Whether `set_precipitation_velocities!` reads the precipitation fraction
-`ᶜprecip_frac`: the 1M scheme with rain and snow placed on the precipitation
-shaft (`precip_shaft_options`). `set_explicit_precomputed_quantities!` then sets
-the velocities after it has updated the precipitation fraction.
-"""
-sedimentation_reads_precip_fraction(atmos, params) =
-    atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
-    precip_shaft_options(atmos, params).shaft_placement
-
-"""
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
 Update the grid-mean precipitation terminal velocities and cloud sedimentation
@@ -154,8 +123,7 @@ zeroes `ᶜwₕhₜ`. Returns `nothing`.
 
 Mutates in `p.precomputed`: the velocity fields available for the scheme (`ᶜwₗ`,
 `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ`, plus number-weighted `ᶜwₙₗ`/`ᶜwₙᵣ` for 2M and `ᶜwnᵢ`
-for P3 ice) and the precipitation energy flux `ᶜwₕhₜ`, whose surface value
-`set_precipitation_surface_fluxes!` uses for the 1M and 2M schemes.
+for P3 ice) and the precipitation energy flux `ᶜwₕhₜ`.
 
 For `PrognosticEDMFX`, the per-subdomain velocities (`ᶜwₗʲs`, `ᶜwᵢʲs`, `ᶜwᵣʲs`,
 `ᶜwₛʲs`, ...) are also computed, and the grid-mean velocities are mass-weighted
@@ -257,9 +225,7 @@ function set_precipitation_velocities!(
             @. ᶜw = terminal_velocity_function(χ_name, ᶜρ, max(zero(ᶜρ), ᶜρχ / ᶜρ))
         end
 
-        # The energy flux carries the same clamped mass as the sedimentation
-        # flux in `implicit_vertical_advection_tendency!`, so a negative cell
-        # moves neither water nor energy.
+        # The energy flux carries only the non-negative condensate mass.
         @. ᶜρwₕhₜ +=
             ᶜw *
             max(zero(ᶜρ), ᶜρχ) *
@@ -497,9 +463,7 @@ function set_precipitation_velocities!(
         max(zero(Y.c.ρ), specific(Y.c.ρq_icl, Y.c.ρ)),
     )
 
-    # The energy flux carries the same clamped mass as the sedimentation flux in
-    # `implicit_vertical_advection_tendency!`, so a negative cell moves neither
-    # water nor energy.
+    # The energy flux carries only the non-negative condensate mass.
     @. ᶜwₕhₜ =
         WVec(
             ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_lcl) * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
@@ -1064,83 +1028,4 @@ function ᶜenv_autoconversion_velocity(Y, p, ᶜq_lcl⁰, ᶜq_icl⁰)
             w_d,
         ),
     )
-end
-
-"""
-    set_precipitation_surface_fluxes!(Y, p, microphysics_model)
-
-Compute the surface fluxes of rain and snow and the column-integrated
-precipitation energy tendency. Returns `nothing`.
-
-Mutates `p.precomputed.surface_rain_flux` and `p.precomputed.surface_snow_flux`
-[kg/m²/s], and `p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The
-sign convention is upward-positive, so all three are negative when precipitation
-reaches the surface.
-
-Dispatch on `microphysics_model`:
-
-  - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: evaluates
-    the fluxes at the bottom cell face from the level-1 specific humidities and
-    terminal velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
-    extrapolation of density to the surface.
-  - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
-    `ρq_rim`, and `ρb_rim` are not yet accounted for.
-  - Default: no-op.
-
-Must be called after `set_precipitation_velocities!` (1M/2M need the terminal
-velocities).
-"""
-set_precipitation_surface_fluxes!(Y, p, _) = nothing
-function set_precipitation_surface_fluxes!(
-    Y,
-    p,
-    microphysics_model::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
-)
-    (; surface_rain_flux, surface_snow_flux) = p.precomputed
-    (; col_integrated_precip_energy_tendency) = p.precomputed
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    sfc_J = Fields.level(ᶠJ, Fields.half)
-    sfc_space = axes(sfc_J)
-
-    # Jacobian-weighted extrapolation from interior to surface, consistent with
-    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
-    int_J = sfc_lev(ᶜJ)
-    int_ρ = sfc_lev(Y.c.ρ)
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-    sfc_wᵣ = sfc_lev(ᶜwᵣ)
-    sfc_wₛ = sfc_lev(ᶜwₛ)
-    sfc_wₗ = sfc_lev(ᶜwₗ)
-    sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
-    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
-
-    @. surface_rain_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_rai, int_ρ), zero(int_ρ)) * (-sfc_wᵣ) +
-            max(specific(int_ρq_lcl, int_ρ), zero(int_ρ)) * (-sfc_wₗ)
-        )
-    @. surface_snow_flux =
-        sfc_ρ * (
-            max(specific(int_ρq_sno, int_ρ), zero(int_ρ)) * (-sfc_wₛ) +
-            max(specific(int_ρq_icl, int_ρ), zero(int_ρ)) * (-sfc_wᵢ)
-        )
-    @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
-
-    return nothing
-end
-
-function set_precipitation_surface_fluxes!(
-    Y,
-    p,
-    ::NonEquilibriumMicrophysics2MP3,
-)
-    set_precipitation_surface_fluxes!(Y, p, NonEquilibriumMicrophysics2M())
-    # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim
 end

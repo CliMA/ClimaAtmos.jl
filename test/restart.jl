@@ -116,6 +116,22 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # domain-masked outputs are compared through the public getters
             # below (see compare_rrtmgp_solver)
             :rrtmgp_solver,
+            # Realized end-of-step fluxes and velocities preserved across
+            # end-of-step cache refresh are recomputed from the checkpointed
+            # state on a read-only restart load (`reading and simulating` checks
+            # them after stepping).
+            :ᶜwₕhₜ,
+            :sfc_conditions,
+            :sfc_q_tot_buoyantʲs,
+            :sfc_mse_buoyantʲs,
+            :ᶜwₗ,
+            :ᶜwᵢ,
+            :ᶜwᵣ,
+            :ᶜwₛ,
+            :ᶜwₗʲs,
+            :ᶜwᵢʲs,
+            :ᶜwᵣʲs,
+            :ᶜwₛʲs,
             # Config-specific
             more_ignore...,
         ]),

@@ -169,12 +169,10 @@ capacity of the full moist mixture.
 **Water** diffuses through the effective total water
 ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}``. The same
 flux increments both ``\rho q_t`` and ``\rho``, so diffusing water carries the
-corresponding moist-air mass. In the non-equilibrium schemes (`1M`, `2M`, and
-`2MP3`), the prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`,
-`ρn_ice`, and the rime mass `ρq_rim` and rime volume `ρb_rim` that P3 cloud ice
-carries) diffuse down their own specific gradients with the same ``\rho K_h``
-(`add_moisture_diffusionᵥ!`). Because the rime fields diffuse with the same
-linear operator as cloud ice, the rime mass stays within the ice mass. In the
+corresponding moist-air mass. In the active non-equilibrium schemes (`1M` and
+`2M`), the prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`)
+diffuse down their own specific gradients with the same ``\rho K_h`` (the P3
+ice scheme `2MP3` is not currently supported by the split column step). In the
 equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
 diagnostic (`ᶜq_liq` and `ᶜq_ice`) and have no separate prognostic equations.
 

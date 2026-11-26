@@ -291,7 +291,6 @@ function prescribed_flow_vertical_advection_tendency!(Yₜ, Y, p, t)
                 Yₜc.ρtke, ᶠρ, ᶠu³, ᶜtke, zero_dt, Val(:first_order),
             )
         end
-        return nothing
     end
 
     rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
@@ -304,7 +303,6 @@ function prescribed_flow_vertical_advection_tendency!(Yₜ, Y, p, t)
             thermo_params, cp_d,
         )
         rst_u₃ isa Tuple || @. Yₜf.u₃ += rst_u₃
-        return nothing
     end
 
     zero_velocity_tendency!(Yₜ, Y, p, t)

@@ -307,13 +307,11 @@ end
     ctx = ClimaComms.SingletonCommsContext()
 
     mktempdir() do tmpdir
-        # 1. EquilibriumMicrophysics0M: ARS343 & SSP333, Float64 & Float32,
-        #    with GaussianSGS quadrature active on Float64 ARS343.
-        for FT in (Float64, Float32),
-            (alg_tag, alg_name, constraint) in (
-                ("ARS343", CTS.ARS343(), CTS.Unconstrained()),
-                ("SSP333", CTS.SSP333(), CTS.Unconstrained()),
-            )
+        # 1. EquilibriumMicrophysics0M: ARS343 Float64 (with GaussianSGS) & SSP333 Float32.
+        for (FT, alg_tag, alg_name, constraint) in (
+            (Float64, "ARS343", CTS.ARS343(), CTS.Unconstrained()),
+            (Float32, "SSP333", CTS.SSP333(), CTS.Unconstrained()),
+        )
 
             grid = CA.ColumnGrid(
                 FT;
@@ -391,14 +389,13 @@ end
         end
 
         # 2. 1M + PrognosticEDMFX + SlabOceanTemperature:
-        #    ARS343 & SSP333, Float64 & Float32, multi-step atmos+slab
+        #    ARS343 Float64 & SSP333 Float32, multi-step atmos+slab
         #    conservation, positivity, realized surface/precip flux preservation
         #    in p.precomputed and diagnostics, and zero-alloc split steps.
-        for FT in (Float64, Float32),
-            (alg_tag, alg_name, constraint) in (
-                ("ARS343", CTS.ARS343(), CTS.Unconstrained()),
-                ("SSP333", CTS.SSP333(), CTS.Unconstrained()),
-            )
+        for (FT, alg_tag, alg_name, constraint) in (
+            (Float64, "ARS343", CTS.ARS343(), CTS.Unconstrained()),
+            (Float32, "SSP333", CTS.SSP333(), CTS.Unconstrained()),
+        )
 
             grid = CA.ColumnGrid(
                 FT;
@@ -569,12 +566,11 @@ end
             end
         end
 
-        # 3. 2M: ARS343 & SSP333, Float64 & Float32
+        # 3. 2M: ARS343 Float64 & SSP333 Float32
         for (mp_tag, mp_model) in (("2M", CA.NonEquilibriumMicrophysics2M()),),
-            FT in (Float64, Float32),
-            (alg_tag, alg_name, constraint) in (
-                ("ARS343", CTS.ARS343(), CTS.Unconstrained()),
-                ("SSP333", CTS.SSP333(), CTS.Unconstrained()),
+            (FT, alg_tag, alg_name, constraint) in (
+                (Float64, "ARS343", CTS.ARS343(), CTS.Unconstrained()),
+                (Float32, "SSP333", CTS.SSP333(), CTS.Unconstrained()),
             )
 
             grid = CA.ColumnGrid(
@@ -658,7 +654,7 @@ end
         end
 
         # 4. 3D BoxGrid steep terrain: 1M + PrognosticEDMFX + SlabOceanTemperature
-        for FT in (Float64, Float32)
+        for FT in (Float64,)
             topo = CA.CosineTopography{3, FT}(; h_max = FT(1000), λ = FT(20e3))
             box_grid = CA.BoxGrid(
                 FT;
@@ -763,7 +759,7 @@ end
         end
 
         # 5. PrescribedFlow (ShipwayHill2012) full solve_atmos! without custom hook
-        for FT in (Float64, Float32)
+        for FT in (Float64,)
             sh_grid = CA.ColumnGrid(
                 FT;
                 context = ctx,

@@ -280,7 +280,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
         sgs_tracer_names(Y),
     )
-    (; microphysics_model) = p.atmos
+    (; microphysics_model, advection_test) = p.atmos
     drafts = unrolled_map(StaticOneTo(n)) do j
         @inline
         (Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j))
@@ -296,11 +296,13 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
             @inline
             ᶜρa = @. max(zero_FT, min(ᶜsgsʲ.ρa, ᶜρʲ))
             @. ᶜsgsʲ.ρa = ᶜρa
-            @. ᶠu₃ʲ = ifelse(
-                ᶠinterp(ᶜρa) < ϵ,
-                C3(zero_FT),
-                C3(max(ᶠu₃ʲ.components.data.:1, zero_FT)),
-            )
+            if !advection_test
+                @. ᶠu₃ʲ = ifelse(
+                    ᶠinterp(ᶜρa) < ϵ,
+                    C3(zero_FT),
+                    C3(max(ᶠu₃ʲ.components.data.:1, zero_FT)),
+                )
+            end
             ᶜnegligible = @. ᶜρa < ϵ
             @. ᶜsgsʲ.mse = ifelse(ᶜnegligible, ᶜh_tot - ᶜK, ᶜsgsʲ.mse)
             if !(microphysics_model isa DryModel)

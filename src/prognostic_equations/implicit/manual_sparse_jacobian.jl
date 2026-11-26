@@ -3,7 +3,12 @@ import LinearAlgebra: I, Adjoint
 using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
 import UnrolledUtilities:
-    unrolled_any, unrolled_filter, unrolled_flatmap, unrolled_map, unrolled_reduce
+    unrolled_any,
+    unrolled_filter,
+    unrolled_flatmap,
+    unrolled_map,
+    unrolled_reduce,
+    unrolled_unique
 import Thermodynamics as TD
 
 """
@@ -158,13 +163,10 @@ end
 """
     merge_jacobian_blocks(block_pairs)
 
-De-duplicate Jacobian block pairs requested by multiple process builders,
-keeping the first occurrence of each `(row_name, col_name)` key.
+De-duplicate Jacobian block pairs, keeping the first occurrence of each
+`(row_name, col_name)` key.
 
 Requesting the same block with two different band-matrix types throws an error.
-In principle two different types are possible (for example a `DiagonalRow` from
-thermodynamics and a `TridiagonalRow` from diffusion); there is no such case at
-present, but if one arises the wider type should be used.
 """
 function merge_jacobian_blocks(block_pairs)
     merged = unrolled_unique(pair -> pair.first, block_pairs)
@@ -291,13 +293,12 @@ end
 # Jacobian matrix entries
 # ============================================================================
 #
-# `update_jacobian!` delegates to one update function per process, mirroring
-# the structure of `implicit_tendency!`. The update functions communicate
-# through the matrix blocks and through `p.scratch`, so their relative order
-# matters; see the ordering contract in `update_jacobian!`.
+# `update_jacobian!` populates the wave-core vertical advection blocks, identity
+# diagonal blocks for remaining prognostic scalars, and the Schur-complement
+# arrow factorization in `MatrixFields.FieldMatrixWithSolver`.
 #
-# TODO: There are a few for loops in these functions. This is because
-# using unrolled_foreach allocates (breaks the flame tests)
+# TODO: Replace remaining indexed loops with `unrolled_foreach` once that
+# compiles with zero allocations in the flame tests.
 
 """
     update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
@@ -313,12 +314,12 @@ contravariant velocity `ᶠρ ᶠinterp(ᶜe_tot) + ᶠinterp(ᶜp)` and `ᶜp` 
 omitting the `O(w²)` kinetic-energy derivative `∂p/∂u₃`), keeping their
 velocity blocks independent of `sign(u³)` while preserving affine relations
 among material scalars at fixed pressure and geopotential (`ρtke` omits velocity
-blocks, as freezing the `ᶠupwind1` donor at the guess velocity turns downwind
-when `u³` reverses sign). The `(ρ, uₕ)` and `(scalar, uₕ)` blocks are written
-in a separate column loop when `topography_flag` is `UseDerivative()`, keeping
-each GPU kernel within the 4 KiB parameter limit on multi-moment microphysics.
-The `(f.u₃, f.u₃)` block includes the `-I` term of the residual, and the
-Rayleigh sponge damping when `p.atmos.rayleigh_sponge` is a `RayleighSponge`.
+blocks, as the upwind donor velocity reverses when `u³` reverses sign). The
+`(ρ, uₕ)` and `(scalar, uₕ)` blocks are written in a separate column loop when
+`topography_flag` is `UseDerivative()`, keeping each GPU kernel within the
+4 KiB parameter limit on multi-moment microphysics. The `(f.u₃, f.u₃)` block
+includes the `-I` term of the residual, and the Rayleigh sponge damping when
+`p.atmos.rayleigh_sponge` is a `RayleighSponge`.
 
 The linearization of the Exner-form pressure gradient is exact: the reference
 profile terms cancel identically, and the thermal and pressure buoyancy

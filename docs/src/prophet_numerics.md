@@ -359,10 +359,7 @@ order matters because the closures depend on each other:
     (`set_prognostic_edmf_precomputed_quantities_draft!`: draft velocities,
     kinetic energies, temperatures, densities) and the environment residuals
     (`..._environment!`). Called before every implicit tendency evaluation, so
-    these are consistent with the current Newton iterate. The time stepper
-    calls `set_implicit_precomputed_quantities_deferred!`, which leaves the SGS
-    moments and the implicit 1M tendency to `ensure_1m_tendencies!` in the
-    Newton residual and Jacobian.
+    these are consistent with the current Newton iterate.
  2. `set_explicit_precomputed_quantities!`: surface conditions, then the
     PROPHET explicit closures (the entrainment rates and the signed
     area-bounding rate, the surface mass-source terms; detrainment itself is

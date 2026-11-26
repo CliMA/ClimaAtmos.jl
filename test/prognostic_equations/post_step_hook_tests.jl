@@ -88,7 +88,6 @@ end
                     push!(events, :post_hook)
                     f.constrain_state!(integrator.u, integrator.p, integrator.t)
                     f.cache!(integrator.u, integrator.p, integrator.t)
-                    return nothing
                 end,
             )
             user_cb = CTS.DiscreteCallback(
@@ -115,9 +114,6 @@ end
         end
     end
 end
-
-@noinline _measure_post_step_allocs(integrator) =
-    @allocated CA.post_step_callback!(integrator)
 
 @testset "AtmosSimulation post-step plumbing on ARS343 and SSP333" begin
     FT = Float64
@@ -243,7 +239,6 @@ end
                     @. Y.c.ρe_tot *= scale_last_step
                 end
                 ρ_prev .= vec(Array(parent(Y.c.ρ)))
-                return nothing
             end
 
             p_before_scale = Ref(zero(FT))
@@ -269,7 +264,6 @@ end
                         user_saw_refreshed_p[] =
                             isapprox(p_after, p_expected; rtol = 1e-12)
                     end
-                    return nothing
                 end,
             )
 
@@ -336,7 +330,6 @@ end
                 @. Y.c.ρ *= FT(1.01)
                 @. Y.c.ρe_tot *= FT(1.01)
                 ρ_expected_diag = copy(vec(Array(parent(Y.c.ρ))))
-                return nothing
             end
             diag_spec = Dict{String, Any}(
                 "short_name" => "rhoa",
@@ -405,7 +398,6 @@ end
             @test (vec(Array(parent(Y.c.ρ))) .- ρ_prev_ssp) ≈ Δρ_imp rtol =
                 1e-12 atol = 1e-14
             ρ_prev_ssp .= vec(Array(parent(Y.c.ρ)))
-            return nothing
         end
         p_ssp = CA.build_cache(
             Y_ssp,

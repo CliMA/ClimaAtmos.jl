@@ -100,6 +100,78 @@ main
   temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
   too high in the bottom cell (where temperature falls with height). This changes the
   results of every run with either scheme enabled.
+- ![][badge-🔥behavioralΔ] Replace stage-wise implicit scalar transport,
+  vertical diffusion, EDMFX updraft stage predictors, and implicit microphysics
+  and sedimentation Jacobians with post-ARK Lie-split column operators
+  (`step_post_ark_physics!`). Each ARK implicit stage solves only the vertical
+  acoustic-gravity wave core via exact `BlockArrowheadSolve`, followed once per
+  realized step `Δt` by: (1) DSS-consistent vertical mass-flux reconstruction
+  and shared-limiter Zalesak FCT grid-mean scalar transport
+  (`step_vertical_scalar_transport!`), (2) column-local implicit vertical
+  diffusion, tridiagonal relative two-stream EDMFX transport
+  (advancing `PrognosticEDMFX` draft states in advective form), prognostic TKE,
+  and conservative column water repair (`step_column_physics!`, subcycled at
+  `Δt_sub ≤ 60 s` for `PrognosticEDMFX`), (3) top-down semi-analytical coupled
+  microphysics and unbounded-Courant sedimentation
+  (`step_coupled_microphysics_sedimentation!`, with compact conditional-moment
+  quadrature for 1-moment schemes, GPU active-column compaction via
+  `DataLayouts.IJHMask` for grid-mean 1-moment sweeps, and subcycling at
+  `dt_sub_2m = 30 s` with prescribed-aerosol activation for 2-moment schemes),
+  and (4) flux-exact `SlabOceanTemperature` coupling. Re-enables 2M microphysics
+  configurations. End-of-step
+  `update_cache_every` and `update_constrain_state_every` updates run through
+  `post_step_callback!`. Removes `ApproximateBlockArrowheadIterativeSolve`,
+  `T_post_imp!`, `correct_implicit_advection_tendency!`, `update_*_jacobian!`
+  for diffusion/SGS/microphysics/sedimentation,
+  `warm_start_grid_mean_tracers!`, `microphysics/tendency.jl`, the `:corrimp`
+  tendency diagnostic, and non-split unit tests
+  (`consistent_transport_tests.jl`, `correct_implicit_advection_tests.jl`,
+  `edmfx_implicit_stage_tracer_predictor_tests.jl`,
+  `implicit_microphysics_split.jl`).
+- ![][badge-💥breaking] Configuration keys that select nothing in the split
+  step accept only their default and raise an `ArgumentError` otherwise:
+  `implicit_diffusion: true` (now the default), `implicit_microphysics: true`,
+  `approximate_linear_solve_iters: 2`, `microphysics_n_substeps: 3`, and
+  `microphysics_n_substeps_quadrature: 2`. The configurations in `config/` no
+  longer set them. `AtmosNumerics` loses `diff_mode`, and
+  `NonEquilibriumMicrophysics1M` loses `n_substeps` and `n_substeps_quad`.
+  Rosenbrock algorithms (e.g. `SSPKnoth`) raise an `ArgumentError`.
+  `ManualSparseJacobian` and `AutoSparseJacobian` lose the
+  `approximate_solve_iters` keyword.
+- ![][badge-🔥behavioralΔ] The `tn_<field>_<process>` tendency diagnostics
+  report realized per-operator tendencies `(Y_after - Y_before) / Δt` of the
+  most recent step for the operators `ark`, `vtrans`, `turb`, `wrepair`,
+  `micro`, and `fixer`, which sum to the change of the state over the step;
+  `RealizedIncrements` records them only after such a diagnostic is
+  requested. The instantaneous ARK tendencies `iva`, `hordyn`,
+  `hortraceradv`, `expvadv`, `hdiff`, and `additional` remain. Removes the
+  `sgsvadv`, `vdiff`, `edmfdiff`, `entrdetr`, `edmfmflux`, and `edmfbc`
+  diagnostics and the tendency functions only they called:
+  `edmfx_sgs_vertical_advection_tendency!`,
+  `vertical_diffusion_boundary_layer_tendency!`,
+  `edmfx_sgs_diffusive_flux_tendency!`, `edmfx_sgs_mass_flux_tendency!`,
+  `edmfx_entr_detr_tendency!`, `edmfx_boundary_condition_tendency!`,
+  `edmfx_tke_tendency!`, `surface_flux_tendency!`, and
+  `pressure_work_tendency!` (with `vertical_diffusion_boundary_layer.jl`,
+  `surface_flux.jl`, `edmfx_tke.jl`, `pressure_work.jl`, and their unit tests).
+- ![][badge-🔥behavioralΔ] 1M warm-air gate: at `T ≥ T_freeze`, the coupled 1M
+  sweep (`coupled_1m_source_terms`) sends cloud-ice–rain collisions to rain and
+  applies no rain freezing; all other process rates equal the CloudMicrophysics
+  bulk tendencies.
+- ![][badge-🔥behavioralΔ] The 1M latent-heating limiter
+  (`microphysics_max_latent_heating_rate`) bounds the temperature change of the
+  cell step, `ΔT = (L_vl Δq_liq + L_vi Δq_ice) / c`, with internal-energy latent
+  heats and the post-step `c_v` for the isochoric grid-mean step and enthalpy
+  latent heats and `c_p` for EDMF subdomains, so freezing and riming heat enter
+  through `L_vi - L_vl`.
+- ![][badge-🔥behavioralΔ] 0M `PrognosticEDMFX`: each subdomain splits its
+  precipitation removal into rain and snow by its own temperature, and passive
+  updraft tracers are diluted by the removed water, `S_χ = -χ S_qt`.
+- ![][badge-🔥behavioralΔ] The environment sedimentation energy flux carries
+  the condensate kinetic energy at the environment terminal velocity, so the
+  grid-mean flux is the sum of the subdomain fluxes.
+- ![][badge-💥breaking] P3 (`microphysics_model: "2MP3"`) is not supported by
+  the split column physics and raises an `ArgumentError`.
 
 0.43.0
 ------
@@ -189,79 +261,6 @@ main
   `precipitation_timescale_updraft_ratio * precipitation_timescale` (default
   ratio 1, unchanged). New diagnostics `prevap`, `tnhusevp` and `prup`. The
   TRMM 0M EDMF column job turns evaporation on.
-- ![][badge-🔥behavioralΔ] Replace stage-wise implicit scalar transport,
-  vertical diffusion, EDMFX updraft stage predictors, and implicit microphysics
-  and sedimentation Jacobians with post-ARK Lie-split column operators
-  (`step_post_ark_physics!`). Each ARK implicit stage solves only the vertical
-  acoustic-gravity wave core via exact `BlockArrowheadSolve`, followed once per
-  realized step `Δt` by: (1) DSS-consistent vertical mass-flux reconstruction
-  and shared-limiter Zalesak FCT grid-mean scalar transport
-  (`step_vertical_scalar_transport!`), (2) column-local implicit vertical
-  diffusion, tridiagonal relative two-stream EDMFX transport
-  (advancing `PrognosticEDMFX` draft states in advective form), prognostic TKE,
-  and conservative column water repair (`step_column_physics!`, subcycled at
-  `Δt_sub ≤ 60 s` for `PrognosticEDMFX`), (3) top-down semi-analytical coupled
-  microphysics and unbounded-Courant sedimentation
-  (`step_coupled_microphysics_sedimentation!`, with compact conditional-moment
-  quadrature for 1-moment schemes, GPU active-column compaction via
-  `DataLayouts.IJHMask` for grid-mean 1-moment sweeps, and subcycling at
-  `dt_sub_2m = 30 s` with prescribed-aerosol activation for 2-moment schemes),
-  and (4) flux-exact `SlabOceanTemperature` coupling. Re-enables 2M microphysics
-  configurations. End-of-step
-  `update_cache_every` and `update_constrain_state_every` updates run through
-  `post_step_callback!`. Removes `split_column_physics`,
-  `ApproximateBlockArrowheadIterativeSolve`, `T_post_imp!`,
-  `correct_implicit_advection_tendency!`, `update_*_jacobian!` for
-  diffusion/SGS/microphysics/sedimentation,
-  `warm_start_grid_mean_tracers!`, `microphysics/tendency.jl`, the `:corrimp`
-  tendency diagnostic, and non-split unit tests
-  (`consistent_transport_tests.jl`, `correct_implicit_advection_tests.jl`,
-  `edmfx_implicit_stage_tracer_predictor_tests.jl`,
-  `implicit_microphysics_split.jl`).
-- ![][badge-💥breaking] Configuration keys that select nothing in the split
-  step accept only their default and raise an `ArgumentError` otherwise:
-  `implicit_diffusion: true` (now the default), `implicit_microphysics: true`,
-  `approximate_linear_solve_iters: 2`, `microphysics_n_substeps: 3`, and
-  `microphysics_n_substeps_quadrature: 2`. The configurations in `config/` no
-  longer set them. `AtmosNumerics` loses `diff_mode`, and
-  `NonEquilibriumMicrophysics1M` loses `n_substeps` and `n_substeps_quad`.
-  Rosenbrock algorithms (e.g. `SSPKnoth`) raise an `ArgumentError`.
-  `ManualSparseJacobian` and `AutoSparseJacobian` lose the
-  `approximate_solve_iters` keyword.
-- ![][badge-🔥behavioralΔ] The `tn_<field>_<process>` tendency diagnostics
-  report realized per-operator tendencies `(Y_after - Y_before) / Δt` of the
-  most recent step for the operators `ark`, `vtrans`, `turb`, `wrepair`,
-  `micro`, and `fixer`, which sum to the change of the state over the step;
-  `RealizedIncrements` records them only after such a diagnostic is
-  requested. The instantaneous ARK tendencies `iva`, `hordyn`,
-  `hortraceradv`, `expvadv`, `hdiff`, and `additional` remain. Removes the
-  `sgsvadv`, `vdiff`, `edmfdiff`, `entrdetr`, `edmfmflux`, and `edmfbc`
-  diagnostics and the tendency functions only they called:
-  `edmfx_sgs_vertical_advection_tendency!`,
-  `vertical_diffusion_boundary_layer_tendency!`,
-  `edmfx_sgs_diffusive_flux_tendency!`, `edmfx_sgs_mass_flux_tendency!`,
-  `edmfx_entr_detr_tendency!`, `edmfx_boundary_condition_tendency!`,
-  `edmfx_tke_tendency!`, `surface_flux_tendency!`, and
-  `pressure_work_tendency!` (with `vertical_diffusion_boundary_layer.jl`,
-  `surface_flux.jl`, `edmfx_tke.jl`, `pressure_work.jl`, and their unit tests).
-- ![][badge-🔥behavioralΔ] 1M warm-air gate: at `T ≥ T_freeze`, the coupled 1M
-  sweep (`coupled_1m_source_terms`) sends cloud-ice–rain collisions to rain and
-  applies no rain freezing; all other process rates equal the CloudMicrophysics
-  bulk tendencies.
-- ![][badge-🔥behavioralΔ] The 1M latent-heating limiter
-  (`microphysics_max_latent_heating_rate`) bounds the temperature change of the
-  cell step, `ΔT = (L_vl Δq_liq + L_vi Δq_ice) / c`, with internal-energy latent
-  heats and the post-step `c_v` for the isochoric grid-mean step and enthalpy
-  latent heats and `c_p` for EDMF subdomains, so freezing and riming heat enter
-  through `L_vi - L_vl`.
-- ![][badge-🔥behavioralΔ] 0M `PrognosticEDMFX`: each subdomain splits its
-  precipitation removal into rain and snow by its own temperature, and passive
-  updraft tracers are diluted by the removed water, `S_χ = -χ S_qt`.
-- ![][badge-🔥behavioralΔ] The environment sedimentation energy flux carries
-  the condensate kinetic energy at the environment terminal velocity, so the
-  grid-mean flux is the sum of the subdomain fluxes.
-- ![][badge-💥breaking] P3 (`microphysics_model: "2MP3"`) is not supported by
-  the split column physics and raises an `ArgumentError`.
 
 0.42.19
 -------

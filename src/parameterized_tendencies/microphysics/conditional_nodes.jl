@@ -49,18 +49,6 @@ normal tail at `x > 0`, evaluated to 32 levels.
     return d, e
 end
 
-"""
-    normal_tail_prob(z)
-
-Upper tail probability `Q(z) = 1 − Φ(z)` of the standard normal with
-relative accuracy in the tail: for `z ≥ 2` the Laplace continued fraction
-`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms
-(`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), otherwise
-`normal_cdf(−z)`, whose absolute error of `7.5 × 10⁻⁸` is a relative error
-below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
-differences of such probabilities, which the absolute accuracy of `normal_cdf`
-alone does not resolve beyond `z ≈ 2`.
-"""
 @inline function _normal_abs_tail_and_pdf(z)
     FT = typeof(z)
     if !isfinite(z)
@@ -93,6 +81,18 @@ alone does not resolve beyond `z ≈ 2`.
     return (φ * poly, φ)
 end
 
+"""
+    normal_tail_prob(z)
+
+Upper tail probability `Q(z) = 1 − Φ(z)` of the standard normal with
+relative accuracy in the tail: for `z ≥ 2` the Laplace continued fraction
+`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms
+(`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), otherwise
+`normal_cdf(−z)`, whose absolute error of `7.5 × 10⁻⁸` is a relative error
+below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
+differences of such probabilities, which the absolute accuracy of `normal_cdf`
+alone does not resolve beyond `z ≈ 2`.
+"""
 @inline function normal_tail_prob(z)
     FT = typeof(z)
     if z >= zero(FT)

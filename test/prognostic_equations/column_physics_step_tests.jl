@@ -3,6 +3,7 @@ julia --project=.buildkite
 using Revise; include("test/prognostic_equations/column_physics_step_tests.jl")
 =#
 using Test
+using Dates
 using LinearAlgebra
 import ClimaComms
 ClimaComms.@import_required_backends
@@ -32,6 +33,7 @@ function _build_sim(
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     surface_setup = CA.AtmosSurface(),
     disable_surface_flux_tendency = true,
+    advection_test = false,
     dt = FT(60),
     sgs_quadrature = CA.SGSQuadrature(FT; distribution = CA.GridMeanSGS()),
 )
@@ -49,16 +51,18 @@ function _build_sim(
         surface = surface_setup,
         disable_surface_flux_tendency,
         sgs_quadrature,
+        advection_test,
     )
-    tmpdir = mktempdir()
-    sim = CA.AtmosSimulation(
-        model;
-        dt = dt,
-        t_end = dt,
-        output_dir = tmpdir,
-        default_callbacks = false,
+    Y = CA.initial_state(model)
+    p = CA.build_cache(
+        Y,
+        model,
+        model.params,
+        dt,
+        DateTime(2010, 1, 1),
+        nothing,
     )
-    return (; sim, Y = sim.integrator.u, p = sim.integrator.p, tmpdir)
+    return (; Y, p)
 end
 
 @noinline function _alloc_check(f::F, args::Vararg{Any, N}) where {F, N}
@@ -2487,6 +2491,94 @@ _surface_area(ᶠlg) = ᶠlg.J * parent(ᶠlg.∂ξ∂x)[end]
         @test Array(parent(Y.c.uₕ)) != uₕ_0
         @test all(iszero, Array(parent(p.precomputed.surface_rain_flux)))
         @test all(iszero, Array(parent(p.precomputed.surface_snow_flux)))
+    end
+
+    @testset "advection_test freezes all velocities" begin
+        FT = Float64
+        params_ref = CA.ClimaAtmosParameters(FT)
+        mo = CA.SurfaceConditions.MoninObukhov(; z0m = FT(1e-3), z0b = FT(1e-3))
+        sfc_adv = CA.AtmosSurface(;
+            flux_scheme = mo,
+            temperature = CA.SurfaceConditions.AnalyticTemperature(Returns(FT(300))),
+        )
+        vd = CA.VerticalDiffusion{FT}(;
+            disable_momentum_vertical_diffusion = false,
+            C_E = CAP.vert_diff_params(params_ref).C_E,
+        )
+        (; Y, p) = _build_sim(
+            FT;
+            z_elem = 12,
+            z_max = FT(3000),
+            vertical_diffusion = vd,
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            surface_setup = sfc_adv,
+            disable_surface_flux_tendency = false,
+            advection_test = true,
+            dt = FT(60),
+        )
+        zc = Fields.coordinate_field(Y.c).z
+        zf = Fields.coordinate_field(Y.f).z
+        @. Y.c.uₕ = CA.C12(FT(10), FT(-5))
+        @. Y.f.u₃ = CA.C3(FT(0.2) * sin(FT(π) * zf / FT(3000)))
+        @. Y.c.ρq_tot = Y.c.ρ * (FT(0.005) + FT(0.006) * exp(-zc / FT(1000)))
+        CA.set_precomputed_quantities!(Y, p, FT(0))
+        uₕ_0 = copy(Array(parent(Y.c.uₕ)))
+        u3_0 = copy(Array(parent(Y.f.u₃)))
+        qt_0 = copy(Array(parent(Y.c.ρq_tot)))
+
+        CA.step_column_physics!(Y, p, FT(0), FT(60))
+
+        @test Array(parent(Y.c.uₕ)) == uₕ_0
+        @test Array(parent(Y.f.u₃)) == u3_0
+        @test Array(parent(Y.c.ρq_tot)) != qt_0
+
+        tc = CA.PrognosticEDMFX{1, true}(FT(0.05))
+        edmfx = CA.EDMFXModel(;
+            entr_model = CA.InvZEntrainment(),
+            detr_model = CA.BuoyancyVelocityDetrainment(),
+            sgs_mass_flux = true,
+            sgs_diffusive_flux = true,
+            nh_pressure = true,
+            vertical_diffusion = true,
+            filter = true,
+            scale_blending_method = CA.SmoothMinimumBlending(),
+        )
+        (; Y, p) = _build_sim(
+            FT;
+            z_elem = 12,
+            z_max = FT(3000),
+            turbconv_model = tc,
+            edmfx_model = edmfx,
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            surface_setup = sfc_adv,
+            disable_surface_flux_tendency = false,
+            advection_test = true,
+            dt = FT(60),
+        )
+        zc_ed = Fields.coordinate_field(Y.c).z
+        zf_ed = Fields.coordinate_field(Y.f).z
+        @. Y.c.uₕ = CA.C12(FT(8), FT(-4))
+        @. Y.f.u₃ = CA.C3(FT(0.15) * sin(FT(π) * zf_ed / FT(3000)))
+        @. Y.f.sgsʲs.:(1).u₃ = CA.C3(FT(1.5) * sin(FT(π) * zf_ed / FT(3000)))
+        @. Y.c.sgsʲs.:(1).ρa = FT(0.04) * Y.c.ρ
+        @. Y.c.sgsʲs.:(1).q_tot = FT(0.012) * exp(-zc_ed / FT(2000))
+        @. Y.c.ρq_tot = Y.c.ρ * FT(0.008) * exp(-zc_ed / FT(2000))
+        CA.set_precomputed_quantities!(Y, p, FT(0))
+        @. Y.c.sgsʲs.:(1).mse = p.precomputed.ᶜh_tot + FT(400)
+        CA.set_precomputed_quantities!(Y, p, FT(0))
+        uₕ_ed0 = copy(Array(parent(Y.c.uₕ)))
+        u3_ed0 = copy(Array(parent(Y.f.u₃)))
+        u3_up0 = copy(Array(parent(Y.f.sgsʲs.:(1).u₃)))
+        ρa_ed0 = copy(Array(parent(Y.c.sgsʲs.:(1).ρa)))
+
+        CA.step_column_physics!(Y, p, FT(0), FT(60))
+
+        @test Array(parent(Y.c.uₕ)) == uₕ_ed0
+        @test Array(parent(Y.f.u₃)) == u3_ed0
+        @test Array(parent(Y.f.sgsʲs.:(1).u₃)) == u3_up0
+        @test Array(parent(Y.c.sgsʲs.:(1).ρa)) != ρa_ed0
+        @test all(isfinite, Array(parent(Y.c.ρ)))
+        @test all(isfinite, Array(parent(Y.c.ρe_tot)))
     end
 
 end  # @testset "Column Physics Step"

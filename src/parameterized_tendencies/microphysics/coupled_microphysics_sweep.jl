@@ -27,12 +27,6 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 # 1. Float32-safe scalar φ functions and divided differences
 # ============================================================================
 
-"""
-    _phi1_neg(x)
-
-Evaluate `φ₁(-x) = (1 - exp(-x)) / x` for `x ≥ 0` without cancellation near
-`x = 0` or overflow as `x → ∞`.
-"""
 @inline _phi_poly_cutoff(::Type{Float32}) = 1.0f0
 @inline _phi_poly_cutoff(::Type{FT}) where {FT} = FT(1 / 4)
 
@@ -182,6 +176,12 @@ end
     )
 end
 
+"""
+    _phi1_neg(x)
+
+Evaluate `φ₁(-x) = (1 - exp(-x)) / x` for `x ≥ 0` without cancellation near
+`x = 0` or overflow as `x → ∞`.
+"""
 @inline function _phi1_neg(x)
     FT = typeof(x)
     xc = max(x, zero(FT))
@@ -1815,20 +1815,6 @@ Returns `(δ̄_l, δ̄_i, f_melt)`.
     return (δ_bar_l, δ_bar_i, f_melt)
 end
 
-"""
-    coupled_1m_cell_step(
-        mp, tps, ρ, T0, w_air, q_tot0, q0, S_in, q_bar_sed, D_sed, dt;
-        is_constant_p = false,
-    )
-
-Advance the four 1-moment condensate pools `q0 = SVector(q_lcl, q_icl, q_rai, q_sno)`
-in one cell over `dt` with sedimentation inflows `S_in`, residence-averaged pools
-`q_bar_sed`, and sedimentation decay rates `D_sed = w / dz_eff`.
-
-Returns `(; q_new, q_out, α_cap, f_melt)` where `q_new ≥ 0` are the end-of-step
-specific contents (per unit pre-step `ρ`) and `q_out = D_sed .* q_bar * dt ≥ 0`
-are the specific masses exported through the cell's bottom face over `dt`.
-"""
 @inline function _solve_1m_cloud_matrices(
     D_sed_1,
     D_sed_2,
@@ -1989,9 +1975,20 @@ end
     return (p_new, p_bar)
 end
 
-# TODO: remove or move into the test suite. The sweeps call
-# `_coupled_1m_cell_step` directly; only `coupled_microphysics_sweep_tests.jl`
-# uses this entry point.
+"""
+    coupled_1m_cell_step(
+        mp, tps, ρ, T0, w_air, q_tot0, q0, S_in, q_bar_sed, D_sed, dt;
+        is_constant_p = false,
+    )
+
+Advance the four 1-moment condensate pools `q0 = SVector(q_lcl, q_icl, q_rai, q_sno)`
+in one cell over `dt` with sedimentation inflows `S_in`, residence-averaged pools
+`q_bar_sed`, and sedimentation decay rates `D_sed = w / dz_eff`.
+
+Returns `(; q_new, q_out, α_cap, f_melt)` where `q_new ≥ 0` are the end-of-step
+specific contents (per unit pre-step `ρ`) and `q_out = D_sed .* q_bar * dt ≥ 0`
+are the specific masses exported through the cell's bottom face over `dt`.
+"""
 @inline function coupled_1m_cell_step(
     mp::CMP.Microphysics1MParams,
     tps,
@@ -2578,7 +2575,10 @@ end
            (from_c_rai <= zero(FT)) &
            (from_c_sno <= zero(FT)) &
            (s_vap_sno <= zero(FT))
-            ((zero(FT), zero(FT)), (zero(FT), zero(FT)))
+            (
+                SA.SVector{2, FT}(zero(FT), zero(FT)),
+                SA.SVector{2, FT}(zero(FT), zero(FT)),
+            )
         else
             _solve_1m_precip_step(
                 q0_p[3],
@@ -2739,163 +2739,8 @@ end
 end
 
 # ============================================================================
-# 6. Conditional SGS Quadrature Wrapper for Coupled 1M Cell Step
+# 6. Conditional SGS Quadrature Helpers for Coupled 1M Cell Step
 # ============================================================================
-
-struct Coupled1MSGSNodeEvaluator{IsConstantP, MP, TPS, FT}
-    mp::MP
-    tps::TPS
-    ρ::FT
-    w_air::FT
-    q_rai0::FT
-    q_sno0::FT
-    S_in::SA.SVector{4, FT}
-    q_bar_sed::SA.SVector{4, FT}
-    D_sed::SA.SVector{4, FT}
-    λ::FT
-    ξ_liq::FT
-    ξ_ice::FT
-    q_lcl0::FT
-    q_icl0::FT
-    λ_lagrange::FT
-    λ_eq::FT
-    mu_S::FT
-    α::FT
-    β_precip::FT
-    shaft_frac::FT
-    dt::FT
-end
-
-@inline function (ev::Coupled1MSGSNodeEvaluator{IsConstantP})(
-    T_hat,
-    q_tot_hat,
-    flag_p,
-) where {IsConstantP}
-    tps = _unwrapped(ev.tps)
-    q_sat_hat = TD.q_vap_saturation(tps, T_hat, ev.ρ)
-    return ev(T_hat, q_tot_hat, flag_p, q_sat_hat)
-end
-
-@noinline function (ev::Coupled1MSGSNodeEvaluator{IsConstantP})(
-    T_hat,
-    q_tot_hat,
-    flag_p,
-    q_sat_hat,
-) where {IsConstantP}
-    FT = typeof(ev.ρ)
-    tps = _unwrapped(ev.tps)
-    q_tot_h = max(zero(FT), q_tot_hat)
-
-    S_prime = q_tot_h - q_sat_hat - ev.mu_S
-    shifted_excess = max(zero(FT), muladd(ev.α, S_prime, ev.λ_lagrange))
-    q_lcl_hat, q_icl_hat = sgs_local_condensate(
-        ev.λ,
-        shifted_excess,
-        ev.ξ_liq,
-        ev.ξ_ice,
-        ev.q_lcl0,
-        ev.q_icl0,
-    )
-
-    q_c_eq_hat = max(zero(FT), ev.λ_eq + S_prime)
-    q_precip0 = ev.q_rai0 + ev.q_sno0
-    S_raw_cloud = q_tot_h - q_precip0 - q_sat_hat
-    S_eff_cloud = ifelse(
-        q_c_eq_hat > zero(FT),
-        q_c_eq_hat,
-        min(zero(FT), S_raw_cloud),
-    )
-    q_tot_eff = max(zero(FT), q_sat_hat + S_eff_cloud + q_precip0)
-
-    φ_p = ifelse(
-        ev.β_precip > zero(FT),
-        sgs_placement_factor(ev.β_precip, flag_p, ev.shaft_frac),
-        one(FT),
-    )
-    shift = (φ_p - one(FT)) * q_precip0
-    q_rai_node = ev.q_rai0 * φ_p
-    q_sno_node = ev.q_sno0 * φ_p
-    q_tot_node = max(
-        q_lcl_hat + q_icl_hat + q_rai_node + q_sno_node,
-        q_tot_eff + shift,
-    )
-
-    q0_node = SA.SVector{4, FT}(q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node)
-    S_in_node = max.(
-        SA.SVector{4, FT}(
-            ev.S_in[1],
-            ev.S_in[2],
-            ev.S_in[3] * φ_p,
-            ev.S_in[4] * φ_p,
-        ),
-        zero(FT),
-    )
-    T_freeze = FT(TD.Parameters.T_freeze(tps))
-    T_icenuc = FT(TD.Parameters.T_icenuc(tps))
-    q_sl_in = T_hat >= T_freeze ? q_sat_hat : FT(-1)
-    q_si_in = if T_hat <= T_icenuc
-        q_sat_hat
-    elseif T_hat < T_freeze
-        TD.q_vap_saturation(tps, T_hat, ev.ρ, TD.Ice())
-    else
-        FT(-1)
-    end
-    q_cond_node = sum(q0_node)
-    if (q_cond_node <= zero(FT)) & (sum(S_in_node) <= zero(FT))
-        q_smin_hat = T_hat >= T_freeze ? q_sl_in : q_si_in
-        if q_tot_node <= q_smin_hat
-            z = zero(FT)
-            return (;
-                q_lcl_new = z,
-                q_icl_new = z,
-                q_rai_new = z,
-                q_sno_new = z,
-                q_lcl_out = z,
-                q_icl_out = z,
-                q_rai_out = z,
-                q_sno_out = z,
-            )
-        end
-    end
-    q_v_node = max(zero(FT), q_tot_node - q_cond_node)
-    q_sed_node = max.(
-        SA.SVector{4, FT}(
-            max(q_lcl_hat, ev.q_bar_sed[1]),
-            max(q_icl_hat, ev.q_bar_sed[2]),
-            ev.q_bar_sed[3] * φ_p,
-            ev.q_bar_sed[4] * φ_p,
-        ),
-        zero(FT),
-    )
-    D_sed_node = max.(ev.D_sed, zero(FT))
-
-    res = _coupled_1m_cell_step_core(
-        ev.mp,
-        ev.tps,
-        ev.ρ,
-        T_hat,
-        ev.w_air,
-        q_v_node,
-        q0_node,
-        S_in_node,
-        q_sed_node,
-        D_sed_node,
-        ev.dt,
-        Val(IsConstantP),
-        q_sl_in,
-        q_si_in,
-    )
-    return (;
-        q_lcl_new = res.q_new[1],
-        q_icl_new = res.q_new[2],
-        q_rai_new = res.q_new[3],
-        q_sno_new = res.q_new[4],
-        q_lcl_out = res.q_out[1],
-        q_icl_out = res.q_out[2],
-        q_rai_out = res.q_out[3],
-        q_sno_out = res.q_out[4],
-    )
-end
 
 @inline function _clear_sgs_mixed_phase_dry(
     thp_u,
@@ -5044,15 +4889,15 @@ end
 end
 
 # ----------------------------------------------------------------------------
-# GPU active-column compaction for coupled 1M column sweeps
+# GPU active-column compaction for coupled 1M grid-mean column sweeps
 # ----------------------------------------------------------------------------
 #
-# Columns are partitioned on the device into five active regimes (updraft,
-# warm cloud, cold cloud, warm precipitation shaft, cold shaft/supersaturated
-# clear air) plus clear columns (bucket 0). Clear columns write their
-# diagnostic defaults during the prescan and skip the sweep; active columns
-# are compacted into a `DataLayouts.IJHMask` by a device prefix sum (`cumsum!`)
-# with zero host synchronization so each warp processes homogeneous regimes.
+# Columns are partitioned on the device into four active regimes (warm cloud,
+# cold cloud, warm precipitation shaft, cold shaft/supersaturated clear air)
+# plus clear columns (bucket 0). Clear columns write their diagnostic defaults
+# during the prescan and skip the sweep; active columns are compacted into a
+# `DataLayouts.IJHMask` by a device prefix sum (`cumsum!`) with zero host
+# synchronization so each warp processes homogeneous regimes.
 
 const _COUPLED_1M_COMPACT_BUCKETS = 5
 
@@ -5066,21 +4911,22 @@ struct _Coupled1MColumnCompactWorkspace{M, F, C}
     Ncols::Int
 end
 
-const _COUPLED_1M_COMPACT_CACHE = Dict{Tuple{DataType, Int, Int, Int}, Any}()
-const _COUPLED_1M_COMPACT_LOCK = ReentrantLock()
-
-function _get_coupled_1m_compact_workspace(ρ_data::DataLayouts.VIJHWithF)
+function _build_coupled_1m_compact_workspace(ρ_data::DataLayouts.VIJHWithF)
     _, Ni, Nj, Nh = size(ρ_data)
-    key = (typeof(parent(ρ_data)), Ni, Nj, Nh)
-    return @lock _COUPLED_1M_COMPACT_LOCK get!(_COUPLED_1M_COMPACT_CACHE, key) do
-        Ncols = Ni * Nj * Nh
-        mask = DataLayouts.IJHMask(ρ_data)
-        flags =
-            similar(parent(ρ_data), Int32, _COUPLED_1M_COMPACT_BUCKETS * Ncols)
-        offsets = similar(flags)
-        cls = similar(parent(ρ_data), UInt8, Ncols)
-        _Coupled1MColumnCompactWorkspace(mask, flags, offsets, cls, Ni, Nj, Ncols)
-    end
+    Ncols = Ni * Nj * Nh
+    mask = DataLayouts.IJHMask(ρ_data)
+    flags = similar(parent(ρ_data), Int32, _COUPLED_1M_COMPACT_BUCKETS * Ncols)
+    offsets = similar(flags)
+    cls = similar(parent(ρ_data), UInt8, Ncols)
+    return _Coupled1MColumnCompactWorkspace(
+        mask,
+        flags,
+        offsets,
+        cls,
+        Ni,
+        Nj,
+        Ncols,
+    )
 end
 
 @inline function _write_bucket_flags!(
@@ -5133,212 +4979,6 @@ Adapt.@adapt_structure _Coupled1MColumnScatter
     return nothing
 end
 
-struct _Coupled1MEDMFXPrescan{SW, F, C} <: Function
-    sw::SW
-    flags::F
-    cls::C
-    Ni::Int
-    Nj::Int
-    Ncols::Int
-end
-Adapt.@adapt_structure _Coupled1MEDMFXPrescan
-
-@inline function (ps::_Coupled1MEDMFXPrescan{SW})(
-    index::CartesianIndex{3},
-    Yc_col,
-    geom_col,
-    pre_col,
-    edmf_col,
-    sgs_col,
-    sfc_col,
-) where {
-    HasSGS,
-    HasPrecipFrac,
-    HasPrecipShaft,
-    HasIncloudSed,
-    HasEnvAcnvVel,
-    SW <: Coupled1MEDMFXColumnSweep{
-        HasSGS,
-        HasPrecipFrac,
-        HasPrecipShaft,
-        HasIncloudSed,
-        HasEnvAcnvVel,
-    },
-}
-    sw = ps.sw
-    FT = typeof(sw.dt)
-    tps = _unwrapped(sw.tps)
-    T_freeze = FT(TD.Parameters.T_freeze(tps))
-    T_warm = T_freeze - FT(2)
-    z = zero(FT)
-    a_p_clear = if HasSGS
-        max(HasPrecipFrac ? z : one(FT), sw.sgs_opts.precip_frac_floor)
-    else
-        one(FT)
-    end
-    β_precip = HasSGS ? sw.sgs_opts.precip_incloud_fraction : z
-
-    ρ_fv = Fields.field_values(Yc_col.ρ)
-    ρqt_fv = Fields.field_values(Yc_col.ρq_tot)
-    ρql_fv = Fields.field_values(Yc_col.ρq_lcl)
-    ρqi_fv = Fields.field_values(Yc_col.ρq_icl)
-    ρqr_fv = Fields.field_values(Yc_col.ρq_rai)
-    ρqs_fv = Fields.field_values(Yc_col.ρq_sno)
-    ρa1_fv = Fields.field_values(Yc_col.sgsʲs.:(1).ρa)
-    qt1_fv = Fields.field_values(Yc_col.sgsʲs.:(1).q_tot)
-    ρ1_fv = Fields.field_values(edmf_col.ᶜρ¹)
-    T0_env_fv = Fields.field_values(edmf_col.ᶜT⁰)
-    p_fv = Fields.field_values(edmf_col.ᶜp)
-
-    nz = Spaces.nlevels(axes(Yc_col.ρ))
-    has_up = false
-    has_cld = false
-    has_prc = false
-    has_clear_act = false
-    has_warm_act = false
-
-    @inbounds for k in 1:nz
-        ρ_old = ρ_fv[k]
-        ρ1_k = max(eps(FT), ρ1_fv[k])
-        ρa1_raw = clamp(ρa1_fv[k], z, ρ_old * (one(FT) - FT(1e-4)))
-        a1_k = clamp(draft_area(ρa1_raw, ρ1_k), z, one(FT) - FT(1e-4))
-        if (ρa1_raw > ϵ_numerics(FT)) & (a1_k > z)
-            has_up = true
-            break
-        end
-        ρql = ρql_fv[k]
-        ρqi = ρqi_fv[k]
-        ρqr = ρqr_fv[k]
-        ρqs = ρqs_fv[k]
-        if (ρ_old < eps(FT)) |
-           (ρql < z) |
-           (ρqi < z) |
-           (ρqr < z) |
-           (ρqs < z)
-            has_clear_act = true
-        elseif (ρql > z) | (ρqi > z)
-            has_cld = true
-            has_warm_act |= (T0_env_fv[k] >= T_warm)
-        elseif (ρqr > z) | (ρqs > z)
-            has_prc = true
-            has_warm_act |= (T0_env_fv[k] >= T_warm)
-        elseif !(has_cld | has_prc | has_clear_act)
-            # The environment `q_tot` of the sweep without an updraft pool.
-            sgsʲs_k = ((; ρa = ρa1_fv[k], q_tot = qt1_fv[k]),)
-            qt0_env = _sweep_env_value(
-                @name(q_tot),
-                ρqt_fv[k],
-                ρ_old,
-                sgsʲs_k,
-                ρa⁰(ρ_old, sgsʲs_k, sw.turbconv_model),
-                sw.turbconv_model,
-                max(z, ρqt_fv[k]),
-                z,
-                z,
-                max(eps(FT), ρ_old),
-            )
-            T0_env = T0_env_fv[k]
-            ρ0_env = max(
-                eps(FT),
-                TD.air_density(tps, T0_env, p_fv[k], qt0_env, z, z),
-            )
-            if HasSGS
-                sgs_m = Fields.field_values(sgs_col.ᶜsgs_moments)[k]
-                if FT(sgs_m.λ_eq) != FT(-Inf)
-                    has_clear_act = true
-                    has_warm_act |= (T0_env >= T_warm)
-                else
-                    is_dry, _ = _clear_sgs_mixed_phase_dry(
-                        tps,
-                        ρ0_env,
-                        T0_env,
-                        qt0_env,
-                        Fields.field_values(sgs_col.ᶜT′T′)[k],
-                    )
-                    if !is_dry
-                        has_clear_act = true
-                        has_warm_act |= (T0_env >= T_warm)
-                    end
-                end
-            else
-                q_smin = if T0_env >= T_freeze
-                    TD.q_vap_saturation(tps, T0_env, ρ0_env, TD.Liquid())
-                else
-                    TD.q_vap_saturation(tps, T0_env, ρ0_env, TD.Ice())
-                end
-                if qt0_env > q_smin
-                    has_clear_act = true
-                    has_warm_act |= (T0_env >= T_warm)
-                end
-            end
-        end
-    end
-
-    bucket = if has_up
-        UInt8(1)
-    elseif has_cld
-        has_warm_act ? UInt8(2) : UInt8(3)
-    elseif has_prc
-        (has_warm_act || (@inbounds T0_env_fv[1] >= T_warm)) ? UInt8(4) :
-        UInt8(5)
-    elseif has_clear_act
-        UInt8(5)
-    else
-        UInt8(0)
-    end
-
-    if bucket == UInt8(0)
-        T_0 = FT(TD.Parameters.T_0(tps))
-        ρe_fv = Fields.field_values(Yc_col.ρe_tot)
-        lg_fv = Fields.field_values(geom_col.ᶜlg)
-        Φ_fv = Fields.field_values(geom_col.ᶜΦ)
-        wl_fv = Fields.field_values(pre_col.ᶜwₗ)
-        wi_fv = Fields.field_values(pre_col.ᶜwᵢ)
-        wr_fv = Fields.field_values(pre_col.ᶜwᵣ)
-        ws_fv = Fields.field_values(pre_col.ᶜwₛ)
-        whht_fv = Fields.field_values(pre_col.ᶜwₕhₜ)
-        wl1_fv = Fields.field_values(edmf_col.ᶜwₗ¹)
-        wi1_fv = Fields.field_values(edmf_col.ᶜwᵢ¹)
-        wr1_fv = Fields.field_values(edmf_col.ᶜwᵣ¹)
-        ws1_fv = Fields.field_values(edmf_col.ᶜwₛ¹)
-        u0_fv = Fields.field_values(edmf_col.ᶜu⁰)
-        whht_z = WVec(z)
-        @inbounds for k in 1:nz
-            ρ_old = ρ_fv[k]
-            inv_ρ = one(FT) / max(ρ_old, floatmin(FT))
-            q_tot_post = max(z, ρqt_fv[k] * inv_ρ)
-            e_int_air_T0 = TD.internal_energy(tps, T_0, q_tot_post, z, z)
-            cv_m_post = TD.cv_m(tps, q_tot_post, z, z)
-            uvw0 = Geometry.UVWVector(u0_fv[k], lg_fv[k])
-            K_air = norm_sqr(uvw0) / 2
-            E_ref_T0 = ρ_old * (e_int_air_T0 + K_air + Φ_fv[k])
-            T0_env_fv[k] =
-                T_0 + (ρe_fv[k] - E_ref_T0) / max(ρ_old * cv_m_post, floatmin(FT))
-            wl_fv[k] = _tv_1m_lcl(sw.vc, ρ_old, z)
-            wi_fv[k] = _tv_1m_icl(sw.vc, ρ_old, z)
-            wr_fv[k] = _tv_1m_rai(sw.vc, ρ_old, z)
-            ws_fv[k] = _tv_1m_sno(sw.vc, ρ_old, z)
-            whht_fv[k] = whht_z
-            wl1_fv[k] = z
-            wi1_fv[k] = z
-            wr1_fv[k] = z
-            ws1_fv[k] = z
-            if HasPrecipFrac
-                Fields.field_values(sgs_col.ᶜprecip_frac)[k] = z
-            end
-        end
-        @inbounds begin
-            Fields.field_values(sfc_col.rain)[] = z
-            Fields.field_values(sfc_col.snow)[] = z
-            Fields.field_values(sfc_col.energy)[] = z
-        end
-    end
-
-    col_idx = index[1] + ps.Ni * ((index[2] - 1) + ps.Nj * (index[3] - 1))
-    _write_bucket_flags!(ps.flags, ps.cls, col_idx, ps.Ncols, bucket)
-    return nothing
-end
-
 struct _Coupled1MGridMeanPrescan{SW, F, C} <: Function
     sw::SW
     flags::F
@@ -5374,12 +5014,6 @@ Adapt.@adapt_structure _Coupled1MGridMeanPrescan
     T_freeze = FT(TD.Parameters.T_freeze(tps))
     T_warm = T_freeze - FT(2)
     z = zero(FT)
-    a_p_clear = if HasSGS
-        max(HasPrecipFrac ? z : one(FT), sw.sgs_opts.precip_frac_floor)
-    else
-        one(FT)
-    end
-    β_precip = HasSGS ? sw.sgs_opts.precip_incloud_fraction : z
 
     ρ_fv = Fields.field_values(Yc_col.ρ)
     ρe_fv = Fields.field_values(Yc_col.ρe_tot)
@@ -5526,51 +5160,6 @@ Adapt.@adapt_structure _Coupled1MGridMeanPrescan
 
     col_idx = index[1] + ps.Ni * ((index[2] - 1) + ps.Nj * (index[3] - 1))
     _write_bucket_flags!(ps.flags, ps.cls, col_idx, ps.Ncols, bucket)
-    return nothing
-end
-
-function _run_coupled_1m_edmfx_compacted!(
-    ws::_Coupled1MColumnCompactWorkspace,
-    sw::Coupled1MEDMFXColumnSweep,
-    Yc,
-    geom,
-    pre,
-    edmf,
-    sgs_fields,
-    sfc,
-)
-    prescan = _Coupled1MEDMFXPrescan(sw, ws.flags, ws.cls, ws.Ni, ws.Nj, ws.Ncols)
-    DataLayouts.foreach_column(
-        prescan,
-        Yc,
-        geom,
-        pre,
-        edmf,
-        sgs_fields,
-        sfc;
-        enumerate = Val(true),
-        shmem = Val(:none),
-    )
-    cumsum!(ws.offsets, ws.flags)
-    scatter =
-        _Coupled1MColumnScatter(ws.offsets, ws.cls, ws.mask, ws.Ni, ws.Nj, ws.Ncols)
-    DataLayouts.foreach_column(
-        scatter,
-        Fields.field_values(Yc.ρ);
-        enumerate = Val(true),
-        shmem = Val(:none),
-    )
-    DataLayouts.foreach_column(
-        sw,
-        Yc,
-        geom,
-        pre,
-        edmf,
-        sgs_fields,
-        sfc;
-        mask = ws.mask,
-        shmem = Val(:none),
-    )
     return nothing
 end
 
@@ -7299,7 +6888,7 @@ end
     )
 end
 
-function _launch_coupled_1m_sweep!(
+@noinline function _launch_coupled_1m_sweep!(
     Y,
     p,
     dt::FT,
@@ -7348,20 +6937,22 @@ function _launch_coupled_1m_sweep!(
             p.precomputed.ᶜsgs_moments,
             p.precomputed.ᶜα,
         )
+    elseif HasPF && HasEA
+        (;
+            ᶜcf = p.precomputed.ᶜcloud_fraction,
+            p.precomputed.ᶜprecip_frac,
+            p.precomputed.ᶜsgs_moments,
+        )
     elseif HasPF
         (;
             ᶜcf = p.precomputed.ᶜcloud_fraction,
             p.precomputed.ᶜprecip_frac,
         )
+    elseif HasEA
+        (; p.precomputed.ᶜsgs_moments)
     else
         ()
     end
-
-    ρ_data = Fields.field_values(Y.c.ρ)
-    use_compact =
-        (ClimaComms.device(Y.c) isa ClimaComms.CUDADevice) &&
-        (ρ_data isa DataLayouts.VIJHWithF) &&
-        (DataLayouts.nelems(ρ_data) > 0)
 
     if turbconv_model isa PrognosticEDMFX
         n_mass_flux_subdomains(turbconv_model) == 1 ||
@@ -7452,8 +7043,11 @@ function _launch_coupled_1m_sweep!(
             Val(HasPS),
             Val(HasICS),
         )
-        if use_compact
-            ws = _get_coupled_1m_compact_workspace(ρ_data)
+        ws =
+            hasproperty(p, :scratch) &&
+            hasproperty(p.scratch, :coupled_1m_compact) ?
+            p.scratch.coupled_1m_compact : nothing
+        if ws !== nothing
             _run_coupled_1m_gridmean_compacted!(
                 ws,
                 sw,
@@ -7480,7 +7074,7 @@ end
 
 # Static boolean-to-Val cascade avoids passing >4 Union{Val{true},Val{false}}
 # arguments at once, keeping dynamic dispatch and CPU heap allocations at 0 B.
-@inline function _dispatch_1m_ea!(
+function _dispatch_1m_ea!(
     Y,
     p,
     dt,
@@ -7497,36 +7091,7 @@ end
     c_w,
     w_d,
     a_min,
-    ::Val{false},
-    v_pf::Val,
-    v_ps::Val,
-    v_ics::Val,
-    ::Bool,
-)
-    return _launch_coupled_1m_sweep!(
-        Y, p, dt, turbconv_model, sgs_quad, vcmp_up, vcmp, vtps, vc, sgs_opts,
-        q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
-        Val(false), v_pf, v_ps, v_ics, Val(false),
-    )
-end
-@inline function _dispatch_1m_ea!(
-    Y,
-    p,
-    dt,
-    turbconv_model,
-    sgs_quad,
-    vcmp_up,
-    vcmp,
-    vtps,
-    vc,
-    sgs_opts,
-    q_precip_min,
-    f_decay,
-    cf_floor,
-    c_w,
-    w_d,
-    a_min,
-    v_sgs::Val{true},
+    v_sgs::Val,
     v_pf::Val,
     v_ps::Val,
     v_ics::Val,
@@ -7546,7 +7111,7 @@ end
         )
     end
 end
-@inline function _dispatch_1m_ics!(
+function _dispatch_1m_ics!(
     Y,
     p,
     dt,
@@ -7583,7 +7148,7 @@ end
         )
     end
 end
-@inline _dispatch_1m_ps!(
+_dispatch_1m_ps!(
     Y,
     p,
     dt,
@@ -7610,7 +7175,7 @@ end
     q_precip_min, f_decay, cf_floor, c_w, w_d, a_min,
     v_sgs, v_pf, Val(false), has_ics, has_ea,
 )
-@inline function _dispatch_1m_ps!(
+function _dispatch_1m_ps!(
     Y,
     p,
     dt,
@@ -7647,7 +7212,7 @@ end
         )
     end
 end
-@inline function _dispatch_1m_pf!(
+function _dispatch_1m_pf!(
     Y,
     p,
     dt,
@@ -7685,7 +7250,7 @@ end
     end
 end
 
-@inline function _dispatch_coupled_1m_sweep!(
+function _dispatch_coupled_1m_sweep!(
     Y,
     p,
     dt,
@@ -7723,21 +7288,6 @@ end
     end
 end
 
-_step_coupled_microphysics_sedimentation!(
-    Y,
-    p,
-    dt::FT,
-    ::NonEquilibriumMicrophysics1M,
-    turbconv_model,
-    _,
-) where {FT} = _step_coupled_microphysics_sedimentation_1m!(
-    Y,
-    p,
-    dt,
-    turbconv_model,
-    false,
-)
-
 function _step_coupled_microphysics_sedimentation_1m!(
     Y,
     p,
@@ -7772,7 +7322,7 @@ function _step_coupled_microphysics_sedimentation_1m!(
         turbconv_model isa PrognosticEDMFX ?
         FT(CAP.min_area(CAP.turbconv_params(p.params))) : zero(FT)
     has_ea =
-        has_sgs &&
+        hasproperty(p.precomputed, :ᶜsgs_moments) &&
         (turbconv_model isa PrognosticEDMFX) &&
         uses_env_autoconversion_velocity(cmp_full, p.params)
 

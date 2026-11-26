@@ -1118,7 +1118,6 @@ function _diffuse_water_species!(
                     shmem = Val(:none),
                 )
             end
-            return nothing
         end
     else
         MatrixFields.unrolled_foreach(species) do (χ_name, ρχ_name)
@@ -1158,7 +1157,6 @@ function _diffuse_water_species!(
                     shmem = Val(:none),
                 )
             end
-            return nothing
         end
     end
     return nothing
@@ -1237,7 +1235,8 @@ function step_vertical_diffusion_and_surface!(Y, p, t, Δt)
     # The vertical Smagorinsky-Lilly stress also diffuses `w` on faces, and it
     # acts on momentum also when the vertical diffusion model diffuses scalars
     # only.
-    if has_smag || !disable_momentum_vertical_diffusion(vertical_diffusion)
+    if !p.atmos.advection_test &&
+       (has_smag || !disable_momentum_vertical_diffusion(vertical_diffusion))
         ᶜlg = Fields.local_geometry_field(Y.c)
         mom_geom = (; ᶜlg, ᶠlg)
         mom_scratch = (;
@@ -1386,7 +1385,6 @@ function step_vertical_diffusion_and_surface!(Y, p, t, Δt)
                 jf_dummy;
                 shmem = Val(:none),
             )
-            return nothing
         end
     end
 
@@ -1441,6 +1439,7 @@ struct EDMFTwoStreamColumnSweep{
     Δt::FT
     z_max::FT
     has_sfc::Bool
+    advection_test::Bool
     has_nh_drag::Bool
     has_sgs_mass_flux::Bool
     has_env_diff::Bool
@@ -1456,7 +1455,7 @@ end
 # `edmfx_sgsflux_upwinding` (`0`: first-order upwind, `1`: centered, `2`:
 # third-order upwind). The net SGS advective flux vanishes when `x¹ = x⁰ = x̄`,
 # with per-scalar positivity limiting on `ρχ_L` when `limit_pos` is `true`.
-@inline function _compute_edmf_sgs_flux_corr!(
+function _compute_edmf_sgs_flux_corr!(
     A_out_fv,
     ρχ_L_fv,
     x1_fv,
@@ -1601,7 +1600,7 @@ end
 # `(χ¹_new - χ¹_old)/Δt + u³¹ ∂ᵥχ¹_new = ε_tot (χ⁰_old - χ¹_new)`
 # `+ δ_{k,1} [r_sfc (χ_b - χ¹_new) + btt/ρ¹]`
 # `+ (1/ρa¹) ᶜdiffdivᵥ(G¹ ∇χ¹_new) + extra_src1`.
-@inline function _solve_edmf_updraft_var!(
+function _solve_edmf_updraft_var!(
     x1_out_fv,
     χ1_in_fv,
     χ0_in_fv,
@@ -1695,7 +1694,7 @@ end
 # equals `S`, including its evaporation bound `S ≥ -q/τ`, which `q_eq ≥ 0`
 # reproduces. Clamping `q_eq` to `[0, q_avail]` keeps `0 ≤ q_new ≤ q_avail` by
 # M-matrix diagonal dominance.
-@inline function _compute_updraft_1m_relax!(
+function _compute_updraft_1m_relax!(
     ::Val{IsLiq},
     r_relax_fv,
     q_eq_fv,
@@ -1833,7 +1832,7 @@ end
 # δ_{k,1} Δt JF_sfc`, accumulating environment FCT `A0` and committing `ρχ_out`
 # in flux form. The storage offset `s_k` (zero unless `has_storage_offset`)
 # separates the transported `χ⁰` from the residual `(ρχ - ρa¹ χ¹) / ρa⁰`.
-@inline function _solve_and_commit_edmf_gm_var!(
+function _solve_and_commit_edmf_gm_var!(
     ρχ_out_fv,
     x0_save_fv,
     A0_out_fv,
@@ -1963,7 +1962,7 @@ end
 end
 
 # Solve updraft `χ¹` and conservative grid-mean `ρχ` for one scalar variable.
-@inline function _solve_and_commit_edmf_var!(
+function _solve_and_commit_edmf_var!(
     χ1_out_fv,
     ρχ_out_fv,
     x0_save_fv,
@@ -2129,7 +2128,7 @@ end
 # coordinate surfaces with the grid-mean `uₕ³`. The solve bounds
 # `ρa¹ ≤ min(a_max ρ¹, (1 - 10⁻⁴) ρ)`, so that `ρa⁰ = ρ - ρa¹ > 0` also when
 # `ρ¹ > ρ`.
-@inline function _step_edmf_u3_and_rhoa!(
+function _step_edmf_u3_and_rhoa!(
     sw::EDMFTwoStreamColumnSweep{
         HasQ,
         HasNonEquil,
@@ -2177,12 +2176,14 @@ end
     L_zero = lower_area_limiter_factor(zero(FT), tcp)
     U_zero = upper_area_limiter_factor(zero(FT), tcp)
 
-    @inbounds begin
+    @inbounds if sw.advection_test
+        for f in 1:(nz + 1)
+            u3_new[f] = u3_in[f]
+        end
+    else
         u3_new[1] = zero(FT)
         u3_new[nz + 1] = zero(FT)
-    end
 
-    @inbounds begin
         ρ_lo = max(ᶜρ1_fv[1], ε)
         a1_cur_lo = draft_area(ᶜρa1_fv[1], ρ_lo)
         a0_lo = clamp(one(FT) - a1_cur_lo, a0_floor, one(FT))
@@ -2457,15 +2458,14 @@ end
     return nothing
 end
 
-@inline function _solve_edmf_cloud_species!(
+function _solve_edmf_cloud_species!(
     ::Val{IsLiq},
     ::Val{HasBlend},
-    sw,
+    sw::EDMFTwoStreamColumnSweep,
     ᶜχ1_f,
     ᶜρχ_f,
     A0_f,
     Yc_col,
-    blend_pre_col,
     edmf_col,
     pre_col,
     ᶜΦ_fv,
@@ -2575,8 +2575,8 @@ end
 
     if HasBlend
         ᶜT0_fv = Fields.field_values(edmf_col.ᶜT0)
-        ᶜl_mix_fv = Fields.field_values(blend_pre_col.ᶜl_mix)
-        ᶜmom_fv = Fields.field_values(blend_pre_col.ᶜsgs_moments)
+        ᶜl_mix_fv = Fields.field_values(edmf_col.ᶜl_mix)
+        ᶜmom_fv = Fields.field_values(edmf_col.ᶜsgs_moments)
         ᶜρtke_fv = Fields.field_values(Yc_col.ρtke)
         phase = IsLiq ? TD.Liquid() : TD.Ice()
         τ_const = IsLiq ? sw.τ_lcl_const : sw.τ_icl_const
@@ -2808,7 +2808,7 @@ end
     return nothing
 end
 
-@inline function _picard_edmf_species_step!(
+function _picard_edmf_species_step!(
     out_p,
     ᶜχ1_sgs,
     ᶜρχ_gs,
@@ -2878,7 +2878,7 @@ end
     return nothing
 end
 
-@inline function _step_edmf_precip_species!(
+function _step_edmf_precip_species!(
     ᶜχ1_f,
     ᶜρχ_f,
     A0_f,
@@ -2976,7 +2976,7 @@ end
     return nothing
 end
 
-@inline function (sw::EDMFTwoStreamColumnSweep{
+function (sw::EDMFTwoStreamColumnSweep{
     HasQ,
     HasNonEquil,
     FtildeMode,
@@ -3090,8 +3090,6 @@ end
     η1_L_fv = Fields.field_values(ct123_c.:(2))
     ρη_L_fv = Fields.field_values(ct123_c.:(3))
     Δρ_col_fv = Fields.field_values(uvw_c.:(1))
-    dummy1_fv = Fields.field_values(uvw_c.:(2))
-    dummy0_fv = Fields.field_values(uvw_c.:(3))
     A1_qv_fv = Fields.field_values(uv_f.:(7))
     A0_qv_fv = Fields.field_values(uv_f.:(8))
     A0_ql_fv = Fields.field_values(st_f.:(1))
@@ -3124,14 +3122,15 @@ end
         ρa0_in[k] = ᶜρ_fv[k] - ρa1_k
     end
     @inbounds begin
-        u3_in[1] = zero(FT)
-        u3_new[1] = zero(FT)
+        u3_in[1] = sw.advection_test ? _c3_scalar(ᶠu31_fv[1]) : zero(FT)
+        u3_new[1] = u3_in[1]
         for f in 2:nz
             u3_in[f] = _c3_scalar(ᶠu31_fv[f])
             u3_new[f] = u3_in[f]
         end
-        u3_in[nz + 1] = zero(FT)
-        u3_new[nz + 1] = zero(FT)
+        u3_in[nz + 1] =
+            sw.advection_test ? _c3_scalar(ᶠu31_fv[nz + 1]) : zero(FT)
+        u3_new[nz + 1] = u3_in[nz + 1]
     end
 
     # Step 1: Picard predictor rounds (`u₃¹ → ρa¹ → updraft scalars and 1M
@@ -3151,8 +3150,7 @@ end
     n_picard = has_draft ? Int(sw.n_picard) : 0
 
     # Arguments shared by the `u₃¹` and `ρa¹` solves of the Picard rounds and of
-    # the final sweep, grouped into NamedTuples so `_step_edmf_u3_and_rhoa!`
-    # stays well under Julia's tuple-splat specialization limit.
+    # the final sweep, grouped into NamedTuples for compact argument passing.
     u3_out = (; u3_new, ᶜρa1_fv, JF1_fv, ε_tot_fv, b_work_col, tail_qt_fv)
     u3_state = (;
         u3_in,
@@ -3516,7 +3514,9 @@ end
         α_face_fv[1] = zero(FT)
         for f in 2:nz
             u3_f = u3_new[f]
-            ᶠu31_fv[f] = C3(u3_f)
+            if !sw.advection_test
+                ᶠu31_fv[f] = C3(u3_f)
+            end
             u3_cont_gm = if FtildeMode === :gm_flux
                 Jρ_gm_f =
                     (ᶜρ_fv[f - 1] * ᶜJ_fv[f - 1] + ᶜρ_fv[f] * ᶜJ_fv[f]) / 2
@@ -3628,8 +3628,7 @@ end
             ᶜqr1_fv = Fields.field_values(sgs1.q_rai)
             ᶜqs1_fv = Fields.field_values(sgs1.q_sno)
 
-            # Save entry q_vap (with conservative entry projection matching
-            # projected q_tot_eff - q_lcl - q_icl) for shared-FCT bounds.
+            # Compute conservative entry specific vapor `qv1_p` for the q_tot_eff projection.
             @inbounds for k in 1:nz
                 ρqv_gs = max(
                     zero(FT),
@@ -3651,8 +3650,6 @@ end
                 )
                 qv1_p =
                     ρa1_in[k] > ε_num ? min(qv1_raw, ρqv_gs / ρa1_in[k]) : qv1_raw
-                dummy1_fv[k] = qv1_p
-                dummy0_fv[k] = (ρqv_gs - ρa1_in[k] * qv1_p) / max(ρa0_in[k], ε)
 
                 # Reduce grid-mean ρq_tot to ρq_tot_eff before the flux-divergence solve.
                 ρqte_k = ᶜρqt_fv[k] - (ᶜρqr_fv[k] + ᶜρqs_fv[k])
@@ -3981,7 +3978,7 @@ end
         # 3) q_lcl, q_icl (with optional donor-limited blended flux when 1M + ρtke)
         _solve_edmf_cloud_species!(
             Val(true), Val(HasBlend), sw, ᶜql1_fv, ᶜρql_fv, A0_ql_fv,
-            Yc_col, edmf_col, edmf_col, pre_col, ᶜΦ_fv,
+            Yc_col, edmf_col, pre_col, ᶜΦ_fv,
             ᶜqt1_fv, ᶜρqt_fv, ᶜql1_fv, ᶜqi1_fv, ᶜρql_fv, ᶜρqi_fv,
             χ1_in, χ0_in, ρa1_in, ρa0_in, ᶜρa1_fv, ρa0_new, ᶜρ_fv,
             V1_fv, ε_tot_fv, JF1_rel_fv, JF0_rel_fv, G1_fv, G0_fv, G0_b_fv,
@@ -3990,7 +3987,7 @@ end
         )
         _solve_edmf_cloud_species!(
             Val(false), Val(HasBlend), sw, ᶜqi1_fv, ᶜρqi_fv, A0_qi_fv,
-            Yc_col, edmf_col, edmf_col, pre_col, ᶜΦ_fv,
+            Yc_col, edmf_col, pre_col, ᶜΦ_fv,
             ᶜqt1_fv, ᶜρqt_fv, ᶜql1_fv, ᶜqi1_fv, ᶜρql_fv, ᶜρqi_fv,
             χ1_in, χ0_in, ρa1_in, ρa0_in, ᶜρa1_fv, ρa0_new, ᶜρ_fv,
             V1_fv, ε_tot_fv, JF1_rel_fv, JF0_rel_fv, G1_fv, G0_fv, G0_b_fv,
@@ -4306,7 +4303,7 @@ end
     return nothing
 end
 
-@inline function _run_edmf_twostream_column!(
+@noinline function _run_edmf_twostream_column!(
     ::Val{HasQ},
     ::Val{HasNonEquil},
     ::Val{FtildeMode},
@@ -4357,6 +4354,7 @@ end
         opts.Δt_FT,
         opts.z_max,
         opts.has_sfc,
+        opts.advection_test,
         opts.has_nh_drag,
         opts.has_sgs_mass_flux,
         opts.has_env_diff,
@@ -4380,7 +4378,7 @@ end
     return nothing
 end
 
-@inline function _dispatch_edmf_tail!(
+function _dispatch_edmf_tail!(
     vq::Val{HasQ},
     vne::Val{HasNonEquil},
     vft::Val{FtildeMode},
@@ -4418,7 +4416,7 @@ end
     return nothing
 end
 
-@inline function _dispatch_edmf_blend!(
+function _dispatch_edmf_blend!(
     vq::Val{HasQ},
     vne::Val{HasNonEquil},
     vft::Val{FtildeMode},
@@ -4449,7 +4447,7 @@ end
     return nothing
 end
 
-@inline function _dispatch_edmf_ftilde!(
+function _dispatch_edmf_ftilde!(
     vq::Val{HasQ},
     vne::Val{HasNonEquil},
     ᶠF̃,
@@ -4622,6 +4620,7 @@ function step_edmf_and_env_turbulence!(
         f_tail,
         z_max,
         has_sfc,
+        advection_test = p.atmos.advection_test,
         has_nh_drag,
         has_sgs_mass_flux,
         has_env_diff,
@@ -4704,12 +4703,12 @@ function step_edmf_and_env_turbulence!(
             scratch_v;
             shmem = Val(:none),
         )
-        return nothing
     end
 
     # Momentum diffusion (`uₕ`) and Robin/Neumann surface drag. Uses
     # `ᶠtemp_scalar` so `ᶠtemp_scalar_2` (`JF1_rel`) stays intact.
-    if (has_env_diff || has_sfc) &&
+    if !p.atmos.advection_test &&
+       (has_env_diff || has_sfc) &&
        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠw_u = p.scratch.ᶠtemp_scalar
         if has_env_diff
@@ -4775,7 +4774,6 @@ function step_edmf_and_env_turbulence!(
                 jf_dummy;
                 shmem = Val(:none),
             )
-            return nothing
         end
     end
 
@@ -5450,10 +5448,46 @@ sedimentation, along with SGS quadrature variances and cloud fraction when
 Skips surface condition updates and mixing-length updates so realized turbulent
 surface fluxes stay intact.
 """
+@inline function _compute_gridmean_sgs_moments(thp, ρ, T, q_c, q_tot_cloud)
+    FT = typeof(ρ)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    return (;
+        sigma_S = ϵ_numerics(FT),
+        λ_lagrange = q_c,
+        λ_eq = max(zero(FT), q_tot_cloud - q_sat),
+    )
+end
+
+function _refresh_1m_gridmean_sgs_moments!(Y, p)
+    hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
+    thermo_params = CAP.thermodynamics_params(p.params)
+    is_edmf = p.atmos.turbconv_model isa PrognosticEDMFX
+    (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) =
+        cloud_env_state(Y, p, thermo_params, Val(is_edmf))
+    zero_FT = zero(eltype(p.params))
+    ᶜq_cloud = @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))
+    ᶜsgs_moments = p.precomputed.ᶜsgs_moments
+    @. ᶜsgs_moments = _compute_gridmean_sgs_moments(
+        thermo_params,
+        ᶜρ_env,
+        ᶜT_mean,
+        ᶜq_lcl + ᶜq_icl,
+        ᶜq_cloud,
+    )
+    return nothing
+end
+
 function refresh_pre_microphysics_thermo!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     if !not_quadrature(p.atmos.sgs_quadrature)
         set_covariance_cache_and_cloud_fraction!(Y, p)
+    elseif hasproperty(p.precomputed, :ᶜsgs_moments) &&
+           p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+        thermo_params = CAP.thermodynamics_params(p.params)
+        is_edmf = p.atmos.turbconv_model isa PrognosticEDMFX
+        env_state = cloud_env_state(Y, p, thermo_params, Val(is_edmf))
+        set_sgs_moments_and_cloud_fraction!(Y, p, env_state)
+        set_precip_fraction!(Y, p, env_state.ᶜq_precip)
     elseif p.atmos.cloud_model isa GridScaleCloud
         set_cloud_fraction!(
             Y,
@@ -5461,6 +5495,9 @@ function refresh_pre_microphysics_thermo!(Y, p, t)
             p.atmos.microphysics_model,
             p.atmos.cloud_model,
         )
+        _refresh_1m_gridmean_sgs_moments!(Y, p)
+    elseif hasproperty(p.precomputed, :ᶜsgs_moments)
+        _refresh_1m_gridmean_sgs_moments!(Y, p)
     end
     return nothing
 end

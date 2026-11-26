@@ -256,10 +256,10 @@ Each operator below has a short name in the ClimaAtmos source, documented under
     zero Courant step so the MUSCL slope reconstruction is purely spatial). The
     van Leer limiter is the default for grid-mean energy and tracer vertical
     transport, set by the `energy_humidity_upwinding` and `tracer_upwinding`
-    configuration keys (applied via the Courant-limited post-Newton correction
-    for `ρe_tot`, `ρq_tot`, and any sedimenting microphysics tracers, all
-    governed by `energy_humidity_upwinding` so that parcel energy and water cross
-    each face with one reconstruction).
+    configuration keys (applied via `step_vertical_scalar_transport!` for
+    `ρe_tot`, `ρq_tot`, and any sedimenting microphysics tracers, all governed by
+    `energy_humidity_upwinding` so that parcel energy and water cross each face
+    with one reconstruction).
 
 ### Horizontal differential operators
 

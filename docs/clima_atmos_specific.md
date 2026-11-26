@@ -46,17 +46,21 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 ## Test groups
 
-`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_edmfx`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
+`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_edmfx`, `dynamics_split_vt`, `dynamics_split_vt_scalars`, `dynamics_split_col`, `dynamics_split_e2e`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
 
-| Change area                                 | Test group          | Example Buildkite job         |
-|:------------------------------------------- |:------------------- |:----------------------------- |
-| Prognostic equations & post-ARK column step | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
-| EDMFX diffusion / limiters                  | `dynamics_edmfx`    | `prognostic_edmfx_*`          |
-| Microphysics / EDMF                         | `parameterizations` | `prognostic_edmfx_*`          |
-| Restarts                                    | Buildkite only      | `Restarting` group            |
-| Initialization from file                    | `restarts`          | `test_init_with_file.jl`      |
-| Diagnostics                                 | `diagnostics`       | any `--diagnostics` job       |
-| Config semantics                            | `infrastructure`    | `config.jl`                   |
+| Change area                                 | Test group                  | Example Buildkite job         |
+|:------------------------------------------- |:--------------------------- |:----------------------------- |
+| Prognostic equations & wave core            | `dynamics`                  | `sphere_baroclinic_wave_rhoe` |
+| Split vertical scalar transport             | `dynamics_split_vt`         | `prognostic_edmfx_*`          |
+| Split vertical transport scalar checks      | `dynamics_split_vt_scalars` | `prognostic_edmfx_*`          |
+| Split column physics step                   | `dynamics_split_col`        | `prognostic_edmfx_*`          |
+| Split simulation end-to-end                 | `dynamics_split_e2e`        | `prognostic_edmfx_*`          |
+| EDMFX diffusion / limiters                  | `dynamics_edmfx`            | `prognostic_edmfx_*`          |
+| Microphysics / EDMF                         | `parameterizations`         | `prognostic_edmfx_*`          |
+| Restarts                                    | Buildkite only              | `Restarting` group            |
+| Initialization from file                    | `restarts`                  | `test_init_with_file.jl`      |
+| Diagnostics                                 | `diagnostics`               | any `--diagnostics` job       |
+| Config semantics                            | `infrastructure`            | `config.jl`                   |
 
 ### Running a single test group
 

@@ -5,16 +5,18 @@
 Sources from cloud microphysics ``\mathcal{S}`` represent the transfer of mass
 between different water categories such as cloud water, cloud ice or precipitation,
 as well as the latent heat release due to phase changes.
-The model supports four cloud microphysics and precipitation representations:
+The model supports three active cloud microphysics and precipitation
+representations:
 
   - equilibrium cloud formation coupled with a 0-moment microphysics scheme,
   - nonequilibrium cloud formation coupled with a 1-moment microphysics scheme
     representing both liquid and ice phase precipitation,
   - nonequilibrium cloud formation coupled with a 2-moment microphysics scheme
-    representing liquid phase precipitation,
-  - nonequilibrium cloud formation coupled with a 2-moment warm-rain scheme
-    plus the P3 ice scheme (`microphysics_model: "2MP3"`), which additionally
-    prognoses ice number and rime mass and volume.
+    representing liquid phase precipitation.
+
+The 2-moment warm-rain plus P3 ice scheme (`microphysics_model: "2MP3"`) is
+currently not supported by the coupled microphysics sweep and raises an
+`ArgumentError`.
 
 The equilibrium 0-moment option does not introduce any microphysics variables beyond ``\rho q_{tot}``.
 The cloud condensate and phase partitioning are diagnosed using saturation adjustment
@@ -255,7 +257,7 @@ while preserving the sharp features of the modeled tracers.
 
 Hyperdiffusion is a higher order derivative operator, and as a result does not guarantee positivity.
 Total water (`q_tot_eff = q_tot - q_rai - q_sno` for the 1M and 2M schemes;
-the full `q_tot` for 0M and 2MP3) and passive tracers are
+the full `q_tot` for 0M) and passive tracers are
 hyperdiffused at full strength; the resulting `ρq_tot` mass tendency is
 distributed proportionally to the cloud species (`ρq_lcl`, `ρq_icl`, and their
 number densities). Rain, snow, and rain number density receive no
@@ -382,7 +384,7 @@ there the water species are written ``q_l^{cl}``, ``q_i^{cl}``, ``q_r``, ``q_s``
 | Vapor-borrowing tendency fixer                             | [src/parameterized_tendencies/microphysics/moisture_fixers.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/moisture_fixers.jl)                                                                                                                      |
 | Element and vertical-borrowing limiters                    | [src/prognostic_equations/limited_tendencies.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/limited_tendencies.jl)                                                                                                                                                  |
 | Tracer hyperdiffusion                                      | [src/prognostic_equations/hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                                          |
-| Model types                                                | [`ClimaAtmos.EquilibriumMicrophysics0M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics1M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics2M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics2MP3`](@ref), [`ClimaAtmos.TracerNonnegativityMethod`](@ref)                                          |
+| Model types                                                | [`ClimaAtmos.EquilibriumMicrophysics0M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics1M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics2M`](@ref), [`ClimaAtmos.TracerNonnegativityMethod`](@ref)                                                                                   |
 
 The scheme is selected with the `microphysics_model` configuration key; see
 [Configuration Options](configuration_options.md).

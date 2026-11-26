@@ -132,14 +132,6 @@ function get_bench_items(
             ),
         ),
         (
-            "  set_precipitation_surface_fluxes!",
-            () -> CA.set_precipitation_surface_fluxes!(
-                Y,
-                p,
-                p.atmos.microphysics_model,
-            ),
-        ),
-        (
             "set_explicit_precomputed_quantities! (total)",
             () -> CA.set_explicit_precomputed_quantities!(Y, p, t),
         ),

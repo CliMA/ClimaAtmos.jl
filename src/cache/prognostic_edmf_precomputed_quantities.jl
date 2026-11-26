@@ -338,7 +338,7 @@ temperature includes the latent heat of the cloudy part. The reference enters
 the buoyancy of the momentum and area solves and the entrainment closures; the
 pressure work in the updraft `mse` equation adds `ᶜρ_ref_excess / ρʲ` back to
 `ᶜρ_diffʲs`, so it uses the grid-mean density
-(`edmfx_sgs_vertical_advection_tendency!`).
+(`step_edmf_and_env_turbulence!`).
 """
 function set_updraft_reference_density_excess!(Y, p)
     (; ᶜρ_ref_excess) = p.precomputed

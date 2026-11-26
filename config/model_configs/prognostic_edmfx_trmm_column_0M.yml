@@ -1,6 +1,6 @@
 initial_condition: TRMM_LBA
 turbconv: prognostic_edmfx
-edmfx_entr_model: "PiGroups"
+edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true

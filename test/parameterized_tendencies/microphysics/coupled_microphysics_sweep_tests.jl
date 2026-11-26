@@ -4,6 +4,7 @@ top-down sweep (`src/parameterized_tendencies/microphysics/coupled_microphysics_
 =#
 
 using Test
+import Dates
 import ClimaAtmos as CA
 import ClimaComms
 ClimaComms.@import_required_backends
@@ -197,15 +198,20 @@ end
 function _build_synthetic_1m_state(
     cspace,
     fspace;
+    w_mode_lcl = CA.FixedTerminalVelocity(),
+    w_mode_icl = CA.FixedTerminalVelocity(),
     w_mode_rai = CA.Chen2022TerminalVelocity(),
     w_mode_sno = CA.Chen2022TerminalVelocity(),
     fixed_w_rai = nothing,
     fixed_w_sno = nothing,
     with_edmfx::Bool = false,
     with_sgs::Bool = false,
+    with_sgs_moments::Bool = with_sgs,
+    with_cf::Bool = with_sgs,
+    extra_toml::AbstractString = "",
 )
     FT = Spaces.undertype(cspace)
-    params = if !isnothing(fixed_w_rai) || !isnothing(fixed_w_sno)
+    params = if !isnothing(fixed_w_rai) || !isnothing(fixed_w_sno) || !isempty(extra_toml)
         mktemp() do path, io
             if !isnothing(fixed_w_rai)
                 println(io, "[fixed_rain_terminal_velocity]")
@@ -217,8 +223,11 @@ function _build_synthetic_1m_state(
                 println(io, "value = ", Float64(fixed_w_sno))
                 println(io, "type = \"float\"")
             end
+            if !isempty(extra_toml)
+                print(io, extra_toml)
+            end
             close(io)
-            CA.ClimaAtmosParameters(CP.create_toml_dict(FT; override_file = path))
+            CA.ClimaAtmosParameters(CA.create_toml_dict(FT; override_file = path))
         end
     else
         CA.ClimaAtmosParameters(FT)
@@ -335,7 +344,15 @@ function _build_synthetic_1m_state(
             ᶜα = ones(cspace),
         )
     else
-        (;)
+        m0 = (;
+            sigma_S = FT(1e-4),
+            λ_lagrange = zero(FT),
+            λ_eq = zero(FT),
+        )
+        (;
+            (with_cf ? (; ᶜcloud_fraction = fill(FT(0.35), cspace)) : (;))...,
+            (with_sgs_moments ? (; ᶜsgs_moments = fill(m0, cspace)) : (;))...,
+        )
     end
 
     precomputed = if with_edmfx
@@ -360,8 +377,8 @@ function _build_synthetic_1m_state(
     end
 
     water = (;
-        terminal_velocity_liquid = CA.FixedTerminalVelocity(),
-        terminal_velocity_ice = CA.FixedTerminalVelocity(),
+        terminal_velocity_liquid = w_mode_lcl,
+        terminal_velocity_ice = w_mode_icl,
         terminal_velocity_rain = w_mode_rai,
         terminal_velocity_snow = w_mode_sno,
     )
@@ -2542,6 +2559,461 @@ _is_cpu_state(Y) = ClimaComms.device(Y.c) isa ClimaComms.AbstractCPUDevice
                     @test _measure_sweep_allocs(Y_init, p_case, dt) == 0
                 end
             end
+        end
+    end
+
+    @testset "1M environment autoconversion velocity (HasEnvAcnvVel) with and without GaussianSGS" begin
+        FT = Float64
+        cspace, fspace = _make_column_spaces(FT; z_max = FT(4000), nz = 16)
+        z_c = Fields.coordinate_field(cspace).z
+        ᶜlg = Fields.local_geometry_field(cspace)
+        toml_ea = """
+[sgs_env_autoconversion_updraft_velocity_weight]
+value = 1.0
+type = "float"
+
+[sgs_env_autoconversion_detrained_velocity]
+value = 8.0
+type = "float"
+"""
+        for with_sgs in (false, true)
+            Y0, p0 = _build_synthetic_1m_state(
+                cspace,
+                fspace;
+                with_edmfx = true,
+                with_sgs,
+                with_sgs_moments = true,
+            )
+            Yea, pea = _build_synthetic_1m_state(
+                cspace,
+                fspace;
+                with_edmfx = true,
+                with_sgs,
+                with_sgs_moments = true,
+                extra_toml = toml_ea,
+            )
+            for (Y, p) in ((Y0, p0), (Yea, pea))
+                tps = CAP.thermodynamics_params(p.params)
+                @. p.precomputed.ᶜT⁰ = FT(288) - FT(0.005) * z_c
+                @. Y.c.ρq_lcl =
+                    ifelse(z_c < FT(2800), Y.c.ρ * FT(6e-4), FT(0))
+                @. Y.c.ρq_tot = Y.c.ρ * FT(0.008) + Y.c.ρq_lcl
+                @. Y.c.sgsʲs.:(1).ρa = FT(0.1) * Y.c.ρ
+                @. Y.c.sgsʲs.:(1).q_tot = FT(0.01)
+                @. Y.c.sgsʲs.:(1).q_lcl = FT(5e-4)
+                @. Y.c.sgsʲs.:(1).mse = TD.moist_static_energy(
+                    tps,
+                    p.precomputed.ᶜT⁰,
+                    p.core.ᶜΦ,
+                    FT(0.01),
+                    FT(5e-4),
+                    FT(0),
+                )
+                @. p.precomputed.ᶜu⁰ = Geometry.Covariant123Vector(
+                    Geometry.UVWVector(FT(0), FT(0), FT(-0.5)),
+                    ᶜlg,
+                )
+                @. p.precomputed.ᶜuʲs.:(1) = Geometry.Covariant123Vector(
+                    Geometry.UVWVector(FT(0), FT(0), FT(6)),
+                    ᶜlg,
+                )
+                m_detr = (;
+                    sigma_S = FT(1e-4),
+                    λ_lagrange = FT(6e-4),
+                    λ_eq = FT(-5e-4),
+                )
+                @. p.precomputed.ᶜsgs_moments = (m_detr,)
+                @. Y.c.ρe_tot =
+                    Y.c.ρ * (
+                        TD.internal_energy(
+                            tps,
+                            p.precomputed.ᶜT⁰,
+                            Y.c.ρq_tot / Y.c.ρ,
+                            Y.c.ρq_lcl / Y.c.ρ,
+                            FT(0),
+                        ) + p.core.ᶜΦ
+                    )
+            end
+            b0 = _column_integrals(Yea, pea)
+            CA.step_coupled_microphysics_sedimentation!(Y0, p0, FT(60))
+            CA.step_coupled_microphysics_sedimentation!(Yea, pea, FT(60))
+            b1 = _column_integrals(Yea, pea)
+            _assert_column_conservation(
+                b0,
+                b1,
+                FT(60),
+                _arr(pea.precomputed.surface_rain_flux),
+                _arr(pea.precomputed.surface_snow_flux),
+                _arr(pea.precomputed.col_integrated_precip_energy_tendency),
+                16,
+            )
+            int_rai_0 = Fields.Field(FT, axes(p0.precomputed.surface_rain_flux))
+            int_rai_ea = Fields.Field(FT, axes(pea.precomputed.surface_rain_flux))
+            Operators.column_integral_definite!(int_rai_0, Y0.c.ρq_rai)
+            Operators.column_integral_definite!(int_rai_ea, Yea.c.ρq_rai)
+            rain_0 =
+                only(_arr(int_rai_0)) -
+                FT(60) * only(_arr(p0.precomputed.surface_rain_flux))
+            rain_ea =
+                only(_arr(int_rai_ea)) -
+                FT(60) * only(_arr(pea.precomputed.surface_rain_flux))
+            @test rain_ea > rain_0
+            if _is_cpu_state(Yea)
+                @test _measure_sweep_allocs(Yea, pea, FT(60)) == 0
+            end
+        end
+
+        # Full Model + QuadratureCloud + GridMeanSGS (`use_sgs_quadrature: false`)
+        # integration: `refresh_pre_microphysics_thermo!` refreshes `ᶜsgs_moments`
+        # and `compute_mp1m_source_env` matches `HasEA`.
+        grid_full = CA.ColumnGrid(
+            FT;
+            context = ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
+            z_elem = 16,
+            z_max = FT(4000),
+            z_stretch = false,
+        )
+        tc_full = CA.PrognosticEDMFX(;
+            n_updrafts = 1,
+            prognostic_tke = true,
+            area_fraction = FT(0.05),
+        )
+        edmfx_full = CA.EDMFXModel(;
+            entr_model = CA.InvZEntrainment(),
+            detr_model = CA.BuoyancyVelocityDetrainment(),
+            scale_blending_method = CA.SmoothMinimumBlending(),
+        )
+        mktemp() do path, io
+            print(io, toml_ea)
+            close(io)
+            params_ea = CA.ClimaAtmosParameters(
+                CA.create_toml_dict(FT; override_file = path),
+            )
+            model_ea = CA.AtmosModel(
+                grid_full;
+                params = params_ea,
+                turbconv_model = tc_full,
+                edmfx_model = edmfx_full,
+                microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+                cloud_model = CA.QuadratureCloud(),
+                sgs_quadrature = CA.SGSQuadrature(
+                    FT;
+                    distribution = CA.GridMeanSGS(),
+                ),
+            )
+            model_0 = CA.AtmosModel(
+                grid_full;
+                params = CA.ClimaAtmosParameters(FT),
+                turbconv_model = tc_full,
+                edmfx_model = edmfx_full,
+                microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+                cloud_model = CA.QuadratureCloud(),
+                sgs_quadrature = CA.SGSQuadrature(
+                    FT;
+                    distribution = CA.GridMeanSGS(),
+                ),
+            )
+            Y_ea = CA.initial_state(model_ea)
+            p_ea = CA.build_cache(
+                Y_ea,
+                model_ea,
+                model_ea.params,
+                FT(60),
+                Dates.DateTime(2010, 1, 1),
+                nothing,
+            )
+            Y_0 = CA.initial_state(model_0)
+            p_0 = CA.build_cache(
+                Y_0,
+                model_0,
+                model_0.params,
+                FT(60),
+                Dates.DateTime(2010, 1, 1),
+                nothing,
+            )
+            tps = CAP.thermodynamics_params(p_ea.params)
+            zc_f = Fields.coordinate_field(axes(Y_ea.c)).z
+            for (Y, p) in ((Y_0, p_0), (Y_ea, p_ea))
+                @. Y.c.ρ = FT(1.15) * exp(-zc_f / FT(8000))
+                @. Y.c.sgsʲs.:(1).ρa = FT(0.1) * Y.c.ρ
+                @. Y.c.sgsʲs.:(1).q_tot = FT(0.012)
+                @. Y.c.sgsʲs.:(1).q_lcl = FT(4e-4)
+                @. Y.c.ρq_lcl =
+                    ifelse(zc_f < FT(2800), Y.c.ρ * FT(6e-4), FT(0))
+                @. Y.c.ρq_tot = Y.c.ρ * FT(0.008) + Y.c.ρq_lcl
+                T_prof = @. FT(288) - FT(0.005) * zc_f
+                @. Y.c.ρe_tot =
+                    Y.c.ρ * (
+                        TD.internal_energy(
+                            tps,
+                            T_prof,
+                            Y.c.ρq_tot / Y.c.ρ,
+                            Y.c.ρq_lcl / Y.c.ρ,
+                            FT(0),
+                        ) + p.core.ᶜΦ
+                    )
+                @. Y.c.sgsʲs.:(1).mse =
+                    TD.moist_static_energy(
+                        tps,
+                        T_prof,
+                        p.core.ᶜΦ,
+                        FT(0.012),
+                        FT(4e-4),
+                        FT(0),
+                    )
+                ᶠlg_f = Fields.local_geometry_field(axes(Y.f))
+                @. Y.f.u₃ = Geometry.Covariant3Vector(
+                    Geometry.WVector(FT(-0.4)),
+                    ᶠlg_f,
+                )
+                @. Y.f.sgsʲs.:(1).u₃ = Geometry.Covariant3Vector(
+                    Geometry.WVector(FT(6.0)),
+                    ᶠlg_f,
+                )
+                CA.set_precomputed_quantities!(Y, p, FT(0))
+            end
+            diag_0 = _arr(
+                CA.Diagnostics.compute_mp1m_source_env(
+                    Y_0,
+                    p_0,
+                    Val(:S_acnv_lcl_rai),
+                ),
+            )
+            diag_ea = _arr(
+                CA.Diagnostics.compute_mp1m_source_env(
+                    Y_ea,
+                    p_ea,
+                    Val(:S_acnv_lcl_rai),
+                ),
+            )
+            @test any(diag_ea .> diag_0)
+
+            @. Y_ea.c.ρq_lcl *= FT(1.2)
+            @. Y_ea.c.ρq_tot += FT(0.2) * Y_ea.c.ρq_lcl
+            λ_before = copy(_arr(p_ea.precomputed.ᶜsgs_moments.λ_lagrange))
+            CA.refresh_pre_microphysics_thermo!(Y_ea, p_ea, FT(0))
+            @test any(
+                _arr(p_ea.precomputed.ᶜsgs_moments.λ_lagrange) .> λ_before,
+            )
+            CA.step_coupled_microphysics_sedimentation!(Y_ea, p_ea, FT(60))
+            @test all(>=(zero(FT)), _arr(Y_ea.c.ρq_rai))
+        end
+    end
+
+    @testset "1M in-cloud sedimentation cloud-fraction floor (HasIncloudSed)" begin
+        FT = Float64
+        cspace, fspace = _make_column_spaces(FT; z_max = FT(4000), nz = 16)
+        z_c = Fields.coordinate_field(cspace).z
+        toml_ics = """
+[sgs_cloud_sedimentation_cf_floor]
+value = 0.25
+type = "float"
+"""
+        Y_1, p_1 = _build_synthetic_1m_state(
+            cspace,
+            fspace;
+            w_mode_lcl = CA.StokesTerminalVelocity(),
+            w_mode_icl = CA.Chen2022TerminalVelocity(),
+            with_cf = true,
+        )
+        Y_ics, p_ics = _build_synthetic_1m_state(
+            cspace,
+            fspace;
+            w_mode_lcl = CA.StokesTerminalVelocity(),
+            w_mode_icl = CA.Chen2022TerminalVelocity(),
+            with_cf = true,
+            extra_toml = toml_ics,
+        )
+        for (Y, p) in ((Y_1, p_1), (Y_ics, p_ics))
+            tps = CAP.thermodynamics_params(p.params)
+            @. p.precomputed.ᶜcloud_fraction = FT(0.25)
+            @. Y.c.ρq_lcl =
+                ifelse(z_c > FT(1500), Y.c.ρ * FT(8e-4), FT(0))
+            @. Y.c.ρq_icl =
+                ifelse(z_c > FT(2500), Y.c.ρ * FT(4e-4), FT(0))
+            @. Y.c.ρq_tot = Y.c.ρ * FT(0.004) + Y.c.ρq_lcl + Y.c.ρq_icl
+            T_prof = @. FT(265) - FT(0.005) * (z_c - FT(2000))
+            @. Y.c.ρe_tot =
+                Y.c.ρ * (
+                    TD.internal_energy(
+                        tps,
+                        T_prof,
+                        Y.c.ρq_tot / Y.c.ρ,
+                        Y.c.ρq_lcl / Y.c.ρ,
+                        Y.c.ρq_icl / Y.c.ρ,
+                    ) + p.core.ᶜΦ
+                )
+        end
+        b0 = _column_integrals(Y_ics, p_ics)
+        CA.step_coupled_microphysics_sedimentation!(Y_1, p_1, FT(60))
+        CA.step_coupled_microphysics_sedimentation!(Y_ics, p_ics, FT(60))
+        b1 = _column_integrals(Y_ics, p_ics)
+        _assert_column_conservation(
+            b0,
+            b1,
+            FT(60),
+            _arr(p_ics.precomputed.surface_rain_flux),
+            _arr(p_ics.precomputed.surface_snow_flux),
+            _arr(p_ics.precomputed.col_integrated_precip_energy_tendency),
+            16,
+        )
+        @test maximum(abs, _arr(p_ics.precomputed.ᶜwᵢ)) >
+              maximum(abs, _arr(p_1.precomputed.ᶜwᵢ))
+        if _is_cpu_state(Y_ics)
+            @test _measure_sweep_allocs(Y_ics, p_ics, FT(60)) == 0
+        end
+    end
+
+    @testset "Grid-mean 1M CPU mixed-column compaction equivalence (VIJHWithF)" begin
+        FT = Float64
+        ctx = ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
+        box_grid = CA.BoxGrid(
+            FT;
+            context = ctx,
+            x_elem = 2,
+            x_max = FT(6000),
+            y_elem = 2,
+            y_max = FT(6000),
+            z_elem = 16,
+            z_max = FT(6000),
+            nh_poly = 2,
+            z_stretch = false,
+        )
+        spaces = CA.get_spaces(box_grid)
+        cspace, fspace = spaces.center_space, spaces.face_space
+        @test Fields.field_values(Fields.Field(FT, cspace)) isa
+              CA.DataLayouts.VIJHWithF
+
+        zc = Fields.coordinate_field(cspace).z
+        xc = Fields.coordinate_field(cspace).x
+        yc = Fields.coordinate_field(cspace).y
+        regime = @. mod(
+            floor(Int, FT(6) * xc / FT(6000)) +
+            floor(Int, FT(3) * yc / FT(6000)),
+            6,
+        )
+
+        for with_sgs in (false, true)
+            Y_plain, p_plain_base =
+                _build_synthetic_1m_state(cspace, fspace; with_sgs)
+            tps = CAP.thermodynamics_params(p_plain_base.params)
+            # Regimes across the 36 columns:
+            # 0: clear subsaturated (bucket 0)
+            # 1: warm cloud (bucket 2)
+            # 2: cold cloud (bucket 3)
+            # 3: warm precip only (bucket 4)
+            # 4: cold precip only (bucket 5)
+            # 5: negative cloud condensate + rain (bucket 5)
+            @. Y_plain.c.ρq_lcl = ifelse(
+                regime == 1,
+                Y_plain.c.ρ * FT(6e-4) * exp(-((zc - FT(1500)) / FT(500))^2),
+                ifelse(regime == 5, -Y_plain.c.ρ * FT(1e-6), FT(0)),
+            )
+            @. Y_plain.c.ρq_icl = ifelse(
+                regime == 2,
+                Y_plain.c.ρ * FT(3e-4) * exp(-((zc - FT(3500)) / FT(600))^2),
+                FT(0),
+            )
+            @. Y_plain.c.ρq_rai = ifelse(
+                (regime == 3) | (regime == 5),
+                Y_plain.c.ρ * FT(1.2e-3) * exp(-((zc - FT(2000)) / FT(700))^2),
+                FT(0),
+            )
+            @. Y_plain.c.ρq_sno = ifelse(
+                regime == 4,
+                Y_plain.c.ρ * FT(5e-4) * exp(-((zc - FT(3500)) / FT(700))^2),
+                FT(0),
+            )
+            T_prof = @. ifelse(
+                (regime == 2) | (regime == 4),
+                FT(260) - FT(0.005) * zc,
+                FT(290) - FT(0.002) * zc,
+            )
+            qv_prof = @. ifelse(
+                regime == 0,
+                FT(1e-5),
+                ifelse((regime == 2) | (regime == 4), FT(5e-5), FT(8e-3)),
+            )
+            @. Y_plain.c.ρq_tot =
+                Y_plain.c.ρ * qv_prof +
+                max(zero(FT), Y_plain.c.ρq_lcl) +
+                max(zero(FT), Y_plain.c.ρq_icl) +
+                max(zero(FT), Y_plain.c.ρq_rai) +
+                max(zero(FT), Y_plain.c.ρq_sno)
+            @. Y_plain.c.ρe_tot =
+                Y_plain.c.ρ * (
+                    TD.internal_energy(
+                        tps,
+                        T_prof,
+                        Y_plain.c.ρq_tot / Y_plain.c.ρ,
+                        max(zero(FT), Y_plain.c.ρq_lcl + Y_plain.c.ρq_rai) /
+                        Y_plain.c.ρ,
+                        max(zero(FT), Y_plain.c.ρq_icl + Y_plain.c.ρq_sno) /
+                        Y_plain.c.ρ,
+                    ) + p_plain_base.core.ᶜΦ
+                )
+            if with_sgs
+                m_clear = (;
+                    sigma_S = FT(1e-4),
+                    λ_lagrange = zero(FT),
+                    λ_eq = FT(-Inf),
+                )
+                m_active = (;
+                    sigma_S = FT(3e-4),
+                    λ_lagrange = zero(FT),
+                    λ_eq = FT(-5e-4),
+                )
+                @. p_plain_base.precomputed.ᶜT′T′ =
+                    ifelse(regime == 0, FT(1e-6), FT(0.04))
+                @. p_plain_base.precomputed.ᶜq′q′ =
+                    ifelse(regime == 0, FT(1e-12), FT(1e-7))
+                @. p_plain_base.precomputed.ᶜsgs_moments =
+                    ifelse(regime == 0, (m_clear,), (m_active,))
+            end
+
+            Y_comp = deepcopy(Y_plain)
+            p_plain = (; p_plain_base..., scratch = (; coupled_1m_compact = nothing))
+            ws = CA._build_coupled_1m_compact_workspace(
+                Fields.field_values(Y_comp.c.ρ),
+            )
+            p_comp = (;
+                deepcopy(p_plain_base)...,
+                scratch = (; coupled_1m_compact = ws),
+            )
+
+            CA.step_coupled_microphysics_sedimentation!(Y_plain, p_plain, FT(120))
+            CA.step_coupled_microphysics_sedimentation!(Y_comp, p_comp, FT(120))
+
+            cls_arr = Array(ws.cls)
+            @test any(==(UInt8(0)), cls_arr)
+            @test length(unique(cls_arr)) >= 4
+
+            for fname in (:ρ, :ρe_tot, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno)
+                @test _arr(getproperty(Y_comp.c, fname)) ≈
+                      _arr(getproperty(Y_plain.c, fname)) rtol = 1e-14 atol = 1e-15
+            end
+            for vname in (:ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ)
+                @test _arr(getproperty(p_comp.precomputed, vname)) ≈
+                      _arr(getproperty(p_plain.precomputed, vname)) rtol = 1e-14 atol =
+                    1e-15
+            end
+            @test _arr(p_comp.precomputed.ᶜwₕhₜ.components.data.:1) ≈
+                  _arr(p_plain.precomputed.ᶜwₕhₜ.components.data.:1) rtol = 1e-14 atol =
+                1e-15
+            @test _arr(p_comp.precomputed.surface_rain_flux) ≈
+                  _arr(p_plain.precomputed.surface_rain_flux) rtol = 1e-14 atol = 1e-15
+            @test _arr(p_comp.precomputed.surface_snow_flux) ≈
+                  _arr(p_plain.precomputed.surface_snow_flux) rtol = 1e-14 atol = 1e-15
+            @test _arr(p_comp.precomputed.col_integrated_precip_energy_tendency) ≈
+                  _arr(p_plain.precomputed.col_integrated_precip_energy_tendency) rtol =
+                1e-14 atol = 1e-15
+            if with_sgs
+                @test _arr(p_comp.precomputed.ᶜprecip_frac) ≈
+                      _arr(p_plain.precomputed.ᶜprecip_frac) rtol = 1e-14 atol = 1e-15
+            end
+
+            Y_comp_alloc = deepcopy(Y_comp)
+            @test _measure_sweep_allocs(Y_comp_alloc, p_comp, FT(120)) == 0
         end
     end
 

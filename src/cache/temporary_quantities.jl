@@ -91,6 +91,18 @@ function temporary_quantities(
             Fields.Field(typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))), center_space),
             1,
         ) : (),
+        coupled_1m_compact =
+        let ρ_data = Fields.field_values(Y.c.ρ)
+            if (ClimaComms.device(Y.c) isa ClimaComms.CUDADevice) &&
+               (atmos.microphysics_model isa NonEquilibriumMicrophysics1M) &&
+               !(atmos.turbconv_model isa PrognosticEDMFX) &&
+               (ρ_data isa DataLayouts.VIJHWithF) &&
+               (DataLayouts.nelems(ρ_data) > 0)
+                _build_coupled_1m_compact_workspace(ρ_data)
+            else
+                nothing
+            end
+        end,
         ᶠstage_entry_χ_e = ntuple(
             _ -> Fields.Field(FT, face_space),
             Val(n_stage_bufs),

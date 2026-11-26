@@ -73,13 +73,38 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-step physics callback plumbing" begin @time include("prognostic_equations/post_step_hook_tests.jl") end
-    @safetestset "Post-ARK vertical scalar transport" begin @time include("prognostic_equations/vertical_transport_step_tests.jl") end
-    @safetestset "Column physics step" begin @time include("prognostic_equations/column_physics_step_tests.jl") end
-    @safetestset "Split simulation end-to-end" begin @time include("prognostic_equations/split_simulation_e2e_tests.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
     @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
+
+# ============================================================================
+# Dynamics (Split VT): Post-ARK vertical scalar transport
+# ============================================================================
+if TEST_GROUP in ("dynamics_split_vt", "all")
+    @safetestset "Post-ARK vertical scalar transport" begin @time include("prognostic_equations/vertical_transport_step_tests.jl") end
+end
+
+# ============================================================================
+# Dynamics (Split VT Scalars): Hydrostatic energy & individual FCT scalars
+# ============================================================================
+if TEST_GROUP in ("dynamics_split_vt_scalars", "all")
+    @safetestset "Post-ARK vertical scalar conservation and FCT scalars" begin @time include("prognostic_equations/vertical_transport_scalars_tests.jl") end
+end
+
+# ============================================================================
+# Dynamics (Split Column): Coupled column physics step
+# ============================================================================
+if TEST_GROUP in ("dynamics_split_col", "all")
+    @safetestset "Column physics step" begin @time include("prognostic_equations/column_physics_step_tests.jl") end
+end
+
+# ============================================================================
+# Dynamics (Split E2E): Coupled split simulation end-to-end tests
+# ============================================================================
+if TEST_GROUP in ("dynamics_split_e2e", "all")
+    @safetestset "Split simulation end-to-end" begin @time include("prognostic_equations/split_simulation_e2e_tests.jl") end
 end
 
 # ============================================================================
