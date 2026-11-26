@@ -865,7 +865,7 @@ function set_precipitation_velocities!(
     Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )
     ## liquid quantities (2M warm rain)
-    (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵣ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     (; ρ, ρq_lcl, ρn_lcl, ρq_rai, ρn_rai) = Y.c
@@ -885,7 +885,7 @@ function set_precipitation_velocities!(
             ρ, max(zero(ρ), ρn_rai),
         ),
     )
-    @. ᶜwnᵣ = getindex(ᶜrai_w_terms, 1)
+    @. ᶜwₙᵣ = getindex(ᶜrai_w_terms, 1)
     @. ᶜwᵣ = getindex(ᶜrai_w_terms, 2)
     # Number- and mass weighted cloud liquid terminal velocity [m/s]
     ᶜliq_w_terms = @. lazy(
@@ -895,7 +895,7 @@ function set_precipitation_velocities!(
             ρ, max(zero(ρ), ρn_lcl),
         ),
     )
-    @. ᶜwnₗ = getindex(ᶜliq_w_terms, 1)
+    @. ᶜwₙₗ = getindex(ᶜliq_w_terms, 1)
     @. ᶜwₗ = getindex(ᶜliq_w_terms, 2)
 
     ## Ice quantities
