@@ -25,6 +25,11 @@ main
   computed. Dry runs carry no `∇²q_tot_eff`. Results change by roundoff on x86
   CPUs with AVX2 and FMA, where the DSS of the vector Laplacians as components
   of the packed field rounds differently from their standalone DSS.
+- ![][badge-🚀performance] The three horizontal-gradient invariants of
+  `set_covariance_cache_and_cloud_fraction!` share one struct-valued scratch
+  field, `p.scratch.ᶜhgrad_invariants` (whose components are `ᶜtemp_scalar_5`,
+  `temp_data`, and `ᶜtemp_scalar_6`), and one DSS. `hgrad_invariant!` and
+  `hgrad_cross_invariant!` take only the output and input fields.
 - ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
   snow sediment at the mass-weighted mean of the terminal velocities in the
   precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),

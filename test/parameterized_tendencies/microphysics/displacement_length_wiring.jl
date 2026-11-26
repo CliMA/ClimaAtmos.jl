@@ -67,7 +67,7 @@ bomex_column_config(job_id, tomls) = CA.AtmosConfig(
     Δx_h = FT(Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c))))
     ℓ_h_q² = c_g * (c_Δx * Δx_h)^2
     inv_q = zeros(axes(Y.c))
-    iszero(c_Δx) || CA.hgrad_invariant!(inv_q, ᶜq_tot_nonneg, p)
+    iszero(c_Δx) || CA.hgrad_invariant!(inv_q, ᶜq_tot_nonneg)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
@@ -129,4 +129,93 @@ end
     binds = q′q′ .≈ bound⁰
     @test count(binds) > 0
     @test !any(q′q′[binds] .≈ bound_gm[binds])
+end
+
+@noinline _alloc_hgrad_invariants_dss!(ᶜinvariants, buffer) =
+    @allocated Spaces.weighted_dss!(ᶜinvariants, buffer)
+
+@testset "Packed 3D horizontal-gradient-invariant DSS parity and 0 B allocations" begin
+    for FT in (Float32, Float64)
+        toml = joinpath(mktempdir(), "hgrad_scale_$FT.toml")
+        write(
+            toml,
+            "[sgs_variance_horizontal_scale_factor]\nvalue = 1.0\ntype = \"float\"\n",
+        )
+        config = CA.AtmosConfig(
+            Dict{String, Any}(
+                "initial_condition" => "Bomex",
+                "FLOAT_TYPE" => string(FT),
+                "config" => "box",
+                "microphysics_model" => "0M",
+                "x_max" => 6400.0,
+                "x_elem" => 2,
+                "y_max" => 6400.0,
+                "y_elem" => 2,
+                "z_max" => 3000.0,
+                "z_elem" => 6,
+                "z_stretch" => false,
+                "dt" => "1secs",
+                "t_end" => "10secs",
+                "toml" => [toml],
+                "output_default_diagnostics" => false,
+            );
+            job_id = "batched_hgrad_dss_$FT",
+        )
+        (; Y, p, simulation) = generate_test_simulation(config)
+        @test CA.do_dss(axes(Y.c))
+        @test !isnothing(p.scratch.ᶜhgrad_invariants_dss_buffer)
+
+        ᶜcoord = Fields.coordinate_field(Y.c)
+        ᶜpert_q = @. FT(1) +
+           FT(0.2) *
+           sin(FT(2π) * ᶜcoord.x / FT(6400)) *
+           cos(FT(2π) * ᶜcoord.y / FT(6400)) *
+           (FT(1) + ᶜcoord.z / FT(3000))
+        ᶜpert_e = @. FT(1) +
+           FT(0.03) *
+           cos(FT(4π) * ᶜcoord.x / FT(6400)) *
+           sin(FT(2π) * ᶜcoord.y / FT(6400)) *
+           cos(FT(π) * ᶜcoord.z / FT(3000))
+        @. Y.c.ρq_tot *= ᶜpert_q
+        @. Y.c.ρe_tot *= ᶜpert_e
+        CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+
+        thermo_params = CAP.thermodynamics_params(p.params)
+        CA.set_buoyancy_gradient_inputs!(Y, p, thermo_params, true)
+        ᶜθ_li = copy(p.scratch.ᶜtemp_scalar)
+        ref_q = similar(ᶜθ_li)
+        ref_θ = similar(ᶜθ_li)
+        ref_θq = similar(ᶜθ_li)
+        CA.hgrad_invariant!(ref_q, p.precomputed.ᶜq_tot_nonneg)
+        CA.hgrad_invariant!(ref_θ, ᶜθ_li)
+        CA.hgrad_cross_invariant!(ref_θq, ᶜθ_li, p.precomputed.ᶜq_tot_nonneg)
+
+        # `set_covariance_cache_and_cloud_fraction!` writes the three DSSed
+        # horizontal invariants into the packed field `ᶜhgrad_invariants`, whose
+        # components are the scratch fields `ᶜtemp_scalar_5`, `temp_data`, and
+        # `ᶜtemp_scalar_6`.
+        CA.set_covariance_cache_and_cloud_fraction!(Y, p)
+        (; ᶜhgrad_invariants) = p.scratch
+        ᶜinv_q = ᶜhgrad_invariants.q
+        ᶜinv_θ = ᶜhgrad_invariants.θ
+        ᶜinv_θq = ᶜhgrad_invariants.θq
+        @test all(parent(p.scratch.ᶜtemp_scalar_5) .=== parent(ᶜinv_q))
+        @test all(
+            parent(Fields.Field(p.scratch.temp_data, axes(Y.c))) .===
+            parent(ᶜinv_θ),
+        )
+        @test all(parent(p.scratch.ᶜtemp_scalar_6) .=== parent(ᶜinv_θq))
+        @test maximum(abs, parent(ref_q)) > zero(FT)
+        @test maximum(abs, parent(ref_θ)) > zero(FT)
+        @test maximum(abs, parent(ref_θq)) > zero(FT)
+        @test all(parent(ᶜinv_q) .=== parent(ref_q))
+        @test all(parent(ᶜinv_θ) .=== parent(ref_θ))
+        @test all(parent(ᶜinv_θq) .=== parent(ref_θq))
+
+        if Base.JLOptions().check_bounds != 1
+            buffer = p.scratch.ᶜhgrad_invariants_dss_buffer
+            _alloc_hgrad_invariants_dss!(ᶜhgrad_invariants, buffer)
+            @test _alloc_hgrad_invariants_dss!(ᶜhgrad_invariants, buffer) == 0
+        end
+    end
 end
