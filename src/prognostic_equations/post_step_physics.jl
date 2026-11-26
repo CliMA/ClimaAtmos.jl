@@ -279,7 +279,7 @@ function step_post_ark_physics!(Y, p, t, Δt, integrator_cache)
             step_vertical_scalar_transport!(Y, p, Δt, integrator_cache) :
             nothing
         record_realized_increment!(Y, p, :vtrans)
-        set_precomputed_quantities!(Y, p, t)
+        set_precomputed_quantities!(Y, p, t; update_precip_velocities = false)
         step_column_physics!(Y, p, t, Δt; ᶠF̃)
     else
         hook!(Y, p, t, Δt, integrator_cache)

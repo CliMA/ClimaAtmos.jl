@@ -998,14 +998,33 @@ function set_end_of_step_precomputed_quantities!(Y, p, t)
 end
 
 """
-    set_precomputed_quantities!(Y, p, t)
+    set_precomputed_quantities!(
+        Y,
+        p,
+        t;
+        update_precip_velocities = !is_stage_cache_update(Y, p),
+    )
 
 Update all precomputed quantities in `p.precomputed` based on the current
-state `Y` via `set_implicit_precomputed_quantities_core!` and
-`set_explicit_precomputed_quantities!`.
+state `Y` via `set_implicit_precomputed_quantities_core!`,
+`set_explicit_precomputed_quantities!`, and, when `update_precip_velocities` is
+`true`, `set_precipitation_velocities!`.
 """
-function set_precomputed_quantities!(Y, p, t)
+function set_precomputed_quantities!(
+    Y,
+    p,
+    t;
+    update_precip_velocities::Bool = !is_stage_cache_update(Y, p),
+)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     set_explicit_precomputed_quantities!(Y, p, t)
+    if update_precip_velocities
+        set_precipitation_velocities!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
     return nothing
 end

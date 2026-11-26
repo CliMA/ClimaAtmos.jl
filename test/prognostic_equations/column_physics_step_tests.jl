@@ -72,9 +72,15 @@ function _col_sum(field, ᶜJ)
     return sum(Array(parent(field .* ᶜJ)))
 end
 
-function _with_cache(p::CA.AtmosCache; atmos = p.atmos, dt = p.dt)
+function _with_cache(
+    p::CA.AtmosCache;
+    atmos = p.atmos,
+    dt = p.dt,
+    params = p.params,
+)
     vals = map(fieldnames(CA.AtmosCache)) do f
-        f === :atmos ? atmos : (f === :dt ? dt : getfield(p, f))
+        f === :atmos ? atmos :
+        (f === :dt ? dt : (f === :params ? params : getfield(p, f)))
     end
     return CA.AtmosCache(vals...)
 end
@@ -902,8 +908,20 @@ _surface_area(ᶠlg) = ᶠlg.J * parent(ᶠlg.∂ξ∂x)[end]
             1e-12
 
         # 2. Constant scalar χ ≡ const and uniform η preserved with ᶠF̃ ≠ 0 (sfc flux disabled)
+        # Environment-mean entrainment (`edmf_tail_entr_fraction = 1`) preserves
+        # uniform `η`; tail entrainment (`f = 0.5`) draws warmer air from the
+        # environment's subgrid distribution while conserving column energy.
+        tc_notail =
+            CA.TurbulenceConvectionParameters(FT, (; edmf_tail_entr_fraction = FT(1)))
+        params_notail = CAP.ClimaAtmosParameters(
+            map(
+                f -> f === :turbconv_params ? tc_notail : getfield(p.params, f),
+                fieldnames(CAP.ClimaAtmosParameters),
+            )...,
+        )
         p_nosfc = _with_cache(
             p;
+            params = params_notail,
             atmos = CA.AtmosModel(
                 p.atmos;
                 disable_surface_flux_tendency = true,
@@ -960,6 +978,7 @@ _surface_area(ᶠlg) = ᶠlg.J * parent(ᶠlg.∂ξ∂x)[end]
         CA.set_precomputed_quantities!(Y, p_nosfc, FT(0))
         K1_const_before = Array(parent(p_nosfc.precomputed.ᶜKʲs.:(1)))
         e_col_const_before = _col_sum(Y.c.ρe_tot, ᶜJ)
+        Y_const_init = copy(Y)
         CA.step_edmf_and_env_turbulence!(Y, p_nosfc, FT(0), FT(120); ᶠF̃)
         @test maximum(abs.(Array(parent(Y.c.ρq_tot ./ Y.c.ρ)) .- q_const_ed)) < 1e-12
         @test maximum(abs.(Array(parent(Y.c.sgsʲs.:(1).q_tot)) .- q_const_ed)) < 1e-12
@@ -971,6 +990,16 @@ _surface_area(ᶠlg) = ᶠlg.J * parent(ᶠlg.∂ξ∂x)[end]
         ) > FT(1)
         @test abs(_col_sum(Y.c.ρe_tot, ᶜJ) - e_col_const_before) <
               1e-12 * abs(e_col_const_before)
+
+        # Default tail entrainment (`f_tail = 0.5`) from the same initial state
+        copyto!(Y, Y_const_init)
+        p_nosfc_tail = _with_cache(p_nosfc; params = p.params)
+        CA.set_precomputed_quantities!(Y, p_nosfc_tail, FT(0))
+        e_col_tail_before = _col_sum(Y.c.ρe_tot, ᶜJ)
+        CA.step_edmf_and_env_turbulence!(Y, p_nosfc_tail, FT(0), FT(120); ᶠF̃)
+        @test maximum(Array(parent(Y.c.sgsʲs.:(1).mse))) > η_const + FT(1)
+        @test abs(_col_sum(Y.c.ρe_tot, ᶜJ) - e_col_tail_before) <
+              1e-12 * abs(e_col_tail_before)
 
         # 3. 3D EDMF (ᶠF̃ ≠ 0) conservation and updraft area/velocity bounds
         p_nodiff = _with_cache(

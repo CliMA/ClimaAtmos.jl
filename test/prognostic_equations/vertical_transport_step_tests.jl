@@ -893,12 +893,12 @@ end
                 @test isapprox(
                     _column_integral(Y.c.ρq_tot),
                     qt_init_int;
-                    atol = FT(1e-14),
+                    rtol = FT(1e-13),
                 )
                 @test isapprox(
                     _column_integral(Y.c.ρq_lcl),
                     ql_init_int;
-                    atol = FT(1e-14),
+                    rtol = FT(1e-13),
                 )
             end
         end

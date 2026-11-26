@@ -699,6 +699,7 @@ with any phase-change options stored on `microphysics_1m_implicit_params`.
         air_properties = mp.air_properties,
         terminal_velocity = mp.terminal_velocity,
         max_latent_heating_rate = mp.max_latent_heating_rate,
+        temperature_rain_collision_snow = mp.temperature_rain_collision_snow,
     )
 end
 
@@ -732,6 +733,7 @@ end
         air_properties = mp.air_properties,
         terminal_velocity = mp.terminal_velocity,
         max_latent_heating_rate = mp.max_latent_heating_rate,
+        temperature_rain_collision_snow = mp.temperature_rain_collision_snow,
     )
 end
 
