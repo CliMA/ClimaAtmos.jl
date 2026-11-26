@@ -331,26 +331,29 @@ function nan_checking_callback(check_nan_every::Int)
 end
 
 """
-    graceful_exit_callback(output_dir)
+    graceful_exit_callback(output_dir; mpi_check_every = 100)
 
 Build the callback that lets a user stop a running simulation from the filesystem.
 
-Polls `maybe_graceful_exit` every step and calls `terminate!` when a stop has been
-requested, so the run ends through the integrator with its output intact.
+Calls `maybe_graceful_exit` every step in a single-process run and every
+`mpi_check_every` steps in a multi-process run, where each check is a broadcast
+from the root process that every rank waits for, and calls `terminate!` when a stop
+has been requested, so the run ends through the integrator with its output intact.
 
 # Returns
 
 A one-element tuple holding a `DiscreteCallback`.
 """
-function graceful_exit_callback(output_dir)
-    return (
-        call_every_n_steps(
-            terminate!;
-            skip_first = true,
-            condition = (u, t, integrator) ->
-                maybe_graceful_exit(output_dir, integrator),
-        ),
-    )
+function graceful_exit_callback(output_dir; mpi_check_every = 100)
+    step = Ref(0)
+    condition =
+        (u, t, integrator) -> begin
+            check_every =
+                ClimaComms.nprocs(ClimaComms.context(u.c)) > 1 ? mpi_check_every : 1
+            (step[] += 1) % check_every == 0 &&
+                maybe_graceful_exit(output_dir, integrator)
+        end
+    return (call_every_n_steps(terminate!; skip_first = true, condition),)
 end
 
 """

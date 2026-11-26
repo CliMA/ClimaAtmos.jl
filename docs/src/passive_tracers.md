@@ -61,16 +61,16 @@ This pairing is enforced by `get_ρχ_name(χ_name)`, which constructs
 The following operations are auto-discovered for all SGS tracers. No code
 changes are needed when adding a new tracer:
 
-| Operation                                       | File                    | Pattern                             |
-|:----------------------------------------------- |:----------------------- |:----------------------------------- |
-| Horizontal advection                            | `advection.jl`          | `for χ_name in sgs_tracer_names(Y)` |
-| Vertical advection (advective form)             | `advection.jl`          | `for χ_name in sgs_tracer_names(Y)` |
-| Entrainment/detrainment mixing                  | `edmfx_entr_detr.jl`    | `for χ_name in sgs_tracer_names(Y)` |
-| SGS mass flux (draft + environment → grid mean) | `edmfx_sgs_flux.jl`     | `for χ_name in sgs_tracer_names(Y)` |
-| SGS diffusive flux (grid mean)                  | `edmfx_sgs_flux.jl`     | `foreach_gs_tracer(Yₜ, Y)`          |
-| SGS hyperdiffusion                              | `hyperdiffusion.jl`     | `for χ_name in sgs_tracer_names(Y)` |
-| Updraft constraint enforcement                  | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
-| Rayleigh sponge damping                         | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)` |
+| Operation                                       | File                    | Pattern                                               |
+|:----------------------------------------------- |:----------------------- |:----------------------------------------------------- |
+| Horizontal advection                            | `advection.jl`          | `for χ_name in sgs_tracer_names(Y)`                   |
+| Vertical advection (advective form)             | `advection.jl`          | `for χ_name in sgs_tracer_names(Y)`                   |
+| Entrainment/detrainment mixing                  | `edmfx_entr_detr.jl`    | `for χ_name in sgs_tracer_names(Y)`                   |
+| SGS mass flux (draft + environment → grid mean) | `edmfx_sgs_flux.jl`     | `for χ_name in sgs_tracer_names(Y)`                   |
+| SGS diffusive flux (grid mean)                  | `edmfx_sgs_flux.jl`     | `foreach_gs_tracer(Yₜ, Y)`                            |
+| SGS hyperdiffusion                              | `hyperdiffusion.jl`     | `unrolled_foreach(hyperdiffused_sgs_tracer_names(Y))` |
+| Updraft constraint enforcement                  | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)`                   |
+| Rayleigh sponge damping                         | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)`                   |
 
 Rain and snow (`ρq_rai`, `ρq_sno`, `ρn_rai`) diffuse only under the LES
 closures. Suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`, and

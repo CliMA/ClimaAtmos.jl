@@ -18,6 +18,22 @@ main
   (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022` for cloud ice
   (`cloud_ice_terminal_velocity: "Chen2022"`), matching the state-dependent
   `Chen2022` defaults used for rain and snow.
+- ![][badge-🚀performance] Hyperdiffusion computes all its Laplacians,
+  including those of passive grid-scale and SGS tracers, in one slab loop into
+  one struct-valued field `p.hyperdiff.ᶜ∇²`, so a single DSS covers them, and
+  its halo exchange runs while the horizontal advection tendencies are
+  computed. Dry runs carry no `∇²q_tot_eff`. Results change by roundoff on x86
+  CPUs with AVX2 and FMA, where the DSS of the vector Laplacians as components
+  of the packed field rounds differently from their standalone DSS.
+- ![][badge-🚀performance] The three horizontal-gradient invariants of
+  `set_covariance_cache_and_cloud_fraction!` share one struct-valued scratch
+  field, `p.scratch.ᶜhgrad_invariants` (whose components are `ᶜtemp_scalar_5`,
+  `temp_data`, and `ᶜtemp_scalar_6`), and one DSS. `hgrad_invariant!` and
+  `hgrad_cross_invariant!` take only the output and input fields.
+- ![][badge-🚀performance] The Jacobian allocates its two Krylov work vectors
+  only when `use_krylov_method` is set. In multi-process runs, only the root
+  process reads `graceful_exit.dat`, every 100 steps, and broadcasts the result,
+  so all ranks stop at the same step.
 - ![][badge-🔥behavioralΔ] With 1-moment microphysics under SGS quadrature, rain and
   snow sediment at the mass-weighted mean of the terminal velocities in the
   precipitation shaft and in the rest of the cell (`shaft_weighted_terminal_velocity`),

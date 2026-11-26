@@ -33,8 +33,6 @@ const IGNORED = Set([
     :rc,
     :ᶜmp_tendency,
     :rrtmgp_solver,
-    # Unwritten when every SGS tracer is a microphysics species
-    :ᶜ∇²sgs_tracerʲs,
 ])
 
 # Note that isequal(-0.0, 0.0) is false

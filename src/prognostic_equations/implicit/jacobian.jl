@@ -45,20 +45,22 @@ abstract type SparseJacobian <: JacobianAlgorithm end
 # Mutable (with const fields) for the same compile-time reason as `AtmosCache`.
 
 """
-    Jacobian(alg, Y, atmos; [verbose])
+    Jacobian(alg, Y, atmos; [verbose], [krylov])
 
 Wrapper for a [`JacobianAlgorithm`](@ref) and its cache, which it uses to update
 and invert the Jacobian. ClimaTimeSteppers.jl interacts with it through
 `update_jacobian!` (before each linear solve) and `LinearAlgebra.ldiv!` (each
 linear solve). The optional `verbose` flag specifies whether debugging
-information should be printed during initialization.
+information should be printed during initialization. With `krylov = true`, the
+cache also holds two state-sized work vectors for the preconditioner solves of a
+Krylov method, which pass flat vectors.
 """
 mutable struct Jacobian{A <: JacobianAlgorithm, C}
     const alg::A
     const cache::C
 end
-function Jacobian(alg, Y, atmos; verbose = false)
-    krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
+function Jacobian(alg, Y, atmos; verbose = false, krylov = false)
+    krylov_cache = krylov ? (; ΔY_krylov = similar(Y), R_krylov = similar(Y)) : (;)
     cache = (; jacobian_cache(alg, Y, atmos; verbose)..., krylov_cache...)
     return Jacobian(alg, cache)
 end
@@ -94,6 +96,10 @@ function LinearAlgebra.ldiv!(
     jacobian::Jacobian,
     R::AbstractVector,
 )
+    hasproperty(jacobian.cache, :ΔY_krylov) || error(
+        "Solving with flat vectors requires a `Jacobian` constructed with \
+         `krylov = true`",
+    )
     (; ΔY_krylov, R_krylov) = jacobian.cache
     R_krylov .= R
     LinearAlgebra.ldiv!(ΔY_krylov, jacobian, R_krylov)
