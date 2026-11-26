@@ -3,6 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] ![][badge-🔥behavioralΔ] Add sparse multi-head
+  Matérn-3/2 Gaussian process EDMF closures (`edmfx_entr_model: "GPInvZ"`,
+  `edmfx_detr_model: "GPBuoyancy"`, `edmf_detr_mix_coeff`), mass- and
+  energy-conserving updraft hydrometeor detrainment shedding
+  (`edmf_condensate_detr_coeff`, `edmf_precip_detr_coeff`), prescribed-aerosol
+  CCN droplet number for liquid cloud optics (`aerosol_radiation_nd`,
+  `aerosol_nd_reference_number`, `aerosol_nd_mass_exponent`), and
+  regime-selective updraft variance fidelity
+  (`sgs_fidelity_updraft_coeff_stratiform`, `sgs_fidelity_updraft_share_ref`,
+  `sgs_fidelity_updraft_warm_ramp_start`, `sgs_fidelity_updraft_warm_ramp_end`,
+  `sgs_fidelity_updraft_inv_blend`).
+- ![][badge-🔥behavioralΔ] Add self-contained provisional 1M `PrognosticEDMFX`
+  and GP-EDMF AMIP target overrides in `toml/amip_target.toml` (keeping
+  `toml/default_parameters.toml` unchanged), enabling `GPInvZ`, `GPBuoyancy`,
+  `aerosol_radiation_nd: true`, `sgs_variance_fidelity_model: "updraft"`, and
+  `snow_deposition_sublimation: "DepositionAndSublimation"` in
+  `config/longrun_configs/amip_target.yml`.
 - ![][badge-✨feature/enhancement] Add a convective vertical velocity for the
   `Kessler1M` rain autoconversion of the `PrognosticEDMFX` environment
   (`env_autoconversion_velocity`). The fraction `f_neq` of the environment cloud

@@ -6,20 +6,24 @@ dt_rad: "1hours"
 insolation: "timevarying"
 time_varying_trace_gases: ["CO2", "O3"]
 aerosol_radiation: true
+aerosol_radiation_nd: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 surface_setup: "DefaultMoninObukhov"
 turbconv: "prognostic_edmfx"
 prognostic_tke: true
-edmfx_entr_model: "Generalized"
-edmfx_detr_model: "Generalized"
+edmfx_entr_model: "GPInvZ"
+edmfx_detr_model: "GPBuoyancy"
 edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
+sgs_variance_fidelity_model: "updraft"
 microphysics_model: "1M"
+snow_deposition_sublimation: "DepositionAndSublimation"
 non_orographic_gravity_wave: true
 dt_nogw: "400secs"
 nogw_beres_source: true
 topography: "Earth"
 topo_smoothing: true
+toml: [toml/amip_target.toml]

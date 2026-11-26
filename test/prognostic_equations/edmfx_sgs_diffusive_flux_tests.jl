@@ -99,20 +99,26 @@ include("../test_helpers.jl")
             ᶜq_liq⁰,
             ᶜq_ice⁰,
         )
-        cmp = CAP.cloud_formation_1m_params(p.params)
+        (; cmp, constant_timescales, τ_liquid, τ_ice) =
+            CA.cloud_species_blend_params(p)
+        τ_phase = phase isa TD.Liquid ? τ_liquid : τ_ice
         ᶜλ = @. CA.cloud_species_flux_blend(
             ᶜl_mix,
             Y.c.ρtke / Y.c.ρ,
             c_d,
-            CA.cloud_species_relaxation_time(
-                cmp,
-                thermo_params,
-                ᶜT⁰,
-                ᶜρ_air,
-                ᶜq_tot⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-                phase,
+            ifelse(
+                constant_timescales,
+                τ_phase,
+                CA.cloud_species_relaxation_time(
+                    cmp,
+                    thermo_params,
+                    ᶜT⁰,
+                    ᶜρ_air,
+                    ᶜq_tot⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
+                    phase,
+                ),
             ),
         )
         ᶜc_qt = @. first(

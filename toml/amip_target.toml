@@ -1,0 +1,207 @@
+# AMIP target overrides layered on top of toml/default_parameters.toml
+
+# sponge
+
+[zd_rayleigh]
+value = 30000.0
+type = "float"
+
+[zd_viscous]
+value = 30000.0
+type = "float"
+
+# GP-EDMF closures, entrainment/detrainment, and updraft hydrometeor detrainment shedding
+
+[entr_coeff]
+value = 0.1
+type = "float"
+
+[entr_subsat_coeff]
+value = 2.5
+type = "float"
+
+[edmf_tail_entr_fraction]
+value = 0.767
+type = "float"
+
+[detr_massflux_vertdiv_coeff]
+value = 0.1
+type = "float"
+
+[turb_entr_param_vec]
+value = [0.003, 1900.0]
+type = "float"
+
+[turb_entr_height_scale]
+value = 3500.0
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+value = 8.0
+type = "float"
+
+[pressure_drag_plume_radius_slope]
+value = 0.2
+type = "float"
+
+[pressure_drag_plume_radius_max]
+value = 1000.0
+type = "float"
+
+[edmf_detr_mix_coeff]
+value = 0.1510402487955914
+type = "float"
+
+[edmf_condensate_detr_coeff]
+value = 0.3038085081510233
+type = "float"
+
+[edmf_precip_detr_coeff]
+value = 0.3392784061081076
+type = "float"
+
+[edmf_gp_entr_weights]
+value = [-0.757253270092904, 1.1134257919288475, 0.29037723863249604, 0.21621615722827817, 0.06285020936025265, 0.16251334703615525, -0.13505050015627892, 0.604174175410776, 0.4735997864929836, -0.11746482486589822]
+type = "float"
+
+[edmf_gp_detr_buoy_weights]
+value = [0.30926116872609655, -0.15361269837529112, -0.3167771907851164, -0.2640903096978596, 0.30740393124355814, -0.3446659889612943, -0.39779942751912695, 0.06157448854629861, -0.28839331095140036, 0.45133817155925043]
+type = "float"
+
+[edmf_gp_detr_mix_weights]
+value = [0.4524984037851164, -0.35837723433694213, -0.11734381240830694, -1.0451630627168713, -0.16913868663873732, 0.41072533571536124, -0.4163595005788844, 0.24465528539932918, -0.2104158124667244, 0.4032799986415596]
+type = "float"
+
+[mixing_length_Prandtl_maximum]
+value = 10.0
+type = "float"
+
+# SGS quadrature, precipitation fractions, and regime-selective updraft fidelity
+
+[sgs_cloud_species_constant_timescales]
+value = 1.0
+type = "float"
+
+[sgs_env_autoconversion_updraft_velocity_weight]
+value = 1.0
+type = "float"
+
+[sgs_env_autoconversion_detrained_velocity]
+value = 0.04
+type = "float"
+
+[sgs_variance_horizontal_scale_factor]
+value = 1.2447861899404595
+type = "float"
+
+[sgs_variance_vertical_velocity_floor]
+value = 0.95
+type = "float"
+
+[sgs_fidelity_equilibrium_weight]
+value = 0.35
+type = "float"
+
+[sgs_fidelity_updraft_coeff]
+value = 2.5
+type = "float"
+
+[sgs_fidelity_updraft_min]
+value = 0.2598271996772409
+type = "float"
+
+[sgs_fidelity_updraft_coeff_stratiform]
+value = 0.75
+type = "float"
+
+[sgs_fidelity_updraft_share_ref]
+value = 0.6
+type = "float"
+
+[sgs_fidelity_updraft_warm_ramp_start]
+value = 248.15
+type = "float"
+
+[sgs_fidelity_updraft_warm_ramp_end]
+value = 258.15
+type = "float"
+
+[sgs_fidelity_updraft_inv_blend]
+value = 1.0
+type = "float"
+
+[sgs_cloud_sedimentation_cf_floor]
+value = 0.02
+type = "float"
+
+[sgs_precip_incloud_fraction]
+value = 0.55
+type = "float"
+
+[sgs_precip_overlap_decay]
+value = 0.9
+type = "float"
+
+[sgs_precip_fraction_floor]
+value = 0.21
+type = "float"
+
+# microphysics
+
+[sublimation_deposition_timescale]
+value = 140
+type = "float"
+
+[rain_autoconversion_timescale]
+value = 210.0
+type = "float"
+
+[rain_autoconversion_timescale_stratiform_scale]
+value = 7.072
+type = "float"
+
+[snow_autoconversion_timescale]
+value = 930.0
+type = "float"
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 0.00032
+type = "float"
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform_scale]
+value = 2.5
+type = "float"
+
+[rain_autoconversion_velocity_scale]
+value = 0.35
+type = "float"
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+value = 1.95e-5
+type = "float"
+
+[cloud_ice_number_max]
+value = 240000.0
+type = "float"
+
+[cloud_liquid_snow_collision_efficiency]
+value = 0.5
+type = "float"
+
+[cloud_fraction_steepness_scale]
+value = 1.85
+type = "float"
+
+[cloud_fraction_eps_rel]
+value = 0.0
+type = "float"
+
+# prescribed-aerosol droplet number
+
+[aerosol_nd_reference_number]
+value = 9.0e7
+type = "float"
+
+[aerosol_nd_mass_exponent]
+value = 0.41
+type = "float"
