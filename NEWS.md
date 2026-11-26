@@ -21,6 +21,15 @@ main
 - ![][badge-🚀performance] Batch the three horizontal-gradient-invariant DSS
   exchanges in `set_covariance_cache_and_cloud_fraction!` into one
   `Spaces.weighted_dss!` pass. Hyperdiffusion computes all its Laplacians,
+- ![][badge-🚀performance] The three horizontal-gradient invariants of
+  `set_covariance_cache_and_cloud_fraction!` share one struct-valued scratch
+  field, `p.scratch.ᶜhgrad_invariants` (whose components are `ᶜtemp_scalar_5`,
+  `temp_data`, and `ᶜtemp_scalar_6`), and one DSS. `hgrad_invariant!` and
+  `hgrad_cross_invariant!` no longer take `p`. Dry runs no longer allocate or
+  exchange `∇²q_tot_eff`, the Jacobian allocates its two Krylov work vectors only
+  when `use_krylov_method` is set, and in multi-process runs only the root
+  process reads `graceful_exit.dat`, every 100 steps, and broadcasts the result,
+  so all ranks stop at the same step. Hyperdiffusion computes all its Laplacians,
   including those of passive grid-scale and SGS tracers, in one slab loop into
   one struct-valued field `p.hyperdiff.ᶜ∇²`, so a single DSS covers them, and
   its halo exchange runs while the horizontal advection tendencies are

@@ -122,3 +122,17 @@ end
     @test_logs CA.warn_if_not_whole_steps("dt_nogw", "360secs", 120.0)
     @test_logs CA.warn_if_not_whole_steps("dt_nogw", "Inf", 120.0)
 end
+
+@testset "Graceful exit request file" begin
+    output_dir = joinpath(mktempdir(), "graceful_exit_test")
+    file = joinpath(output_dir, "graceful_exit.dat")
+    # The first read creates the file holding `0`.
+    @test CA.read_graceful_exit_request(output_dir) === false
+    @test read(file, String) == "0"
+    write(file, "1")
+    @test CA.read_graceful_exit_request(output_dir) === true
+    # Unparsable contents are reset to `0`.
+    write(file, "x")
+    @test CA.read_graceful_exit_request(output_dir) === false
+    @test read(file, String) == "0"
+end

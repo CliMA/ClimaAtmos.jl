@@ -172,6 +172,12 @@ function temporary_quantities(
 
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
+    # The three horizontal-gradient invariants of the geometric SGS variance
+    # (`set_covariance_cache_and_cloud_fraction!`) share one struct-valued field,
+    # so that one DSS covers them. Its components are the scratch fields
+    # `ᶜtemp_scalar_5`, `temp_data`, and `ᶜtemp_scalar_6`.
+    ᶜhgrad_invariants =
+        Fields.Field(NamedTuple{(:q, :θ, :θq), NTuple{3, FT}}, center_space)
     return (;
         compensate_explicit_scalar_advection,
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp in the orographic gravity wave drag
@@ -180,8 +186,8 @@ function temporary_quantities(
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space),
-        ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
-        ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
+        ᶜtemp_scalar_5 = ᶜhgrad_invariants.q,
+        ᶜtemp_scalar_6 = ᶜhgrad_invariants.θq,
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space), # ᶜq_precip of the environment in the cloud fraction; ᶜw⁰ of the environment 1M autoconversion
         precipitation_surface_flux_accumulator_quantities(
             Y,
@@ -192,7 +198,7 @@ function temporary_quantities(
         cosp_temporary_quantities(Y, atmos.cosp)...,
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
-        temp_data = Fields.field_values(Fields.Field(FT, center_space)),
+        temp_data = Fields.field_values(ᶜhgrad_invariants.θ),
         # Whether the deferred 1M quantities are out of date: `ᶜsgs_moments`,
         # the implicit tendency `ᶜmp_tendency_implicit*`, and the updraft
         # tendency `ᶜmp_tendencyʲs`. The stage hooks set the flags and the
@@ -200,18 +206,12 @@ function temporary_quantities(
         sgs_moments_are_stale = Base.RefValue(false),
         implicit_1m_tendency_is_stale = Base.RefValue(false),
         updraft_1m_tendency_is_stale = Base.RefValue(false),
-        # DSS buffers for the three horizontal-gradient invariants of the
-        # geometric SGS variance (`set_covariance_cache_and_cloud_fraction!`,
-        # `hgrad_invariant!`); `nothing` on spaces that need no DSS.
-        ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
-                             Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
-                             nothing,
-        ᶜscalar_dss_buffer_2 = (uses_covariances(atmos) && do_dss(center_space)) ?
-                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
-                               nothing,
-        ᶜscalar_dss_buffer_3 = (uses_covariances(atmos) && do_dss(center_space)) ?
-                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
-                               nothing,
+        ᶜhgrad_invariants,
+        # DSS buffer for `ᶜhgrad_invariants`; `nothing` on spaces that need no
+        # DSS.
+        ᶜhgrad_invariants_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
+                                       Spaces.create_dss_buffer(ᶜhgrad_invariants) :
+                                       nothing,
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(

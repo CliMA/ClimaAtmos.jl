@@ -136,7 +136,12 @@ function get_jacobian(
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
     verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
-    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
+    # Only a Krylov method solves with flat vectors, which need the work
+    # vectors of the Jacobian's Krylov cache.
+    krylov =
+        ode_algo isa CTS.IMEXAlgorithm && !isnothing(ode_algo.newtons_method) &&
+        !isnothing(ode_algo.newtons_method.krylov_method)
+    jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian, krylov)
     if verbose && hasproperty(jac.cache, :derivative_flags)
         flags_str = join(
             ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),

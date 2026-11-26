@@ -38,14 +38,14 @@ Returns an empty `NamedTuple` when `atmos.hyperdiff` is `nothing`. Otherwise
 allocates one struct-valued field `ᶜ∇²` that holds every Laplacian, so that a
 single DSS covers them, and a DSS buffer for it when the space requires DSS. The
 cache also holds views of the components of `ᶜ∇²`: `ᶜ∇²u`, the energy-split
-fields `ᶜ∇²T`, `ᶜ∇²Φ`, and `ᶜ∇²q_tot_eff` (energy hyperdiffusion acts on the
-sensible heat `c_p ∇∇²T`, the geopotential, and an enthalpy-weighted effective
-total water, never on a lumped `h_tot`), `ᶜ∇²specific_tracers` when the state
-has passive grid-scale tracers, the corresponding per-updraft fields for
-`PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs`, plus
-`ᶜ∇²sgs_tracerʲs` when the state has passive SGS tracers; the updrafts share
-`ᶜ∇²Φ`), and `ᶜ∇²tke` when the turbulence-convection model carries prognostic
-TKE. For `PrognosticEDMFX`, also allocates
+fields `ᶜ∇²T`, `ᶜ∇²Φ`, and, when `ρq_tot` is prognostic, `ᶜ∇²q_tot_eff`
+(energy hyperdiffusion acts on the sensible heat `c_p ∇∇²T`, the geopotential,
+and an enthalpy-weighted effective total water, never on a lumped `h_tot`),
+`ᶜ∇²specific_tracers` when the state has passive grid-scale tracers, the
+corresponding per-updraft fields for `PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²Tʲs`, and
+`ᶜ∇²q_tot_effʲs`, plus `ᶜ∇²sgs_tracerʲs` when the state has passive SGS tracers;
+the updrafts share `ᶜ∇²Φ`), and `ᶜ∇²tke` when the turbulence-convection model
+carries prognostic TKE. For `PrognosticEDMFX`, also allocates
 the per-updraft scratch fields `ᶜscratchʲs` and `ᶜscratch_2ʲs`, which are not
 DSSed. Both apply functions use `ᶜscratchʲs` (`apply_hyperdiffusion_tendency!`
 for `ᶜcpʲs`, `apply_tracer_hyperdiffusion_tendency!` for `ᶜq_tot_hyperdiffʲs`),
@@ -77,7 +77,7 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
         u = C123{FT},
         T = FT,
         Φ = FT,
-        q_tot_eff = FT,
+        (MatrixFields.has_field(Y, @name(c.ρq_tot)) ? (; q_tot_eff = FT) : (;))...,
         (
             isempty(gs_syms) ? (;) :
             (; specific_tracers = NamedTuple{gs_syms, NTuple{length(gs_syms), FT}})
@@ -317,7 +317,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ) = p.hyperdiff
     if is_edmf
         (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
         # Shares `ᶜscratchʲs` with `ᶜq_tot_hyperdiffʲs` in
@@ -385,7 +385,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ν₄_scalar * (
                 wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) +
                 wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ)) +
-                wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
+                wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(p.hyperdiff.ᶜ∇²q_tot_eff))
             )
     end
     if (turbconv_model isa AbstractEDMF) && diffuse_tke

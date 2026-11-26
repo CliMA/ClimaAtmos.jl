@@ -54,29 +54,22 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # not first compiled without it.
     if uses_hgrad
         ᶜθ_li = p.scratch.ᶜtemp_scalar
-        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-        ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
-        ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+        (; ᶜhgrad_invariants) = p.scratch
         DataLayouts.foreach_slab(
-            ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq_tot_nonneg, ᶜθ_li;
+            ᶜhgrad_invariants, ᶜq_tot_nonneg, ᶜθ_li;
             shmem = Val(:medium),
-        ) do ᶜinv_q, ᶜinv_θ, ᶜinv_θq, ᶜq, ᶜθ
+        ) do ᶜinv, ᶜq, ᶜθ
+            ᶜinv_q = ᶜinv.q
+            ᶜinv_θ = ᶜinv.θ
+            ᶜinv_θq = ᶜinv.θq
             ᶜ∇q = @. gradₕ(ᶜq)
             ᶜ∇θ = @. gradₕ(ᶜθ)
             @. ᶜinv_q = lumpedₕ(norm_sqr(ᶜ∇q))
             @. ᶜinv_θ = lumpedₕ(norm_sqr(ᶜ∇θ))
             @. ᶜinv_θq = lumpedₕ(dot(Geometry.Contravariant12Vector(ᶜ∇θ), ᶜ∇q))
         end
-        buf1 = p.scratch.ᶜscalar_dss_buffer
-        if !isnothing(buf1)
-            buf2 = p.scratch.ᶜscalar_dss_buffer_2
-            buf3 = p.scratch.ᶜscalar_dss_buffer_3
-            Spaces.weighted_dss!(
-                ᶜinv_q => buf1,
-                ᶜinv_θ => buf2,
-                ᶜinv_θq => buf3,
-            )
-        end
+        buffer = p.scratch.ᶜhgrad_invariants_dss_buffer
+        isnothing(buffer) || Spaces.weighted_dss!(ᶜhgrad_invariants, buffer)
     end
 
     if p.atmos.numerics.reproducible_restart
@@ -408,7 +401,7 @@ quadratic term is centred so that the mean of `S` is `μ_S`; its variance
 end
 
 """
-    hgrad_invariant!(ᶜinv, ᶜψ, p)
+    hgrad_invariant!(ᶜinv, ᶜψ)
 
 Write the element-scale horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ`
 into `ᶜinv`: the invariant of the nodal spectral-element gradient, replaced within each
@@ -418,26 +411,29 @@ nodes and too small inside once `ψ` has structure near the element scale; the r
 that node-position bias while conserving each element's WJ-weighted integral of the invariant.
 One weighted DSS then makes the result continuous across elements. On a space that
 needs no DSS (single column) the restriction is a no-op and the nodal invariant is used.
+
+The model computes this invariant, with those of `hgrad_cross_invariant!`, in
+`set_covariance_cache_and_cloud_fraction!`. This standalone form allocates a DSS buffer
+on every call, for use outside the time loop (tests and analysis).
 """
-function hgrad_invariant!(ᶜinv, ᶜψ, p)
+function hgrad_invariant!(ᶜinv, ᶜψ)
     @. ᶜinv = lumpedₕ(norm_sqr(gradₕ(ᶜψ)))
-    buf = p.scratch.ᶜscalar_dss_buffer
-    buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
+    do_dss(axes(ᶜinv)) && Spaces.weighted_dss!(ᶜinv)
     return nothing
 end
 
 """
-    hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+    hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2)
 
 Write the horizontal-gradient cross invariant `∇_h ψ1 · ∇_h ψ2` into `ᶜinv`, with the
 same gradient estimate and element filter as `hgrad_invariant!`: the nodal
 cross invariant, replaced within each element by its lumped GLL{2} restriction, then one
-weighted DSS (skipped on a space that needs no DSS).
+weighted DSS (skipped on a space that needs no DSS). Like `hgrad_invariant!`, it
+allocates a DSS buffer on every call.
 """
-function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2)
     @. ᶜinv = lumpedₕ(dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2)))
-    buf = p.scratch.ᶜscalar_dss_buffer
-    buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
+    do_dss(axes(ᶜinv)) && Spaces.weighted_dss!(ᶜinv)
     return nothing
 end
 
