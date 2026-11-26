@@ -47,7 +47,9 @@ CTS.step!(integrator) # compile first
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "constrain_state!", 0)
-        @test compare_mem(trials, "initialize_imp!", 0)
+        # `initialize_imp!` is registered only for `PrognosticEDMFX`.
+        isnothing(integrator.sol.prob.f.initialize_imp!) ||
+            @test compare_mem(trials, "initialize_imp!", 0)
         @test compare_mem(trials, "cache!", 912)
         @test compare_mem(trials, "cache_imp!", 0)
 

@@ -201,7 +201,6 @@ funcs = [
     "lim!",
     "dss!",
     "constrain_state!",
-    "initialize_imp!",
     "cache!",
     "cache_imp!",
 ]

@@ -61,6 +61,8 @@ column(f) = vec(Array(parent(f)))
     t = simulation.integrator.t
     FT = eltype(Y)
     dtγ = FT(60)
+    @test simulation.integrator.sol.prob.f.initialize_imp! ===
+          CA.initialize_implicit_stage_problem!
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
     sgsʲ = Y.c.sgsʲs.:(1)
     ᶠu₃ʲ = Y.f.sgsʲs.:(1).u₃.components.data.:1

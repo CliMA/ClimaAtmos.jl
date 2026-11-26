@@ -256,7 +256,8 @@ end
 Map a YAML frequency string (`"stage"`, `"step"`, `"dss"`) to the matching
 ClimaTimeSteppers `UpdateSignalHandler` for `ClimaODEFunction`'s
 `update_constrain_state` field. `"dss"` fires `constrain_state!` at every
-`dss!` site (including pre-implicit and post-`initialize_imp!` DSSes).
+`dss!` site (including the pre-implicit DSS and, with `PrognosticEDMFX`, the
+DSS after `initialize_imp!`).
 """
 function update_constrain_state_signal_handler(freq_str)
     if freq_str == "stage"
@@ -283,7 +284,8 @@ Passes the tendency and stage hooks to a `ClimaODEFunction`: the explicit and
 limited tendencies, the implicit tendency with its Jacobian (both replaced by
 `fully_explicit_tendency!` when `prescribed_flow` is set, so sound waves are not
 treated implicitly), the implicit-stage initializer
-(`initialize_implicit_stage_problem!`), the post-Newton stage hook
+(`initialize_implicit_stage_hook`: `initialize_implicit_stage_problem!` for
+`PrognosticEDMFX`, otherwise `nothing`), the post-Newton stage hook
 (`post_newton_stage_update!`, skipped when `T_imp!` is absent or
 `p.dtγ == 0`), the cache and
 implicit-cache updates, the limiter, DSS, and the state constraints. The cache
@@ -408,7 +410,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             update_constrain_state = update_constrain_state_signal_handler(
                 update_constrain_state_every,
             ),
-            initialize_imp! = initialize_implicit_stage_problem!,
+            initialize_imp! = initialize_implicit_stage_hook(atmos.turbconv_model),
         )
     end
     problem = CTS.ODEProblem(tendency_function, Y, tspan, p)

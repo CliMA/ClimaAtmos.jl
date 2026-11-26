@@ -60,11 +60,13 @@ differences and uses the Jacobian below as a left preconditioner.
 
 Two stage hooks surround the Newton solve on each implicit stage:
 
-  - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
-    resets the stage-weighted precipitation accumulator at the start of a step
-    and, for prognostic PROPHET (`PrognosticEDMFX`), runs the closed-form
-    updraft predictor and warm-starts ``Y[0]``; see
-    [PROPHET Discretization and Time Stepping](prophet_numerics.md).
+  - Before the solve, for prognostic PROPHET (`PrognosticEDMFX`),
+    `initialize_implicit_stage_problem!` (`initialize_imp!`) runs the
+    closed-form updraft predictor and warm-starts ``Y[0]``; see
+    [PROPHET Discretization and Time Stepping](prophet_numerics.md). Other
+    models register no `initialize_imp!` hook, and the solve starts from the
+    stage state as it enters the stage (after its pre-implicit DSS from the
+    second stage on).
   - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
     stage-weighted surface precipitation fluxes, applies
     `correct_implicit_advection_tendency!` — which performs the implicit
