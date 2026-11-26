@@ -5435,29 +5435,6 @@ end
 # 8. step_column_physics! (composite sequencer)
 # ============================================================================
 
-"""
-    refresh_pre_microphysics_thermo!(Y, p, t)
-
-Refresh core velocities and thermodynamics (plus `PrognosticEDMFX` draft and
-environment thermodynamics) after column turbulence and
-`repair_column_water_conservatively!`, prior to coupled microphysics and
-sedimentation, along with SGS quadrature variances and cloud fraction when
-`!not_quadrature(p.atmos.sgs_quadrature)`, or `0`/`1` `ᶜcloud_fraction` when
-`p.atmos.cloud_model isa GridScaleCloud`.
-
-Skips surface condition updates and mixing-length updates so realized turbulent
-surface fluxes stay intact.
-"""
-@inline function _compute_gridmean_sgs_moments(thp, ρ, T, q_c, q_tot_cloud)
-    FT = typeof(ρ)
-    q_sat = TD.q_vap_saturation(thp, T, ρ)
-    return (;
-        sigma_S = ϵ_numerics(FT),
-        λ_lagrange = q_c,
-        λ_eq = max(zero(FT), q_tot_cloud - q_sat),
-    )
-end
-
 function _refresh_1m_gridmean_sgs_moments!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -5467,16 +5444,34 @@ function _refresh_1m_gridmean_sgs_moments!(Y, p)
     zero_FT = zero(eltype(p.params))
     ᶜq_cloud = @. lazy(max(zero_FT, ᶜq_mean - ᶜq_precip))
     ᶜsgs_moments = p.precomputed.ᶜsgs_moments
-    @. ᶜsgs_moments = _compute_gridmean_sgs_moments(
-        thermo_params,
-        ᶜρ_env,
-        ᶜT_mean,
+    @. ᶜsgs_moments = _gridmean_sgs_moments(
         ᶜq_lcl + ᶜq_icl,
         ᶜq_cloud,
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
     )
     return nothing
 end
 
+"""
+    refresh_pre_microphysics_thermo!(Y, p, t)
+
+Refresh core velocities and thermodynamics (plus `PrognosticEDMFX` draft and
+environment thermodynamics) after column turbulence and
+`repair_column_water_conservatively!`, prior to coupled microphysics and
+sedimentation:
+
+  - When `!not_quadrature(p.atmos.sgs_quadrature)`, updates SGS quadrature
+    variances, moments, and cloud fraction (`set_covariance_cache_and_cloud_fraction!`).
+  - When `p.atmos.sgs_quadrature` is grid-mean/absent and
+    `p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}`, refreshes
+    `ᶜsgs_moments`, `ᶜcloud_fraction`, and `ᶜprecip_frac`.
+  - When `p.atmos.cloud_model isa GridScaleCloud`, updates `0`/`1`
+    `ᶜcloud_fraction` and grid-mean `ᶜsgs_moments` (if present).
+  - Otherwise, refreshes grid-mean `ᶜsgs_moments` (if present).
+
+Skips surface condition updates and mixing-length updates so realized turbulent
+surface fluxes stay intact.
+"""
 function refresh_pre_microphysics_thermo!(Y, p, t)
     set_implicit_precomputed_quantities_core!(Y, p, t)
     if !not_quadrature(p.atmos.sgs_quadrature)

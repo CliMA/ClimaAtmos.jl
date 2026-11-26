@@ -108,6 +108,13 @@ if TEST_GROUP in ("dynamics_split_e2e", "all")
 end
 
 # ============================================================================
+# Dynamics (Split E2E Extra): 2M, 3D terrain, and ShipwayHill2012 e2e tests
+# ============================================================================
+if TEST_GROUP in ("dynamics_split_e2e_extra", "all")
+    @safetestset "Split simulation end-to-end extra" begin @time include("prognostic_equations/split_simulation_e2e_extra_tests.jl") end
+end
+
+# ============================================================================
 # Dynamics (EDMFX): SGS diffusion, limiters, and closures (split out for CI time)
 # ============================================================================
 if TEST_GROUP in ("dynamics_edmfx", "all")

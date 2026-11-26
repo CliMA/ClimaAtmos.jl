@@ -1898,13 +1898,9 @@ directly, matching the σ_S → 0 limit.
 )
     FT = typeof(ρ)
     q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
-    mu_S_cloud = q_tot_cloud - q_sat
     not_quadrature(sgs_quad) &&
-        return (;
-            sigma_S = ϵ_numerics(FT),
-            λ_lagrange = q_c,
-            λ_eq = max(zero(FT), mu_S_cloud),
-        )
+        return _gridmean_sgs_moments(q_c, q_tot_cloud, q_sat)
+    mu_S_cloud = q_tot_cloud - q_sat
 
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
     λ_lagrange = _continuous_lagrange(q_c, max(α * sigma_S, ϵ_numerics(FT)))
@@ -1925,6 +1921,15 @@ directly, matching the σ_S → 0 limit.
     )
     λ_eq = ifelse(iszero(curv), λ_eq_trunc, λ_eq_fit)
     return (; sigma_S, λ_lagrange, λ_eq)
+end
+
+@inline function _gridmean_sgs_moments(q_c, q_tot_cloud, q_sat)
+    FT = typeof(q_sat)
+    return (;
+        sigma_S = ϵ_numerics(FT),
+        λ_lagrange = q_c,
+        λ_eq = max(zero(FT), q_tot_cloud - q_sat),
+    )
 end
 
 """

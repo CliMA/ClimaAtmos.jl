@@ -46,7 +46,7 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 ## Test groups
 
-`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_edmfx`, `dynamics_split_vt`, `dynamics_split_vt_scalars`, `dynamics_split_col`, `dynamics_split_e2e`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
+`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_edmfx`, `dynamics_split_vt`, `dynamics_split_vt_scalars`, `dynamics_split_col`, `dynamics_split_e2e`, `dynamics_split_e2e_extra`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
 
 | Change area                                 | Test group                  | Example Buildkite job         |
 |:------------------------------------------- |:--------------------------- |:----------------------------- |
@@ -54,7 +54,8 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 | Split vertical scalar transport             | `dynamics_split_vt`         | `prognostic_edmfx_*`          |
 | Split vertical transport scalar checks      | `dynamics_split_vt_scalars` | `prognostic_edmfx_*`          |
 | Split column physics step                   | `dynamics_split_col`        | `prognostic_edmfx_*`          |
-| Split simulation end-to-end                 | `dynamics_split_e2e`        | `prognostic_edmfx_*`          |
+| Split simulation end-to-end (0M/1M)         | `dynamics_split_e2e`        | `prognostic_edmfx_*`          |
+| Split simulation e2e (2M/3D terrain/Shipway)| `dynamics_split_e2e_extra`  | `prognostic_edmfx_*`          |
 | EDMFX diffusion / limiters                  | `dynamics_edmfx`            | `prognostic_edmfx_*`          |
 | Microphysics / EDMF                         | `parameterizations`         | `prognostic_edmfx_*`          |
 | Restarts                                    | Buildkite only              | `Restarting` group            |

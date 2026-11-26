@@ -1862,7 +1862,9 @@ symbols or strings.
     restarted from a restart file, at the cost of deterministically
     reconstructing cache state that would otherwise depend on the previous step
     (the cloud fraction is first recomputed with `GridScaleCloud` before the
-    Picard iteration). Should be disabled for production runs.
+    Picard iteration; end-of-step realized fluxes are populated when stepping
+    rather than reconstructed on restart load). Should be disabled for
+    production runs.
   - `limiter`: `nothing`, or `QuasiMonotoneLimiter` for horizontal tracer
     transport.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.

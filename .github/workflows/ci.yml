@@ -74,6 +74,7 @@ jobs:
           - dynamics_split_vt_scalars
           - dynamics_split_col
           - dynamics_split_e2e
+          - dynamics_split_e2e_extra
           - parameterizations
           - restarts
           - era5
@@ -85,7 +86,7 @@ jobs:
       TEST_GROUP: ${{ matrix.test_group }}
       # EDMFX and split simulation tests are compile-bound; coverage
       # instrumentation increases their wall time.
-      COVERAGE: ${{ matrix.test_group != 'dynamics_edmfx' && matrix.test_group != 'dynamics_split_vt' && matrix.test_group != 'dynamics_split_vt_scalars' && matrix.test_group != 'dynamics_split_col' && matrix.test_group != 'dynamics_split_e2e' }}
+      COVERAGE: ${{ matrix.test_group != 'dynamics_edmfx' && matrix.test_group != 'dynamics_split_vt' && matrix.test_group != 'dynamics_split_vt_scalars' && matrix.test_group != 'dynamics_split_col' && matrix.test_group != 'dynamics_split_e2e' && matrix.test_group != 'dynamics_split_e2e_extra' }}
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
