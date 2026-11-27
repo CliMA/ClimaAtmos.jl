@@ -67,6 +67,58 @@ function vertical_buoyancy_acceleration(ρ_diff, gradᵥ_Φ, local_geometry)
     return projected_vector_data(C3, buoy_vector, local_geometry)
 end
 
+"""
+    draft_buoyancy_per_mse(thermo_params, T, ρ, q_lcl, q_icl)
+
+Buoyancy change per unit change of a draft's moist static energy [m s⁻² / (J/kg)],
+`g / (c_p T Γ)`. In a cloudy draft, the moist factor
+`Γ = 1 + (L/c_p) ∂q_sat/∂T`, with the phase ramp of `liquid_fraction_ramp`,
+accounts for the share of an mse change that goes into condensation. A draft
+without cloud condensate (`TD.has_condensate` on `q_lcl + q_icl`, as for
+`_updraft_cloud_fraction`) responds as dry air, `Γ = 1`: a moist factor there
+would underestimate the stratification, and an underestimate leaves the
+alternating iterates that `stable_draft_mse_response` damps, whereas an
+overestimate only slows their convergence.
+"""
+@inline function draft_buoyancy_per_mse(thermo_params, T, ρ, q_lcl, q_icl)
+    cp_d = TD.Parameters.cp_d(thermo_params)
+    λ = TD.liquid_fraction_ramp(thermo_params, T)
+    L = TD.latent_heat_mixed(thermo_params, T, λ)
+    q_c = max(zero(T), q_lcl + q_icl)
+    # Both arms evaluate, so the kernel has no branch on the condensate test.
+    Γ =
+        1 + ifelse(
+            TD.has_condensate(thermo_params, q_c),
+            L / cp_d * TD.∂q_vap_sat_∂T(thermo_params, T, ρ),
+            zero(T),
+        )
+    return TD.Parameters.grav(thermo_params) / (cp_d * T * Γ)
+end
+
+"""
+    stable_draft_mse_response(β, Δmse, C, J, dtγ)
+
+Buoyancy change of a stably stratified draft cell [m/s²] per unit face flux
+`J u³` at its bottom face within one Newton step, for the Jacobian's `u₃` block:
+`dtγ β max(Δmse, 0) / (J (1 + C))`. `β` is `draft_buoyancy_per_mse`, `Δmse` the
+mse step from the cell below (`mse_c − mse_{c−1}`), `J` the cell's Jacobian, and
+`C = dtγ (J u³_jac)_{c−½} / J` the damping of the cell's upwinded mse at the
+Jacobian updraft velocity.
+
+The `u₃` rows omit the buoyancy derivatives, so Newton sees the buoyancy of the
+previous iterate: a velocity error moves the draft's mse, whose buoyancy change
+the next iterate responds to. In a stable draft (`N² > 0`) the error alternates
+in sign and grows once the gain of this loop, `dtγ² N²` reduced by the damping
+of the `u₃` and mse diagonals, exceeds one, as for a draft at rest under
+positive buoyancy, which then swings between rest and launch. With this
+response, the `u₃` block carries the Schur complement of the omitted
+`u₃`–mse–buoyancy coupling where `Δmse > 0`, with the mse block replaced by its
+diagonal. Where `Δmse < 0` the same term would shrink the diagonal, which is why
+the buoyancy derivatives are left out of convecting drafts.
+"""
+@inline stable_draft_mse_response(β, Δmse, C, J, dtγ) =
+    dtγ * β * max(Δmse, zero(Δmse)) / (J * (1 + C))
+
 
 """
     draft_area(ρa, ρ)
@@ -132,8 +184,8 @@ environment is clamped from
 below at `1 - a_max`, which keeps the coefficient finite when the implicit
 velocity solve is handed an extrapolated `a⁰` outside `[0, 1]`.
 
-Shared by the implicit updraft momentum solve
-(`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
+Shared by the implicit updraft momentum tendency (`sgs_u₃_implicit_tendency!`)
+and the TKE return-to-isotropy source
 (the pressure-drag term of `edmfx_tke_sources!`), so the kinetic energy the drag
 removes from the updraft is the energy the TKE budget receives.
 """
@@ -284,6 +336,9 @@ microphysics models.
 """
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
+    # The clip below changes the condensate but not `ρq_tot`, so the surface
+    # precipitation of the stage is linearized at the condensate before it.
+    record_solved_precipitation_condensate!(Y, p)
     (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
     DataLayouts.foreach_column(Y.c) do Yc
         ρq_lcl = @. max(zero_FT, Yc.ρq_lcl)
@@ -303,13 +358,17 @@ end
 """
     enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
 
-Clip the prognostic PROPHET (`EDMFX` in code) updraft state to a physically
-admissible range and relax degenerate updrafts toward the grid mean.
+Clip the prognostic EDMFX updraft state to a physically admissible range and
+relax degenerate updrafts toward the grid mean.  Called from
+`enforce_physical_constraints!` at stage boundaries when the `filter` flag is
+enabled.
 
 For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
 
-  - `Y.c.sgsʲs.:(j).ρa` is clamped to `[0, ᶜρʲ]`, i.e. the area fraction to
-    `[0, 1]`.
+  - `Y.c.sgsʲs.:(j).ρa` is clamped to `[0, ρʲ·a_max]`, i.e. the area fraction
+    `ρa / ρʲ` to `[0, a_max]`, using the updraft density `ρʲ` and `a_max` from
+    turbconv params (the same bound as the `ρa` bounds-restoring term of
+    `sgs_ρa_implicit_tendency!` and `initialize_implicit_stage_problem!`).
   - The covariant³ component of `Y.f.sgsʲs.:(j).u₃` is clamped to be
     non-negative (updrafts do not descend), and is set to zero where the
     face-interpolated `ρa` is below `ϵ_numerics`.
@@ -326,8 +385,7 @@ For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
     the grid-mean `enforce_grid_mean_microphysics_constraints!`.
 
 No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
-`EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`. Called
-from `enforce_physical_constraints!`.
+`EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`.
 """
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     FT = eltype(p.params)
@@ -335,6 +393,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
     (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
+    a_max = CAP.max_area(CAP.turbconv_params(p.params))
     # The SGS tracers whose grid-mean densities are prognostic
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c, get_ρχ_name(χ_name)),
@@ -347,10 +406,10 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     end
     DataLayouts.foreach_column(Y.c, drafts, ᶜh_tot, ᶜK) do Yc, drafts, ᶜh_tot, ᶜK
         for (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ) in drafts
-            # Clip the area fraction to [0, 1] and the vertical velocity to
-            # non-negative values, with zero velocity where the face-averaged
-            # area fraction is negligible.
-            ᶜρa = @. max(zero_FT, min(ᶜsgsʲ.ρa, ᶜρʲ))
+            # Clip the area fraction ρa/ρʲ to [0, a_max] using the updraft
+            # density ρʲ, and the vertical velocity to non-negative values, with zero velocity
+            # where the face-averaged ρa is below ϵ_numerics.
+            ᶜρa = @. clamp(ᶜsgsʲ.ρa, zero_FT, ᶜρʲ * a_max)
             @. ᶜsgsʲ.ρa = ᶜρa
             @. ᶠu₃ʲ = ifelse(
                 ᶠinterp(ᶜρa) < ϵ,

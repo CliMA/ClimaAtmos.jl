@@ -100,6 +100,29 @@ main
   temperature, so `N²` was about 10% too low in the top cell (stratospheric warming) and
   too high in the bottom cell (where temperature falls with height). This changes the
   results of every run with either scheme enabled.
+- ![][badge-🔥behavioralΔ] The implicit stage is one Newton problem whose
+  residual matches the ODE: `energy_humidity_upwinding` is applied in the
+  residual, `post_newton_stage_update!` and
+  `compensate_explicit_scalar_advection` are removed, and `max_newton_iters_ode`
+  defaults to 2. Changes the output of every job with implicit vertical
+  advection or `PrognosticEDMFX`.
+- ![][badge-🔥behavioralΔ] The `PrognosticEDMFX` updraft `u₃` and `ρa` are Newton
+  unknowns with physical right-hand sides (`updraft_tendency.jl`) and manual
+  Jacobian blocks, replacing the closed-form stage solves and
+  `edmfx_updraft_picard_rounds`. The Newton guess is the analytic `u₃` solve and
+  one upward sweep of `ρa` and the draft scalars. The updraft's own velocity and
+  the horizontal wind across sloping levels are upwinded separately.
+- ![][badge-🔥behavioralΔ] `min_area_limiter_scale` and `max_area_limiter_scale`
+  are removed. Bounds-restoring terms keep the updraft `ρa` in `[0, ρʲ a_max]`
+  and `u₃ ≥ 0`, at 1 s⁻¹ (`1/dt` under `prescribed_flow`), and `edmfx_filter`
+  clamps `ρa` to `ρʲ a_max`. `PrognosticEDMFX` without `edmfx_filter` errors on
+  IMEX tableaus that evaluate the implicit tendency explicitly (SSP333,
+  ARK437L2SA1, ARK548L2SA2, IMKG343a).
+- ![][badge-🔥behavioralΔ] With `ManualSparseJacobian`, non-equilibrium
+  precipitation, and `update_cache_every = "stage"`, the stage-weighted surface
+  precipitation (and the slab ocean's share of it) is sampled by the first
+  `cache!` call of each implicit stage, so the column-plus-slab water budget
+  closes.
 
 0.43.0
 ------

@@ -44,10 +44,6 @@ type = "float"
 value = 0.3
 type = "float"
 
-[min_area_limiter_scale]
-value = 0.001
-type = "float"
-
 [min_area_limiter_power]
 value = 1
 type = "float"
@@ -78,10 +74,6 @@ type = "float"
 
 [detr_massflux_vertdiv_coeff]
 value = 0.3
-type = "float"
-
-[max_area_limiter_scale]
-value = 0.001
 type = "float"
 
 [max_area_limiter_power]

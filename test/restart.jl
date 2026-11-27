@@ -102,6 +102,10 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
+            # Implicit-solver scratch, written by update_jacobian! and at the
+            # start of each implicit stage (no step is taken in this case)
+            :ᶠwʲ_maxs,
+            :ᶜsgsʲs_stage_snapshot,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
@@ -113,12 +117,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜq′q′,
             :ᶜcorr_Tq,
             :ᶜT′q′,
-            # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
-            :ᶠu₃_tendencyʲs,
-            :ᶜρa_tendencyʲs,
-            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
-            :ᶠsgsʲs_picard_snapshot,
-            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -180,9 +178,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜq′q′,
             :ᶜcorr_Tq,
             :ᶜT′q′,
-            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
-            :ᶠsgsʲs_picard_snapshot,
-            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

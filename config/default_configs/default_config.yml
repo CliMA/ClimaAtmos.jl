@@ -76,7 +76,7 @@ use_dynamic_krylov_rtol:
   value: false
 max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
-  value: 1
+  value: 2
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `ARS222`, `SSP333`, `IMKG343a`, etc.]. The explicit tableau of `ARS222` amplifies undamped oscillatory modes (`|R(iy)| > 1`), so it suits 1D column setups (which have no horizontal modes) and 3D configurations whose horizontal damping per step is strong, such as `amip_target.yml` and the aquaplanet setups that select it."
   value: "ARS343"
@@ -105,7 +105,7 @@ update_cache_every:
   help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`stage` (default), `step`]"
   value: "stage"
 update_constrain_state_every:
-  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]. With `PrognosticEDMFX`, 1M microphysics, and `updraft_picard_rounds > 0`, `dss` re-clamps the warm-started grid-mean condensates of the Newton initial guess after the stage-entering state is copied, which can produce an upward surface precipitation flux."
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`stage` (default), `step`, `dss`]."
   value: "stage"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
@@ -365,7 +365,7 @@ tracer_upwinding:
   help: "Upwinding mode for passive tracers; prognostic `ρtke` uses implicit `first_order` upwind, and the sedimenting microphysics species follow `energy_humidity_upwinding` [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 energy_humidity_upwinding:
-  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)]. `first_order` gives positive first-order transport of `e_tot - Φ`, `q_tot`, and the sedimenting species with the leading diffusivity of backward-Euler upwind; `third_order` is linear and unlimited (not positive or monotone on sharp fronts); `none` skips their post-Newton dissipation and antidiffusion, leaving their vertical advection forward-Euler central under one Newton iteration with `ManualSparseJacobian` (amplifying oscillatory modes without vertical diffusion)."
+  help: "Upwinding mode for energy, total water, and (with non-equilibrium microphysics) the sedimenting microphysics species [`none`, `first_order`, `third_order`, `vanleer_limiter` (default)], applied in the Newton residual. The Jacobian keeps these transports central, so `n` Newton iterations give a truncated backward-Euler series: with `first_order` and the default 2 iterations, the stage is stable and positive for grid-mean Courant numbers `dtγ·|w|/Δz ≤ 1/2`, and positivity degrades roughly as `1/n` with more iterations. `third_order` is linear and unlimited (not positive or monotone on sharp fronts); `none` is central (neither positive nor monotone)."
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization)]"
@@ -535,9 +535,6 @@ edmfx_sgs_diffusive_flux:
 edmfx_sgs_horizontal_diffusive_flux:
   help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
-edmfx_updraft_picard_rounds:
-  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `initialize_implicit_stage_problem!` before the final u₃/ρa analytic solves. `0` reproduces the single-pass behavior.  [non-negative integer; default `2`]"
-  value: 2
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1

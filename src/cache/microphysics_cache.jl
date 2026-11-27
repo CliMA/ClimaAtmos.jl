@@ -1399,11 +1399,10 @@ For 1M, this is the **stage-initial** cache update (runs once per IMEX stage,
 before the Newton solve starts): it writes only the bulk CM BMT tendency
 (`microphysics_1m_params`). The implicit tendency (`ᶜmp_tendency_implicit*`,
 driven by `microphysics_1m_implicit_params`) is refreshed by
-`ensure_1m_tendencies!` at every Newton iterate, by
-`set_precomputed_quantities!` (after the covariance pass), and by
-`update_updraft_microphysics_tendency_cache!` at every Picard round; it stays
-zero when `implicit_microphysics: false` (`has_implicit_1m_microphysics` is
-`false`, so none of those three refreshes fires).
+`ensure_1m_tendencies!` at every Newton iterate and by
+`set_precomputed_quantities!` once per step (after the covariance pass), and
+it stays zero when `implicit_microphysics: false` (`has_implicit_1m_microphysics`
+is `false`, so neither of those two refreshes fires).
 
 **Dispatch table** (`microphysics_model` × `turbconv_model`):
 
@@ -1446,137 +1445,15 @@ See also `set_precipitation_velocities!` and `set_precipitation_surface_fluxes!`
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 
-# `Val(true)` defers the tendencies that the next implicit stage overwrites
-# before it reads them (`set_precomputed_quantities_deferred!`): the updraft
-# tendency of the 1M scheme with `PrognosticEDMFX` and Picard rounds.
-set_microphysics_tendency_cache!(Y, p, mm, tm, ::Val) =
-    set_microphysics_tendency_cache!(Y, p, mm, tm)
-
 """
     set_updraft_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
 
 Write the 1M updraft tendency `ᶜmp_tendencyʲs` of `PrognosticEDMFX` for the
 current state `Y`, with the averaging window of
 `set_microphysics_tendency_cache!`. A no-op for the other models. Called from
-`set_microphysics_tendency_cache!` and `ensure_1m_tendencies!`.
+`set_microphysics_tendency_cache!`.
 """
 set_updraft_microphysics_tendency_cache!(Y, p, _, _) = nothing
-
-"""
-    update_updraft_microphysics_tendency_cache!(
-        Y, p, microphysics_model, turbconv_model, dtγ,
-    )
-
-Refresh the per-updraft microphysics tendency `ᶜmp_tendencyʲs` against the
-current `Y`, using `dtγ` as the integration window. For 1M, also refreshes
-`ᶜmp_tendency_implicitʲs` so the Picard predictor sees the implicit cond/subl
-rates at the transported updraft state. The expensive SGS-quadrature
-environment tendency `ᶜmp_tendency⁰` is left at its last `cache!` value.
-
-Called from the implicit-stage tracer predictor
-(`solve_sgs_updraft_tracers_implicit_stage_analytic!`) for the
-non-equilibrium schemes, after its transport sweep, and from the Picard loop
-of `initialize_implicit_stage_problem!` for the 0-moment scheme. The bulk
-`ᶜmp_tendencyʲs` is frozen through the Newton solve, matching the Jacobian
-(no derivative of `ᶜmp_tendencyʲs`); `ᶜmp_tendency_implicitʲs` is overwritten
-on each Newton iterate by `ensure_1m_tendencies!`. A no-op for any combination
-not covered by a specialization.
-"""
-update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
-
-function update_updraft_microphysics_tendency_cache!(
-    Y, p, ::EquilibriumMicrophysics0M, tm::PrognosticEDMFX, dtγ,
-)
-    (; ᶜΦ) = p.core
-    (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs,
-        ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-    thp = CAP.thermodynamics_params(p.params)
-    cm0 = CAP.microphysics_0m_params(p.params)
-    # Updraft (convective) condensate precipitates with its own timescale.
-    cm0_up = CMP.Microphysics0MParams(; precip = cm0.precip_updraft)
-    DataLayouts.foreach_point(
-        ᶜmp_tendencyʲs,
-        ᶜρʲs,
-        ᶜTʲs,
-        ᶜq_tot_nonnegʲs,
-        ᶜq_liqʲs,
-        ᶜq_iceʲs,
-        ᶜΦ,
-    ) do ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜΦ
-        for j in 1:n_mass_flux_subdomains(tm)
-            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
-                cm0_up, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-                ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dtγ,
-            )
-        end
-    end
-    return nothing
-end
-
-NVTX.@annotate function update_updraft_microphysics_tendency_cache!(
-    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, dtγ,
-)
-    # Refresh both bulk and implicit updraft tendencies at the Picard-
-    # transported state. The Picard predictor applies the sum; Newton later
-    # overwrites the implicit entries via `ensure_1m_tendencies!`.
-    # Skip the implicit BMT call entirely when the split is off: the implicit
-    # entries stay zero from their allocation-time initialization.
-    #
-    # Mode choice: `ᶜmp_tendency_implicitʲs` is deliberately overwritten with
-    # different BMT modes at different solver phases. Here the default
-    # `microphysics_tendencies_1m` call uses `BMT.LinearizedAverage()`, which
-    # is the stage-averaged rate the Picard predictor wants (so the predictor
-    # move matches the time-averaged implicit response). The subsequent
-    # `update_implicit_1m_tendency!` in Newton reads `BMT.Instantaneous()` into
-    # the same field, matching the Jacobian's `-dtγ/τ` linearization of the
-    # un-averaged rate. Immediately after the Picard loop and before Newton,
-    # the field therefore holds a `LinearizedAverage` tendency; after any
-    # Newton iterate it holds an `Instantaneous` tendency.
-    (;
-        ᶜmp_tendencyʲs,
-        ᶜmp_tendency_implicitʲs,
-        ᶜρʲs,
-        ᶜTʲs,
-        ᶜuʲs,
-        ᶜq_tot_nonnegʲs,
-    ) = p.precomputed
-    thp = CAP.thermodynamics_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
-    cmp_i = CAP.microphysics_1m_implicit_params(p.params)
-    dev = ClimaComms.device(Y.c)
-    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
-    vcmp_i = _fold(dev, cmp_i)
-    nsubs = mp1m.n_substeps
-    refresh_implicit = has_implicit_1m_microphysics(p)
-    DataLayouts.foreach_point(
-        ᶜmp_tendencyʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
-    ) do ᶜmp_tendencyʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
-        for j in 1:n_mass_flux_subdomains(tm)
-            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
-            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
-                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
-            )
-        end
-    end
-    refresh_implicit && DataLayouts.foreach_point(
-        ᶜmp_tendency_implicitʲs, Y.c, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs,
-    ) do ᶜmp_tendency_implicitʲs, Yc, ᶜuʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜTʲs
-        for j in 1:n_mass_flux_subdomains(tm)
-            ᶜwʲ_air = @inline @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
-            @. ᶜmp_tendency_implicitʲs.:($$j) = microphysics_tendencies_1m(
-                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-                Yc.sgsʲs.:($$j).q_lcl, Yc.sgsʲs.:($$j).q_icl,
-                Yc.sgsʲs.:($$j).q_rai, Yc.sgsʲs.:($$j).q_sno,
-                ᶜTʲs.:($$j), ᶜwʲ_air, vcmp_i, vthp, dtγ, nsubs,
-            )
-        end
-    end
-    p.scratch.updraft_1m_tendency_is_stale[] = false
-    return nothing
-end
 
 ###
 ### 0 Moment Microphysics
@@ -1848,25 +1725,6 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     set_updraft_microphysics_tendency_cache!(Y, p, mp1m, tm)
-    p.scratch.updraft_1m_tendency_is_stale[] = false
-    set_environment_microphysics_tendency_cache!(Y, p, mp1m, tm)
-    return nothing
-end
-
-function set_microphysics_tendency_cache!(
-    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, ::Val{true},
-)
-    # With Picard rounds, `update_updraft_microphysics_tendency_cache!`
-    # overwrites `ᶜmp_tendencyʲs` in `initialize_implicit_stage_problem!`
-    # before the Newton solve reads it; a reader with no implicit stage in
-    # between evaluates it (`ensure_1m_tendencies!`). Without Picard rounds, the
-    # Newton solve reads the tendency of this state, evaluated here.
-    if p.atmos.edmfx_model.updraft_picard_rounds > 0
-        p.scratch.updraft_1m_tendency_is_stale[] = true
-    else
-        set_updraft_microphysics_tendency_cache!(Y, p, mp1m, tm)
-        p.scratch.updraft_1m_tendency_is_stale[] = false
-    end
     set_environment_microphysics_tendency_cache!(Y, p, mp1m, tm)
     return nothing
 end
@@ -1876,8 +1734,7 @@ function set_updraft_microphysics_tendency_cache!(
 )
     # Window for the BMT substep averager: `p.dt` under step-fired `cache!`,
     # `p.dtγ` under stage-fired `cache!`. Bulk CM BMT only; the implicit cache
-    # is refreshed per Newton iterate by `ensure_1m_tendencies!` and per Picard
-    # round by `update_updraft_microphysics_tendency_cache!`.
+    # is refreshed per Newton iterate by `ensure_1m_tendencies!`.
     dt = mp_averaging_dt(p, p.mp_averaging)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs, ᶜmp_tendencyʲs) = p.precomputed
 
@@ -2188,11 +2045,16 @@ Dispatch on `microphysics_model`:
     at the bottom cell face from the level-1 specific humidities and terminal
     velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
     extrapolation of density to the surface. Because
-    `reset_precip_stage_accumulator!` resets `precip_stage_idx` to `0` at the
-    first implicit stage's entry, intermediate calls before the final stage's
-    `T_post_imp!` evaluate the pointwise formula at the current iterate, while
-    the post-step `cache!` refresh (and the explicit stage 1 that precedes any
-    implicit stage) sees the stage-weighted sum.
+    `reset_precip_stage_accumulator!` (called from `initialize_imp!`, which
+    runs only for implicit stages) resets `precip_stage_idx` to `0` at the
+    first implicit stage's entry and marks the stage pending;
+    `accumulate_stage_precipitation_surface_fluxes!` samples the first `cache!`
+    call of a pending stage and advances the counter, and skips every other
+    `cache!` call (build_cache, init, explicit-diagonal stages, end of step,
+    callbacks). Only after all implicit stages have been accumulated does the
+    guard check pass and the weighted sum is used; before the first step,
+    `seed_precip_stage_accumulator!` sets the counter and the accumulators to
+    the pointwise fluxes of the initial state, so the check passes with those.
   - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
     `ρq_rim`, and `ρb_rim` are not yet accounted for.
   - Default: no-op.
@@ -2268,15 +2130,116 @@ function precipitation_evaporation_scale(sfc_flux, col_evap)
 end
 
 """
+    seed_precip_stage_accumulator!(p)
+
+Make a freshly built cache look like the cache at a step boundary: copy the
+surface precipitation fluxes of the initial state (`p.precomputed`, evaluated
+pointwise by the initial `set_precomputed_quantities!` call) into the
+stage-weighted accumulators and set `p.scratch.precip_stage_idx[]` to
+`n_imp_stages`, the value it holds at the end of every step. The accumulators
+then hold the fluxes of the last completed step, which at the initial time are
+the fluxes of the initial state, so every `cache!` call before the first
+implicit stage gives the same surface fluxes as the pointwise evaluation, and
+the first implicit stage resets the counter as usual. A checkpoint, which is
+taken at a step boundary, then holds the same counter as a freshly built cache,
+so a restart that checks the counter for consistency (as ClimaCoupler does)
+accepts it, and the restored accumulators give the surface fluxes of the
+checkpointed step. Called once by `build_cache`; a no-op when the accumulator is
+not active.
+"""
+function seed_precip_stage_accumulator!(p)
+    has_precip_stage_accumulator(p) || return nothing
+    (; surface_rain_flux, surface_snow_flux, col_integrated_precip_energy_tendency) =
+        p.precomputed
+    (;
+        surface_rain_flux_accum,
+        surface_snow_flux_accum,
+        col_integrated_precip_energy_tendency_accum,
+    ) = p.scratch
+    @. surface_rain_flux_accum = surface_rain_flux
+    @. surface_snow_flux_accum = surface_snow_flux
+    @. col_integrated_precip_energy_tendency_accum =
+        col_integrated_precip_energy_tendency
+    p.scratch.precip_stage_idx[] = p.scratch.n_imp_stages
+    return nothing
+end
+
+@inline _condensate_nt(ρq_lcl, ρq_icl, ρq_rai, ρq_sno) =
+    (; ρq_lcl, ρq_icl, ρq_rai, ρq_sno)
+
+function _copy_level1_condensate!(dest, Y)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), axes(dest))
+    @. dest = _condensate_nt(
+        $(sfc_lev(Y.c.ρq_lcl)),
+        $(sfc_lev(Y.c.ρq_icl)),
+        $(sfc_lev(Y.c.ρq_rai)),
+        $(sfc_lev(Y.c.ρq_sno)),
+    )
+    return nothing
+end
+
+"""
+    record_solved_precipitation_condensate!(Y, p)
+    solved_precipitation_condensate(Y, p)
+
+The level-1 condensate masses `ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` of the
+Newton-solved stage value `U*`, at which the stage surface precipitation is
+evaluated (`accumulate_stage_precipitation_surface_fluxes!` and
+`add_stage_slab_precipitation_increment!`).
+
+`ClimaTimeSteppers` calls `constrain_state!` between the Newton solve and the
+`cache!` call that samples the stage, and
+`enforce_grid_mean_microphysics_constraints!` there clips the condensate to
+non-negative values without changing `ρq_tot`. The atmosphere's stage water and
+energy loss is that of the unclipped condensate, so the constraint records it
+first with `record_solved_precipitation_condensate!`, which acts only while an
+implicit stage is open (`precip_stage_pending`). Every residual evaluation
+(`record_stage_precipitation_linearization!`) marks the record stale, so a value
+recorded by the constraint at the start of the stage is never used.
+`solved_precipitation_condensate` returns the record, first filling it from the
+current state when no constraint has recorded it since the last residual
+evaluation.
+"""
+function record_solved_precipitation_condensate!(Y, p)
+    (
+        eltype(Y) === eltype(p.params) &&
+        has_precip_stage_accumulator(p) &&
+        p.scratch.precip_stage_pending[] &&
+        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
+        MatrixFields.has_field(Y.c, @name(ρq_sno))
+    ) || return nothing
+    _copy_level1_condensate!(p.scratch.sfc_precip_solved_condensate, Y)
+    p.scratch.precip_solved_condensate_recorded[] = true
+    return nothing
+end
+function solved_precipitation_condensate(Y, p)
+    (; sfc_precip_solved_condensate, precip_solved_condensate_recorded) =
+        p.scratch
+    if !precip_solved_condensate_recorded[]
+        _copy_level1_condensate!(sfc_precip_solved_condensate, Y)
+        precip_solved_condensate_recorded[] = true
+    end
+    return sfc_precip_solved_condensate
+end
+
+"""
     accumulate_stage_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
 Accumulate the stage-weighted bottom-face sedimentation fluxes of rain, snow,
 and precipitation energy for the current IMEX implicit stage at the
-Newton-solved state `Y = U*`. Called from `post_newton_stage_update!` before
-the post-Newton vertical advection increment is added to `U*`. Advances
-`p.scratch.precip_stage_idx[]`. `ClimaTimeSteppers.solve_stage_implicit!`
-invokes `T_post_imp!` once per implicit stage (`a_imp[i, i] ≠ 0`), which the
-stage index depends on.
+Newton-solved state `Y = U*`. Called from `set_precomputed_quantities!`; only
+the first call after `initialize_implicit_stage_problem!` sets
+`p.scratch.precip_stage_pending[]` samples the stage, and it clears the flag and
+advances `p.scratch.precip_stage_idx[]`. Evaluates the flux the atmosphere's
+bottom cell loses in the stage, `F(U^g) + w_jac (ρq* − ρq^g)` linearized at the
+last Newton iterate `U^g` (`record_stage_precipitation_linearization!`), rather
+than `F(U*)`, so the accumulated surface fluxes close the column water and
+energy budgets. For a `SlabOceanTemperature` surface, also adds the slab's share
+of the stage that the Newton solve leaves out
+(`add_stage_slab_precipitation_increment!`).
 
 The accumulator covers the four mass species `ρq_lcl`, `ρq_icl`, `ρq_rai`, and
 `ρq_sno`, which the 1M, 2M, and 2MP3 states all include; a state missing any of
@@ -2302,58 +2265,46 @@ function accumulate_stage_precipitation_surface_fluxes!(
         MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
         MatrixFields.has_field(Y.c, @name(ρq_sno))
     ) || return nothing
+    # Sample only the first cache! call after `initialize_implicit_stage_problem!`
+    # opened an implicit stage, which is the call at the Newton-solved stage
+    # value (or, at the last stage of an FSAL tableau, the end-of-step call at
+    # the same state). Calls from build_cache, CTS.init, explicit-diagonal
+    # stages, the end of a non-FSAL step, and callbacks find no open stage.
+    (; precip_stage_pending) = p.scratch
+    precip_stage_pending[] || return nothing
+    precip_stage_pending[] = false
 
     (;
         b_imp_stages,
         n_imp_stages,
         precip_stage_idx,
-        sfc_precip_lin_state,
         surface_rain_flux_accum,
         surface_snow_flux_accum,
         col_integrated_precip_energy_tendency_accum,
     ) = p.scratch
     idx = precip_stage_idx[]
-    k = idx >= n_imp_stages ? 1 : idx + 1
+    idx >= n_imp_stages && return nothing
+    k = idx + 1
     precip_stage_idx[] = k
     b_k = b_imp_stages[k]
 
-    sfc_space = axes(sfc_precip_lin_state)
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    lin = p.scratch.sfc_precip_lin_state
+    # The condensate of the solved stage, before the post-Newton clip.
+    solved = solved_precipitation_condensate(Y, p)
+    int_ρq_lcl = solved.ρq_lcl
+    int_ρq_icl = solved.ρq_icl
+    int_ρq_rai = solved.ρq_rai
+    int_ρq_sno = solved.ρq_sno
 
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-
-    f_lcl = @. lazy(
-        sfc_precip_lin_state.f_guess_lcl +
-        sfc_precip_lin_state.w_lcl_jac *
-        (int_ρq_lcl - sfc_precip_lin_state.ρq_lcl_guess),
-    )
-    f_icl = @. lazy(
-        sfc_precip_lin_state.f_guess_icl +
-        sfc_precip_lin_state.w_icl_jac *
-        (int_ρq_icl - sfc_precip_lin_state.ρq_icl_guess),
-    )
-    f_rai = @. lazy(
-        sfc_precip_lin_state.f_guess_rai +
-        sfc_precip_lin_state.w_rai_jac *
-        (int_ρq_rai - sfc_precip_lin_state.ρq_rai_guess),
-    )
-    f_sno = @. lazy(
-        sfc_precip_lin_state.f_guess_sno +
-        sfc_precip_lin_state.w_sno_jac *
-        (int_ρq_sno - sfc_precip_lin_state.ρq_sno_guess),
-    )
+    f_lcl = @. lazy(lin.f_guess_lcl + lin.w_lcl_jac * (int_ρq_lcl - lin.ρq_lcl_guess))
+    f_icl = @. lazy(lin.f_guess_icl + lin.w_icl_jac * (int_ρq_icl - lin.ρq_icl_guess))
+    f_rai = @. lazy(lin.f_guess_rai + lin.w_rai_jac * (int_ρq_rai - lin.ρq_rai_guess))
+    f_sno = @. lazy(lin.f_guess_sno + lin.w_sno_jac * (int_ρq_sno - lin.ρq_sno_guess))
     f_rain = @. lazy(f_rai + f_lcl)
     f_snow = @. lazy(f_sno + f_icl)
     f_energy = @. lazy(
-        sfc_precip_lin_state.f_e_sgs +
-        f_rai * sfc_precip_lin_state.e_rai +
-        f_lcl * sfc_precip_lin_state.e_lcl +
-        f_sno * sfc_precip_lin_state.e_sno +
-        f_icl * sfc_precip_lin_state.e_icl,
+        lin.f_e_sgs + f_rai * lin.e_rai + f_lcl * lin.e_lcl + f_sno * lin.e_sno +
+        f_icl * lin.e_icl,
     )
 
     if k == 1
@@ -2365,6 +2316,7 @@ function accumulate_stage_precipitation_surface_fluxes!(
         @. surface_snow_flux_accum += b_k * f_snow
         @. col_integrated_precip_energy_tendency_accum += b_k * f_energy
     end
+    add_stage_slab_precipitation_increment!(Y, p, p.atmos.surface.temperature)
     return nothing
 end
 

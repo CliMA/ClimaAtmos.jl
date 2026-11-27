@@ -98,6 +98,7 @@ include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
+include(joinpath("prognostic_equations", "updraft_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
 include(
     joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),

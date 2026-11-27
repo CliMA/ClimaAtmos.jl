@@ -212,6 +212,10 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
+            # Implicit-solver scratch, written by update_jacobian! and at the
+            # start of each implicit stage (no step is taken in this case)
+            :ᶠwʲ_maxs,
+            :ᶜsgsʲs_stage_snapshot,
             # Precomputed scratch fields for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
             # rc is some CUDA/CuArray internal object that we don't care about
@@ -220,9 +224,6 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
             :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
-            # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
-            :ᶠu₃_tendencyʲs,
-            :ᶜρa_tendencyʲs,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

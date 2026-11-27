@@ -14,9 +14,8 @@ import ClimaTimeSteppers as CTS
 
 include("../test_helpers.jl")
 
-deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
+deferred_1m_test_config() = CA.AtmosConfig(
     Dict(
-        "edmfx_updraft_picard_rounds" => picard_rounds,
         "config" => "column",
         "initial_condition" => "DYCOMS_RF02",
         "FLOAT_TYPE" => "Float64",
@@ -44,7 +43,7 @@ deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
 )
 
 @testset "Deferred 1M tendencies equal the undeferred cache at their readers" begin
-    config = deferred_1m_test_config(; picard_rounds = 2)
+    config = deferred_1m_test_config()
     (; Y, p, simulation) = generate_test_simulation(config)
     (; integrator) = simulation
     for _ in 1:10
@@ -62,40 +61,27 @@ deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
         fill!(parent(getproperty(p.precomputed, n)), NaN)
     end
     (; sgs_moments_are_stale, implicit_1m_tendency_is_stale) = p.scratch
-    (; updraft_1m_tendency_is_stale) = p.scratch
-    # which of the SGS moments, the implicit tendency and the updraft tendency
-    # are out of date
-    stale() = (
-        sgs_moments_are_stale[], implicit_1m_tendency_is_stale[],
-        updraft_1m_tendency_is_stale[],
-    )
+    # which of the SGS moments and the implicit tendency are out of date
+    stale() = (sgs_moments_are_stale[], implicit_1m_tendency_is_stale[])
 
-    # The `cache!` hook defers the implicit tendency and the updraft tendency.
+    # The `cache!` hook defers the implicit tendency and evaluates the updraft
+    # tendency, which the Newton solve reads.
     CA.set_precomputed_quantities!(Y, p, t)
-    @test stale() == (false, false, false)
+    @test stale() == (false, false)
     ref = snapshot()
     @test any(!iszero, ref[2]) && any(!iszero, ref[3])
     poison!((:ᶜmp_tendencyʲs, :ᶜmp_tendency_implicit⁰, :ᶜmp_tendency_implicitʲs))
     CA.set_precomputed_quantities_deferred!(Y, p, t)
-    @test stale() == (false, true, true)
+    @test stale() == (false, true)
+    @test parent(p.precomputed.ᶜmp_tendencyʲs) == ref[2]
     CA.ensure_1m_tendencies!(Y, p)
-    @test stale() == (false, false, false)
+    @test stale() == (false, false)
     @test snapshot() == ref
-
-    # The updraft tendency that the implicit-stage predictor writes is kept.
-    CA.set_precomputed_quantities_deferred!(Y, p, t)
-    CA.update_updraft_microphysics_tendency_cache!(
-        Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model, p.dtγ,
-    )
-    @test !updraft_1m_tendency_is_stale[]
-    predicted = copy(parent(p.precomputed.ᶜmp_tendencyʲs))
-    CA.ensure_1m_tendencies!(Y, p)
-    @test parent(p.precomputed.ᶜmp_tendencyʲs) == predicted
 
     # The `cache_imp!` hook defers the SGS moments and the implicit tendency to
     # the Newton residual and the Jacobian.
     CA.set_implicit_precomputed_quantities!(Y, p, t)
-    @test stale() == (false, false, false)
+    @test stale() == (false, false)
     ref = snapshot()
     Yₜ_ref = similar(Y)
     CA.implicit_tendency!(Yₜ_ref, Y, p, t)
@@ -105,9 +91,9 @@ deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
     )
         poison!((:ᶜmp_tendency_implicit⁰, :ᶜmp_tendency_implicitʲs, :ᶜsgs_moments))
         CA.set_implicit_precomputed_quantities_deferred!(Y, p, t)
-        @test stale() == (true, true, false)
+        @test stale() == (true, true)
         read!()
-        @test stale() == (false, false, false)
+        @test stale() == (false, false)
         @test snapshot() == ref
     end
     Yₜ = similar(Y)
@@ -121,25 +107,8 @@ deferred_1m_test_config(; picard_rounds) = CA.AtmosConfig(
     poison!((:ᶜsgs_moments,))
     CA.set_implicit_precomputed_quantities_deferred!(Y, p, t)
     CA.ensure_sgs_moments!(Y, p)
-    @test stale() == (false, true, false)
+    @test stale() == (false, true)
     @test parent(p.precomputed.ᶜsgs_moments) == ref[5]
     CA.ensure_1m_tendencies!(Y, p)
     @test snapshot() == ref
-end
-
-@testset "Without Picard rounds the cache! hook evaluates the updraft tendency" begin
-    config = deferred_1m_test_config(; picard_rounds = 0)
-    (; Y, p, simulation) = generate_test_simulation(config)
-    for _ in 1:10
-        CTS.step!(simulation.integrator)
-    end
-    t = simulation.integrator.t
-    stale = p.scratch.updraft_1m_tendency_is_stale
-    CA.set_precomputed_quantities!(Y, p, t)
-    ref = copy(parent(p.precomputed.ᶜmp_tendencyʲs))
-    @test any(!iszero, ref)
-    fill!(parent(p.precomputed.ᶜmp_tendencyʲs), NaN)
-    CA.set_precomputed_quantities_deferred!(Y, p, t)
-    @test !stale[]
-    @test parent(p.precomputed.ᶜmp_tendencyʲs) == ref
 end

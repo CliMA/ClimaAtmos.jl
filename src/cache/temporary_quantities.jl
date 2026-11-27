@@ -33,6 +33,9 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜKᵥʲ
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space), # ᶜK_h_scaled
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space), # ᶜq_icl (in surface conditions)
+        ᶜtemp_scalar_5 = Fields.Field(FT, center_space), # updraft sedimentation mass rate in sgs_ρa_implicit_tendency!
+        ᶜtemp_scalar_6 = Fields.Field(FT, center_space), # column max of wʲ in updraft_sedimentation_rate!
+        temp_data = Fields.field_values(Fields.Field(FT, center_space)), # column max of wʲ in updraft_sedimentation_rate!
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜτ_smag in the implicit Smagorinsky tendency
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
@@ -68,6 +71,8 @@ function precipitation_surface_flux_accumulator_quantities(
     } || return (;)
     sfc_space = axes(Fields.level(Y.f, half))
     c_lev1_space = axes(Fields.level(Y.c, 1))
+    # Level-1 linearization of the sedimentation fluxes at the last Newton
+    # iterate (`record_stage_precipitation_linearization!`).
     PrecipLinNT = @NamedTuple{
         w_lcl_jac::FT,
         w_icl_jac::FT,
@@ -91,6 +96,17 @@ function precipitation_surface_flux_accumulator_quantities(
         b_imp_stages,
         n_imp_stages,
         precip_stage_idx = Base.RefValue(0),
+        precip_stage_pending = Base.RefValue(false),
+        # Level-1 condensate of the Newton-solved stage value, before the
+        # post-Newton `constrain_state!` clips it
+        # (`record_solved_precipitation_condensate!`).
+        sfc_precip_solved_condensate = Fields.Field(
+            @NamedTuple{ρq_lcl::FT, ρq_icl::FT, ρq_rai::FT, ρq_sno::FT},
+            sfc_space,
+        ),
+        # `true`, its value at every step boundary, so that a fresh cache
+        # matches a checkpoint; the residual resets it before any stage sample.
+        precip_solved_condensate_recorded = Base.RefValue(true),
         sfc_precip_lin_state = Fields.Field(PrecipLinNT, sfc_space),
         surface_rain_flux_accum = zeros(sfc_space),
         surface_snow_flux_accum = zeros(sfc_space),
@@ -129,7 +145,6 @@ end
     temporary_quantities(
         Y, atmos;
         b_imp_stages = (), n_imp_stages = 0,
-        compensate_explicit_scalar_advection = true,
     )
 
 Allocate the scratch fields stored in `p.scratch`.
@@ -154,8 +169,6 @@ comment on each entry records a representative use.
     `precipitation_surface_flux_accumulator_quantities`.
   - `n_imp_stages = 0`: Number of implicit tableau stages (`0` disables the
     precipitation accumulator).
-  - `compensate_explicit_scalar_advection = true`: Whether post-Newton implicit
-    dissipation weights by `1 + 2 |u³| dtγ` (`_dissipation_weight`).
 
 # Returns
 
@@ -166,14 +179,12 @@ function temporary_quantities(
     atmos;
     b_imp_stages = (),
     n_imp_stages = 0,
-    compensate_explicit_scalar_advection::Bool = true,
 )
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        compensate_explicit_scalar_advection,
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp in the orographic gravity wave drag
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠK of the implicit-stage u₃ solve
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
@@ -193,13 +204,11 @@ function temporary_quantities(
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_data = Fields.field_values(Fields.Field(FT, center_space)),
-        # Whether the deferred 1M quantities are out of date: `ᶜsgs_moments`,
-        # the implicit tendency `ᶜmp_tendency_implicit*`, and the updraft
-        # tendency `ᶜmp_tendencyʲs`. The stage hooks set the flags and the
-        # readers reset them (`ensure_1m_tendencies!`).
+        # Whether the deferred 1M quantities are out of date: `ᶜsgs_moments`
+        # and the implicit tendency `ᶜmp_tendency_implicit*`. The stage hooks
+        # set the flags and the readers reset them (`ensure_1m_tendencies!`).
         sgs_moments_are_stale = Base.RefValue(false),
         implicit_1m_tendency_is_stale = Base.RefValue(false),
-        updraft_1m_tendency_is_stale = Base.RefValue(false),
         # DSS buffer for the element-filtered gradient invariant of the geometric SGS
         # variance (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
         ᶜscalar_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
@@ -215,14 +224,5 @@ function temporary_quantities(
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # ᶠΔu, vertical velocity differences
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠτ_smag
-        # Post-Newton implicit upwind dissipation
-        # (`add_vertical_advection_corrections!`): the operator, the system
-        # `I - dtγ 𝒟`, and the tridiagonal solver cache.
-        ᶜupwind_dissipation_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
-        ᶜupwind_dissipation_system = similar(Y.c, TridiagonalMatrixRow{FT}),
-        ᶜupwind_dissipation_solver_cache = MatrixFields.single_field_solver_cache(
-            similar(Y.c, TridiagonalMatrixRow{FT}),
-            Fields.Field(FT, center_space),
-        ),
     )
 end

@@ -51,7 +51,7 @@ R'(Y[k]) \, \Delta Y[k] = R(Y[k]) ,
 and updates ``Y[k+1] = Y[k] - \Delta Y[k]``. The update follows from the
 linearization ``R(Y - \Delta Y) \approx R(Y) - R'(Y) \Delta Y``, set to zero.
 
-By default, a single iteration is taken (`max_newton_iters_ode`), so ``Y[1]`` is
+By default, two iterations are taken (`max_newton_iters_ode`), so ``Y[2]`` is
 the solution of the implicit step. Iterating to a tolerance instead is available
 through `use_newton_rtol` and `newton_rtol`. The linear system is solved
 directly by default; setting `use_krylov_method` solves it instead with a
@@ -61,22 +61,17 @@ differences and uses the Jacobian below as a left preconditioner.
 Two stage hooks surround the Newton solve on each implicit stage:
 
   - Before the solve, `initialize_implicit_stage_problem!` (`initialize_imp!`)
-    resets the stage-weighted precipitation accumulator at the start of a step
-    and, for prognostic PROPHET (`PrognosticEDMFX`), runs the closed-form
-    updraft predictor and warm-starts ``Y[0]``; see
+    opens the stage for the stage-weighted precipitation accumulator and, for
+    prognostic PROPHET (`PrognosticEDMFX`), clamps the draft area and
+    warm-starts the draft velocity with its closed-form column solve; see
     [PROPHET Discretization and Time Stepping](prophet_numerics.md).
-  - After the solve, `post_newton_stage_update!` (`T_post_imp!`) accumulates the
-    stage-weighted surface precipitation fluxes, applies
-    `correct_implicit_advection_tendency!` — which performs the implicit
-    first-order upwind dissipation (weighted by ``1 + 2 C_\gamma`` when the
-    linear solve omits the scalar advection derivative — `ManualSparseJacobian`,
-    or `AutoSparseJacobian` in dry explicit-diffusion runs, without
-    `use_krylov_method` — and by ``1`` otherwise) and the Courant-limited
-    high-order antidiffusion of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting
-    microphysics tracers at the solved velocity — and updates a prognostic
-    slab ocean with the post-Newton precipitation increment when the
-    `ManualSparseJacobian` stage accumulator is active; see
-    [Discretization and Operators](discretization.md).
+  - After the solve, the `cache!` call at the Newton-solved state ``U^*``
+    (`set_precomputed_quantities!`) adds the stage-weighted surface
+    precipitation flux ``F(U^*)`` to the accumulator.
+
+Upwinding of ``e_{tot} - \Phi``, ``q_t``, and the sedimenting condensates is
+handled directly in the Newton residual via `add_energy_transport!` and
+`add_vertical_transport!`; see [Discretization and Operators](discretization.md).
 
 ## Jacobian algorithms
 
