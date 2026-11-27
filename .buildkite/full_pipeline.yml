@@ -1097,7 +1097,7 @@ steps:
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
-        timeout_in_minutes: 30
+        timeout_in_minutes: 40
         #retry:
         #  automatic: true
 

@@ -301,10 +301,8 @@ first-cell updraft `mse` and `q_tot` toward their buoyant surface values,
     mass_flux_source / max(ρaʲ, ρʲ a_min).
 
 The floor `ρʲ a_min` keeps the rate finite for a vanishing updraft area.
-Called from the implicit tendency (`edmfx_boundary_condition_tendency!`),
-its Jacobian diagonal (`update_sgs_boundary_condition_jacobian!`), and the
-implicit-stage tracer predictor
-(`solve_sgs_updraft_tracers_implicit_stage_analytic!`).
+Called from the implicit tendency (`edmfx_boundary_condition_tendency!`) and
+its Jacobian diagonal (`update_sgs_boundary_condition_jacobian!`).
 """
 @inline edmfx_sfc_relaxation_rate(mass_flux_source, ρaʲ, ρʲ, a_min) =
     mass_flux_source / max(ρaʲ, ρʲ * oftype(ρʲ, a_min))
@@ -335,8 +333,7 @@ off as the plume area approaches `a_max`. The rate
 `mass_flux_source / max(ρa, ρʲ·a_min)` is `edmfx_sfc_relaxation_rate`; its
 floor keeps the divisor finite when the updraft is small.
 
-The corresponding `ρa` source is injected in the implicit ρa solve
-(`solve_sgs_ρa_implicit_stage_analytic!`).
+The corresponding `ρa` source is injected in `sgs_ρa_implicit_tendency!`.
 
 # Notes
 

@@ -2,8 +2,8 @@
 
 The [PROPHET equations](prophet.md) are continuous. This page gives their
 discrete form: the spatial discretization, the implicit–explicit split, and the
-two analytic implicit-stage solves that make the scheme run at the dynamical
-core's timestep rather than at the updraft CFL limit. It also collects the
+implicit treatment of the draft mass and velocity that makes the scheme run at
+the dynamical core's timestep rather than at the updraft CFL limit. It also collects the
 regularizations that keep the scheme well behaved where the drafts are nearly
 empty or nearly fill the cell.
 
@@ -126,8 +126,8 @@ each sedimenting draft condensate or precipitation species
 ``q_\mu^{\sigma j}``, the downward-biased (`ᶠtop_bias`) sedimentation
 divergence ``S_\mu`` with the lateral-mixing correction where
 ``\partial_z a^j < 0``. The sum ``S = \sum_\mu S_\mu`` is the sedimentation
-source of the draft mass, which the analytic draft-mass solve
-(`solve_sgs_ρa_implicit_stage_analytic!`) applies as a rate, and each
+source of the draft mass, which the draft-mass Newton residual
+(`sgs_ρa_implicit_tendency!`) applies as a rate, and each
 intensive draft scalar ``\chi^j`` receives
 ``(S_\chi - \chi^j S) / \hat{\rho}^j``, with ``S_\chi`` its own
 sedimentation tendency: ``S_\mu`` for ``q_\mu^{\sigma j}``,
@@ -252,64 +252,20 @@ Configurations that use PROPHET normally set `implicit_diffusion: true` together
 with `approximate_linear_solve_iters: 2`, because the diffusive coupling between
 the grid mean and the drafts is stiff at the timesteps of interest.
 
-## Analytic implicit-stage solves
+## Implicit stage for draft mass and velocity
 
-The draft mass ``\hat{\rho}^j`` and vertical velocity ``u_3^j`` are *not*
-advanced by the Newton solve. At the start of every implicit stage, before the
-solve, `initialize_implicit_stage_problem!` records
-``-u_3^{j,\mathrm{old}} / (\gamma \Delta t)`` and
-``-\hat{\rho}^{j,\mathrm{old}} / (\gamma \Delta t)``,
-refreshes `set_implicit_precomputed_quantities_core!` when Picard rounds
-follow (without them, the solves use the buoyancy of the last cache update),
-and clamps ``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``. The grid-mean state
-enters the Newton guess as it enters the stage, moved only by the updraft
-increment of the Picard predictor (`warm_start_grid_mean_tracers!`, which
-shifts the grid-mean condensates, ``\rho q_t``, and ``\rho e_t`` so that the
-environment keeps its stage-entering values).
-`initialize_implicit_stage_problem!` then overwrites ``u_3^j`` and
-``\hat{\rho}^j`` in the state with values obtained from closed-form column
-solves, and caches the implied tendencies
-
-```math
-\frac{u_3^{j,\mathrm{stage}} - u_3^{j,\mathrm{old}}}{\gamma \Delta t} ,
-\qquad
-\frac{\hat{\rho}^{j,\mathrm{stage}} - \hat{\rho}^{j,\mathrm{old}}}{\gamma \Delta t} ,
-```
-
-which `sgs_u₃_implicit_tendency!` and `sgs_ρa_implicit_tendency!` then return as
-the implicit tendencies of those variables. Because the tendencies are
-*assigned* rather than accumulated, and the corresponding Jacobian rows are
-identity blocks, the Newton solve reproduces the analytic stage values exactly
-and leaves them alone. The result is less general than a Newton solve but
-cannot fail: each solve is exact, needs one or two sweeps through the column,
-and is constructed so that it cannot produce a negative area or a downward
-updraft.
-
-`u_3^j` enters the buoyancy-affecting draft scalars (``h_s^j``, ``q_t^j``, 1M
-condensates) through the upwind-advection sweep, and those scalars in turn
-drive the buoyancy that closes the next ``u_3^j`` solve. To tighten the
-within-stage coupling, `initialize_implicit_stage_problem!` runs
-`edmfx_updraft_picard_rounds` Picard rounds (default `2`; ``0`` reproduces
-the single-pass behavior) that alternate the analytic ``u_3^j`` solve, the
-two-pass area solve (`solve_sgs_ρa_two_pass!`, which evaluates the lower and
-upper area-limiter factors — gating buoyancy detrainment and the
-mass-flux-divergence detrainment prefactor — and the convergence sign test at
-``\max(\hat{\rho}^{j,\mathrm{old}}, \hat{\rho}^{j,\mathrm{pass1}})``), and the
-semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
-turbulent entrainment toward the environment diagnosed from the stage-start
-draft snapshot, first-cell surface mass-source relaxation of ``h_s^j`` and
-``q_t^j``, and 1M microphysics), each round starting from the stage-initial
-`Y.(f,c).sgsʲs` with the clamped area. Within a round, the sweep transports
-every draft scalar first; the draft thermodynamics and `ᶜmp_tendencyʲs` are
-then evaluated at the transported state, so that the vapor of each cell is
-consistent with the condensate that arrives with it, and the condensate and
-precipitation tracers receive ``\gamma \Delta t`` times that source (floored at
-zero and proportionally rescaled so their sum does not exceed ``q_t^j``); the
-draft thermodynamics are refreshed again at the full iterate for the next
-``u_3^j`` solve. The final analytic
-``u_3^j`` and two-pass ``\hat{\rho}^j`` solves then run with Picard-converged
-buoyancy and microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton
-solve so the Jacobian stays consistent.
+The draft mass ``\hat{\rho}^j`` and vertical velocity ``u_3^j`` are advanced by
+the Newton solve together with the other implicit variables. At the start of
+every implicit stage, `initialize_implicit_stage_problem!` refreshes the
+`Y`-dependent precomputed quantities (`set_implicit_precomputed_quantities_core!`)
+so that ``\rho^j`` and the buoyancy are those of the stage-entering state, clamps
+``\hat{\rho}^j`` to ``[0, a_{\max} \rho^j]``, so that the solve starts from a
+feasible area, and overwrites ``u_3^j`` with a closed-form column solve of its
+stage equation (below), which warm-starts the Newton iteration. Within the
+solve, `sgs_u₃_implicit_tendency!` and `sgs_ρa_implicit_tendency!` evaluate the
+right-hand sides of the ``u_3^j`` and ``\hat{\rho}^j`` equations at the current
+Newton iterate, and `update_sgs_u₃_and_ρa_jacobian!` supplies their Jacobian
+blocks (see [Jacobian](#Jacobian)).
 
 ### Vertical velocity
 
@@ -335,7 +291,7 @@ w^0 - w^j \approx - \frac{\rho}{\hat{\rho}^0} \, w^j ,
 which is exact for a single draft and is applied unchanged when there are
 several. Each velocity difference then brings one factor of
 ``\rho / \hat{\rho}^0 = 1/a^0``. The velocity-independent entrainment rates
-(background, buoyancy-driven, area-bounding, and turbulent), collected in
+(background, buoyancy-driven, and turbulent), collected in
 ``E^j_0``, contribute the *linear* sink ``E^j_0 w^j / a^0``; the
 velocity-proportional entrainment ``\epsilon^j |w^j - w^0|`` contributes the
 *quadratic* sink ``\epsilon^j (w^j)^2 / (a^0)^2``, with ``\epsilon^j`` the
@@ -344,12 +300,13 @@ evaluated with ``w^0 \approx 0``; and the form drag
 ``d^j = a^0 d_c^j (w^j - w^0) |w^j - w^0|`` contributes the quadratic sink
 ``d_c^j (w^j)^2 / a^0``, its weight ``a^0`` cancelling one of the two factors
 from the velocity differences. The area ``a^0`` is clamped to
-``[1 - a_{\max}, 1]`` here, because the velocity solve runs before the area
-solve and can be handed an extrapolated area. The prognostic variable is the
+``[1 - a_{\max}, 1]``, in both the warm start and the residual, because the
+stage-entering state or a Newton iterate can carry an area outside that range.
+The prognostic variable is the
 covariant component ``u_3 = w \Delta z``, so the whole equation carries one
-factor of ``\Delta z`` relative to the equation for ``w``. At face ``i``, the
-stage equation is then a quadratic, coupled to the face below through the
-advection term:
+factor of ``\Delta z`` relative to the equation for ``w``. For the warm start
+(`predict_sgs_u₃!`), the stage equation at face ``i`` is
+then a quadratic, coupled to the face below through the advection term:
 
 ```math
 \mathcal{A} \, u_3^2 + \mathcal{B} \, u_3 + \mathcal{C}
@@ -363,34 +320,34 @@ sponge damping rate (only when a sponge is configured), the reduced buoyancy,
 and the local part of the vertical kinetic-energy advection. The equation is
 swept upward with `Operators.column_accumulate!`, each face taking the ``+``
 root. Clamping the constant term with ``\min(0, \cdot)`` keeps the discriminant
-non-negative and the root non-negative, so the solve can never return a downward
-draft velocity.
+non-negative and the root non-negative, so the warm start can never return a
+downward draft velocity.
+
+The Newton residual (`sgs_u₃_implicit_tendency!`) evaluates the same terms at
+the iterate: the reduced buoyancy, the vertical kinetic-energy advection
+upwinded by the sign of ``u_3^j``, the linear and quadratic sinks, and the
+sponge, plus a fixer ``-\min(u_3^j, 0)`` that relaxes a negative velocity at
+``1\,\mathrm{s}^{-1}``. The tendency is zero at the boundary faces, where
+``u_3^j`` is held at zero.
 
 ### Draft mass
 
-The flux-form stage equation
-``\partial \hat{\rho}^j / \partial t + \partial_z(\hat{\rho}^j w^j) = (E^j - \Delta^j) \hat{\rho}^j``
-under first-order upwinding (for upward ``u_3^j``) is a forward recurrence in
-the column,
+The Newton residual for ``\hat{\rho}^j`` (`sgs_ρa_implicit_tendency!`) is the
+right-hand side of the flux-form equation
 
 ```math
-\hat{\rho}^j[i] = \frac{n[i] + \alpha_{\mathrm{bot}}[i] \, \hat{\rho}^j[i-1]}{d[i]} ,
-\qquad
-n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} ,
+\frac{\partial \hat{\rho}^j}{\partial t}
+= - P \, D^c\!\left[ U_1^f(u_3^j, \hat{\rho}^j) \right]
+  + \left( E^j - \Delta^j_* + r \right) \hat{\rho}^j
+  + \frac{F_{\mathrm{sfc}}}{\Delta z} \delta_{i,1}
+  - R ,
 ```
 
-```math
-d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
-  \frac{1}{\gamma \Delta t} + \alpha_{\mathrm{top}}[i]
-  - (E^j - \Delta^j)[i] - r[i] \right) ,
-\qquad
-\alpha_{\mathrm{face}} = \frac{I^f(\rho^j J)}{J^f}
-  \frac{u_3^j / \Delta z^f}{\rho^j_{\mathrm{upwind}} \, \Delta z} ,
-```
-
-swept bottom to top, with the upwind density ``\rho^j[i]`` at the top face and
-``\rho^j[i-1]`` at the bottom face. The floor on the denominator caps the
-per-step growth at roughly a factor of ten. The sedimentation mass source of
+with ``U_1^f`` the first-order upwind face flux selected by the sign of
+``u^{3,j}``, ``\Delta^j_*`` the detrainment without its mass-flux-divergence
+part, ``P`` the detrainment prefactor, ``r`` the sedimentation rate, and ``R``
+the bounds-restoring term, all evaluated at the Newton iterate. The
+sedimentation mass source of
 the condensate species enters as the rate (`updraft_sedimentation_rate!`)
 
 ```math
@@ -402,9 +359,8 @@ r = \frac{1}{\gamma \Delta t} \sum_\mu \Delta q_\mu ,
 ```
 
 the change of each draft condensate by sedimentation in one linearized
-backward-Euler step from the Picard-converged tracers, at the stage-start
-area. The flux through each face comes from the cell above, so the operator is
-upper bidiagonal and each column is solved in one top-to-bottom sweep. For
+backward-Euler step from the current Newton iterate. The flux through each
+face comes from the cell above, so the operator is upper bidiagonal and each column is solved in one top-to-bottom sweep. For
 ``q_{\mathrm{icl}}``, ``q_{\mathrm{rai}}``, and ``q_{\mathrm{sno}}`` (mass) and
 ``n_{\mathrm{rai}}`` (2M number), the super-diagonal uses the running column max
 of the terminal velocity at and above each cell (`fill_column_max!`) instead of
@@ -420,43 +376,47 @@ precipitation arriving from above at Courant numbers above one traverses
 negative cells in the same stage rather than piling up there. Cloud liquid and
 ``n_{\mathrm{lcl}}`` fall in the Stokes/fixed regime (`CFL_sed ≪ 1`) and keep
 the pointwise stencil. The lateral-mixing diagonal keeps the pointwise ``w^n``.
-The stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
+The residual source is ``r \hat{\rho}^j``. The Newton solve takes the same step for
 the condensate, so the mass the draft gains matches the dilution
 ``\chi^j S / \hat{\rho}^j`` that it applies, also at Courant numbers above
 one, where the condensate that arrives over the stage differs from the
-stage-start ``S``. Where the draft narrows downward, ``S_\mu`` and its
+``S`` of the current iterate. Where the draft narrows downward, ``S_\mu`` and its
 derivative are proportional to the local area and ``\Delta q_\mu`` does not
 depend on it, so the rate also holds at the stage area. Under the
-equilibrium 0-moment microphysics with implicit microphysics tendencies, ``r``
-is the draft precipitation removal rate (the ``q_t^j`` tendency
-`ᶜmp_tendencyʲs.dq_tot_dt`); with explicit tendencies, the removal enters
-``\hat{\rho}^j`` through the explicit tendency, and ``r`` is zero.
+equilibrium 0-moment microphysics, ``r`` is the draft precipitation removal
+rate (the ``q_t^j`` tendency `ᶜmp_tendencyʲs.dq_tot_dt`).
 
-The recurrence routes detrainment, the surface source, and the area bound in
+The residual routes detrainment, the surface source, and the area bound in
 ways that are easy to misread:
 
-  - **Detrainment enters in two ways.** The area-bounding, velocity-scale
-    entrainment, and buoyancy-detrainment pieces appear in ``(E^j - \Delta^j)``.
-    The *mass-flux-divergence* component of detrainment does not; it becomes a
-    multiplicative prefactor on ``\alpha_{\mathrm{top}}`` and
-    ``\alpha_{\mathrm{bot}}``, so that it is treated implicitly together with
-    the flux divergence it derives from. Where the draft is at ``a_{\max}``,
-    that prefactor is zero: the whole converging mass flux is detrained, and
-    none of it is left to grow the area.
-  - **The surface source enters the first cell's numerator.** In cell 1 the
-    bottom coefficient is zeroed, since the physical flux is zero there
-    (``u_3 = 0`` at the surface), and the capped surface mass source
-    ``F_{\mathrm{sfc}} / \Delta z`` is added to the numerator as an
-    area-independent constant. That is the discrete form of the free lower
-    boundary condition on the draft area.
-  - **The area is clamped, asymmetrically.** The limiters in
-    ``(E^j - \Delta^j)`` are evaluated at the previous iterate, so they
-    cannot guarantee the bound at the stage value. The sweep therefore clamps
-    ``\hat{\rho}^j`` to ``[0, \rho^j a_{\max}]``. Clipping from *above* is
-    mass-conserving: the excess is absorbed by the environment automatically,
-    acting like instantaneous detrainment. Clipping from below at
-    ``\rho^j a_{\min}`` would not be, since it would create draft mass out of
-    nothing, so the lower bound is zero.
+  - **Detrainment enters in two ways.** The velocity-scale entrainment and the
+    buoyancy-detrainment pieces appear in ``(E^j - \Delta^j_*)``. The
+    *mass-flux-divergence* component of detrainment does not; it becomes the
+    prefactor ``P`` on the flux divergence where that divergence is negative,
+    so that it is treated implicitly together with the flux divergence it
+    derives from. Where the draft is at ``a_{\max}``, ``P`` is zero: the whole
+    converging mass flux is detrained, and none of it is left to grow the area.
+  - **The surface source enters the first cell.** The capped surface mass
+    source ``F_{\mathrm{sfc}} / \Delta z`` is added in cell 1 as an
+    area-independent volumetric source. That is the discrete form of the free
+    lower boundary condition on the draft area.
+  - **The area is bounded by a restoring term and clamps, not by entrainment.**
+    The limiters in ``(E^j - \Delta^j_*)`` damp rates near the bounds but cannot
+    guarantee them. The residual therefore includes
+    ``R = \min(\hat{\rho}^j, 0) + \max(\hat{\rho}^j - \rho^j a_{\max}, 0)``,
+    which relaxes ``\hat{\rho}^j`` back into ``[0, \rho^j a_{\max}]`` at
+    ``1\,\mathrm{s}^{-1}``; it is a numerical stabilizer, like the
+    negative-velocity fixer on ``u_3^j``, not part of the entrainment or
+    detrainment closures. The stage initialization and the state filter
+    (`edmfx_filter`) clamp ``\hat{\rho}^j`` to the same interval. The
+    Jacobian takes the derivative of ``R`` as 1 on the bounds as well as
+    outside them: the stage initialization clamps an out-of-bounds stage
+    target onto a bound, and a derivative of 0 there would let the first
+    Newton step move ``\hat{\rho}^j`` almost all the way back to the target.
+    The lower
+    bound is zero rather than ``\rho^j a_{\min}``, since raising the area to
+    ``a_{\min}`` would create draft mass out of nothing; at ``a_{\min}`` the
+    lower limiter only switches detrainment off.
 
 ## Jacobian
 
@@ -465,17 +425,89 @@ The implicit residual is linearized by the Jacobian algorithms of
 blocks are assembled by five update functions that mirror the tendency
 structure, in a fixed order because they accumulate into shared blocks:
 
-| Update                                         | Covers                                                                                                                                                                                                         |
-|:---------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_sgs_advection_jacobian!`               | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux |
-| `update_sgs_diffusion_and_entr_detr_jacobian!` | vertical diffusion of the draft scalars down their own gradients, and the entrainment relaxation, including the feedback through the environment residual                                                      |
-| `update_sgs_boundary_condition_jacobian!`      | the surface mass-source relaxation in the first cell                                                                                                                                                           |
-| `update_sgs_massflux_jacobian!`                | the mass-flux contributions to the grid-mean scalars                                                                                                                                                           |
+| Update                                         | Covers                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|:---------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `update_sgs_advection_jacobian!`               | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux                                                                                                                                                                                                                 |
+| `update_sgs_diffusion_and_entr_detr_jacobian!` | vertical diffusion of the draft scalars down their own gradients, and the entrainment relaxation, including the feedback through the environment residual                                                                                                                                                                                                                                                                      |
+| `update_sgs_boundary_condition_jacobian!`      | the surface mass-source relaxation in the first cell, and a Patankar barrier `S / (ρʲ a_max − ρ̂ʲ)` on the ``\hat{\rho}^j`` diagonal that keeps the Newton iterate below ``\rho^j a_{\max}`` against the surface mass source `S`                                                                                                                                                                                               |
+| `update_sgs_massflux_jacobian!`                | the mass-flux contributions to the grid-mean scalars                                                                                                                                                                                                                                                                                                                                                                           |
+| `update_sgs_u₃_and_ρa_jacobian!`               | the ``u_3^j`` rows (kinetic-energy advection, entrainment and form drag, the sponge, the Patankar barrier against negative buoyancy, and the stable-draft buoyancy feedback; no blocks with respect to the draft scalars) and the ``\hat{\rho}^j`` rows (upwinded mass-flux divergence and its ``u_3^j`` derivative, net entrainment minus detrainment, the Patankar barrier on the gross gain, and the bounds-restoring term) |
 
-The ``\hat{\rho}^j`` and ``u_3^j`` rows receive fallback identity blocks,
-since their stage values come from the analytic solves. The block solver
+The diagonal advection blocks of the draft scalars, ``\hat{\rho}^j``, and
+``u_3^j`` (kinetic energy) advect with ``W^j`` instead of the Newton iterate's
+``w^j``; the off-diagonal derivatives with respect to ``u_3^j`` stay at the
+iterate. ``W^j`` (`ᶠwʲ_maxs`, set by `fill_jacobian_updraft_velocity!` at each
+Jacobian update) is swept up the column from zero as
+
+```math
+W^j_k = \begin{cases}
+  \max\left( w_{\mathrm{pred},k} ,\; W^j_{k-1} \dfrac{C}{1 + C} \right) ,
+    & w_{\mathrm{pred},k} > 0 , \\
+  0 , & w_{\mathrm{pred},k} = 0 ,
+\end{cases}
+\qquad C = \frac{W^j_{k-1} \gamma \Delta t}{\Delta z_k} ,
+```
+
+from the velocity predicted after a buoyancy-driven step of the ``u_3^j``
+equation,
+
+```math
+w_{\mathrm{pred}} = w^+ + \frac{\gamma \Delta t \, b^+}
+  {1 + \gamma \Delta t \left( r_{\mathrm{lin}} + 2 r_{\mathrm{quad}} w^+ \right)} ,
+```
+
+with ``w^+`` and ``b^+`` the positive parts of the iterate's velocity and
+buoyancy acceleration and ``r_{\mathrm{lin}}``, ``r_{\mathrm{quad}}`` the linear
+and quadratic drag rates of the ``u_3^j`` equation. ``W^j_{k-1} C / (1 + C)``
+is the velocity that a backward-Euler upwind step of the kinetic-energy
+advection carries from the face below into a face at rest, which covers an
+updraft that rises into empty cells within the step. Nothing is carried across
+a face where ``w_{\mathrm{pred}}`` vanishes, where the iterate is at rest and the
+buoyancy is not positive (an updraft top): the residual carries no draft mass
+into the cells above, and coupling them to the top draft cell would move its
+Newton step into them. With first-order upwinding
+and Courant numbers ``c_w`` (residual) and ``c_W`` (Jacobian), a Newton step
+reduces the error by about ``|c_w - c_W| / (1 + c_W)``, which is below one for
+any ``c_W \ge c_w`` but exceeds one once an updraft that accelerates within the
+solve outruns the Jacobian's velocity by more than ``1 + c_W``.
+``W^j \ge w_{\mathrm{pred}} \ge w^+`` keeps each step monotone and contracting
+at any Courant number, as the running column maximum of the terminal velocity
+does in the sedimentation blocks.
+The buoyancy term matters for ``\hat{\rho}^j``: the ``(\hat{\rho}^j, u_3^j)``
+block moves ``c_{\Delta w} \hat{\rho}^j`` out of a cell, with ``c_{\Delta w}``
+the Courant number of the velocity increment of the step, which removes more
+than the cell holds once ``c_{\Delta w} > 1 + c_W``. A ``W^j`` built from the
+iterate alone cannot anticipate the buoyancy kick of the step, which is largest
+where the updraft starts from rest under a full cell.
+
+The ``u_3^j`` rows carry no buoyancy derivatives with respect to the draft
+scalars (``h_s^j``, ``q_t^j``, condensates): each Newton step uses the buoyancy
+of the current iterate, which responds to the scalars at the next iteration.
+With those derivatives, buoyancy (``\partial u_3^j / \partial \chi^j``) and
+advection (``\partial \chi^j / \partial u_3^j``) form a positive feedback, in
+which a faster updraft advects warmer air from below and gains buoyancy. Where
+an almost empty draft cell sits above a much warmer one, the product of the two
+couplings reaches the product of the diagonals, the linearization becomes
+singular, and the Newton step flips sign. Lagging the buoyancy breaks the loop.
+
+In a stably stratified draft the lagged loop has the opposite sign: a velocity
+error lifts air of lower ``h_s^j`` from below, the buoyancy of the next iterate
+opposes the error, and the iterates alternate. Once the loop gain, about
+``(\gamma \Delta t)^2 N^2`` reduced by the damping of the ``u_3^j`` and ``h_s^j``
+diagonals, exceeds one, as for a draft at rest under positive buoyancy, the
+iterates swing between rest and launch. The ``u_3^j`` block therefore carries the
+Schur complement of the omitted ``u_3^j``–``h_s^j``–buoyancy coupling, with the
+``h_s^j`` block replaced by its diagonal, in cells where ``h_s^j`` increases from
+the cell below (`stable_draft_mse_response`, with the buoyancy per unit
+``h_s^j`` of `draft_buoyancy_per_mse`). Since a cell's upwinded ``h_s^j``
+responds only to the velocity at its bottom face and the face buoyancy averages
+two cells, each cell enters half on the diagonal of the face below it and half
+on the sub-diagonal of the face above it. In convecting cells the same term
+would shrink the diagonal, so it is left out there.
+
+The block solver
 eliminates the sedimenting draft tracers first, then the draft ``q_t`` and
-``h_s``, then the grid-scale condensate masses, then ``\rho`` and the surface
+``h_s``, then ``\hat{\rho}^j``, then the grid-scale condensate masses, then ``\rho`` and the surface
 state, then ``\rho q_t``, and finally the remaining scalars including
 ``\rho e_{tot}``; the two velocity groups (``\boldsymbol{u}_h``, then
 ``u_3^j``) are solved with a block lower-triangular solve. The
@@ -537,9 +569,9 @@ grid mean is not. `edmfx_filter` is enabled in all PROPHET configurations in
 
 ### Other limiters
 
-  - The entrainment and detrainment area limiters and the additive area-bounding
-    rate, described in
-    [Closures](prophet_closures.md#Entrainment-and-detrainment).
+  - The entrainment and detrainment area limiters, described in
+    [Closures](prophet_closures.md#Entrainment-and-detrainment), and the
+    bounds-restoring term on ``\hat{\rho}^j`` ([Implicit stage for draft mass and velocity](#Implicit-stage-for-draft-mass-and-velocity)).
   - A floor of 1 m on the mixing length, which prevents division by zero in the
     TKE dissipation.
   - Negative TKE is relaxed to zero within one timestep rather than being
@@ -567,8 +599,8 @@ order matters because the closures depend on each other:
     moments and the implicit 1M tendency to `ensure_1m_tendencies!` in the
     Newton residual and Jacobian.
  2. `set_explicit_precomputed_quantities!`: surface conditions, then the
-    PROPHET explicit closures (the entrainment rates and the signed
-    area-bounding rate, the surface mass-source terms; detrainment itself is
+    PROPHET explicit closures (the entrainment rates, the surface mass-source
+    terms; detrainment itself is
     assembled at each call site), then the coupled covariance/cloud-fraction
     Picard iteration, then the face diffusivities (which need the final cloud
     fraction), then the center mixing length, terminal velocities, and the
@@ -582,15 +614,16 @@ shared predicate that keeps the two paths from disagreeing.
 
 ## Where this is implemented
 
-| Component                                                | Source                                                                                                                                                                                                                                                                           |
-|:-------------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit/explicit split                                  | [implicit/implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl), [remaining_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/remaining_tendency.jl)               |
-| Analytic stage solves for ``u_3^j`` and ``\hat{\rho}^j`` | [implicit/initialize_implicit_problem.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/initialize_implicit_problem.jl)                                                                                                                     |
-| Horizontal advection of draft variables                  | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                                                                                                                                                                           |
-| Vertical advection, buoyancy, sedimentation              | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl)                                                       |
-| Subgrid-scale flux discretization                        | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                                                                                                 |
-| Draft hyperdiffusion                                     | [hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                                                 |
-| Jacobian blocks                                          | [implicit/manual_sparse_jacobian.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/manual_sparse_jacobian.jl)                                                                                                                               |
-| State filters                                            | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl), [constrain_state.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/constrain_state.jl)                                     |
-| Environment reconstruction and the blend weight          | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                                                                                                                          |
-| Precomputed-quantity ordering                            | [cache/precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/precomputed_quantities.jl), [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl) |
+| Component                                         | Source                                                                                                                                                                                                                                                                           |
+|:------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implicit/explicit split                           | [implicit/implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl), [remaining_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/remaining_tendency.jl)               |
+| Implicit ``u_3^j`` and ``\hat{\rho}^j`` residuals | [updraft_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/updraft_tendency.jl)                                                                                                                                                             |
+| Newton predictor (warm start)                     | [implicit/initialize_implicit_problem.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/initialize_implicit_problem.jl)                                                                                                                     |
+| Horizontal advection of draft variables           | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                                                                                                                                                                           |
+| Vertical advection, buoyancy, sedimentation       | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl)                                                       |
+| Subgrid-scale flux discretization                 | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                                                                                                 |
+| Draft hyperdiffusion                              | [hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                                                 |
+| Jacobian blocks                                   | [implicit/manual_sparse_jacobian.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/manual_sparse_jacobian.jl)                                                                                                                               |
+| State filters                                     | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl), [constrain_state.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/constrain_state.jl)                                     |
+| Environment reconstruction and the blend weight   | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                                                                                                                          |
+| Precomputed-quantity ordering                     | [cache/precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/precomputed_quantities.jl), [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl) |

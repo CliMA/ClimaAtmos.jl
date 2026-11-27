@@ -1,4 +1,4 @@
-483
+484
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+484
+- Move energy/humidity/condensate upwinding into the Newton residual (2 Newton
+  iterations by default) and delete the post-Newton advection correction.
+  Solve the updraft `u₃` and `ρa` with their physical right-hand sides and
+  manual Jacobian blocks instead of closed-form stage solves. Changes the
+  output of every job with implicit vertical advection or `PrognosticEDMFX`.
+
 483
 - Change default 1-moment cloud-liquid and cloud-ice terminal velocities from `Fixed`
   to `Stokes` (`cloud_liquid_terminal_velocity: "Stokes"`) and `Chen2022`

@@ -57,7 +57,12 @@ makedocs(;
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
         mathengine = MathJax3(),
-        size_threshold_ignore = ["available_diagnostics.md", "api.md"],
+        size_threshold_ignore = [
+            "available_diagnostics.md",
+            "api.md",
+            "configuration_options.md",
+            "moist_baroclinic_wave.md",
+        ],
     ),
     pages = [
         "Home" => "index.md",

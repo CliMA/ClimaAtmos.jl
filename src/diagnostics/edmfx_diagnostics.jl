@@ -352,14 +352,12 @@ compute_entr(state, cache, time) =
 compute_entr(_, _, _, turbconv_model) = error_diagnostic_variable("entr", turbconv_model)
 
 function compute_entr(state, cache, _, ::PrognosticEDMFX)
-    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) =
-        cache.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜuʲs) = cache.precomputed
     ᶜlg = Fields.local_geometry_field(state.c)
     return @. lazy(
         compute_entrainment(
             ᶜentr_vel_scaleʲs.:1,
             ᶜentr_nonvel_rateʲs.:1,
-            ᶜarea_bounding_entr_detrʲs.:1,
             get_physical_w(ᶜuʲs.:1, ᶜlg),
         ),
     )
@@ -393,7 +391,7 @@ compute_detr(state, cache, time) =
 compute_detr(_, _, _, turbconv_model) = error_diagnostic_variable("detr", turbconv_model)
 
 function compute_detr(state, cache, _, ::PrognosticEDMFX)
-    (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs) = cache.precomputed
     (; ᶠgradᵥ_ᶜΦ) = cache.core
     turbconv_params = CAP.turbconv_params(cache.params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
@@ -426,7 +424,6 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             ρaʲ,
             ᶜbuoy_inv_time_scale,
             ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
-            ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
         ),
     )

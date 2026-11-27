@@ -23,16 +23,16 @@ microphysics on plain floating-point states, evaluates the pointwise bottom-face
 sedimentation water and energy fluxes directly from `(Y, p)` (converting the
 level-1 velocity on the center space before slicing) so explicit-diagonal stages
 (`a_{11} = 0`) do not read the previous step's stage-weighted diagnostic in
-`p.precomputed`. When the stage-weighted `ManualSparseJacobian` accumulator is
-active (`has_precip_stage_accumulator(p)` — direct Newton solve without Krylov or
-line search at `update_jacobian_every = "solve"`, or `"stage"` when
-`max_newton_iters_ode == 1`), `add_post_newton_surface_precipitation_tendency!`
-adds the post-Newton Jacobian increment at each implicit stage so the slab ocean
-conserves column water and energy with the atmosphere across IMEX stages
-whenever `constrain_state!` leaves column water unchanged (`ρq_tot ≥ 0`). When
-the accumulator is disabled (Krylov, line search, `update_jacobian_every = "dt"`,
-`"stage"` with `max_newton_iters_ode > 1`, or autodiff Jacobians), `build_cache`
-warns once and the slab receives only the pointwise stage flux `F(U^g)`.
+`p.precomputed`.
+
+This tendency is part of `implicit_tendency!`, so at each implicit stage the slab
+receives the flux `F(U^g)` at the last Newton iterate `U^g`. The Jacobian has no
+blocks coupling `sfc` to the atmospheric condensate, while the atmosphere's
+bottom-cell loss includes the linearized change `w_jac Δρq₁` over the last Newton
+increment `Δ = U* - U^g`. When the stage-weighted precipitation accumulator is
+active, `add_stage_slab_precipitation_increment!` adds that change to the slab
+after the solve, so the slab-plus-atmosphere water and energy budgets close
+exactly; otherwise they close only to within the last Newton increment.
 """
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
 
@@ -212,65 +212,51 @@ function surface_precipitation_tendency!(
 end
 
 """
-    add_post_newton_surface_precipitation_tendency!(Yₜ, Y, p, temperature, microphysics_model)
+    add_stage_slab_precipitation_increment!(Y, p, temperature)
 
-Add to `Yₜ.sfc` the post-Newton Jacobian increment `-(w_jac (ρq* - ρq^g))` of
-the bottom-face sedimentation water and energy fluxes at `Y = U*`, using the
-linearization state cached in `p.scratch.sfc_precip_lin_state` by
-`record_stage_precipitation_linearization!`. Active only for a
-`SlabOceanTemperature` surface with non-equilibrium microphysics when the
-stage-weighted `ManualSparseJacobian` accumulator is enabled; a no-op otherwise.
+Add to the slab state `Y.sfc` at the Newton-solved stage value `U*` the part of
+the stage precipitation that the slab does not receive inside the Newton solve.
+Inside the solve the slab receives the flux `F(U^g)` at the last Newton iterate
+`U^g` (`surface_precipitation_tendency!`; the Jacobian has no blocks coupling
+`sfc` to the atmospheric condensate), while the atmosphere's bottom cell loses
+`F(U^g) + w_jac (ρq₁* − ρq₁^g)` per species. This function subtracts
+`dtγ w_jac (ρq₁* − ρq₁^g)` from `Y.sfc.water`, and the matching energy divided by
+the slab heat capacity from `Y.sfc.T`, with the linearization cached in
+`p.scratch.sfc_precip_lin_state` by `record_stage_precipitation_linearization!`.
+
+Called by `accumulate_stage_precipitation_surface_fluxes!` from the first
+`cache!` call of each implicit stage. `ClimaTimeSteppers` makes that call after
+the Newton solve and before it forms the stage tendency `(U* − U_start) / dtγ`,
+so the increment enters the slab's stage tendency and the slab-plus-atmosphere
+water and energy budgets close exactly. At the last stage of an FSAL tableau the
+call is the end-of-step `cache!`, after the stage tendency is formed; there the
+new state is the stage value itself, so the increment enters the step all the
+same. A no-op for any surface other than a slab ocean.
 """
-add_post_newton_surface_precipitation_tendency!(Yₜ, Y, p, _, _) = nothing
-add_post_newton_surface_precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    ::SlabOceanTemperature,
-    _,
-) = nothing
-function add_post_newton_surface_precipitation_tendency!(
-    Yₜ,
+add_stage_slab_precipitation_increment!(Y, p, _) = nothing
+function add_stage_slab_precipitation_increment!(
     Y,
     p,
     slab::SlabOceanTemperature,
-    ::Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
-    },
 )
-    (
-        eltype(Y) === eltype(p.params) &&
-        has_precip_stage_accumulator(p) &&
-        MatrixFields.has_field(Y.c, @name(ρq_lcl)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_icl)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
-        MatrixFields.has_field(Y.c, @name(ρq_sno))
-    ) || return nothing
-
     lin = p.scratch.sfc_precip_lin_state
-    sfc_space = axes(lin)
-    sfc_lev(x) =
-        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
-    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
-    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
-    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
-    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
-
+    # The condensate of the solved stage, before the post-Newton clip.
+    solved = solved_precipitation_condensate(Y, p)
+    int_ρq_lcl = solved.ρq_lcl
+    int_ρq_icl = solved.ρq_icl
+    int_ρq_rai = solved.ρq_rai
+    int_ρq_sno = solved.ρq_sno
     Δf_lcl = @. lazy(lin.w_lcl_jac * (int_ρq_lcl - lin.ρq_lcl_guess))
     Δf_icl = @. lazy(lin.w_icl_jac * (int_ρq_icl - lin.ρq_icl_guess))
     Δf_rai = @. lazy(lin.w_rai_jac * (int_ρq_rai - lin.ρq_rai_guess))
     Δf_sno = @. lazy(lin.w_sno_jac * (int_ρq_sno - lin.ρq_sno_guess))
-
+    (; dtγ) = p
     surface_heat_capacity_per_area =
         slab.ρ_ocean * slab.cp_ocean * slab.depth_ocean
-    @. Yₜ.sfc.water -= Δf_rai + Δf_lcl + Δf_sno + Δf_icl
-    @. Yₜ.sfc.T -=
-        (
-            Δf_rai * lin.e_rai +
-            Δf_lcl * lin.e_lcl +
-            Δf_sno * lin.e_sno +
+    @. Y.sfc.water -= dtγ * (Δf_rai + Δf_lcl + Δf_sno + Δf_icl)
+    @. Y.sfc.T -=
+        dtγ * (
+            Δf_rai * lin.e_rai + Δf_lcl * lin.e_lcl + Δf_sno * lin.e_sno +
             Δf_icl * lin.e_icl
         ) / surface_heat_capacity_per_area
     return nothing

@@ -249,8 +249,8 @@ end
 Write into the surface-level field `dest` the subdomain correction to the
 bottom-face sedimentation energy flux at the Newton linearization state, summed
 over the four condensate species [W/m²]. `gm` holds the surface-level grid-mean
-inputs of `record_stage_precipitation_linearization!` (`sfc_lev`, `J_ratio`,
-`int_T`, `int_uvw`, and the species' `int_ρq_*` and `sfc_w_*`). Each term is
+inputs (`sfc_lev`, `J_ratio`, `int_T`, `int_uvw`, and the species' `int_ρq_*`
+and `sfc_w_*`). Each term is
 `J_ratio (ρʲ fʲ + ρ⁰ f⁰)` with `fʲ` and `f⁰` from `updraft_precip_energy_flux`
 and `environment_precip_energy_flux`, which is the value of the column
 correction flux through the surface face. Zero for every turbulence-convection
@@ -452,43 +452,27 @@ end
 """
     record_stage_precipitation_linearization!(Y, p)
 
-Cache the level-1 condensate mass densities, specific energies, and SGS bottom
-energy-flux correction at the Newton linearization state `Y = U^g` into
-`p.scratch.sfc_precip_lin_state`. Read after the Newton solve by
-`accumulate_stage_precipitation_surface_fluxes!` to evaluate the stage
-bottom-face sedimentation flux
+Cache the level-1 condensate mass densities, the bottom-face sedimentation
+fluxes, the Jacobian fall speeds, the species energies, and the SGS bottom
+energy-flux correction at the state `Y` into `p.scratch.sfc_precip_lin_state`.
+Called from every evaluation of the implicit residual, so after a Newton solve it
+holds the last iterate `U^g`, where the Jacobian of the last Newton step is also
+evaluated (`update_jacobian_every = "solve"`).
 
-    F = w_base * max(0, ρq^g) + w_jac * (ρq* - ρq^g),
+The atmosphere's implicit stage tendency is `T(U^g) + J Δ` with `Δ = U* − U^g`,
+so its bottom cell loses the linearized flux
 
-where `w_base` is the level-1 terminal velocity (`ᶜJ_1 / ᶠJ_{1/2}`-scaled) and
-`w_jac` is the Jacobian terminal velocity: `w_base` for cloud liquid, and the
-column maxima `ᶜwᵢ_max` / `ᶜwᵣ_max` / `ᶜwₛ_max` (scaled the same way) for cloud
-ice, rain, and snow, matching `update_sedimentation_jacobian!`. This
-linearization matches the discrete column sink applied by the stage under four
-conditions: (1) direct Newton solve without Krylov or line search, with the
-Jacobian refreshed at the final Newton iterate (`update_jacobian_every = "solve"`,
-or `"stage"` when `max_newton_iters_ode == 1`); (2) `ManualSparseJacobian`
-(autodiff uses the pointwise derivative and disables this accumulator);
-(3) direct inversion of the block-lower-triangular scalar submatrix `A₁₁`
-(`ApproximateBlockArrowheadIterativeSolve` wraps `SchurComplementReductionSolve`
-with `alg₁ = BlockLowerTriangularSolve`, approximating only the velocity Schur
-complement whose `ᶜadvdivᵥ` columns integrate to zero over each column, so
-column sums hold at any `approximate_solve_iters ≥ 1`); and
-(4) `constrain_state!` leaving column water unchanged (`ρq_tot ≥ 0`; setting
-`update_constrain_state_every = "dss"` under condensate warm-starting preserves
-conservation when `ρq_tot ≥ 0`, but re-clamping `U^g` before the solve can drive
-the stage flux upward). A stage flux is upward (`F > 0`) whenever
-`|w_jac| (ρq^g - ρq*) > |w_base| max(0, ρq^g)` — from (a) a negative bottom cell
-with a net implicit sink and `w_jac > 0` (from condensate aloft, the 1M `10⁻⁸`
-rain terminal-velocity floor, or `FixedTerminalVelocity`), or (b) a positive
-bottom cell drained below `(1 - w_base / w_jac) ρq^g` within one stage (e.g.,
-subcloud evaporation at linearized dimensionless rate
-`dtγ λ > w_base / (w_jac - w_base)`) — and (c) negative IMEX `b_imp` stage
-weights (`ARS343` has `b_imp[3] ≈ -0.644`) can make the step sum upward even
-when every stage flux is downward; in all cases the accumulated sum equals the
-discrete column sink (up to explicit-diagonal weight redistribution on `SSP` /
-`IMKG` tableaus). The SGS correction comes from `set_sfc_sgs_precip_energy_flux!`,
-which dispatches on the turbulence-convection model.
+    F = w_base max(0, ρq^g) + w_jac (ρq* − ρq^g)
+
+per species, with `w_base` the level-1 terminal velocity and `w_jac` the
+Jacobian fall speed (`update_sedimentation_jacobian!`: `w_base` for cloud liquid
+and the column maxima of the terminal velocity for cloud ice, rain, and snow),
+both scaled by `ᶜJ₁ / ᶠJ_{1/2}`. The stage-weighted accumulator
+(`accumulate_stage_precipitation_surface_fluxes!`) evaluates `F` at `U*` from
+this record, so the accumulated surface fluxes equal what the atmosphere loses.
+The SGS
+correction comes from `set_sfc_sgs_precip_energy_flux!`, which dispatches on the
+turbulence-convection model. A no-op when the accumulator is not active.
 """
 function record_stage_precipitation_linearization!(Y, p)
     (
@@ -499,6 +483,8 @@ function record_stage_precipitation_linearization!(Y, p)
         MatrixFields.has_field(Y.c, @name(ρq_rai)) &&
         MatrixFields.has_field(Y.c, @name(ρq_sno))
     ) || return nothing
+    # A Newton iterate follows, so a solved condensate recorded earlier is stale.
+    p.scratch.precip_solved_condensate_recorded[] = false
 
     (; params) = p
     (; ᶜΦ) = p.core

@@ -479,7 +479,6 @@ include("../test_helpers.jl")
     p.precomputed.ᶜturb_entrʲs.:1 .= 0
     p.precomputed.ᶜentr_vel_scaleʲs.:1 .= 0
     p.precomputed.ᶜentr_nonvel_rateʲs.:1 .= 0
-    p.precomputed.ᶜarea_bounding_entr_detrʲs.:1 .= 0
     CA.update_sgs_diffusion_and_entr_detr_jacobian!(
         matrix,
         Y,

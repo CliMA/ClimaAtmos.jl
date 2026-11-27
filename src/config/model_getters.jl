@@ -1360,7 +1360,6 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         horizontal_diffusion = pa["edmfx_horizontal_diffusion"],
         filter = pa["edmfx_filter"],
         scale_blending_method,
-        updraft_picard_rounds = pa["edmfx_updraft_picard_rounds"],
     )
 
     n = pa["smagorinsky_lilly"]

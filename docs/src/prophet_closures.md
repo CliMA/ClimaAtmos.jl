@@ -35,16 +35,15 @@ so that what subdomain ``m`` gains from ``n`` is what ``n`` loses to ``m``, and
 the exchange terms cancel in the sum over subdomains that recovers the resolved
 equations.
 
-In the code, the total entrainment rate of draft ``j`` is assembled from three
+In the code, the total entrainment rate of draft ``j`` is assembled from two
 pieces (`compute_entrainment`):
 
 ```math
-E^j = \varepsilon_w \, |w^j| + \varepsilon_r + \max(0, \Lambda_a) ,
+E^j = \varepsilon_w \, |w^j| + \varepsilon_r ,
 ```
 
 a velocity-proportional part with an inverse-length prefactor
-``\varepsilon_w``, a velocity-independent rate ``\varepsilon_r``, and the
-positive branch of a signed area-bounding rate ``\Lambda_a`` (below). Two models
+``\varepsilon_w`` and a velocity-independent rate ``\varepsilon_r``. Two models
 supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
 `edmfx_entr_model`:
 
@@ -132,36 +131,34 @@ combines a negative-buoyancy timescale with a converging mass flux:
 \Delta^j = \max\!\left(0, \; \Lambda_{\min} \left[
     c_\delta \, \tau_{\mathrm{buoy}}^{-1}
     - c_{\delta \nabla} \frac{\min(0, \nabla \cdot (\hat{\rho}^j \boldsymbol{w}^j))}{\hat{\rho}^j}
-  \right] \right) + \max(0, -\Lambda_a) ,
+  \right] \right) ,
 ```
 
 with ``\tau_{\mathrm{buoy}}^{-1}`` now built from the *negative* part of the
 buoyancy contrast, and ``\Lambda_{\min}`` the lower-area limiter. Only a
 converging (negative) mass-flux divergence detrains.
 
-**Area limiters.** Two mechanisms keep the draft area fraction inside
-``[a_{\min}, a_{\max}]``. Multiplicative limiters damp the rate that would push
-the area toward the bound it is approaching,
+**Area limiters.** Multiplicative limiters damp the rate that would push the
+draft area fraction toward the bound of ``[a_{\min}, a_{\max}]`` it is
+approaching,
 
 ```math
 \Lambda_{\max} = \left[ \left(1 - \frac{a}{a_{\max}}\right)_+ \right]^{p_{\max}}
 \quad \text{on entrainment,} \qquad
 \Lambda_{\min} = \left[ \left(1 - \frac{a_{\min}}{a}\right)_+ \right]^{p_{\min}}
-\quad \text{on detrainment,}
+\quad \text{on detrainment.}
 ```
 
-and a signed additive rate ``\Lambda_a`` (`area_bounding_entr_detr`) relaxes the
-area back if it leaves the interval at all:
-
-```math
-\Lambda_a = s_{\min} \left[ \frac{(a_{\min} - a)_+}{a_{\min}} \right]^{p_{\min}}
-  - s_{\max} \left[ \frac{(a - a_{\max})_+}{1 - a_{\max}} \right]^{p_{\max}} .
-```
-
-The two ranges are disjoint, so at most one term is nonzero. The small positive
-``a_{\min}`` keeps the equations from becoming singular and maintains a seed
-draft across convective gaps; ``a_{\max}`` keeps the environment from being
-displaced entirely.
+They cannot by themselves keep the area inside the interval. The implicit
+draft-mass equation adds a numerical bounds-restoring term that relaxes
+``\hat{\rho}^j`` back into ``[0, \rho^j a_{\max}]``, and the stage
+initialization and state filter clamp it there; see
+[Discretization and Time Stepping](prophet_numerics.md). Nothing raises the
+area back to ``a_{\min}``: below it, ``\Lambda_{\min} = 0`` and detrainment is
+switched off. The small positive
+``a_{\min}`` keeps a small draft from detraining away entirely, which keeps
+the equations from becoming singular across convective gaps; ``a_{\max}``
+keeps the environment from being displaced entirely.
 
 !!! note "Departure from the formulation"
 
@@ -172,13 +169,14 @@ displaced entirely.
     one-sided limiters, and evaluates the entrainment relaxation with ``w^0``
     set to zero at the call site in place of the velocity difference. Setting
     ``w^0 = 0`` bounds the entrainment of a draft with ``w^j \approx 0``, whose
-    area would otherwise grow without limit. The analytic area solve holds the
-    draft area fixed through the Newton iteration, which closes that path, so
-    restoring the velocity difference is a code-side task, as is a symmetric
-    redesign of the limiters.
+    area would otherwise grow without limit. The implicit ``u_3^j`` equation
+    already uses the relative-velocity form, so the ``u_3^j`` and
+    ``\hat{\rho}^j`` equations use rates that differ by ``1/a^0``. Restoring
+    the velocity difference in the draft-mass equation is a code-side task, as
+    is a symmetric redesign of the limiters.
 
-Detrainment does not appear in the explicit scalar tendencies. It is absorbed
-into the analytic implicit solve for ``\hat{\rho}^j``, and scalars are detrained
+Detrainment does not appear in the explicit scalar tendencies. It enters the
+implicit draft-mass equation for ``\hat{\rho}^j``, and scalars are detrained
 implicitly through the area divergence of the mass flux; see
 [Discretization and Time Stepping](prophet_numerics.md).
 
@@ -1011,8 +1009,8 @@ covariance, quadrature and cloud-fraction closures,
 | ``c_1 \dots c_6`` (Π groups)                                                                    | `entr_param_vec`                                                                                                                                                                                                                     | `entr_param_vec`                                                                                                                                |
 | ``\varepsilon_t``, ``c_t``                                                                      | `turb_entr_param_vec`                                                                                                                                                                                                                | `turb_entr_param_vec`                                                                                                                           |
 | ``c_\delta``, ``c_{\delta \nabla}``                                                             | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                                                                                                                                                     | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                                                                |
-| ``s_{\min}``, ``p_{\min}``                                                                      | `min_area_limiter_scale`, `min_area_limiter_power`                                                                                                                                                                                   | `min_area_limiter_scale`, `min_area_limiter_power`                                                                                              |
-| ``s_{\max}``, ``p_{\max}``                                                                      | `max_area_limiter_scale`, `max_area_limiter_power`                                                                                                                                                                                   | `max_area_limiter_scale`, `max_area_limiter_power`                                                                                              |
+| ``p_{\min}``                                                                                    | `min_area_limiter_power`                                                                                                                                                                                                             | `min_area_limiter_power`                                                                                                                        |
+| ``p_{\max}``                                                                                    | `max_area_limiter_power`                                                                                                                                                                                                             | `max_area_limiter_power`                                                                                                                        |
 | ``\alpha_b``, ``\alpha_d``                                                                      | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                                                                                                                                                                  | same                                                                                                                                            |
 | ``c_m``                                                                                         | `tke_ed_coeff`                                                                                                                                                                                                                       | `mixing_length_eddy_viscosity_coefficient`                                                                                                      |
 | ``c_b``                                                                                         | `static_stab_coeff`                                                                                                                                                                                                                  | `mixing_length_static_stab_coeff`                                                                                                               |

@@ -12,7 +12,10 @@ The cache is built once by `build_cache` and mutated in place thereafter: no
 lazy broadcasting instead). Entries of `p.precomputed` are refreshed from the
 current state `Y` by the `set_*_precomputed_quantities!` family of functions
 (see `set_precomputed_quantities!`); entries of `p.scratch` hold no persistent
-state and may be overwritten by any function.
+state and may be overwritten by any function, except the stage-weighted surface
+precipitation accumulator (`precip_stage_idx` and the `*_accum` fields), which
+carries the fluxes of the last completed step (see
+`seed_precip_stage_accumulator!`).
 
 # Fields
 
@@ -155,7 +158,9 @@ configuration `atmos`.
 All fields needed during time stepping are allocated here; subsequent code only
 mutates them in place. After allocating the precomputed quantities, this calls
 `set_precomputed_quantities!(Y, ..., 0)` once so that the cache is consistent
-with the initial state, and then builds the component caches (hyperdiffusion,
+with the initial state, seeds the stage-weighted surface precipitation
+accumulator with the resulting fluxes (`seed_precip_stage_accumulator!`), and
+then builds the component caches (hyperdiffusion,
 gravity waves, radiation, tracers).
 
 # Arguments
@@ -172,11 +177,9 @@ gravity waves, radiation, tracers).
 # Keyword Arguments
 
   - `ode_algo = nothing`: Time-stepping algorithm (`CTS.IMEXAlgorithm` or
-    explicit), used to extract `dtγ`, `b_imp` stage weights, and the
-    `compensate_explicit_scalar_advection` flag.
+    explicit), used to extract `dtγ` and `b_imp` stage weights.
   - `jacobian = ManualSparseJacobian()`: Implicit Jacobian algorithm, gating the
-    stage-weighted surface precipitation accumulator and scalar advection
-    dissipation weight.
+    stage-weighted surface precipitation accumulator.
   - `update_cache_every = "step"`: Precomputed-quantity refresh cadence (`"step"`
     or `"stage"`), selecting `StepAveraging()` or `StageAveraging()`.
 
@@ -202,6 +205,39 @@ function build_cache(
        any(!iszero, LinearAlgebra.diag(ode_algo.tableau.a_imp))
         !isnothing(γ) || error(
             "IMEX tableau must have a single non-zero diagonal γ for p.dtγ",
+        )
+    end
+    # A stage with a zero implicit diagonal whose implicit tendency enters a
+    # later stage or the update has that tendency evaluated explicitly by
+    # ClimaTimeSteppers (stage 1 of SSP333, ARK437L2SA1, ARK548L2SA2, and
+    # IMKG343a). The 1 s⁻¹ bounds-restoring terms of the updraft `ρa` and `u₃`
+    # overshoot there unless they vanish, which the updraft filter ensures.
+    if ode_algo isa CTS.IMEXAlgorithm &&
+       atmos.turbconv_model isa PrognosticEDMFX &&
+       !atmos.edmfx_model.filter &&
+       !(atmos.prescribed_flow isa PrescribedFlow)
+        (; a_imp, b_imp) = ode_algo.tableau
+        n_stages = length(b_imp)
+        explicit_stages = filter(
+            i ->
+                iszero(a_imp[i, i]) && (
+                    !iszero(b_imp[i]) ||
+                    any(k -> !iszero(a_imp[k, i]), (i + 1):n_stages)
+                ),
+            1:n_stages,
+        )
+        isempty(explicit_stages) || error(
+            "Prognostic EDMF with this IMEX tableau requires `edmfx_filter: \
+            true`. The tableau evaluates the implicit tendency explicitly at \
+            stage(s) $explicit_stages, which includes the bounds-restoring \
+            terms of the updraft area and velocity (relaxation of `ρa` into \
+            `[0, ρʲ a_max]` and of `u₃` to `u₃ ≥ 0` at 1 s⁻¹). Evaluated \
+            explicitly with a step longer than 2 s, these terms overshoot, and \
+            only the later implicit stages can damp them. The filter clips \
+            `ρa` and `u₃` into those bounds at the end of every step, so the \
+            terms vanish at the state those stages evaluate. Enable \
+            `edmfx_filter`, or use a tableau whose implicit tendency is never \
+            evaluated explicitly (e.g. ARS222).",
         )
     end
     dtγ = isnothing(γ) ? zero(dt) : FT(γ) * dt
@@ -290,38 +326,20 @@ function build_cache(
             NonEquilibriumMicrophysics2M,
             NonEquilibriumMicrophysics2MP3,
         }
+    # The accumulator samples the post-Newton `cache!` call of each implicit
+    # stage, which CTS makes only when the cache is updated every stage.
     b_imp_stages, n_imp_stages =
-        (jacobian isa ManualSparseJacobian && has_noneq_precip) ?
-        imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
-    if atmos.surface.temperature isa SurfaceConditions.SlabOceanTemperature &&
-       has_noneq_precip &&
-       !iszero(dtγ) &&
-       n_imp_stages == 0
-        @warn(
-            "Stage-weighted surface precipitation accumulator is disabled for \
-             this solver/Jacobian configuration; `SlabOceanTemperature` \
-             receives only the pointwise stage flux while the atmosphere \
-             applies the post-solve sedimentation increment."
-        )
-    end
-    compensate_explicit_scalar_advection =
-        !iszero(dtγ) &&
         (
-            jacobian isa ManualSparseJacobian || (
-                jacobian isa AutoSparseJacobian &&
-                atmos.microphysics_model isa DryModel &&
-                atmos.diff_mode != Implicit()
-            )
-        ) &&
-        ode_algo isa CTS.IMEXAlgorithm &&
-        !isnothing(ode_algo.newtons_method) &&
-        isnothing(ode_algo.newtons_method.krylov_method)
+            jacobian isa ManualSparseJacobian &&
+            has_noneq_precip &&
+            update_cache_every == "stage"
+        ) ?
+        imex_b_imp_stages(ode_algo, FT) : (zero(SVector{8, FT}), 0)
     scratch = temporary_quantities(
         Y,
         atmos;
         b_imp_stages,
         n_imp_stages,
-        compensate_explicit_scalar_advection,
     )
 
     precomputed = precomputed_quantities(Y, atmos)
@@ -345,6 +363,12 @@ function build_cache(
         SurfaceConditions.init_sfc_conditions_zero!(precomputing_arguments)
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
+    seed_precip_stage_accumulator!(precomputing_arguments)
+    # Match the step-boundary state that `cache!` leaves, so that a fresh cache
+    # matches a checkpoint; the tendency is current, so marking it stale costs
+    # one extra evaluation at most.
+    precomputing_arguments.scratch.implicit_1m_tendency_is_stale[] =
+        has_implicit_1m_microphysics(precomputing_arguments)
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
