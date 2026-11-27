@@ -124,12 +124,19 @@ function temporary_quantities(
         temp_field_level_3 = Fields.level(Fields.Field(FT, center_space), 1),
         temp_data = Fields.field_values(Fields.Field(FT, center_space)),
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
-        # DSS buffer for scalar center fields (used by `hgrad_invariant!`);
-        # `nothing` on spaces that need no perimeter buffer (single columns and
-        # 1D spectral-element planes).
+        # DSS buffer for scalar center fields (used by `hgrad_invariant!` and
+        # `vertical_transport_step.jl`), plus two extra buffers so the three
+        # horizontal-gradient invariants in `set_covariance_cache_and_cloud_fraction!`
+        # batch into a single `Spaces.weighted_dss!`; `nothing` when no DSS is needed.
         ᶜscalar_dss_buffer = do_dss(center_space) ?
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,
+        ᶜscalar_dss_buffer_2 = (uses_covariances(atmos) && do_dss(center_space)) ?
+                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
+                               nothing,
+        ᶜscalar_dss_buffer_3 = (uses_covariances(atmos) && do_dss(center_space)) ?
+                               Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
+                               nothing,
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
