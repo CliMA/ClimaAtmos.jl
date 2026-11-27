@@ -37,12 +37,13 @@
 Inner convergents `(d, e)` of Laplace's continued fraction
 `r(−x) = φ(x) / Q(x) = x + 1 / (x + d)`, `d = 2 / (x + e)`,
 `e = 3 / (x + 4 / (x + ⋯))` for the inverse Mills ratio of the standard
-normal tail at `x > 0`, evaluated to 32 levels.
+normal tail at `x > 0`, evaluated to 20 levels in `Float32` and 32 levels in `Float64`.
 """
 @inline function _mills_continued_fraction(x)
     FT = typeof(x)
     e = zero(FT)
-    for k in 32:-1:3
+    n_levels = FT === Float32 ? 20 : 32
+    for k in n_levels:-1:3
         e = FT(k) / (x + e)
     end
     d = FT(2) / (x + e)

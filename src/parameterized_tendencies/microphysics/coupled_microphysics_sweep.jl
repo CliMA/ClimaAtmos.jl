@@ -1031,6 +1031,63 @@ when `q_rai` and `q_sno` hold residence-time shaft averages `q̄_sed`.
     )
 end
 
+@inline function _pos_pow_frac(x::FT, p::FT) where {FT <: AbstractFloat}
+    x_pos = max(x, floatmin(FT))
+    if p == FT(0.25)
+        return sqrt(sqrt(x_pos))
+    elseif p == FT(0.125)
+        return sqrt(sqrt(sqrt(x_pos)))
+    elseif p == FT(0.5)
+        return sqrt(x_pos)
+    else
+        return exp2(p * log2(x_pos))
+    end
+end
+
+@inline function _rain_evap_geom_factor(
+    mp::CMP.Microphysics1MParams,
+    ρ::FT,
+    n0::FT,
+    v0::FT,
+    λ_inv::FT,
+) where {FT <: AbstractFloat}
+    (; mass, vent) = mp.precip.rain
+    (; χv, ve, Δv, gamma_vent) = mp.terminal_velocity.rain
+    aps = mp.air_properties
+    (; ν_air) = aps
+    (; r0) = mass
+    return 4 * FT(π) * n0 / ρ * λ_inv^2 *
+           (
+               vent.a +
+               vent.b * CMU.precomputed(CM1._cbrt_schmidt, aps) /
+               _pos_pow_frac(r0 / max(λ_inv, floatmin(FT)), (ve + Δv) / FT(2)) *
+               sqrt(2 * v0 * χv / ν_air * λ_inv) *
+               gamma_vent
+           )
+end
+
+@inline function _snow_subl_geom_factor(
+    mp::CMP.Microphysics1MParams,
+    ρ::FT,
+    n0::FT,
+    v0::FT,
+    λ_inv::FT,
+) where {FT <: AbstractFloat}
+    (; mass, vent) = mp.precip.snow
+    (; χv, ve, Δv, gamma_vent) = mp.terminal_velocity.snow
+    aps = mp.air_properties
+    (; ν_air) = aps
+    (; r0) = mass
+    return 4 * FT(π) * n0 / ρ * λ_inv^2 *
+           (
+               vent.a +
+               vent.b * CMU.precomputed(CM1._cbrt_schmidt, aps) /
+               _pos_pow_frac(r0 / max(λ_inv, floatmin(FT)), (ve + Δv) / FT(2)) *
+               sqrt(2 * v0 * χv / ν_air * λ_inv) *
+               gamma_vent
+           )
+end
+
 @inline function _coupled_1m_source_terms_with_qsat(
     mp::CMP.Microphysics1MParams,
     tps,
@@ -1260,6 +1317,8 @@ end
         )
     end
 
+    n0_rai = has_rai ? CM1.get_n0(mp.precip.rain.pdf, q_rai_p, ρ_pos) : zero(FT)
+    n0_sno = has_sno ? CM1.get_n0(mp.precip.snow.pdf, q_sno_p, ρ_pos) : zero(FT)
     sd = (;
         λ_inv_rai = has_rai ?
                     CM1.lambda_inverse(
@@ -1267,9 +1326,9 @@ end
             mp.precip.rain.mass,
             q_rai_p,
             ρ_pos,
+            n0_rai,
         ) : zero(FT),
-        n0_rai = has_rai ? CM1.get_n0(mp.precip.rain.pdf, q_rai_p, ρ_pos) :
-                 zero(FT),
+        n0_rai,
         v0_rai = has_rai ? CM1.get_v0(mp.terminal_velocity.rain, ρ_pos) :
                  zero(FT),
         λ_inv_sno = has_sno ?
@@ -1278,9 +1337,9 @@ end
             mp.precip.snow.mass,
             q_sno_p,
             ρ_pos,
+            n0_sno,
         ) : zero(FT),
-        n0_sno = has_sno ? CM1.get_n0(mp.precip.snow.pdf, q_sno_p, ρ_pos) :
-                 zero(FT),
+        n0_sno,
         v0_sno = has_sno ? CM1.get_v0(mp.terminal_velocity.snow, ρ_pos) :
                  zero(FT),
         λ_inv_icl = has_icl ?
@@ -1407,7 +1466,19 @@ end
         S_accr_melt_rai_sno = zero(FT)
     end
 
-    if has_rai
+    if has_rai && procs.rain_condensation_evaporation isa CMP.RainEvaporation
+        rain_geom = _rain_evap_geom_factor(
+            mp,
+            ρ_pos,
+            sd.n0_rai,
+            sd.v0_rai,
+            sd.λ_inv_rai,
+        )
+        p_sl = q_sl * ρ_pos * FT(TD.Parameters.R_v(tps)) * T
+        G_liq = CMCo.G_func_liquid(mp.air_properties, tps, T, p_sl)
+        c_rai_raw = max(zero(FT), (rain_geom * G_liq) / max(q_sl, floatmin(FT)))
+        S_vap_rai = ifelse(q_v_p < q_sl, c_rai_raw * (q_v_p - q_sl), zero(FT))
+    elseif has_rai
         S_vap_rai = CM1.conv_q_rai_to_q_vap(
             procs.rain_condensation_evaporation,
             mp,
@@ -1448,7 +1519,30 @@ end
         c_rai_raw = zero(FT)
     end
 
-    if has_sno
+    if has_sno &&
+       procs.snow_deposition_sublimation isa CMP.SnowDepositionSublimation
+        snow_geom = _snow_subl_geom_factor(
+            mp,
+            ρ_pos,
+            sd.n0_sno,
+            sd.v0_sno,
+            sd.λ_inv_sno,
+        )
+        p_si = q_si * ρ_pos * FT(TD.Parameters.R_v(tps)) * T
+        G_ice = CMCo.G_func_ice(mp.air_properties, tps, T, p_si)
+        c_sno_raw = max(zero(FT), (snow_geom * G_ice) / max(q_si, floatmin(FT)))
+        S_vap_sno_raw = c_sno_raw * (q_v_p - q_si)
+        S_vap_sno = ifelse(
+            CM1._snow_deposition_blocked(
+                procs.snow_deposition_sublimation,
+                tps,
+                micro,
+                thermo,
+            ),
+            min(zero(FT), S_vap_sno_raw),
+            S_vap_sno_raw,
+        )
+    elseif has_sno
         S_vap_sno = CM1.conv_q_sno_to_q_vap(
             procs.snow_deposition_sublimation,
             mp,
@@ -2460,6 +2554,11 @@ end
             θ0,
             dt,
         )
+    elseif (c_l == c_l_raw) &
+           (c_r == c_r_pass1) &
+           (c_i == c_i_raw) &
+           (c_s == c_s_pass1)
+        (δ_bar_l1, δ_bar_i1, zero(FT))
     else
         d_l, d_i = _mm15_joint_excesses(
             c_l,
