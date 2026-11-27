@@ -90,9 +90,15 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     fused = cloud_model isa QuadratureCloud && microphysics_model isa MoistMicrophysics
     is_edmf = turbconv_model isa PrognosticEDMFX
     if fused && is_edmf && uses_covariances(p.atmos)
-        _set_covariance_cache_and_cloud_fraction_fused_edmf!(
-            Y, p, thermo_params, Val(uses_hgrad),
-        )
+        if uses_hgrad
+            _set_covariance_cache_and_cloud_fraction_fused_edmf!(
+                Y, p, thermo_params, Val(true),
+            )
+        else
+            _set_covariance_cache_and_cloud_fraction_fused_edmf!(
+                Y, p, thermo_params, Val(false),
+            )
+        end
         return nothing
     end
 

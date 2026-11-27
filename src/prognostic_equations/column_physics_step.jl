@@ -1404,12 +1404,17 @@ end
 @inline _updraft_upw_mode(::Val{:none}) = Int8(0)
 @inline _updraft_upw_mode(_) = Int8(1)
 
+@inline _upw_val(::Val{M}) where {M} = M
+@inline _upw_val(x::Int8) = x
+
 struct EDMFTwoStreamColumnSweep{
     HasQ,
     HasNonEquil,
     FtildeMode,
     HasBlend,
     HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
     TurbParams,
     ThermoParams,
     CMP,
@@ -1472,9 +1477,10 @@ function _compute_edmf_sgs_flux_corr!(
     Δt,
     nz::Int,
     limit_pos::Bool,
-    sgsflux_upw_mode::Int8,
+    sgsflux_upw_mode,
 )
     FT = typeof(Δt)
+    upw_mode = _upw_val(sgsflux_upw_mode)
     if nz < 2
         @inbounds for f in 1:(nz + 1)
             A_out_fv[f] = zero(FT)
@@ -1483,32 +1489,56 @@ function _compute_edmf_sgs_flux_corr!(
     end
     ε = floatmin(FT)
     @inbounds begin
-        for k in 1:nz
-            ρ_new_k = max(ρa1_new_fv[k] + ρa0_new_fv[k], ε)
-            a1_k = clamp(ρa1_new_fv[k] / ρ_new_k, zero(FT), one(FT))
-            a0_k = one(FT) - a1_k
-            Δx_buf_fv[k] = a1_k * a0_k * (x1_fv[k] - x0_fv[k])
+        if upw_mode == Int8(2)
+            for k in 1:nz
+                ρ_new_k = max(ρa1_new_fv[k] + ρa0_new_fv[k], ε)
+                a1_k = clamp(ρa1_new_fv[k] / ρ_new_k, zero(FT), one(FT))
+                a0_k = one(FT) - a1_k
+                Δx_buf_fv[k] = a1_k * a0_k * (x1_fv[k] - x0_fv[k])
+            end
         end
 
-        A_raw_fv[1] = zero(FT)
-        A_raw_fv[nz + 1] = zero(FT)
+        dst_fv = limit_pos ? A_raw_fv : A_out_fv
+        dst_fv[1] = zero(FT)
+        dst_fv[nz + 1] = zero(FT)
+
+        ρa1_lo = ρa1_new_fv[1]
+        ρa0_lo = ρa0_new_fv[1]
+        x1_lo = x1_fv[1]
+        x0_lo = x0_fv[1]
+        q1_lo = if upw_mode == Int8(2)
+            Δx_buf_fv[1]
+        else
+            a1_lo = clamp(ρa1_lo / max(ρa1_lo + ρa0_lo, ε), zero(FT), one(FT))
+            a1_lo * (one(FT) - a1_lo) * (x1_lo - x0_lo)
+        end
+
         for f in 2:nz
+            ρa1_hi = ρa1_new_fv[f]
+            ρa0_hi = ρa0_new_fv[f]
+            x1_hi = x1_fv[f]
+            x0_hi = x0_fv[f]
+            q1_hi = if upw_mode == Int8(2)
+                Δx_buf_fv[f]
+            else
+                a1_hi = clamp(ρa1_hi / max(ρa1_hi + ρa0_hi, ε), zero(FT), one(FT))
+                a1_hi * (one(FT) - a1_hi) * (x1_hi - x0_hi)
+            end
+
             F1_f = JF1_rel_fv[f]
             W1_f = W1_rel_fv[f]
             if F1_f == zero(FT) && W1_f == zero(FT)
-                A_raw_fv[f] = zero(FT)
+                dst_fv[f] = zero(FT)
             else
                 f_adv_low =
-                    max(zero(FT), F1_f) * x1_fv[f - 1] +
-                    min(zero(FT), F1_f) * x1_fv[f] +
-                    max(zero(FT), -F1_f) * x0_fv[f - 1] +
-                    min(zero(FT), -F1_f) * x0_fv[f]
-                ρa1_f = FT(0.5) * (ρa1_new_fv[f - 1] + ρa1_new_fv[f])
-                ρa0_f = max(FT(0.5) * (ρa0_new_fv[f - 1] + ρa0_new_fv[f]), ε)
+                    max(zero(FT), F1_f) * x1_lo +
+                    min(zero(FT), F1_f) * x1_hi +
+                    max(zero(FT), -F1_f) * x0_lo +
+                    min(zero(FT), -F1_f) * x0_hi
+                ρa1_f = FT(0.5) * (ρa1_lo + ρa1_hi)
+                ρa0_f = max(FT(0.5) * (ρa0_lo + ρa0_hi), ε)
                 W0_f = -W1_f * (ρa1_f / ρa0_f)
-                q1_lo = Δx_buf_fv[f - 1]
-                q1_hi = Δx_buf_fv[f]
-                Φ_sgs_target = if sgsflux_upw_mode == Int8(0)
+                Φ_sgs_target = if upw_mode == Int8(0)
                     (
                         max(zero(FT), W1_f) * q1_lo +
                         min(zero(FT), W1_f) * q1_hi
@@ -1516,31 +1546,38 @@ function _compute_edmf_sgs_flux_corr!(
                         max(zero(FT), W0_f) * (-q1_lo) +
                         min(zero(FT), W0_f) * (-q1_hi)
                     )
-                elseif sgsflux_upw_mode == Int8(1)
+                elseif upw_mode == Int8(1)
                     (W1_f - W0_f) * FT(0.5) * (q1_lo + q1_hi)
                 else
                     W1_f * _face_ho_upwind3(Δx_buf_fv, f, W1_f, ᶠz_fv, nz) -
                     W0_f * _face_ho_upwind3(Δx_buf_fv, f, W0_f, ᶠz_fv, nz)
                 end
-                d0_idx = (-F1_f) >= zero(FT) ? (f - 1) : f
-                C0_f = abs(F1_f) * Δt / max(ᶜJ_fv[d0_idx] * ρa0_new_fv[d0_idx], ε)
-                w_C = min(one(FT), one(FT) / max(C0_f, ε))
-                A_raw_fv[f] = w_C * (Φ_sgs_target - f_adv_low)
+                d0_lo = (-F1_f) >= zero(FT)
+                d0_idx = d0_lo ? (f - 1) : f
+                ρa0_don = d0_lo ? ρa0_lo : ρa0_hi
+                denom_C = abs(F1_f) * Δt
+                cap_C = max(ᶜJ_fv[d0_idx] * ρa0_don, ε)
+                w_C = denom_C <= cap_C ? one(FT) : cap_C / denom_C
+                dst_fv[f] = w_C * (Φ_sgs_target - f_adv_low)
             end
+
+            ρa1_lo = ρa1_hi
+            ρa0_lo = ρa0_hi
+            x1_lo = x1_hi
+            x0_lo = x0_hi
+            q1_lo = q1_hi
         end
 
-        A_out_fv[1] = zero(FT)
-        A_out_fv[nz + 1] = zero(FT)
-        if !limit_pos
-            for f in 2:nz
-                A_out_fv[f] = A_raw_fv[f]
-            end
-        else
+        if limit_pos
+            A_out_fv[1] = zero(FT)
+            A_out_fv[nz + 1] = zero(FT)
+            A_bot = zero(FT)
             for k in 1:nz
-                P_out_k =
-                    Δt * (max(zero(FT), A_raw_fv[k + 1]) + max(zero(FT), -A_raw_fv[k]))
+                A_top = k < nz ? A_raw_fv[k + 1] : zero(FT)
+                P_out_k = Δt * (max(zero(FT), A_top) + max(zero(FT), -A_bot))
                 Q_avail_k = max(zero(FT), ᶜJ_fv[k] * ρχ_L_fv[k])
                 R_pos_fv[k] = _zalesak_ratio(P_out_k, Q_avail_k)
+                A_bot = A_top
             end
             for f in 2:nz
                 A_f = A_raw_fv[f]
@@ -1596,6 +1633,156 @@ end
     χ_buoyant = zero(FT),
 )
 
+@inline function _edmf_updraft_matrix_row(
+    V1_fv,
+    G1_fv,
+    ε_k,
+    J_k,
+    inv_J_k,
+    ρa1_k,
+    r_sfc_k,
+    r_rel_k,
+    Δt,
+    k::Int,
+    nz::Int,
+    apply_diff::Bool,
+    updraft_upw_mode,
+)
+    FT = typeof(Δt)
+    ε_num = ϵ_numerics(FT)
+    inv_m1_k = (apply_diff && ρa1_k > ε_num) ? inv(J_k * ρa1_k) : zero(FT)
+    g1_top = (apply_diff && k < nz) ? G1_fv[k + 1] * inv_m1_k : zero(FT)
+    g1_bot = (apply_diff && k > 1) ? G1_fv[k] * inv_m1_k : zero(FT)
+    if _upw_val(updraft_upw_mode) == Int8(0)
+        v_top = k < nz ? FT(0.5) * V1_fv[k + 1] * inv_J_k : zero(FT)
+        v_bot = k > 1 ? FT(0.5) * V1_fv[k] * inv_J_k : zero(FT)
+        d_k = max(
+            FT(0.1),
+            one(FT) +
+            Δt * ((v_bot - v_top) + ε_k + r_sfc_k + r_rel_k + g1_top + g1_bot),
+        )
+        u_k = Δt * (v_top - g1_top)
+        l_k = -Δt * (v_bot + g1_bot)
+        return (d_k, u_k, l_k)
+    else
+        adv_top = k < nz ? -min(zero(FT), V1_fv[k + 1]) * inv_J_k : zero(FT)
+        adv_bot = k > 1 ? max(zero(FT), V1_fv[k]) * inv_J_k : zero(FT)
+        d_k =
+            one(FT) +
+            Δt * (adv_top + adv_bot + ε_k + r_sfc_k + r_rel_k + g1_top + g1_bot)
+        u_k = -Δt * (adv_top + g1_top)
+        l_k = -Δt * (adv_bot + g1_bot)
+        return (d_k, u_k, l_k)
+    end
+end
+
+@inline function _solve_edmf_updraft_thomas_from_rhs!(
+    ::Val{TwoRHS},
+    x1_out_fv,
+    x2_out_fv,
+    rhs1_fv,
+    rhs2_fv,
+    V1_fv,
+    G1_fv,
+    ε_tot_fv,
+    ρa1_new_fv,
+    ᶜJ_fv,
+    upper1_fv,
+    Δt,
+    nz::Int,
+    apply_diff::Bool,
+    apply_sfc::Bool,
+    r_sfc_1,
+    updraft_upw_mode,
+    has_relax::Bool = false,
+    r_relax_fv = rhs1_fv,
+) where {TwoRHS}
+    FT = typeof(Δt)
+    @inbounds begin
+        u_prev = zero(FT)
+        r1_prev = zero(FT)
+        r2_prev = zero(FT)
+        x1_next = zero(FT)
+        x2_next = zero(FT)
+        for k in 1:nz
+            J_k = ᶜJ_fv[k]
+            inv_J_k = inv(J_k)
+            r_sfc_k = (k == 1 && apply_sfc) ? r_sfc_1 : zero(FT)
+            r_rel_k = has_relax ? r_relax_fv[k] : zero(FT)
+            d_k, u_k, l_k = _edmf_updraft_matrix_row(
+                V1_fv,
+                G1_fv,
+                ε_tot_fv[k],
+                J_k,
+                inv_J_k,
+                ρa1_new_fv[k],
+                r_sfc_k,
+                r_rel_k,
+                Δt,
+                k,
+                nz,
+                apply_diff,
+                updraft_upw_mode,
+            )
+
+            rhs1_k = rhs1_fv[k]
+            rhs2_k = TwoRHS ? rhs2_fv[k] : zero(FT)
+            if k == 1
+                if nz == 1
+                    w = inv(d_k)
+                    x1_next = rhs1_k * w
+                    x1_out_fv[1] = x1_next
+                    if TwoRHS
+                        x2_next = rhs2_k * w
+                        x2_out_fv[1] = x2_next
+                    end
+                else
+                    w = inv(d_k)
+                    u_prev = u_k * w
+                    r1_prev = rhs1_k * w
+                    upper1_fv[1] = u_prev
+                    rhs1_fv[1] = r1_prev
+                    if TwoRHS
+                        r2_prev = rhs2_k * w
+                        rhs2_fv[1] = r2_prev
+                    end
+                end
+            elseif k < nz
+                w = inv(d_k - l_k * u_prev)
+                u_prev = u_k * w
+                r1_prev = (rhs1_k - l_k * r1_prev) * w
+                upper1_fv[k] = u_prev
+                rhs1_fv[k] = r1_prev
+                if TwoRHS
+                    r2_prev = (rhs2_k - l_k * r2_prev) * w
+                    rhs2_fv[k] = r2_prev
+                end
+            else
+                w = inv(d_k - l_k * u_prev)
+                x1_next = (rhs1_k - l_k * r1_prev) * w
+                x1_out_fv[nz] = x1_next
+                if TwoRHS
+                    x2_next = (rhs2_k - l_k * r2_prev) * w
+                    x2_out_fv[nz] = x2_next
+                end
+            end
+        end
+
+        for k in (nz - 1):-1:1
+            u_k = upper1_fv[k]
+            x1_k = rhs1_fv[k] - u_k * x1_next
+            x1_out_fv[k] = x1_k
+            x1_next = x1_k
+            if TwoRHS
+                x2_k = rhs2_fv[k] - u_k * x2_next
+                x2_out_fv[k] = x2_k
+                x2_next = x2_k
+            end
+        end
+    end
+    return nothing
+end
+
 # Intensive advective-diffusive updraft solve for `χ¹_new`:
 # `(χ¹_new - χ¹_old)/Δt + u³¹ ∂ᵥχ¹_new = ε_tot (χ⁰_old - χ¹_new)`
 # `+ δ_{k,1} [r_sfc (χ_b - χ¹_new) + btt/ρ¹]`
@@ -1610,15 +1797,13 @@ function _solve_edmf_updraft_var!(
     ε_tot_fv,
     G1_fv,
     ᶜJ_fv,
-    diag1_fv,
     upper1_fv,
-    lower1_fv,
     rhs1_fv,
     Δt,
     nz::Int,
     opts,
     sfc,
-    updraft_upw_mode::Int8,
+    updraft_upw_mode,
     has_relax::Bool = false,
     r_relax_fv = extra_src1_fv,
     q_eq_fv = extra_src1_fv,
@@ -1627,61 +1812,43 @@ function _solve_edmf_updraft_var!(
     (; apply_diff, apply_sfc, has_extra_src1, limit_pos) = opts
     (; JF_sfc, r_sfc_1, ρ1_1, χ_buoyant) = sfc
     ε = eps(FT)
-    ε_num = ϵ_numerics(FT)
     @inbounds for k in 1:nz
-        J_k = ᶜJ_fv[k]
-        ρa1_k = ρa1_new_fv[k]
-        inv_m1_k = ρa1_k > ε_num ? inv(J_k * ρa1_k) : zero(FT)
-        g1_top = (apply_diff && k < nz) ? G1_fv[k + 1] * inv_m1_k : zero(FT)
-        g1_bot = (apply_diff && k > 1) ? G1_fv[k] * inv_m1_k : zero(FT)
-        r_sfc_k = (k == 1 && apply_sfc) ? r_sfc_1 : zero(FT)
-        r_rel_k = has_relax ? r_relax_fv[k] : zero(FT)
-        ε_k = ε_tot_fv[k]
-
-        if updraft_upw_mode == Int8(0)
-            v_top = k < nz ? FT(0.5) * V1_fv[k + 1] / J_k : zero(FT)
-            v_bot = k > 1 ? FT(0.5) * V1_fv[k] / J_k : zero(FT)
-            diag1_fv[k] = max(
-                FT(0.1),
-                one(FT) +
-                Δt * ((v_bot - v_top) + ε_k + r_sfc_k + r_rel_k + g1_top + g1_bot),
-            )
-            if k < nz
-                upper1_fv[k] = Δt * (v_top - g1_top)
-            end
-            if k > 1
-                lower1_fv[k - 1] = -Δt * (v_bot + g1_bot)
-            end
-        else
-            adv_top = k < nz ? -min(zero(FT), V1_fv[k + 1]) / J_k : zero(FT)
-            adv_bot = k > 1 ? max(zero(FT), V1_fv[k]) / J_k : zero(FT)
-            diag1_fv[k] =
-                one(FT) +
-                Δt * (adv_top + adv_bot + ε_k + r_sfc_k + r_rel_k + g1_top + g1_bot)
-            if k < nz
-                upper1_fv[k] = -Δt * (adv_top + g1_top)
-            end
-            if k > 1
-                lower1_fv[k - 1] = -Δt * (adv_bot + g1_bot)
-            end
-        end
-
         χ1_o = limit_pos ? max(zero(FT), χ1_in_fv[k]) : χ1_in_fv[k]
         χ0_o = limit_pos ? max(zero(FT), χ0_in_fv[k]) : χ0_in_fv[k]
         rhs_k =
             χ1_o +
             Δt * (
-                ε_k * χ0_o +
+                ε_tot_fv[k] * χ0_o +
                 (has_extra_src1 ? extra_src1_fv[k] : zero(FT)) +
-                (has_relax ? r_rel_k * q_eq_fv[k] : zero(FT))
+                (has_relax ? r_relax_fv[k] * q_eq_fv[k] : zero(FT))
             )
         if k == 1 && apply_sfc
-            rhs_k += Δt * (r_sfc_1 * χ_buoyant + JF_sfc / (J_k * max(ρ1_1, ε)))
+            rhs_k +=
+                Δt * (r_sfc_1 * χ_buoyant + JF_sfc * inv(ᶜJ_fv[1]) / max(ρ1_1, ε))
         end
         rhs1_fv[k] = limit_pos ? max(zero(FT), rhs_k) : rhs_k
     end
-
-    column_thomas_solve!(x1_out_fv, rhs1_fv, diag1_fv, upper1_fv, lower1_fv, nz)
+    _solve_edmf_updraft_thomas_from_rhs!(
+        Val(false),
+        x1_out_fv,
+        x1_out_fv,
+        rhs1_fv,
+        rhs1_fv,
+        V1_fv,
+        G1_fv,
+        ε_tot_fv,
+        ρa1_new_fv,
+        ᶜJ_fv,
+        upper1_fv,
+        Δt,
+        nz,
+        apply_diff,
+        apply_sfc,
+        r_sfc_1,
+        updraft_upw_mode,
+        has_relax,
+        r_relax_fv,
+    )
     return nothing
 end
 
@@ -1852,14 +2019,13 @@ function _solve_and_commit_edmf_gm_var!(
     Φ1_fv,
     diag0_fv,
     upper0_fv,
-    lower0_fv,
     rhs0_fv,
     x0_fv,
     Δt,
     nz::Int,
     opts,
     JF_sfc,
-    sgsflux_upw_mode::Int8,
+    sgsflux_upw_mode,
     has_storage_offset::Bool = false,
     storage_offset_fv = ρχ_in_fv,
 )
@@ -1868,71 +2034,123 @@ function _solve_and_commit_edmf_gm_var!(
     @inbounds begin
         Φ1_fv[1] = zero(FT)
         Φ1_fv[nz + 1] = zero(FT)
-        for f in 2:nz
-            F1_f = JF1_rel_fv[f]
-            f_adv1 =
-                max(zero(FT), F1_f) * x1_gm_fv[f - 1] +
-                min(zero(FT), F1_f) * x1_gm_fv[f]
-            f_diff1 =
-                apply_diff ? -G1_fv[f] * (x1_diff_fv[f] - x1_diff_fv[f - 1]) : zero(FT)
-            Φ1_fv[f] = f_adv1 + f_diff1
-        end
+        F0_bot = JF0_rel_fv[1]
+        G0_bot = zero(FT)
+        Φ1_bot = zero(FT)
+        jf_ex_bot = has_jf_extra ? jf_extra_fv[1] : zero(FT)
+        x1_gm_lo = x1_gm_fv[1]
+        x1_diff_lo = apply_diff ? x1_diff_fv[1] : zero(FT)
+
+        u_prev = zero(FT)
+        r_prev = zero(FT)
+        x_next = zero(FT)
 
         for k in 1:nz
             J_k = ᶜJ_fv[k]
             F0_top = JF0_rel_fv[k + 1]
-            F0_bot = JF0_rel_fv[k]
             G0_top = (apply_diff && k < nz) ? G0_eff_fv[k + 1] : zero(FT)
-            G0_bot = (apply_diff && k > 1) ? G0_eff_fv[k] : zero(FT)
+            jf_ex_top = has_jf_extra ? jf_extra_fv[k + 1] : zero(FT)
 
-            diag0_fv[k] =
+            x1_gm_hi = k < nz ? x1_gm_fv[k + 1] : zero(FT)
+            x1_diff_hi = (apply_diff && k < nz) ? x1_diff_fv[k + 1] : zero(FT)
+            Φ1_top = if k < nz
+                F1_top = JF1_rel_fv[k + 1]
+                f_adv1 =
+                    max(zero(FT), F1_top) * x1_gm_lo +
+                    min(zero(FT), F1_top) * x1_gm_hi
+                f_diff1 =
+                    apply_diff ? -G1_fv[k + 1] * (x1_diff_hi - x1_diff_lo) :
+                    zero(FT)
+                Φ_f = f_adv1 + f_diff1
+                Φ1_fv[k + 1] = Φ_f
+                Φ_f
+            else
+                zero(FT)
+            end
+
+            d_k =
                 J_k * ρa0_new_fv[k] +
                 Δt * (max(zero(FT), F0_top) - min(zero(FT), F0_bot) + G0_top + G0_bot)
-            if k < nz
-                upper0_fv[k] = Δt * min(zero(FT), F0_top) - Δt * G0_top
-            end
-            if k > 1
-                lower0_fv[k - 1] = -Δt * max(zero(FT), F0_bot) - Δt * G0_bot
-            end
+            u_k = Δt * min(zero(FT), F0_top) - Δt * G0_top
+            l_k = -Δt * max(zero(FT), F0_bot) - Δt * G0_bot
 
             rhs0_k =
-                J_k * (ρχ_in_fv[k] - ρa1_new_fv[k] * x1_gm_fv[k]) -
-                Δt * (Φ1_fv[k + 1] - Φ1_fv[k])
+                J_k * (ρχ_in_fv[k] - ρa1_new_fv[k] * x1_gm_lo) -
+                Δt * (Φ1_top - Φ1_bot)
             if has_storage_offset
                 rhs0_k -= J_k * storage_offset_fv[k]
             end
             if has_jf_extra
-                rhs0_k -= Δt * (jf_extra_fv[k + 1] - jf_extra_fv[k])
+                rhs0_k -= Δt * (jf_ex_top - jf_ex_bot)
             end
             if k == 1 && apply_sfc
                 rhs0_k += Δt * JF_sfc
             end
-            rhs0_fv[k] = rhs0_k
+
+            if k == 1
+                if nz == 1
+                    x_next = rhs0_k / d_k
+                    x0_fv[1] = x_next
+                    if save_x0
+                        x0_save_fv[1] = x_next
+                    end
+                else
+                    w = inv(d_k)
+                    u_prev = u_k * w
+                    r_prev = rhs0_k * w
+                    upper0_fv[1] = u_prev
+                    rhs0_fv[1] = r_prev
+                end
+            elseif k < nz
+                denom = d_k - l_k * u_prev
+                w = inv(denom)
+                u_prev = u_k * w
+                r_prev = (rhs0_k - l_k * r_prev) * w
+                upper0_fv[k] = u_prev
+                rhs0_fv[k] = r_prev
+            else
+                denom = d_k - l_k * u_prev
+                x_next = (rhs0_k - l_k * r_prev) / denom
+                x0_fv[nz] = x_next
+                if save_x0
+                    x0_save_fv[nz] = x_next
+                end
+            end
+
+            F0_bot = F0_top
+            G0_bot = G0_top
+            Φ1_bot = Φ1_top
+            jf_ex_bot = jf_ex_top
+            x1_gm_lo = x1_gm_hi
+            x1_diff_lo = x1_diff_hi
         end
-    end
 
-    column_thomas_solve!(x0_fv, rhs0_fv, diag0_fv, upper0_fv, lower0_fv, nz)
+        for k in (nz - 1):-1:1
+            x_k = rhs0_fv[k] - upper0_fv[k] * x_next
+            x0_fv[k] = x_k
+            if save_x0
+                x0_save_fv[k] = x_k
+            end
+            x_next = x_k
+        end
 
-    @inbounds begin
         Φ_bot = apply_sfc ? JF_sfc : zero(FT)
+        x0_lo = x0_fv[1]
         for k in 1:nz
             Φ_top = if k < nz
                 F0_f = JF0_rel_fv[k + 1]
+                x0_hi = x0_fv[k + 1]
                 f_adv0 =
-                    max(zero(FT), F0_f) * x0_fv[k] +
-                    min(zero(FT), F0_f) * x0_fv[k + 1]
+                    max(zero(FT), F0_f) * x0_lo + min(zero(FT), F0_f) * x0_hi
                 f_diff0 =
-                    apply_diff ? -G0_eff_fv[k + 1] * (x0_fv[k + 1] - x0_fv[k]) :
-                    zero(FT)
+                    apply_diff ? -G0_eff_fv[k + 1] * (x0_hi - x0_lo) : zero(FT)
+                x0_lo = x0_hi
                 Φ1_fv[k + 1] +
                 f_adv0 +
                 f_diff0 +
                 (has_jf_extra ? jf_extra_fv[k + 1] : zero(FT))
             else
                 zero(FT)
-            end
-            if save_x0
-                x0_save_fv[k] = x0_fv[k]
             end
             ρχ_out_fv[k] = ρχ_in_fv[k] - (Δt / ᶜJ_fv[k]) * (Φ_top - Φ_bot)
             Φ_bot = Φ_top
@@ -1987,15 +2205,15 @@ function _solve_and_commit_edmf_var!(
     nz::Int,
     opts,
     sfc,
-    sgsflux_upw_mode::Int8,
-    updraft_upw_mode::Int8,
+    sgsflux_upw_mode,
+    updraft_upw_mode,
     has_extra_src1::Bool = false,
     extra_src1_fv = χ1_in_fv,
 )
     (; apply_diff, apply_sfc, has_jf_extra, save_x0, limit_pos) = opts
     (; JF_sfc) = sfc
     _solve_edmf_updraft_var!(
-        wk.x1,
+        χ1_out_fv,
         χ1_in_fv,
         χ0_in_fv,
         extra_src1_fv,
@@ -2004,9 +2222,7 @@ function _solve_and_commit_edmf_var!(
         ε_tot_fv,
         G1_fv,
         ᶜJ_fv,
-        wk.diag1,
         wk.upper1,
-        wk.lower1,
         wk.r1,
         Δt,
         nz,
@@ -2014,9 +2230,6 @@ function _solve_and_commit_edmf_var!(
         sfc,
         updraft_upw_mode,
     )
-    @inbounds for k in 1:nz
-        χ1_out_fv[k] = wk.x1[k]
-    end
     _solve_and_commit_edmf_gm_var!(
         ρχ_out_fv,
         x0_save_fv,
@@ -2037,7 +2250,6 @@ function _solve_and_commit_edmf_var!(
         wk.Φ1,
         wk.diag0,
         wk.upper0,
-        wk.lower0,
         wk.r0,
         wk.x0,
         Δt,
@@ -2167,9 +2379,10 @@ function _step_edmf_u3_and_rhoa!(
         ᶜgradΦ_fv,
         ᶠuh3_fv,
     ) = geom
-    (; d11, u1_blk, l1_blk, r1_blk, x1_blk, E_sfc, Δt, nz) = wk
+    (; u1_blk, r1_blk, E_sfc, Δt, nz) = wk
     FT = typeof(E_sfc)
     ε = eps(FT)
+    inv_Δt = inv(Δt)
     tcp = sw.turbconv_params
     a0_floor = one(FT) - sw.a_max
     ab_zero = area_bounding_entr_detr(tcp, zero(FT))
@@ -2219,9 +2432,11 @@ function _step_edmf_u3_and_rhoa!(
         ab_lo = a1_cur_lo == zero(FT) ? ab_zero : area_bounding_entr_detr(tcp, a1_cur_lo)
         te_lo = turbulent_entrainment(tcp, a1_cur_lo, z_lo, z_sfc_val, tke_lo, R_lo)
         b_lo = (max(zero(FT), ab_lo) + ᶜenr_fv[1] + te_lo) * a0_inv_lo
+        w_prev = zero(FT)
 
         for f in 2:nz
             dz_f = ᶠdz_fv[f]
+            inv_dz_f = inv(dz_f)
             ρ_hi = max(ᶜρ1_fv[f], ε)
             a1_cur_hi = draft_area(ᶜρa1_fv[f], ρ_hi)
             a0_hi = clamp(one(FT) - a1_cur_hi, a0_floor, one(FT))
@@ -2240,10 +2455,12 @@ function _step_edmf_u3_and_rhoa!(
             )
 
             a_f =
+                FT(0.5) *
                 (
                     ᶜevs_fv[f - 1] * a0_inv_lo * a0_inv_lo +
-                    ᶜevs_fv[f] * a0_inv_hi * a0_inv_hi
-                ) / (2 * dz_f) + inv(dz_f * dz_f) / 2
+                    ᶜevs_fv[f] * a0_inv_hi * a0_inv_hi +
+                    inv_dz_f
+                ) * inv_dz_f
             dc_hi = if sw.has_nh_drag
                 pressure_drag_coefficient(
                     sw.α_d,
@@ -2261,7 +2478,7 @@ function _step_edmf_u3_and_rhoa!(
                 zero(FT)
             end
             if sw.has_nh_drag
-                a_f += (dc_lo * a0_inv_lo + dc_hi * a0_inv_hi) / (2 * dz_f)
+                a_f += FT(0.5) * (dc_lo * a0_inv_lo + dc_hi * a0_inv_hi) * inv_dz_f
             end
 
             ab_hi =
@@ -2271,25 +2488,25 @@ function _step_edmf_u3_and_rhoa!(
                 tcp, a1_cur_hi, z_hi, z_sfc_val, tke_hi, R_hi,
             )
             b_hi = (max(zero(FT), ab_hi) + ᶜenr_fv[f] + te_hi) * a0_inv_hi
-            b_f = inv(Δt) + (b_lo + b_hi) / 2
+            b_f = inv_Δt + (b_lo + b_hi) / 2
             if !isnothing(sw.rayleigh_sponge)
                 b_f += β_rayleigh_u₃(sw.rayleigh_sponge, ᶠz_fv[f], sw.z_max)
             end
 
             gradΦ_f = _c3_scalar(ᶠgradΦ_fv[f])
             ρ_diff_f = (ᶜρ_diff1_fv[f - 1] + ᶜρ_diff1_fv[f]) / 2
-            # Physical `w` at the face below, with that face's own spacing.
-            w_prev = u3_new[f - 1] / ᶠdz_fv[f - 1]
             c_f =
-                -u3_in[f] / Δt +
+                -u3_in[f] * inv_Δt +
                 (one(FT) - sw.α_b) * ρ_diff_f * gradΦ_f -
                 (w_prev * w_prev) / 2
             # Positive root of `a u² + b u + c = 0` for `c ≤ 0`, avoiding
             # cancellation in `-b + √disc` when `4a|c| ≪ b²`.
             c_neg = min(zero(FT), c_f)
             disc = max(zero(FT), b_f * b_f - 4 * a_f * c_neg)
-            u3_new[f] = max(zero(FT), -2 * c_neg / (b_f + sqrt(disc)))
+            u3_new_f = max(zero(FT), -2 * c_neg / (b_f + sqrt(disc)))
+            u3_new[f] = u3_new_f
 
+            w_prev = u3_new_f * inv_dz_f
             a0_inv_lo = a0_inv_hi
             dc_lo = dc_hi
             b_lo = b_hi
@@ -2316,10 +2533,19 @@ function _step_edmf_u3_and_rhoa!(
     for _iter in 1:2
         @inbounds begin
             buoy_bot = zero(FT)
+            c_bot = JF1_fv[1]
+            ρa_eff_k = max(ρa1_in[1], ᶜρa1_fv[1])
+            flux_bot_eff = zero(FT)
+            w_bot = u3_new[1] / ᶠdz_fv[1]
+            u_prev = zero(FT)
+            r_prev = zero(FT)
+            x_next = zero(FT)
+
             for k in 1:nz
                 J_k = ᶜJ_fv[k]
+                inv_J_k = inv(J_k)
                 ρ1_k = max(ᶜρ1_fv[k], ε)
-                ρa_eff_k = max(ρa1_in[k], ᶜρa1_fv[k])
+                ρa1_cur_k = ᶜρa1_fv[k]
                 a_eff_k = draft_area(ρa_eff_k, ρ1_k)
                 L_k =
                     a_eff_k == zero(FT) ? L_zero :
@@ -2329,20 +2555,13 @@ function _step_edmf_u3_and_rhoa!(
                     upper_area_limiter_factor(a_eff_k, tcp)
 
                 c_top = JF1_fv[k + 1]
-                c_bot = JF1_fv[k]
+                ρa_eff_kp1 = k < nz ? max(ρa1_in[k + 1], ᶜρa1_fv[k + 1]) : zero(FT)
                 flux_top_eff = if k < nz
-                    ρa_eff_kp1 = max(ρa1_in[k + 1], ᶜρa1_fv[k + 1])
                     c_top >= zero(FT) ? c_top * ρa_eff_k : c_top * ρa_eff_kp1
                 else
                     zero(FT)
                 end
-                flux_bot_eff = if k > 1
-                    ρa_eff_km1 = max(ρa1_in[k - 1], ᶜρa1_fv[k - 1])
-                    c_bot >= zero(FT) ? c_bot * ρa_eff_km1 : c_bot * ρa_eff_k
-                else
-                    zero(FT)
-                end
-                div_eff = (flux_top_eff - flux_bot_eff) / J_k
+                div_eff = (flux_top_eff - flux_bot_eff) * inv_J_k
                 one_minus_detr = if k == nz
                     zero(FT)
                 elseif div_eff < zero(FT)
@@ -2351,8 +2570,8 @@ function _step_edmf_u3_and_rhoa!(
                     one(FT)
                 end
 
+                w_top = u3_new[k + 1] / ᶠdz_fv[k + 1]
                 buoy_top = if k < nz
-                    w_top = u3_new[k + 1] / ᶠdz_fv[k + 1]
                     gradΦ_top = _c3_scalar(ᶠgradΦ_fv[k + 1])
                     vb_top = vertical_buoyancy_acceleration(
                         (ᶜρ_diff1_fv[k] + ᶜρ_diff1_fv[k + 1]) / 2,
@@ -2366,10 +2585,9 @@ function _step_edmf_u3_and_rhoa!(
                     zero(FT)
                 end
                 buoy_inv_tau = (buoy_top + buoy_bot) / 2
-                buoy_bot = buoy_top
-                w_c = (u3_new[k] / ᶠdz_fv[k] + u3_new[k + 1] / ᶠdz_fv[k + 1]) / 2
+                w_c = (w_bot + w_top) / 2
 
-                a_cur_k = draft_area(ᶜρa1_fv[k], ρ1_k)
+                a_cur_k = draft_area(ρa1_cur_k, ρ1_k)
                 ab_cur_k =
                     a_cur_k == zero(FT) ? ab_zero :
                     area_bounding_entr_detr(tcp, a_cur_k)
@@ -2383,77 +2601,113 @@ function _step_edmf_u3_and_rhoa!(
 
                 out_top = one_minus_detr * max(zero(FT), c_top)
                 out_bot = max(zero(FT), -c_bot)
-                if k < nz
-                    u1_blk[k] = -max(zero(FT), -c_top) / J_k
-                end
-                if k > 1
-                    l1_blk[k - 1] = -(one_minus_detr * max(zero(FT), c_bot)) / J_k
-                end
-                d11[k] = max(
-                    FT(0.1) / Δt,
-                    inv(Δt) - (entr_k - detr_k) + (out_top + out_bot) / J_k,
+                u_k = -max(zero(FT), -c_top) * inv_J_k
+                l_k = -(one_minus_detr * max(zero(FT), c_bot)) * inv_J_k
+                d_k = max(
+                    FT(0.1) * inv_Δt,
+                    inv_Δt - (entr_k - detr_k) + (out_top + out_bot) * inv_J_k,
                 )
-                r1_blk[k] = ρa1_in[k] / Δt + (k == 1 ? E_sfc : zero(FT))
+                r_k = ρa1_in[k] * inv_Δt + (k == 1 ? E_sfc : zero(FT))
+
+                if k == 1
+                    if nz == 1
+                        x_next = r_k / d_k
+                        ρa1_max_1 = min(sw.a_max * ρ1_k, (1 - FT(1e-4)) * ᶜρ_fv[1])
+                        ᶜρa1_fv[1] = clamp(x_next, zero(FT), max(zero(FT), ρa1_max_1))
+                    else
+                        w = inv(d_k)
+                        u_prev = u_k * w
+                        r_prev = r_k * w
+                        u1_blk[1] = u_prev
+                        r1_blk[1] = r_prev
+                    end
+                elseif k < nz
+                    denom = d_k - l_k * u_prev
+                    w = inv(denom)
+                    u_prev = u_k * w
+                    r_prev = (r_k - l_k * r_prev) * w
+                    u1_blk[k] = u_prev
+                    r1_blk[k] = r_prev
+                else
+                    denom = d_k - l_k * u_prev
+                    x_next = (r_k - l_k * r_prev) / denom
+                    ρa1_max_k = min(sw.a_max * ρ1_k, (1 - FT(1e-4)) * ᶜρ_fv[k])
+                    ᶜρa1_fv[nz] = clamp(x_next, zero(FT), max(zero(FT), ρa1_max_k))
+                end
+
+                buoy_bot = buoy_top
+                c_bot = c_top
+                ρa_eff_k = ρa_eff_kp1
+                flux_bot_eff = flux_top_eff
+                w_bot = w_top
             end
 
-            column_thomas_solve!(x1_blk, r1_blk, d11, u1_blk, l1_blk, nz)
-
-            for k in 1:nz
+            for k in (nz - 1):-1:1
+                x_k = r1_blk[k] - u1_blk[k] * x_next
+                x_next = x_k
                 ρa1_max_k =
                     min(sw.a_max * max(ᶜρ1_fv[k], ε), (1 - FT(1e-4)) * ᶜρ_fv[k])
-                ᶜρa1_fv[k] = clamp(x1_blk[k], zero(FT), max(zero(FT), ρa1_max_k))
+                ᶜρa1_fv[k] = clamp(x_k, zero(FT), max(zero(FT), ρa1_max_k))
             end
         end
     end
 
-    @inbounds for k in 1:nz
-        ρ_k = ᶜρ_fv[k]
-        ρ1_k = max(ᶜρ1_fv[k], ε)
-        a1_k = draft_area(ᶜρa1_fv[k], ρ1_k)
-        w_c = (u3_new[k] / ᶠdz_fv[k] + u3_new[k + 1] / ᶠdz_fv[k + 1]) / 2
-        ab_k = a1_k == zero(FT) ? ab_zero : area_bounding_entr_detr(tcp, a1_k)
-        z_k = ᶜz_fv[k]
-        tke_k = max(zero(FT), ᶜρtke_fv[k] / max(ρ_k, ε))
-        R_k = plume_radius(
-            sw.scale_height,
-            a1_k,
-            sw.a_min,
-            sw.a_max,
-            z_k,
-            z_sfc_val,
-            sw.c_R,
-            sw.R_max,
-        )
-        te_k = turbulent_entrainment(tcp, a1_k, z_k, z_sfc_val, tke_k, R_k)
-        entr_dyn_k = max(zero(FT), ab_k) + ᶜevs_fv[k] * abs(w_c) + ᶜenr_fv[k]
-        ε_tot_fv[k] = entr_dyn_k + te_k
-        u3_c = FT(0.5) * (u3_new[k] + u3_new[k + 1])
-        b_work =
-            (u3_c * parent(ᶜlg_fv[k].gⁱʲ)[end]) *
-            (ᶜρ_diff1_fv[k] + ᶜρ_ref_excess_fv[k] / ρ1_k) *
-            _c3_scalar(ᶜgradΦ_fv[k])
-        if HasTailEntr
-            (ᶜqt0_fv, ᶜql0_fv, ᶜqi0_fv, ᶜTT_fv, ᶜqq_fv, ᶜcorr_fv) = tail_fvs
-            ρa0_k = max(ρ_k - ᶜρa1_fv[k], zero(FT))
-            tail_k = tail_entrainment_increments(
-                sw.thermo_params,
-                sw.f_tail,
-                ᶜT0_fv[k],
-                ᶜqt0_fv[k],
-                ᶜql0_fv[k],
-                ᶜqi0_fv[k],
-                ᶜTT_fv[k],
-                ᶜqq_fv[k],
-                ᶜcorr_fv[k],
-                ρa0_k,
-                ᶜρa1_fv[k],
-                entr_dyn_k,
-                Δt,
+    @inbounds begin
+        u3_bot = u3_new[1]
+        w_bot = u3_bot / ᶠdz_fv[1]
+        for k in 1:nz
+            ρ_k = ᶜρ_fv[k]
+            ρ1_k = max(ᶜρ1_fv[k], ε)
+            a1_k = draft_area(ᶜρa1_fv[k], ρ1_k)
+            u3_top = u3_new[k + 1]
+            w_top = u3_top / ᶠdz_fv[k + 1]
+            w_c = (w_bot + w_top) / 2
+            ab_k = a1_k == zero(FT) ? ab_zero : area_bounding_entr_detr(tcp, a1_k)
+            z_k = ᶜz_fv[k]
+            tke_k = max(zero(FT), ᶜρtke_fv[k] / max(ρ_k, ε))
+            R_k = plume_radius(
+                sw.scale_height,
+                a1_k,
+                sw.a_min,
+                sw.a_max,
+                z_k,
+                z_sfc_val,
+                sw.c_R,
+                sw.R_max,
             )
-            b_work += entr_dyn_k * tail_k.mse
-            tail_qt_fv[k] = entr_dyn_k * tail_k.q_tot
+            te_k = turbulent_entrainment(tcp, a1_k, z_k, z_sfc_val, tke_k, R_k)
+            entr_dyn_k = max(zero(FT), ab_k) + ᶜevs_fv[k] * abs(w_c) + ᶜenr_fv[k]
+            ε_tot_fv[k] = entr_dyn_k + te_k
+            u3_c = FT(0.5) * (u3_bot + u3_top)
+            b_work =
+                (u3_c * parent(ᶜlg_fv[k].gⁱʲ)[end]) *
+                (ᶜρ_diff1_fv[k] + ᶜρ_ref_excess_fv[k] / ρ1_k) *
+                _c3_scalar(ᶜgradΦ_fv[k])
+            if HasTailEntr
+                (ᶜqt0_fv, ᶜql0_fv, ᶜqi0_fv, ᶜTT_fv, ᶜqq_fv, ᶜcorr_fv) = tail_fvs
+                ρa0_k = max(ρ_k - ᶜρa1_fv[k], zero(FT))
+                tail_k = tail_entrainment_increments(
+                    sw.thermo_params,
+                    sw.f_tail,
+                    ᶜT0_fv[k],
+                    ᶜqt0_fv[k],
+                    ᶜql0_fv[k],
+                    ᶜqi0_fv[k],
+                    ᶜTT_fv[k],
+                    ᶜqq_fv[k],
+                    ᶜcorr_fv[k],
+                    ρa0_k,
+                    ᶜρa1_fv[k],
+                    entr_dyn_k,
+                    Δt,
+                )
+                b_work += entr_dyn_k * tail_k.mse
+                tail_qt_fv[k] = entr_dyn_k * tail_k.q_tot
+            end
+            b_work_col[k] = b_work
+            u3_bot = u3_top
+            w_bot = w_top
         end
-        b_work_col[k] = b_work
     end
     return nothing
 end
@@ -2461,7 +2715,15 @@ end
 function _solve_edmf_cloud_species!(
     ::Val{IsLiq},
     ::Val{HasBlend},
-    sw::EDMFTwoStreamColumnSweep,
+    sw::EDMFTwoStreamColumnSweep{
+        <:Any,
+        <:Any,
+        <:Any,
+        <:Any,
+        <:Any,
+        SgsUpwMode,
+        UpdUpwMode,
+    },
     ᶜχ1_f,
     ᶜρχ_f,
     A0_f,
@@ -2502,7 +2764,7 @@ function _solve_edmf_cloud_species!(
     wk,
     Δt::FT,
     nz::Int,
-) where {IsLiq, HasBlend, FT}
+) where {IsLiq, HasBlend, SgsUpwMode, UpdUpwMode, FT}
     ε = eps(FT)
     ε_num = ϵ_numerics(FT)
     tps = sw.thermo_params
@@ -2682,9 +2944,7 @@ function _solve_edmf_cloud_species!(
             ε_tot_fv,
             G1_fv,
             ᶜJ_fv,
-            wk.diag1,
             wk.upper1,
-            wk.lower1,
             wk.r1,
             Δt,
             nz,
@@ -2695,7 +2955,7 @@ function _solve_edmf_cloud_species!(
                 limit_pos = true,
             ),
             _no_surface_source(FT),
-            sw.updraft_upw_mode,
+            Val(UpdUpwMode),
         )
         if !precomputed_relax
             _solve_edmf_updraft_var!(updraft_solve_args...)
@@ -2754,7 +3014,6 @@ function _solve_edmf_cloud_species!(
             wk.Φ1,
             wk.diag0,
             wk.upper0,
-            wk.lower0,
             wk.r0,
             wk.x0,
             Δt,
@@ -2767,7 +3026,7 @@ function _solve_edmf_cloud_species!(
                 save_x0 = false,
             ),
             zero(FT),
-            sw.sgsflux_upw_mode,
+            Val(SgsUpwMode),
         )
     else
         _solve_and_commit_edmf_var!(
@@ -2801,79 +3060,255 @@ function _solve_edmf_cloud_species!(
                 limit_pos = true,
             ),
             _no_surface_source(FT),
-            sw.sgsflux_upw_mode,
-            sw.updraft_upw_mode,
+            Val(SgsUpwMode),
+            Val(UpdUpwMode),
         )
     end
     return nothing
 end
 
-function _picard_edmf_species_step!(
-    out_p,
-    ᶜχ1_sgs,
-    ᶜρχ_gs,
-    do_diff::Bool,
+function _picard_edmf_thermo_step!(
+    ::Val{HasQ},
+    ::Val{HasTailEntr},
+    mse1_p,
+    qt1_p,
+    ᶜmse1_fv,
+    ᶜqt1_fv,
+    ᶜρqt_fv,
+    ᶜρe_fv,
+    ᶜp_fv,
+    ᶜρ_fv,
+    ᶜK_fv,
+    b_work_col,
+    tail_qt_fv,
     ρa1_in,
     ρa0_in,
-    χ1_in,
-    χ0_in,
     ᶜρa1_fv,
     V1_fv,
     ε_tot_fv,
     G1_fv,
     ᶜJ_fv,
-    diag1_fv,
     upper1_fv,
-    lower1_fv,
-    r1_blk,
+    rhs1_fv,
+    rhs2_fv,
+    apply_diff::Bool,
+    apply_sfc::Bool,
     Δt,
     nz::Int,
-    updraft_upw_mode::Int8,
+    sfc,
+    updraft_upw_mode,
+) where {HasQ, HasTailEntr}
+    FT = typeof(Δt)
+    ε = eps(FT)
+    ε_num = ϵ_numerics(FT)
+    (; JF_sfc_h, JF_sfc_q, r_sfc_1, ρ1_1, mse_buoy, qt_buoy) = sfc
+    ρ1_1_safe = max(ρ1_1, ε)
+    @inbounds for k in 1:nz
+        ε_k = ε_tot_fv[k]
+        ρa1_k = ρa1_in[k]
+        inv_ρa0_k = inv(max(ρa0_in[k], ε))
+        mse1_old_k = ᶜmse1_fv[k]
+        ρh_tot_k = ᶜρe_fv[k] + ᶜp_fv[k]
+        mse0_o =
+            ((ρh_tot_k - ᶜρ_fv[k] * ᶜK_fv[k]) - ρa1_k * mse1_old_k) * inv_ρa0_k
+        rhs_h = mse1_old_k + Δt * (ε_k * mse0_o + b_work_col[k])
+        if k == 1 && apply_sfc
+            inv_J_1 = inv(ᶜJ_fv[1])
+            rhs_h += Δt * (r_sfc_1 * mse_buoy + JF_sfc_h * inv_J_1 / ρ1_1_safe)
+        end
+        rhs1_fv[k] = rhs_h
+
+        if HasQ
+            ρqt_k = ᶜρqt_fv[k]
+            qt1_raw = max(zero(FT), ᶜqt1_fv[k])
+            qt1_in_k =
+                (ρqt_k >= zero(FT) && ρa1_k > ε_num) ?
+                min(qt1_raw, ρqt_k / ρa1_k) : qt1_raw
+            qt0_o = max(zero(FT), (ρqt_k - ρa1_k * qt1_in_k) * inv_ρa0_k)
+            extra_q = HasTailEntr ? tail_qt_fv[k] : zero(FT)
+            rhs_q = qt1_in_k + Δt * (ε_k * qt0_o + extra_q)
+            if k == 1 && apply_sfc
+                inv_J_1 = inv(ᶜJ_fv[1])
+                rhs_q += Δt * (r_sfc_1 * qt_buoy + JF_sfc_q * inv_J_1 / ρ1_1_safe)
+            end
+            rhs2_fv[k] = max(zero(FT), rhs_q)
+        end
+    end
+    _solve_edmf_updraft_thomas_from_rhs!(
+        Val(HasQ),
+        mse1_p,
+        qt1_p,
+        rhs1_fv,
+        rhs2_fv,
+        V1_fv,
+        G1_fv,
+        ε_tot_fv,
+        ᶜρa1_fv,
+        ᶜJ_fv,
+        upper1_fv,
+        Δt,
+        nz,
+        apply_diff,
+        apply_sfc,
+        r_sfc_1,
+        updraft_upw_mode,
+    )
+    return nothing
+end
+
+function _picard_edmf_species_pair_step!(
+    out_a,
+    out_b,
+    ᶜχ1_a,
+    ᶜρχ_a,
+    ᶜχ1_b,
+    ᶜρχ_b,
+    do_diff::Bool,
+    ρa1_in,
+    ρa0_in,
+    ᶜρa1_fv,
+    V1_fv,
+    ε_tot_fv,
+    G1_fv,
+    ᶜJ_fv,
+    upper1_fv,
+    rhs1_fv,
+    rhs2_fv,
+    Δt,
+    nz::Int,
+    updraft_upw_mode,
 )
     FT = typeof(Δt)
     ε = eps(FT)
     ε_num = ϵ_numerics(FT)
-    has_sp_in = false
+    has_a = false
+    has_b = false
+    @inbounds for k in 1:nz
+        ρa1_k = ρa1_in[k]
+        inv_ρa0_k = inv(max(ρa0_in[k], ε))
+        inv_ρa1_k = ρa1_k > ε_num ? inv(ρa1_k) : zero(FT)
+        Δt_ε = Δt * ε_tot_fv[k]
+
+        ρχ_ak = ᶜρχ_a[k]
+        χ1a_raw = max(zero(FT), ᶜχ1_a[k])
+        χ1a_in =
+            (ρχ_ak >= zero(FT) && ρa1_k > ε_num) ? min(χ1a_raw, ρχ_ak * inv_ρa1_k) :
+            χ1a_raw
+        χ0a_in = max(zero(FT), (ρχ_ak - ρa1_k * χ1a_in) * inv_ρa0_k)
+        rhs1_fv[k] = max(zero(FT), χ1a_in + Δt_ε * χ0a_in)
+        has_a |= (ρχ_ak != zero(FT)) | (χ1a_raw > zero(FT))
+
+        ρχ_bk = ᶜρχ_b[k]
+        χ1b_raw = max(zero(FT), ᶜχ1_b[k])
+        χ1b_in =
+            (ρχ_bk >= zero(FT) && ρa1_k > ε_num) ? min(χ1b_raw, ρχ_bk * inv_ρa1_k) :
+            χ1b_raw
+        χ0b_in = max(zero(FT), (ρχ_bk - ρa1_k * χ1b_in) * inv_ρa0_k)
+        rhs2_fv[k] = max(zero(FT), χ1b_in + Δt_ε * χ0b_in)
+        has_b |= (ρχ_bk != zero(FT)) | (χ1b_raw > zero(FT))
+    end
+    if !(has_a || has_b)
+        @inbounds for k in 1:nz
+            out_a[k] = zero(FT)
+            out_b[k] = zero(FT)
+        end
+        return nothing
+    end
+    _solve_edmf_updraft_thomas_from_rhs!(
+        Val(true),
+        out_a,
+        out_b,
+        rhs1_fv,
+        rhs2_fv,
+        V1_fv,
+        G1_fv,
+        ε_tot_fv,
+        ᶜρa1_fv,
+        ᶜJ_fv,
+        upper1_fv,
+        Δt,
+        nz,
+        do_diff,
+        false,
+        zero(FT),
+        updraft_upw_mode,
+    )
+    @inbounds if !has_a
+        for k in 1:nz
+            out_a[k] = zero(FT)
+        end
+    elseif !has_b
+        for k in 1:nz
+            out_b[k] = zero(FT)
+        end
+    end
+    return nothing
+end
+
+function _picard_edmf_species_relax_step!(
+    out_p,
+    ᶜχ1_sgs,
+    ᶜρχ_gs,
+    r_relax_fv,
+    q_eq_fv,
+    do_diff::Bool,
+    ρa1_in,
+    ρa0_in,
+    ᶜρa1_fv,
+    V1_fv,
+    ε_tot_fv,
+    G1_fv,
+    ᶜJ_fv,
+    upper1_fv,
+    rhs1_fv,
+    Δt,
+    nz::Int,
+    updraft_upw_mode,
+)
+    FT = typeof(Δt)
+    ε = eps(FT)
+    ε_num = ϵ_numerics(FT)
+    has_sp = false
     @inbounds for k in 1:nz
         ρχ_k = ᶜρχ_gs[k]
         χ1_raw = max(zero(FT), ᶜχ1_sgs[k])
+        ρa1_k = ρa1_in[k]
         χ1_in_k =
-            (ρχ_k >= zero(FT) && ρa1_in[k] > ε_num) ?
-            min(χ1_raw, ρχ_k / ρa1_in[k]) : χ1_raw
-        χ1_in[k] = χ1_in_k
-        χ0_in[k] = (ρχ_k - ρa1_in[k] * χ1_in_k) / max(ρa0_in[k], ε)
-        has_sp_in |= (ρχ_k != zero(FT)) | (χ1_raw > zero(FT))
+            (ρχ_k >= zero(FT) && ρa1_k > ε_num) ? min(χ1_raw, ρχ_k / ρa1_k) : χ1_raw
+        χ0_in_k = max(zero(FT), (ρχ_k - ρa1_k * χ1_in_k) / max(ρa0_in[k], ε))
+        r_rel_k = r_relax_fv[k]
+        q_eq_k = q_eq_fv[k]
+        rhs1_fv[k] = max(
+            zero(FT),
+            χ1_in_k + Δt * (ε_tot_fv[k] * χ0_in_k + r_rel_k * q_eq_k),
+        )
+        has_sp |=
+            (ρχ_k != zero(FT)) |
+            (χ1_raw > zero(FT)) |
+            ((r_rel_k > zero(FT)) & (q_eq_k > zero(FT)))
     end
-    if has_sp_in
-        _solve_edmf_updraft_var!(
+    if has_sp
+        _solve_edmf_updraft_thomas_from_rhs!(
+            Val(false),
             out_p,
-            χ1_in,
-            χ0_in,
-            χ1_in,
-            ᶜρa1_fv,
+            out_p,
+            rhs1_fv,
+            rhs1_fv,
             V1_fv,
-            ε_tot_fv,
             G1_fv,
+            ε_tot_fv,
+            ᶜρa1_fv,
             ᶜJ_fv,
-            diag1_fv,
             upper1_fv,
-            lower1_fv,
-            r1_blk,
             Δt,
             nz,
-            (;
-                apply_diff = do_diff,
-                apply_sfc = false,
-                has_extra_src1 = false,
-                limit_pos = true,
-            ),
-            _no_surface_source(FT),
+            do_diff,
+            false,
+            zero(FT),
             updraft_upw_mode,
+            true,
+            r_relax_fv,
         )
-    else
-        @inbounds for k in 1:nz
-            out_p[k] = zero(FT)
-        end
     end
     return nothing
 end
@@ -2904,8 +3339,8 @@ function _step_edmf_precip_species!(
     wk,
     Δt,
     nz::Int,
-    sgsflux_upw_mode::Int8,
-    updraft_upw_mode::Int8,
+    sgsflux_upw_mode,
+    updraft_upw_mode,
 )
     FT = typeof(Δt)
     ε = eps(FT)
@@ -2976,12 +3411,56 @@ function _step_edmf_precip_species!(
     return nothing
 end
 
-function (sw::EDMFTwoStreamColumnSweep{
+struct EDMFUpdraftPicardSweep{
     HasQ,
     HasNonEquil,
     FtildeMode,
     HasBlend,
     HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
+    S <: EDMFTwoStreamColumnSweep{
+        HasQ,
+        HasNonEquil,
+        FtildeMode,
+        HasBlend,
+        HasTailEntr,
+        SgsUpwMode,
+        UpdUpwMode,
+    },
+} <: ColumnSweep
+    sw::S
+end
+
+struct EDMFTwoStreamScalarSweep{
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
+    S <: EDMFTwoStreamColumnSweep{
+        HasQ,
+        HasNonEquil,
+        FtildeMode,
+        HasBlend,
+        HasTailEntr,
+        SgsUpwMode,
+        UpdUpwMode,
+    },
+} <: ColumnSweep
+    sw::S
+end
+
+function (w::EDMFUpdraftPicardSweep{
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
 })(
     Yc_col,
     Yf_col,
@@ -2989,7 +3468,16 @@ function (sw::EDMFTwoStreamColumnSweep{
     pre_col,
     edmf_col,
     scratch_col,
-) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
+) where {
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
+}
+    sw = w.sw
     FT = typeof(sw.Δt)
     Δt = sw.Δt
     ε = eps(FT)
@@ -3018,8 +3506,6 @@ function (sw::EDMFTwoStreamColumnSweep{
     ᶠuh3_fv = Fields.field_values(geom_col.ᶠuₕ³)
     ᶜK_fv = Fields.field_values(pre_col.ᶜK)
     sfc_col = pre_col.sfc
-    ᶜK1_fv = Fields.field_values(edmf_col.ᶜK1)
-    ᶜK0_fv = Fields.field_values(edmf_col.ᶜK0)
     ᶜT0_fv = Fields.field_values(edmf_col.ᶜT0)
     ᶜρ1_fv = Fields.field_values(edmf_col.ᶜρ1)
     ᶜρ_diff1_fv = Fields.field_values(edmf_col.ᶜρ_diff1)
@@ -3048,7 +3534,6 @@ function (sw::EDMFTwoStreamColumnSweep{
     ρa1_prev = Fields.field_values(scratch_col.ρa1_prev)
     ρa0_new = Fields.field_values(scratch_col.ρa0_new)
     b_work_col = Fields.field_values(scratch_col.E_col)
-    extra_src1_col = Fields.field_values(scratch_col.D_col)
     tail_qt_fv = Fields.field_values(scratch_col.empty_reg)
 
     JF1_fv = Fields.field_values(scratch_col.JF1)
@@ -3058,48 +3543,26 @@ function (sw::EDMFTwoStreamColumnSweep{
     uv_c = scratch_col.uv_c.components.data
     st_c = scratch_col.st_c.components.data
     c12_c = scratch_col.c12_c.components.data
-    c3_c = scratch_col.c3_c.components.data
     ct123_c = scratch_col.ct123_c.components.data
-    uvw_c = scratch_col.uvw_c.components.data
     uv_f = scratch_col.uv_f.components.data
-    st_f = scratch_col.st_f.components.data
-    c123_f = scratch_col.c123_f.components.data
 
     α_face_fv = Fields.field_values(uv_f.:(1))
     u3_in = Fields.field_values(uv_f.:(2))
     u3_new = Fields.field_values(uv_f.:(3))
-    G0_fv = Fields.field_values(uv_f.:(5))
     G1_fv = Fields.field_values(uv_f.:(6))
 
     diag1_fv = Fields.field_values(uv_c.:(1))
     upper1_fv = Fields.field_values(uv_c.:(2))
-    lower1_fv = Fields.field_values(uv_c.:(3))
     diag0_fv = Fields.field_values(uv_c.:(5))
     upper0_fv = Fields.field_values(uv_c.:(6))
     lower0_fv = Fields.field_values(uv_c.:(7))
-    d11 = Fields.field_values(uv_c.:(9))
     d00 = Fields.field_values(st_c.:(3))
     u1_blk = Fields.field_values(st_c.:(4))
-    l1_blk = Fields.field_values(st_c.:(6))
     r1_blk = Fields.field_values(st_c.:(8))
     r0_blk = Fields.field_values(st_c.:(9))
-    x1_blk = Fields.field_values(c12_c.:(1))
     x0_blk = Fields.field_values(c12_c.:(2))
-    χ1_in = Fields.field_values(c3_c.:(1))
-    χ0_in = Fields.field_values(ct123_c.:(1))
     η1_L_fv = Fields.field_values(ct123_c.:(2))
     ρη_L_fv = Fields.field_values(ct123_c.:(3))
-    Δρ_col_fv = Fields.field_values(uvw_c.:(1))
-    A1_qv_fv = Fields.field_values(uv_f.:(7))
-    A0_qv_fv = Fields.field_values(uv_f.:(8))
-    A0_ql_fv = Fields.field_values(st_f.:(1))
-    A0_qi_fv = Fields.field_values(st_f.:(3))
-    A1_qr_fv = Fields.field_values(st_f.:(4))
-    A0_qr_fv = Fields.field_values(st_f.:(5))
-    A1_qs_fv = Fields.field_values(st_f.:(6))
-    A0_qs_fv = Fields.field_values(st_f.:(7))
-    A0_qt_fv = Fields.field_values(st_f.:(9))
-    A0_η_fv = Fields.field_values(c123_f.:(2))
 
     # Surface scalar BC values (single-level horizontal fields)
     E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
@@ -3177,9 +3640,10 @@ function (sw::EDMFTwoStreamColumnSweep{
         ᶜgradΦ_fv,
         ᶠuh3_fv,
     )
-    u3_wk = (; d11, u1_blk, l1_blk, r1_blk, x1_blk, E_sfc, Δt, nz)
-    for _picard in 1:n_picard
+    u3_wk = (; u1_blk, r1_blk, E_sfc, Δt, nz)
+    for _picard in 0:n_picard
         _step_edmf_u3_and_rhoa!(sw, u3_out, u3_state, u3_geom, u3_wk)
+        _picard == n_picard && break
 
         @inbounds begin
             V1_fv[1] = zero(FT)
@@ -3219,243 +3683,180 @@ function (sw::EDMFTwoStreamColumnSweep{
         qr1_p = r0_blk
         qs1_p = x0_blk
 
-        @inbounds for k in 1:nz
-            mse1_old_k = ᶜmse1_fv[k]
-            ρh_tot_k = ᶜρe_fv[k] + ᶜp_fv[k]
-            χ1_in[k] = mse1_old_k
-            χ0_in[k] =
-                ((ρh_tot_k - ᶜρ_fv[k] * ᶜK_fv[k]) - ρa1_in[k] * mse1_old_k) /
-                max(ρa0_in[k], ε)
-        end
-        _solve_edmf_updraft_var!(
+        ᶜqt1_p_fv = HasQ ? Fields.field_values(sgs1.q_tot) : ᶜmse1_fv
+        ᶜρqt_p_fv = HasQ ? Fields.field_values(Yc_col.ρq_tot) : ᶜρe_fv
+        _picard_edmf_thermo_step!(
+            Val(HasQ),
+            Val(HasTailEntr),
             mse1_p,
-            χ1_in,
-            χ0_in,
+            qt1_p,
+            ᶜmse1_fv,
+            ᶜqt1_p_fv,
+            ᶜρqt_p_fv,
+            ᶜρe_fv,
+            ᶜp_fv,
+            ᶜρ_fv,
+            ᶜK_fv,
             b_work_col,
+            tail_qt_fv,
+            ρa1_in,
+            ρa0_in,
             ᶜρa1_fv,
             V1_fv,
             ε_tot_fv,
             G1_fv,
             ᶜJ_fv,
-            diag1_fv,
             upper1_fv,
-            lower1_fv,
             r1_blk,
+            diag1_fv,
+            sw.has_updraft_diff,
+            sw.has_sfc,
             Δt,
             nz,
             (;
-                apply_diff = sw.has_updraft_diff,
-                apply_sfc = sw.has_sfc,
-                has_extra_src1 = true,
-                limit_pos = false,
+                JF_sfc_h,
+                JF_sfc_q,
+                r_sfc_1 = r_sfc_p,
+                ρ1_1 = ρ1_1_p,
+                mse_buoy,
+                qt_buoy,
             ),
-            (; JF_sfc = JF_sfc_h, r_sfc_1 = r_sfc_p, ρ1_1 = ρ1_1_p, χ_buoyant = mse_buoy),
-            sw.updraft_upw_mode,
+            Val(UpdUpwMode),
         )
 
-        if HasQ
-            ᶜρqt_p_fv = Fields.field_values(Yc_col.ρq_tot)
-            ᶜqt1_p_fv = Fields.field_values(sgs1.q_tot)
-            @inbounds for k in 1:nz
-                ρqt_k = ᶜρqt_p_fv[k]
-                qt1_raw = max(zero(FT), ᶜqt1_p_fv[k])
-                qt1_in_k =
-                    (ρqt_k >= zero(FT) && ρa1_in[k] > ε_num) ?
-                    min(qt1_raw, ρqt_k / ρa1_in[k]) : qt1_raw
-                χ1_in[k] = qt1_in_k
-                χ0_in[k] = (ρqt_k - ρa1_in[k] * qt1_in_k) / max(ρa0_in[k], ε)
-            end
-            _solve_edmf_updraft_var!(
-                qt1_p,
-                χ1_in,
-                χ0_in,
-                tail_qt_fv,
+        if HasQ && HasNonEquil
+            ᶜql1_sgs = Fields.field_values(sgs1.q_lcl)
+            ᶜρql_gs = Fields.field_values(Yc_col.ρq_lcl)
+            ᶜqi1_sgs = Fields.field_values(sgs1.q_icl)
+            ᶜρqi_gs = Fields.field_values(Yc_col.ρq_icl)
+            ᶜqr1_sgs = Fields.field_values(sgs1.q_rai)
+            ᶜρqr_gs = Fields.field_values(Yc_col.ρq_rai)
+            ᶜqs1_sgs = Fields.field_values(sgs1.q_sno)
+            ᶜρqs_gs = Fields.field_values(Yc_col.ρq_sno)
+            _picard_edmf_species_pair_step!(
+                ql1_p,
+                qi1_p,
+                ᶜql1_sgs,
+                ᶜρql_gs,
+                ᶜqi1_sgs,
+                ᶜρqi_gs,
+                sw.has_updraft_diff,
+                ρa1_in,
+                ρa0_in,
                 ᶜρa1_fv,
                 V1_fv,
                 ε_tot_fv,
                 G1_fv,
                 ᶜJ_fv,
-                diag1_fv,
                 upper1_fv,
-                lower1_fv,
                 r1_blk,
+                diag1_fv,
                 Δt,
                 nz,
-                (;
-                    apply_diff = sw.has_updraft_diff,
-                    apply_sfc = sw.has_sfc,
-                    has_extra_src1 = HasTailEntr,
-                    limit_pos = true,
-                ),
-                (;
-                    JF_sfc = JF_sfc_q,
-                    r_sfc_1 = r_sfc_p,
-                    ρ1_1 = ρ1_1_p,
-                    χ_buoyant = qt_buoy,
-                ),
-                sw.updraft_upw_mode,
+                Val(UpdUpwMode),
             )
-
-            if HasNonEquil
-                pic_sp_tail = (
+            _picard_edmf_species_pair_step!(
+                qr1_p,
+                qs1_p,
+                ᶜqr1_sgs,
+                ᶜρqr_gs,
+                ᶜqs1_sgs,
+                ᶜρqs_gs,
+                false,
+                ρa1_in,
+                ρa0_in,
+                ᶜρa1_fv,
+                V1_fv,
+                ε_tot_fv,
+                G1_fv,
+                ᶜJ_fv,
+                upper1_fv,
+                r1_blk,
+                diag1_fv,
+                Δt,
+                nz,
+                Val(UpdUpwMode),
+            )
+            if HasNonEquil && !(sw.cmp === nothing)
+                mp_1m_p = _unwrapped(sw.cmp)
+                _compute_updraft_1m_relax!(
+                    Val(true),
+                    η1_L_fv,
+                    ρη_L_fv,
+                    mp_1m_p,
+                    tps,
+                    sw.T_min_sgs,
+                    ᶜρa1_fv,
+                    mse1_p,
+                    qt1_p,
+                    ql1_p,
+                    qi1_p,
+                    qr1_p,
+                    qs1_p,
+                    ᶜΦ_fv,
+                    ᶜp_fv,
+                    false,
+                    nz,
+                )
+                _picard_edmf_species_relax_step!(
+                    ql1_p,
+                    ᶜql1_sgs,
+                    ᶜρql_gs,
+                    η1_L_fv,
+                    ρη_L_fv,
+                    sw.has_updraft_diff,
                     ρa1_in,
                     ρa0_in,
-                    χ1_in,
-                    χ0_in,
                     ᶜρa1_fv,
                     V1_fv,
                     ε_tot_fv,
                     G1_fv,
                     ᶜJ_fv,
-                    diag1_fv,
                     upper1_fv,
-                    lower1_fv,
                     r1_blk,
                     Δt,
                     nz,
-                    sw.updraft_upw_mode,
+                    Val(UpdUpwMode),
                 )
-                _picard_edmf_species_step!(
+                _compute_updraft_1m_relax!(
+                    Val(false),
+                    η1_L_fv,
+                    ρη_L_fv,
+                    mp_1m_p,
+                    tps,
+                    sw.T_min_sgs,
+                    ᶜρa1_fv,
+                    mse1_p,
+                    qt1_p,
                     ql1_p,
-                    Fields.field_values(sgs1.q_lcl),
-                    Fields.field_values(Yc_col.ρq_lcl),
-                    sw.has_updraft_diff,
-                    pic_sp_tail...,
-                )
-                _picard_edmf_species_step!(
                     qi1_p,
-                    Fields.field_values(sgs1.q_icl),
-                    Fields.field_values(Yc_col.ρq_icl),
-                    sw.has_updraft_diff,
-                    pic_sp_tail...,
-                )
-                _picard_edmf_species_step!(
                     qr1_p,
-                    Fields.field_values(sgs1.q_rai),
-                    Fields.field_values(Yc_col.ρq_rai),
-                    false,
-                    pic_sp_tail...,
-                )
-                _picard_edmf_species_step!(
                     qs1_p,
-                    Fields.field_values(sgs1.q_sno),
-                    Fields.field_values(Yc_col.ρq_sno),
+                    ᶜΦ_fv,
+                    ᶜp_fv,
                     false,
-                    pic_sp_tail...,
+                    nz,
                 )
-                if HasNonEquil && !(sw.cmp === nothing)
-                    mp_1m_p = _unwrapped(sw.cmp)
-                    _compute_updraft_1m_relax!(
-                        Val(true),
-                        η1_L_fv,
-                        ρη_L_fv,
-                        mp_1m_p,
-                        tps,
-                        sw.T_min_sgs,
-                        ᶜρa1_fv,
-                        mse1_p,
-                        qt1_p,
-                        ql1_p,
-                        qi1_p,
-                        qr1_p,
-                        qs1_p,
-                        ᶜΦ_fv,
-                        ᶜp_fv,
-                        false,
-                        nz,
-                    )
-                    ᶜql1_sgs = Fields.field_values(sgs1.q_lcl)
-                    ᶜρql_gs = Fields.field_values(Yc_col.ρq_lcl)
-                    has_ql_p = false
-                    @inbounds for k in 1:nz
-                        ρχ_k = ᶜρql_gs[k]
-                        χ1_raw = max(zero(FT), ᶜql1_sgs[k])
-                        χ1_in_k =
-                            (ρχ_k >= zero(FT) && ρa1_in[k] > ε_num) ?
-                            min(χ1_raw, ρχ_k / ρa1_in[k]) : χ1_raw
-                        χ1_in[k] = χ1_in_k
-                        χ0_in[k] =
-                            (ρχ_k - ρa1_in[k] * χ1_in_k) /
-                            max(ρa0_in[k], ε)
-                        has_ql_p |=
-                            (ρχ_k != zero(FT)) |
-                            (χ1_raw > zero(FT)) |
-                            ((η1_L_fv[k] > zero(FT)) & (ρη_L_fv[k] > zero(FT)))
-                    end
-                    # Arguments shared by the cloud liquid and cloud ice
-                    # predictor solves.
-                    species_solve_args = (
-                        χ1_in,
-                        χ0_in,
-                        χ1_in,
-                        ᶜρa1_fv,
-                        V1_fv,
-                        ε_tot_fv,
-                        G1_fv,
-                        ᶜJ_fv,
-                        diag1_fv,
-                        upper1_fv,
-                        lower1_fv,
-                        r1_blk,
-                        Δt,
-                        nz,
-                        (;
-                            apply_diff = sw.has_updraft_diff,
-                            apply_sfc = false,
-                            has_extra_src1 = false,
-                            limit_pos = true,
-                        ),
-                        _no_surface_source(FT),
-                        sw.updraft_upw_mode,
-                        true,
-                        η1_L_fv,
-                        ρη_L_fv,
-                    )
-                    if has_ql_p
-                        _solve_edmf_updraft_var!(ql1_p, species_solve_args...)
-                    end
-
-                    _compute_updraft_1m_relax!(
-                        Val(false),
-                        η1_L_fv,
-                        ρη_L_fv,
-                        mp_1m_p,
-                        tps,
-                        sw.T_min_sgs,
-                        ᶜρa1_fv,
-                        mse1_p,
-                        qt1_p,
-                        ql1_p,
-                        qi1_p,
-                        qr1_p,
-                        qs1_p,
-                        ᶜΦ_fv,
-                        ᶜp_fv,
-                        false,
-                        nz,
-                    )
-                    ᶜqi1_sgs = Fields.field_values(sgs1.q_icl)
-                    ᶜρqi_gs = Fields.field_values(Yc_col.ρq_icl)
-                    has_qi_p = false
-                    @inbounds for k in 1:nz
-                        ρχ_k = ᶜρqi_gs[k]
-                        χ1_raw = max(zero(FT), ᶜqi1_sgs[k])
-                        χ1_in_k =
-                            (ρχ_k >= zero(FT) && ρa1_in[k] > ε_num) ?
-                            min(χ1_raw, ρχ_k / ρa1_in[k]) : χ1_raw
-                        χ1_in[k] = χ1_in_k
-                        χ0_in[k] =
-                            (ρχ_k - ρa1_in[k] * χ1_in_k) /
-                            max(ρa0_in[k], ε)
-                        has_qi_p |=
-                            (ρχ_k != zero(FT)) |
-                            (χ1_raw > zero(FT)) |
-                            ((η1_L_fv[k] > zero(FT)) & (ρη_L_fv[k] > zero(FT)))
-                    end
-                    if has_qi_p
-                        _solve_edmf_updraft_var!(qi1_p, species_solve_args...)
-                    end
-                end
+                _picard_edmf_species_relax_step!(
+                    qi1_p,
+                    ᶜqi1_sgs,
+                    ᶜρqi_gs,
+                    η1_L_fv,
+                    ρη_L_fv,
+                    sw.has_updraft_diff,
+                    ρa1_in,
+                    ρa0_in,
+                    ᶜρa1_fv,
+                    V1_fv,
+                    ε_tot_fv,
+                    G1_fv,
+                    ᶜJ_fv,
+                    upper1_fv,
+                    r1_blk,
+                    Δt,
+                    nz,
+                    Val(UpdUpwMode),
+                )
             end
         end
 
@@ -3501,8 +3902,6 @@ function (sw::EDMFTwoStreamColumnSweep{
             end
         end
     end
-
-    _step_edmf_u3_and_rhoa!(sw, u3_out, u3_state, u3_geom, u3_wk)
 
     # Write final u₃¹, relative SGS mass fluxes `JF1_rel = -JF0_rel`,
     # contravariant updraft volume flux `V1_fv`, and SGS flux weight
@@ -3556,6 +3955,125 @@ function (sw::EDMFTwoStreamColumnSweep{
         end
     end
 
+    return nothing
+end
+
+function (w::EDMFTwoStreamScalarSweep{
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
+})(
+    Yc_col,
+    Yf_col,
+    geom_col,
+    pre_col,
+    edmf_col,
+    scratch_col,
+) where {
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+    SgsUpwMode,
+    UpdUpwMode,
+}
+    sw = w.sw
+    FT = typeof(sw.Δt)
+    Δt = sw.Δt
+    ε = eps(FT)
+    ε_num = ϵ_numerics(FT)
+    tps = sw.thermo_params
+
+    ᶜρ_fv = Fields.field_values(Yc_col.ρ)
+    ᶜρe_fv = Fields.field_values(Yc_col.ρe_tot)
+    sgs1 = Yc_col.sgsʲs.:(1)
+    ᶜρa1_fv = Fields.field_values(sgs1.ρa)
+    ᶜmse1_fv = Fields.field_values(sgs1.mse)
+
+    ᶜJ_fv = Fields.field_values(geom_col.ᶜlg.J)
+    ᶠlg_fv = Fields.field_values(geom_col.ᶠlg)
+    ᶠz_fv = Fields.field_values(geom_col.ᶠlg.coordinates.z)
+    ᶜΦ_fv = Fields.field_values(geom_col.ᶜΦ)
+    ᶜK_fv = Fields.field_values(pre_col.ᶜK)
+    sfc_col = pre_col.sfc
+    ᶜK1_fv = Fields.field_values(edmf_col.ᶜK1)
+    ᶜK0_fv = Fields.field_values(edmf_col.ᶜK0)
+    ᶜT0_fv = Fields.field_values(edmf_col.ᶜT0)
+    ᶜρ1_fv = Fields.field_values(edmf_col.ᶜρ1)
+    ᶠK_h_fv = Fields.field_values(pre_col.ᶠK_h)
+
+    nz = Spaces.nlevels(axes(Yc_col.ρ))
+
+    ρa1_in = Fields.field_values(scratch_col.ρa1_in)
+    ρa0_in = Fields.field_values(scratch_col.ρa0_in)
+    ε_tot_fv = Fields.field_values(scratch_col.ρa1_prev)
+    ρa0_new = Fields.field_values(scratch_col.ρa0_new)
+    b_work_col = Fields.field_values(scratch_col.E_col)
+    extra_src1_col = Fields.field_values(scratch_col.D_col)
+    tail_qt_fv = Fields.field_values(scratch_col.empty_reg)
+
+    V1_fv = Fields.field_values(scratch_col.JF1)
+    JF1_rel_fv = Fields.field_values(scratch_col.JF1_rel)
+    JF0_rel_fv = Fields.field_values(scratch_col.JF0_rel)
+
+    uv_c = scratch_col.uv_c.components.data
+    st_c = scratch_col.st_c.components.data
+    c12_c = scratch_col.c12_c.components.data
+    c3_c = scratch_col.c3_c.components.data
+    ct123_c = scratch_col.ct123_c.components.data
+    uvw_c = scratch_col.uvw_c.components.data
+    uv_f = scratch_col.uv_f.components.data
+    st_f = scratch_col.st_f.components.data
+    c123_f = scratch_col.c123_f.components.data
+
+    α_face_fv = Fields.field_values(uv_f.:(1))
+    u3_in = Fields.field_values(uv_f.:(2))
+    u3_new = Fields.field_values(uv_f.:(3))
+    G0_fv = Fields.field_values(uv_f.:(5))
+    G1_fv = Fields.field_values(uv_f.:(6))
+
+    upper1_fv = Fields.field_values(uv_c.:(2))
+    diag0_fv = Fields.field_values(uv_c.:(5))
+    upper0_fv = Fields.field_values(uv_c.:(6))
+    d00 = Fields.field_values(st_c.:(3))
+    u1_blk = Fields.field_values(st_c.:(4))
+    r1_blk = Fields.field_values(st_c.:(8))
+    r0_blk = Fields.field_values(st_c.:(9))
+    x1_blk = Fields.field_values(c12_c.:(1))
+    x0_blk = Fields.field_values(c12_c.:(2))
+    χ1_in = Fields.field_values(c3_c.:(1))
+    χ0_in = Fields.field_values(ct123_c.:(1))
+    η1_L_fv = Fields.field_values(ct123_c.:(2))
+    ρη_L_fv = Fields.field_values(ct123_c.:(3))
+    Δρ_col_fv = Fields.field_values(uvw_c.:(1))
+    A1_qv_fv = Fields.field_values(uv_f.:(7))
+    A0_qv_fv = Fields.field_values(uv_f.:(8))
+    A0_ql_fv = Fields.field_values(st_f.:(1))
+    A0_qi_fv = Fields.field_values(st_f.:(3))
+    A1_qr_fv = Fields.field_values(st_f.:(4))
+    A0_qr_fv = Fields.field_values(st_f.:(5))
+    A1_qs_fv = Fields.field_values(st_f.:(6))
+    A0_qs_fv = Fields.field_values(st_f.:(7))
+    A0_qt_fv = Fields.field_values(st_f.:(9))
+    A0_η_fv = Fields.field_values(c123_f.:(2))
+
+    E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
+    mse_buoy = Fields.field_values(edmf_col.sfc_mse_buoy)[]
+    qt_buoy = HasQ ? Fields.field_values(edmf_col.sfc_qt_buoy)[] : zero(FT)
+    JF_sfc_h =
+        sw.has_sfc ?
+        surface_c3_flux_factor(ᶠlg_fv[1]) *
+        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_h_tot)[]) : zero(FT)
+    JF_sfc_q =
+        (sw.has_sfc && HasQ) ?
+        surface_c3_flux_factor(ᶠlg_fv[1]) *
+        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_q_tot)[]) : zero(FT)
+
     ρ1_1 = max(ᶜρ1_fv[1], ε)
     r_sfc_1 =
         sw.has_sfc ?
@@ -3592,12 +4110,9 @@ function (sw::EDMFTwoStreamColumnSweep{
     Φ1_fv = u3_in
     G0_b_fv = u3_new
     wk = (;
-        diag1 = diag1_fv,
         upper1 = upper1_fv,
-        lower1 = lower1_fv,
         diag0 = diag0_fv,
         upper0 = upper0_fv,
-        lower0 = lower0_fv,
         Φ1 = Φ1_fv,
         r1 = r1_blk,
         r0 = r0_blk,
@@ -3733,8 +4248,8 @@ function (sw::EDMFTwoStreamColumnSweep{
                 limit_pos = true,
             ),
             (; JF_sfc = JF_sfc_q, r_sfc_1, ρ1_1, χ_buoyant = qt_buoy_eff),
-            sw.sgsflux_upw_mode,
-            sw.updraft_upw_mode,
+            Val(SgsUpwMode),
+            Val(UpdUpwMode),
             HasTailEntr,
             tail_qt_fv,
         )
@@ -3749,89 +4264,143 @@ function (sw::EDMFTwoStreamColumnSweep{
     # 2) Energy: solve intensive updraft `mse¹` directly with buoyancy work and
     # `mse_eff¹` diffusion, then solve conservative grid-mean `ρh_tot` with
     # `η¹ = mse¹ + K¹` and full subdomain enthalpy diffusion.
+    has_qp = HasQ && HasNonEquil
     @inbounds begin
         A1_qr_fv[1] = zero(FT)
         A1_qr_fv[nz + 1] = zero(FT)
         jf_extra_fv[1] = zero(FT)
         jf_extra_fv[nz + 1] = zero(FT)
-        for f in 2:nz
-            jf_c0_f = zero(FT)
-            jf_p1_f = zero(FT)
-            jf_c1_dq_f = zero(FT)
+        if nz >= 2
+            hd0_lo = zero(FT)
+            q0_lo = zero(FT)
+            K0_lo = zero(FT)
+            qr0_lo = zero(FT)
+            qs0_lo = zero(FT)
+            hld0_lo = zero(FT)
+            hid0_lo = zero(FT)
             if sw.has_env_diff
-                hd0_f =
-                    (
-                        TD.enthalpy_dry(tps, ᶜT0_fv[f - 1]) + ᶜΦ_fv[f - 1] +
-                        TD.enthalpy_dry(tps, ᶜT0_fv[f]) + ᶜΦ_fv[f]
-                    ) / 2
-                dq0_f = HasQ ? (u1_blk[f] - u1_blk[f - 1]) : zero(FT)
-                corr0 = -(ᶜK0_fv[f] - ᶜK0_fv[f - 1]) + hd0_f * dq0_f
-                if HasQ && HasNonEquil
+                T0_1 = ᶜT0_fv[1]
+                hd0_1 = TD.enthalpy_dry(tps, T0_1)
+                hd0_lo = hd0_1 + ᶜΦ_fv[1]
+                q0_lo = HasQ ? u1_blk[1] : zero(FT)
+                K0_lo = ᶜK0_fv[1]
+                if has_qp
                     ᶜρqr_fv = Fields.field_values(Yc_col.ρq_rai)
                     ᶜρqs_fv = Fields.field_values(Yc_col.ρq_sno)
                     ᶜqr1_fv = Fields.field_values(sgs1.q_rai)
                     ᶜqs1_fv = Fields.field_values(sgs1.q_sno)
+                    inv_ρa0_1 = inv(max(ρa0_in[1], ε))
                     qr0_lo =
-                        _env_residual_value(
-                            ᶜρqr_fv[f - 1], ρa1_in[f - 1], ᶜqr1_fv[f - 1], ρa0_in[f - 1], ε,
-                        )
-                    qr0_hi =
-                        _env_residual_value(
-                            ᶜρqr_fv[f], ρa1_in[f], ᶜqr1_fv[f], ρa0_in[f], ε,
-                        )
+                        (ᶜρqr_fv[1] - ρa1_in[1] * max(zero(FT), ᶜqr1_fv[1])) *
+                        inv_ρa0_1
                     qs0_lo =
-                        _env_residual_value(
-                            ᶜρqs_fv[f - 1], ρa1_in[f - 1], ᶜqs1_fv[f - 1], ρa0_in[f - 1], ε,
-                        )
-                    qs0_hi =
-                        _env_residual_value(
-                            ᶜρqs_fv[f], ρa1_in[f], ᶜqs1_fv[f], ρa0_in[f], ε,
-                        )
-                    hl_d0_f =
-                        _face_mean_enthalpy_excess(
-                            TD.enthalpy_liquid, tps, ᶜT0_fv[f - 1], ᶜT0_fv[f],
-                        )
-                    hi_d0_f =
-                        _face_mean_enthalpy_excess(
-                            TD.enthalpy_ice, tps, ᶜT0_fv[f - 1], ᶜT0_fv[f],
-                        )
-                    corr0 -= hl_d0_f * (qr0_hi - qr0_lo) + hi_d0_f * (qs0_hi - qs0_lo)
+                        (ᶜρqs_fv[1] - ρa1_in[1] * max(zero(FT), ᶜqs1_fv[1])) *
+                        inv_ρa0_1
+                    hld0_lo = TD.enthalpy_liquid(tps, T0_1) - hd0_1
+                    hid0_lo = TD.enthalpy_ice(tps, T0_1) - hd0_1
                 end
-                jf_c0_f = -G0_fv[f] * corr0
             end
+
+            hd1_lo = zero(FT)
+            qt1_lo = zero(FT)
+            qr1_lo = zero(FT)
+            qs1_lo = zero(FT)
+            hld1_lo = zero(FT)
+            hid1_lo = zero(FT)
             if sw.has_updraft_diff
-                hd1_f =
-                    (
-                        TD.enthalpy_dry(tps, ᶜT1_fv[f - 1]) + ᶜΦ_fv[f - 1] +
-                        TD.enthalpy_dry(tps, ᶜT1_fv[f]) + ᶜΦ_fv[f]
-                    ) / 2
-                dq1_f = HasQ ? (ᶜqt1_fv[f] - ᶜqt1_fv[f - 1]) : zero(FT)
-                if HasQ && HasNonEquil
+                T1_1 = ᶜT1_fv[1]
+                hd1_1 = TD.enthalpy_dry(tps, T1_1)
+                hd1_lo = hd1_1 + ᶜΦ_fv[1]
+                qt1_lo = HasQ ? ᶜqt1_fv[1] : zero(FT)
+                if has_qp
                     ᶜqr1_fv = Fields.field_values(sgs1.q_rai)
                     ᶜqs1_fv = Fields.field_values(sgs1.q_sno)
-                    hl_d1_f =
-                        _face_mean_enthalpy_excess(
-                            TD.enthalpy_liquid, tps, ᶜT1_fv[f - 1], ᶜT1_fv[f],
-                        )
-                    hi_d1_f =
-                        _face_mean_enthalpy_excess(
-                            TD.enthalpy_ice, tps, ᶜT1_fv[f - 1], ᶜT1_fv[f],
-                        )
-                    jf_p1_f =
-                        G1_fv[f] * (
-                            hl_d1_f * (ᶜqr1_fv[f] - ᶜqr1_fv[f - 1]) +
-                            hi_d1_f * (ᶜqs1_fv[f] - ᶜqs1_fv[f - 1])
-                        )
+                    qr1_lo = ᶜqr1_fv[1]
+                    qs1_lo = ᶜqs1_fv[1]
+                    hld1_lo = TD.enthalpy_liquid(tps, T1_1) - hd1_1
+                    hid1_lo = TD.enthalpy_ice(tps, T1_1) - hd1_1
                 end
-                jf_c1_dq_f = -G1_fv[f] * hd1_f * dq1_f
             end
-            A1_qr_fv[f] = jf_p1_f
-            jf_extra_fv[f] = jf_c0_f + jf_p1_f + jf_c1_dq_f
+
+            for f in 2:nz
+                jf_c0_f = zero(FT)
+                jf_p1_f = zero(FT)
+                jf_c1_dq_f = zero(FT)
+                if sw.has_env_diff
+                    T0_hi = ᶜT0_fv[f]
+                    hd0_hi_raw = TD.enthalpy_dry(tps, T0_hi)
+                    hd0_hi = hd0_hi_raw + ᶜΦ_fv[f]
+                    hd0_f = (hd0_lo + hd0_hi) / 2
+                    q0_hi = HasQ ? u1_blk[f] : zero(FT)
+                    dq0_f = HasQ ? (q0_hi - q0_lo) : zero(FT)
+                    K0_hi = ᶜK0_fv[f]
+                    corr0 = -(K0_hi - K0_lo) + hd0_f * dq0_f
+                    hd0_lo = hd0_hi
+                    q0_lo = q0_hi
+                    K0_lo = K0_hi
+                    if has_qp
+                        ᶜρqr_fv = Fields.field_values(Yc_col.ρq_rai)
+                        ᶜρqs_fv = Fields.field_values(Yc_col.ρq_sno)
+                        ᶜqr1_fv = Fields.field_values(sgs1.q_rai)
+                        ᶜqs1_fv = Fields.field_values(sgs1.q_sno)
+                        inv_ρa0_hi = inv(max(ρa0_in[f], ε))
+                        ρa1_f = ρa1_in[f]
+                        qr0_hi =
+                            (ᶜρqr_fv[f] - ρa1_f * max(zero(FT), ᶜqr1_fv[f])) *
+                            inv_ρa0_hi
+                        qs0_hi =
+                            (ᶜρqs_fv[f] - ρa1_f * max(zero(FT), ᶜqs1_fv[f])) *
+                            inv_ρa0_hi
+                        hld0_hi = TD.enthalpy_liquid(tps, T0_hi) - hd0_hi_raw
+                        hid0_hi = TD.enthalpy_ice(tps, T0_hi) - hd0_hi_raw
+                        hl_d0_f = (hld0_lo + hld0_hi) / 2
+                        hi_d0_f = (hid0_lo + hid0_hi) / 2
+                        corr0 -=
+                            hl_d0_f * (qr0_hi - qr0_lo) + hi_d0_f * (qs0_hi - qs0_lo)
+                        qr0_lo = qr0_hi
+                        qs0_lo = qs0_hi
+                        hld0_lo = hld0_hi
+                        hid0_lo = hid0_hi
+                    end
+                    jf_c0_f = -G0_fv[f] * corr0
+                end
+                if sw.has_updraft_diff
+                    T1_hi = ᶜT1_fv[f]
+                    hd1_hi_raw = TD.enthalpy_dry(tps, T1_hi)
+                    hd1_hi = hd1_hi_raw + ᶜΦ_fv[f]
+                    hd1_f = (hd1_lo + hd1_hi) / 2
+                    qt1_hi = HasQ ? ᶜqt1_fv[f] : zero(FT)
+                    dq1_f = HasQ ? (qt1_hi - qt1_lo) : zero(FT)
+                    hd1_lo = hd1_hi
+                    qt1_lo = qt1_hi
+                    if has_qp
+                        ᶜqr1_fv = Fields.field_values(sgs1.q_rai)
+                        ᶜqs1_fv = Fields.field_values(sgs1.q_sno)
+                        qr1_hi = ᶜqr1_fv[f]
+                        qs1_hi = ᶜqs1_fv[f]
+                        hld1_hi = TD.enthalpy_liquid(tps, T1_hi) - hd1_hi_raw
+                        hid1_hi = TD.enthalpy_ice(tps, T1_hi) - hd1_hi_raw
+                        hl_d1_f = (hld1_lo + hld1_hi) / 2
+                        hi_d1_f = (hid1_lo + hid1_hi) / 2
+                        jf_p1_f =
+                            G1_fv[f] * (
+                                hl_d1_f * (qr1_hi - qr1_lo) +
+                                hi_d1_f * (qs1_hi - qs1_lo)
+                            )
+                        qr1_lo = qr1_hi
+                        qs1_lo = qs1_hi
+                        hld1_lo = hld1_hi
+                        hid1_lo = hid1_hi
+                    end
+                    jf_c1_dq_f = -G1_fv[f] * hd1_f * dq1_f
+                end
+                A1_qr_fv[f] = jf_p1_f
+                jf_extra_fv[f] = jf_c0_f + jf_p1_f + jf_c1_dq_f
+            end
         end
     end
 
     @inbounds for k in 1:nz
-        J_k = ᶜJ_fv[k]
         mse1_old_k = ᶜmse1_fv[k]
         ρh_tot_k = ᶜρe_fv[k] + ᶜp_fv[k]
         d00[k] = ρh_tot_k
@@ -3839,9 +4408,12 @@ function (sw::EDMFTwoStreamColumnSweep{
         χ0_in[k] =
             ((ρh_tot_k - ᶜρ_fv[k] * ᶜK_fv[k]) - ρa1_in[k] * mse1_old_k) /
             max(ρa0_in[k], ε)
-        inv_m1_k = ᶜρa1_fv[k] > ε_num ? inv(J_k * ᶜρa1_fv[k]) : zero(FT)
-        extra_src1_col[k] =
-            b_work_col[k] - inv_m1_k * (A1_qr_fv[k + 1] - A1_qr_fv[k])
+        extra_src1_col[k] = if has_qp && sw.has_updraft_diff && ᶜρa1_fv[k] > ε_num
+            b_work_col[k] -
+            (A1_qr_fv[k + 1] - A1_qr_fv[k]) / (ᶜJ_fv[k] * ᶜρa1_fv[k])
+        else
+            b_work_col[k]
+        end
     end
 
     _solve_edmf_updraft_var!(
@@ -3854,9 +4426,7 @@ function (sw::EDMFTwoStreamColumnSweep{
         ε_tot_fv,
         G1_fv,
         ᶜJ_fv,
-        wk.diag1,
         wk.upper1,
-        wk.lower1,
         wk.r1,
         Δt,
         nz,
@@ -3867,7 +4437,7 @@ function (sw::EDMFTwoStreamColumnSweep{
             limit_pos = false,
         ),
         (; JF_sfc = JF_sfc_h, r_sfc_1, ρ1_1, χ_buoyant = mse_buoy),
-        sw.updraft_upw_mode,
+        Val(UpdUpwMode),
     )
 
     # The environment carries `mse⁰ + K⁰` with `K⁰` from `u⁰`. It differs from
@@ -3900,7 +4470,6 @@ function (sw::EDMFTwoStreamColumnSweep{
         wk.Φ1,
         wk.diag0,
         wk.upper0,
-        wk.lower0,
         wk.r0,
         wk.x0,
         Δt,
@@ -3913,7 +4482,7 @@ function (sw::EDMFTwoStreamColumnSweep{
             save_x0 = false,
         ),
         JF_sfc_h,
-        sw.sgsflux_upw_mode,
+        Val(SgsUpwMode),
         true,
         χ0_in,
     )
@@ -3924,45 +4493,56 @@ function (sw::EDMFTwoStreamColumnSweep{
         ᶜρqr_fv = Fields.field_values(Yc_col.ρq_rai)
         ᶜρqs_fv = Fields.field_values(Yc_col.ρq_sno)
         A1_qv_fv[1] = zero(FT)
-        for f in 2:nz
-            hv_d0_f =
-                _face_mean_enthalpy_excess(
-                    TD.enthalpy_vapor, tps, ᶜT0_fv[f - 1], ᶜT0_fv[f],
-                )
-            hl_d0_f =
-                _face_mean_enthalpy_excess(
-                    TD.enthalpy_liquid, tps, ᶜT0_fv[f - 1], ᶜT0_fv[f],
-                )
-            hi_d0_f =
-                _face_mean_enthalpy_excess(
-                    TD.enthalpy_ice, tps, ᶜT0_fv[f - 1], ᶜT0_fv[f],
-                )
-            qr0_lo =
-                _env_residual_value(
-                    ᶜρqr_fv[f - 1], ρa1_in[f - 1], ᶜqr1_fv[f - 1], ρa0_in[f - 1], ε,
-                )
-            qr0_hi =
-                _env_residual_value(
-                    ᶜρqr_fv[f], ρa1_in[f], ᶜqr1_fv[f], ρa0_in[f], ε,
-                )
-            qs0_lo =
-                _env_residual_value(
-                    ᶜρqs_fv[f - 1], ρa1_in[f - 1], ᶜqs1_fv[f - 1], ρa0_in[f - 1], ε,
-                )
-            qs0_hi =
-                _env_residual_value(
-                    ᶜρqs_fv[f], ρa1_in[f], ᶜqs1_fv[f], ρa0_in[f], ε,
-                )
-            A1_qv_fv[f] =
-                -G0_fv[f] * (
-                    (wk.x0[f] - wk.x0[f - 1]) -
-                    (ᶜK0_fv[f] - ᶜK0_fv[f - 1]) -
-                    hv_d0_f * (u1_blk[f] - u1_blk[f - 1]) -
-                    hl_d0_f * (qr0_hi - qr0_lo) -
-                    hi_d0_f * (qs0_hi - qs0_lo)
-                )
-        end
         A1_qv_fv[nz + 1] = zero(FT)
+        if nz >= 2
+            T0_1 = ᶜT0_fv[1]
+            hd0_1 = TD.enthalpy_dry(tps, T0_1)
+            hvd0_lo = TD.enthalpy_vapor(tps, T0_1) - hd0_1
+            hld0_lo = TD.enthalpy_liquid(tps, T0_1) - hd0_1
+            hid0_lo = TD.enthalpy_ice(tps, T0_1) - hd0_1
+            x0_lo = wk.x0[1]
+            K0_lo = ᶜK0_fv[1]
+            qv0_lo = u1_blk[1]
+            inv_ρa0_1 = inv(max(ρa0_in[1], ε))
+            qr0_lo =
+                (ᶜρqr_fv[1] - ρa1_in[1] * max(zero(FT), ᶜqr1_fv[1])) * inv_ρa0_1
+            qs0_lo =
+                (ᶜρqs_fv[1] - ρa1_in[1] * max(zero(FT), ᶜqs1_fv[1])) * inv_ρa0_1
+            for f in 2:nz
+                T0_hi = ᶜT0_fv[f]
+                hd0_hi = TD.enthalpy_dry(tps, T0_hi)
+                hvd0_hi = TD.enthalpy_vapor(tps, T0_hi) - hd0_hi
+                hld0_hi = TD.enthalpy_liquid(tps, T0_hi) - hd0_hi
+                hid0_hi = TD.enthalpy_ice(tps, T0_hi) - hd0_hi
+                x0_hi = wk.x0[f]
+                K0_hi = ᶜK0_fv[f]
+                qv0_hi = u1_blk[f]
+                inv_ρa0_hi = inv(max(ρa0_in[f], ε))
+                ρa1_f = ρa1_in[f]
+                qr0_hi =
+                    (ᶜρqr_fv[f] - ρa1_f * max(zero(FT), ᶜqr1_fv[f])) *
+                    inv_ρa0_hi
+                qs0_hi =
+                    (ᶜρqs_fv[f] - ρa1_f * max(zero(FT), ᶜqs1_fv[f])) *
+                    inv_ρa0_hi
+                A1_qv_fv[f] =
+                    -G0_fv[f] * (
+                        (x0_hi - x0_lo) -
+                        (K0_hi - K0_lo) -
+                        ((hvd0_lo + hvd0_hi) / 2) * (qv0_hi - qv0_lo) -
+                        ((hld0_lo + hld0_hi) / 2) * (qr0_hi - qr0_lo) -
+                        ((hid0_lo + hid0_hi) / 2) * (qs0_hi - qs0_lo)
+                    )
+                x0_lo = x0_hi
+                K0_lo = K0_hi
+                qv0_lo = qv0_hi
+                qr0_lo = qr0_hi
+                qs0_lo = qs0_hi
+                hvd0_lo = hvd0_hi
+                hld0_lo = hld0_hi
+                hid0_lo = hid0_hi
+            end
+        end
     end
 
     if HasQ && HasNonEquil
@@ -4063,8 +4643,8 @@ function (sw::EDMFTwoStreamColumnSweep{
             wk,
             Δt,
             nz,
-            sw.sgsflux_upw_mode,
-            sw.updraft_upw_mode,
+            Val(SgsUpwMode),
+            Val(UpdUpwMode),
         )
         _step_edmf_precip_species!(ᶜqr1_fv, ᶜρqr_fv, A0_qr_fv, precip_sp_tail...)
         _step_edmf_precip_species!(ᶜqs1_fv, ᶜρqs_fv, A0_qs_fv, precip_sp_tail...)
@@ -4194,15 +4774,11 @@ end
     A0_fv = Fields.field_values(c123_f.:(2))
     jf_extra_fv = Fields.field_values(c123_f.:(3))
 
-    diag1_fv = Fields.field_values(uv_c.:(1))
     upper1_fv = Fields.field_values(uv_c.:(2))
-    lower1_fv = Fields.field_values(uv_c.:(3))
     diag0_fv = Fields.field_values(uv_c.:(5))
     upper0_fv = Fields.field_values(uv_c.:(6))
-    lower0_fv = Fields.field_values(uv_c.:(7))
     r1_blk = Fields.field_values(st_c.:(8))
     r0_blk = Fields.field_values(st_c.:(9))
-    x1_blk = Fields.field_values(c12_c.:(1))
     x0_blk = Fields.field_values(c12_c.:(2))
     χ1_in = Fields.field_values(c3_c.:(1))
     χ0_in = Fields.field_values(ct123_c.:(1))
@@ -4248,16 +4824,12 @@ end
     end
 
     wk = (;
-        diag1 = diag1_fv,
         upper1 = upper1_fv,
-        lower1 = lower1_fv,
         diag0 = diag0_fv,
         upper0 = upper0_fv,
-        lower0 = lower0_fv,
         Φ1 = Φ1_fv,
         r1 = r1_blk,
         r0 = r0_blk,
-        x1 = x1_blk,
         x0 = x0_blk,
     )
     _solve_and_commit_edmf_var!(
@@ -4303,7 +4875,9 @@ end
     return nothing
 end
 
-@noinline function _run_edmf_twostream_column!(
+@noinline function _launch_edmf_twostream!(
+    ::Val{SgsUpwMode},
+    ::Val{UpdUpwMode},
     ::Val{HasQ},
     ::Val{HasNonEquil},
     ::Val{FtildeMode},
@@ -4316,7 +4890,15 @@ end
     scratch,
     opts,
     cmp,
-) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
+) where {
+    SgsUpwMode,
+    UpdUpwMode,
+    HasQ,
+    HasNonEquil,
+    FtildeMode,
+    HasBlend,
+    HasTailEntr,
+}
     FT = typeof(opts.Δt_FT)
     (; turbconv_params, thermo_params, rayleigh_sponge, params) = opts
     sw = EDMFTwoStreamColumnSweep{
@@ -4325,6 +4907,8 @@ end
         FtildeMode,
         HasBlend,
         HasTailEntr,
+        SgsUpwMode,
+        UpdUpwMode,
         typeof(turbconv_params),
         typeof(thermo_params),
         typeof(cmp),
@@ -4366,7 +4950,7 @@ end
         opts.n_picard,
     )
     DataLayouts.foreach_column(
-        sw,
+        EDMFUpdraftPicardSweep(sw),
         Y.c,
         Y.f,
         geom,
@@ -4375,6 +4959,74 @@ end
         scratch;
         shmem = Val(:none),
     )
+    DataLayouts.foreach_column(
+        EDMFTwoStreamScalarSweep(sw),
+        Y.c,
+        Y.f,
+        geom,
+        pre,
+        edmf,
+        scratch;
+        shmem = Val(:none),
+    )
+    return nothing
+end
+
+@noinline function _run_edmf_twostream_column!(
+    ::Val{HasQ},
+    ::Val{HasNonEquil},
+    ::Val{FtildeMode},
+    ::Val{HasBlend},
+    ::Val{HasTailEntr},
+    Y,
+    geom,
+    pre,
+    edmf,
+    scratch,
+    opts,
+    cmp,
+) where {HasQ, HasNonEquil, FtildeMode, HasBlend, HasTailEntr}
+    (; sgsflux_upw_mode, updraft_upw_mode) = opts
+    vq = Val(HasQ)
+    vne = Val(HasNonEquil)
+    vft = Val(FtildeMode)
+    vb = Val(HasBlend)
+    vte = Val(HasTailEntr)
+    if updraft_upw_mode == Int8(0)
+        if sgsflux_upw_mode == Int8(0)
+            _launch_edmf_twostream!(
+                Val(Int8(0)), Val(Int8(0)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        elseif sgsflux_upw_mode == Int8(1)
+            _launch_edmf_twostream!(
+                Val(Int8(1)), Val(Int8(0)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        else
+            _launch_edmf_twostream!(
+                Val(Int8(2)), Val(Int8(0)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        end
+    else
+        if sgsflux_upw_mode == Int8(0)
+            _launch_edmf_twostream!(
+                Val(Int8(0)), Val(Int8(1)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        elseif sgsflux_upw_mode == Int8(1)
+            _launch_edmf_twostream!(
+                Val(Int8(1)), Val(Int8(1)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        else
+            _launch_edmf_twostream!(
+                Val(Int8(2)), Val(Int8(1)), vq, vne, vft, vb, vte,
+                Y, geom, pre, edmf, scratch, opts, cmp,
+            )
+        end
+    end
     return nothing
 end
 
