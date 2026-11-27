@@ -152,7 +152,7 @@ function _subtract_stage_tendency!(
 end
 
 """
-    _project_and_integrate_mass_flux_column!(ᶠF_col, ᶜD_raw_col, ᶜρ_new_col, ᶜlg_col, ᶠlg_col)
+    _project_and_integrate_mass_flux_column_j!(ᶠF_col, ᶜD_raw_col, ᶜρ_new_col, ᶜJ_col, ᶠJ_col)
 
 Apply the mass-weighted column-sum projection to `ᶜD_raw_col` against
 `ᶜρ_new_col` and integrate `∂_z F̃ = -D` upward from `F̃_{1/2} = 0` with
@@ -160,25 +160,25 @@ Apply the mass-weighted column-sum projection to `ᶜD_raw_col` against
 registers so `Float32` columns retain full relative precision into low-density
 upper levels.
 """
-@inline function _project_and_integrate_mass_flux_column!(
+@inline function _project_and_integrate_mass_flux_column_j!(
     ᶠF_col,
     ᶜD_raw_col,
     ᶜρ_new_col,
-    ᶜlg_col,
-    ᶠlg_col,
+    ᶜJ_col,
+    ᶠJ_col,
 )
     FT = Spaces.undertype(axes(ᶜρ_new_col))
     F_fv = Fields.field_values(ᶠF_col)
     D_raw_fv = Fields.field_values(ᶜD_raw_col)
     ρ_new_fv = Fields.field_values(ᶜρ_new_col)
-    ᶜlg_fv = Fields.field_values(ᶜlg_col)
-    ᶠlg_fv = Fields.field_values(ᶠlg_col)
+    ᶜJ_fv = Fields.field_values(ᶜJ_col)
+    ᶠJ_fv = Fields.field_values(ᶠJ_col)
     nz = Spaces.nlevels(axes(ᶜρ_new_col))
 
     sum_JD = 0.0
     sum_Jρ = 0.0
     @inbounds for k in 1:nz
-        J_k = Float64(ᶜlg_fv[k].J)
+        J_k = Float64(ᶜJ_fv[k])
         sum_JD = muladd(J_k, Float64(D_raw_fv[k]), sum_JD)
         sum_Jρ = muladd(J_k, Float64(ρ_new_fv[k]), sum_Jρ)
     end
@@ -187,14 +187,30 @@ upper levels.
     @inbounds F_fv[1] = CT3(zero(FT))
     JF_curr = 0.0
     @inbounds for k in 1:(nz - 1)
-        J_k = Float64(ᶜlg_fv[k].J)
+        J_k = Float64(ᶜJ_fv[k])
         D_k = muladd(-α_proj, Float64(ρ_new_fv[k]), Float64(D_raw_fv[k]))
         JF_curr -= J_k * D_k
-        J_f = Float64(ᶠlg_fv[k + 1].J)
+        J_f = Float64(ᶠJ_fv[k + 1])
         F_fv[k + 1] = CT3(FT(JF_curr / J_f))
     end
     @inbounds F_fv[nz + 1] = CT3(zero(FT))
     return α_proj
+end
+
+@inline function _project_and_integrate_mass_flux_column!(
+    ᶠF_col,
+    ᶜD_raw_col,
+    ᶜρ_new_col,
+    ᶜlg_col,
+    ᶠlg_col,
+)
+    return _project_and_integrate_mass_flux_column_j!(
+        ᶠF_col,
+        ᶜD_raw_col,
+        ᶜρ_new_col,
+        ᶜlg_col.J,
+        ᶠlg_col.J,
+    )
 end
 
 struct _StageEnergyFluxColumnAccum{FT} <: ColumnSweep
@@ -206,21 +222,21 @@ end
     ᶜD_stage_col,
     ᶜρ_new_col,
     ᶠê_col,
-    ᶜlg_col,
-    ᶠlg_col,
+    ᶜJ_col,
+    ᶠJ_col,
 ) where {FT}
     F_χe_fv = Fields.field_values(ᶠF_χe_col)
     D_fv = Fields.field_values(ᶜD_stage_col)
     ρ_new_fv = Fields.field_values(ᶜρ_new_col)
     ê_fv = Fields.field_values(ᶠê_col)
-    ᶜlg_fv = Fields.field_values(ᶜlg_col)
-    ᶠlg_fv = Fields.field_values(ᶠlg_col)
+    ᶜJ_fv = Fields.field_values(ᶜJ_col)
+    ᶠJ_fv = Fields.field_values(ᶠJ_col)
     nz = Spaces.nlevels(axes(ᶜρ_new_col))
 
     sum_JD = 0.0
     sum_Jρ = 0.0
     @inbounds for k in 1:nz
-        J_k = Float64(ᶜlg_fv[k].J)
+        J_k = Float64(ᶜJ_fv[k])
         sum_JD = muladd(J_k, Float64(D_fv[k]), sum_JD)
         sum_Jρ = muladd(J_k, Float64(ρ_new_fv[k]), sum_Jρ)
     end
@@ -229,17 +245,16 @@ end
     JF_curr = 0.0
     w_i = op.w_i
     @inbounds for k in 1:(nz - 1)
-        J_k = Float64(ᶜlg_fv[k].J)
+        J_k = Float64(ᶜJ_fv[k])
         D_k = muladd(-α_i, Float64(ρ_new_fv[k]), Float64(D_fv[k]))
         JF_curr -= J_k * D_k
         f = k + 1
-        F_i_u3 = FT(JF_curr / Float64(ᶠlg_fv[f].J))
+        F_i_u3 = FT(JF_curr / Float64(ᶠJ_fv[f]))
         F_χe_fv[f] = CT3(muladd(w_i * F_i_u3, ê_fv[f], F_χe_fv[f].u³))
     end
-    return nothing
 end
 
-struct _StageEnergyFluxAccumulator{FX, YV, PV, SB, FB, AC, AI, LG, FLG, FT}
+struct _StageEnergyFluxAccumulator{FX, YV, PV, SB, FB, AC, AI, CJ, FJ, FT}
     ᶠF_χe_accum::FX
     Y::YV
     p::PV
@@ -247,8 +262,8 @@ struct _StageEnergyFluxAccumulator{FX, YV, PV, SB, FB, AC, AI, LG, FLG, FT}
     ᶠê_fallback::FB
     ᶜD_dss::AC
     a_imp::AI
-    ᶜlg::LG
-    ᶠlg::FLG
+    ᶜJ::CJ
+    ᶠJ::FJ
     mask::UInt16
     z_ft::FT
 end
@@ -269,8 +284,8 @@ end
             acc.ᶜD_dss,
             acc.Y.c.ρ,
             ᶠê_i,
-            acc.ᶜlg,
-            acc.ᶠlg;
+            acc.ᶜJ,
+            acc.ᶠJ;
             shmem = Val(:none),
         )
     else
@@ -280,12 +295,11 @@ end
             T_imp_i.c.ρ,
             acc.Y.c.ρ,
             ᶠê_i,
-            acc.ᶜlg,
-            acc.ᶠlg;
+            acc.ᶜJ,
+            acc.ᶠJ;
             shmem = Val(:none),
         )
     end
-    return nothing
 end
 
 # Return `true` when a stage with `b_imp[i] != 0` has no entry energy recorded
@@ -322,8 +336,8 @@ function _reconstruct_pre_transport_energy!(
     if _needs_stage_entry_fallback(mask, length(stage_bufs), integrator_cache)
         _write_stage_entry_χ_e!(ᶠê_fallback, Y, p.core.ᶜΦ)
     end
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     acc = _StageEnergyFluxAccumulator(
         ᶠF_χe_accum,
         Y,
@@ -332,8 +346,8 @@ function _reconstruct_pre_transport_energy!(
         ᶠê_fallback,
         ᶜD_dss,
         integrator_cache.tableau.a_imp,
-        ᶜlg,
-        ᶠlg,
+        ᶜJ,
+        ᶠJ,
         mask,
         z,
     )
@@ -361,20 +375,20 @@ co-transported thermodynamic scalars.
 end
 
 """
-    _upwind3_antidiff_delta(JF_f, f, nz, χ_fv, ᶜlg_fv)
+    _upwind3_antidiff_delta_j(JF_f, f, nz, χ_fv, ᶜJ_fv)
 
 Metric-aware third-order finite-volume upwind antidiffusive face increment
 `χ_HO - χ_up` at interior face `f ∈ 2:nz` (between cells `f - 1` and `f`).
-Reconstructs the quadratic primitive over cell metric volumes `V_m = ᶜlg[m].J`,
+Reconstructs the quadratic primitive over cell metric volumes `V_m = ᶜJ_fv[m]`,
 reducing to `(-2 χ_u + 10 χ_c + 4 χ_d) / 12 - χ_c` on uniform grids and to
 two-cell central interpolation at the two faces adjacent to the boundaries.
 """
-@inline function _upwind3_antidiff_delta(
+@inline function _upwind3_antidiff_delta_j(
     JF_f,
     f::Int,
     nz::Int,
     χ_fv,
-    ᶜlg_fv,
+    ᶜJ_fv,
 )
     FT = typeof(JF_f)
     if JF_f >= zero(FT)
@@ -382,14 +396,14 @@ two-cell central interpolation at the two faces adjacent to the boundaries.
         d = f
         χ_c = @inbounds χ_fv[c]
         χ_d = @inbounds χ_fv[d]
-        V_c = @inbounds ᶜlg_fv[c].J
-        V_d = @inbounds ᶜlg_fv[d].J
+        V_c = @inbounds ᶜJ_fv[c]
+        V_d = @inbounds ᶜJ_fv[d]
         if f == 2
             return V_c * (χ_d - χ_c) / (V_c + V_d)
         else
             u = f - 2
             χ_u = @inbounds χ_fv[u]
-            V_u = @inbounds ᶜlg_fv[u].J
+            V_u = @inbounds ᶜJ_fv[u]
             V_uc = V_u + V_c
             return (V_c / (V_uc + V_d)) * (
                 (V_uc / (V_c + V_d)) * (χ_d - χ_c) +
@@ -401,14 +415,14 @@ two-cell central interpolation at the two faces adjacent to the boundaries.
         d = f - 1
         χ_c = @inbounds χ_fv[c]
         χ_d = @inbounds χ_fv[d]
-        V_c = @inbounds ᶜlg_fv[c].J
-        V_d = @inbounds ᶜlg_fv[d].J
+        V_c = @inbounds ᶜJ_fv[c]
+        V_d = @inbounds ᶜJ_fv[d]
         if f == nz
             return V_c * (χ_d - χ_c) / (V_c + V_d)
         else
             u = f + 1
             χ_u = @inbounds χ_fv[u]
-            V_u = @inbounds ᶜlg_fv[u].J
+            V_u = @inbounds ᶜJ_fv[u]
             V_uc = V_u + V_c
             return (V_c / (V_uc + V_d)) * (
                 (V_uc / (V_c + V_d)) * (χ_d - χ_c) +
@@ -418,7 +432,7 @@ two-cell central interpolation at the two faces adjacent to the boundaries.
     end
 end
 
-# Integer upwinding mode tags passed into GPU column kernels (`isbits`).
+# Integer upwinding mode tags (`isbits`).
 const _UPW_NONE = Int8(0)
 const _UPW_FIRST_ORDER = Int8(1)
 const _UPW_VANLEER = Int8(2)
@@ -444,308 +458,364 @@ const _UPW_THIRD_ORDER = Int8(3)
     end
 end
 
-@inline function _vt_face_courant(
-    ρ_new_fv,
-    F_fv,
-    ᶜlg_fv,
-    ᶠlg_fv,
-    Δt,
-    f::Int,
-    nz::Int,
-)
-    FT = typeof(Δt)
-    (f <= 1 || f > nz) && return zero(FT)
-    @inbounds begin
-        JF_abs = abs(ᶠlg_fv[f].J * F_fv[f].u³)
-        M_lo = ᶜlg_fv[f - 1].J * ρ_new_fv[f - 1]
-        M_hi = ᶜlg_fv[f].J * ρ_new_fv[f]
-        M_min = max(min(M_lo, M_hi), floatmin(FT))
-        return (Δt * JF_abs) / M_min
-    end
-end
-
-# Factor the implicit donor-cell M-matrix `M = diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)`
-# per column: row `k` has `dl_k = -s_k max(JF_k, 0)`, `du_k = -s_k max(-JF_{k+1}, 0)`,
-# and `d_k = ρ^{n+1}_k + s_k (max(JF_{k+1}, 0) + max(-JF_k, 0))` (`s_k = Δt / J_k`).
-# Each `J_k`-weighted column sum equals `J_k ρ^{n+1}_k > 0`, making `M` a strict
-# nonsingular M-matrix whose Thomas upper pivots `u_curr` are strictly positive.
-@inline function _factor_inv_u_column!(
-    inv_u_fv,
+# Project `ᶜD_raw_col` onto `ᶠF̃_col`, cache face invariants `(JF, c_f, Δt * JF * w_C)`
+# and pre-transport density `ρ⁰`, and factor the implicit donor-cell M-matrix
+# `M = diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)` into `inv_u_fv`. Each `J_k`-weighted
+# column sum equals `J_k ρ^{n+1}_k > 0`, making `M` a strict nonsingular M-matrix
+# with positive Thomas upper pivots `u_curr`.
+@inline function _factor_column_invariants!(
     ᶠF̃_col,
+    inv_u_fv,
+    ρ0_fv,
+    ᶜinvJ_fv,
+    JF_fv,
+    c_fv,
+    dt_JF_wC_fv,
     ᶜD_raw_col,
     ᶜρ_new_col,
-    ᶜlg_col,
-    ᶠlg_col,
+    ᶜJ_col,
+    ᶠJ_col,
     Δt,
 )
     FT = typeof(Δt)
-    _project_and_integrate_mass_flux_column!(
+    _project_and_integrate_mass_flux_column_j!(
         ᶠF̃_col,
         ᶜD_raw_col,
         ᶜρ_new_col,
-        ᶜlg_col,
-        ᶠlg_col,
+        ᶜJ_col,
+        ᶠJ_col,
     )
     F_fv = Fields.field_values(ᶠF̃_col)
     ρ_new_fv = Fields.field_values(ᶜρ_new_col)
-    ᶜlg_fv = Fields.field_values(ᶜlg_col)
-    ᶠlg_fv = Fields.field_values(ᶠlg_col)
+    ᶜJ_fv = Fields.field_values(ᶜJ_col)
+    ᶠJ_fv = Fields.field_values(ᶠJ_col)
     nz = Spaces.nlevels(axes(ᶜρ_new_col))
     z = zero(FT)
-    u_prev = one(FT)
-    du_prev = z
-    @inbounds for k in 1:nz
-        ρ_new_k = ρ_new_fv[k]
-        s_k = Δt * ᶜlg_fv[k].invJ
-        JF_bot = ᶠlg_fv[k].J * F_fv[k].u³
-        JF_top = ᶠlg_fv[k + 1].J * F_fv[k + 1].u³
+    o = one(FT)
 
-        dl_k = -s_k * max(JF_bot, z)
-        du_k = -s_k * max(-JF_top, z)
-        d_k = ρ_new_k + s_k * (max(JF_top, z) + max(-JF_bot, z))
-        u_curr = k == 1 ? d_k : muladd(-(dl_k / u_prev), du_prev, d_k)
-        inv_u_fv[k] = inv(max(u_curr, floatmin(FT)))
-        u_prev = max(u_curr, floatmin(FT))
-        du_prev = du_k
+    @inbounds begin
+        JF_fv[1] = ᶠJ_fv[1] * F_fv[1].u³
+        c_fv[1] = z
+        dt_JF_wC_fv[1] = z
+        M_lo = ᶜJ_fv[1] * ρ_new_fv[1]
+        for f in 2:nz
+            JF_f = ᶠJ_fv[f] * F_fv[f].u³
+            JF_fv[f] = JF_f
+            M_hi = ᶜJ_fv[f] * ρ_new_fv[f]
+            M_min = max(min(M_lo, M_hi), floatmin(FT))
+            c_f = (Δt * abs(JF_f)) / M_min
+            c_fv[f] = c_f
+            w_C_f = ifelse(c_f > o, inv(c_f), o)
+            dt_JF_wC_fv[f] = Δt * JF_f * w_C_f
+            M_lo = M_hi
+        end
+        JF_fv[nz + 1] = ᶠJ_fv[nz + 1] * F_fv[nz + 1].u³
+        c_fv[nz + 1] = z
+        dt_JF_wC_fv[nz + 1] = z
+
+        u_prev = o
+        du_prev = z
+        JF_bot = JF_fv[1]
+        for k in 1:nz
+            ρ_new_k = ρ_new_fv[k]
+            invJ_k = inv(ᶜJ_fv[k])
+            ᶜinvJ_fv[k] = invJ_k
+            s_k = Δt * invJ_k
+            JF_top = JF_fv[k + 1]
+            ρ0_fv[k] = ρ_new_k + s_k * (JF_top - JF_bot)
+
+            dl_k = -s_k * max(JF_bot, z)
+            du_k = -s_k * max(-JF_top, z)
+            d_k = ρ_new_k + s_k * (max(JF_top, z) + max(-JF_bot, z))
+            u_curr = k == 1 ? d_k : muladd(-(dl_k / u_prev), du_prev, d_k)
+            u_safe = max(u_curr, floatmin(FT))
+            inv_u_fv[k] = inv(u_safe)
+            u_prev = u_safe
+            du_prev = du_k
+            JF_bot = JF_top
+        end
     end
     return nothing
 end
 
-@inline function _thomas_solve_m!(
+@inline function _thomas_solve_m_cached!(
     χL_fv,
     ρχ0_fv,
     inv_u_fv,
-    F_fv,
-    ᶜlg_fv,
-    ᶠlg_fv,
+    JF_fv,
+    ᶜinvJ_fv,
     Δt,
     nz::Int,
 )
     FT = typeof(Δt)
     z = zero(FT)
     @inbounds begin
-        χL_fv[1] = ρχ0_fv[1]
+        χL_prev = ρχ0_fv[1]
+        χL_fv[1] = χL_prev
         for k in 2:nz
-            s_k = Δt * ᶜlg_fv[k].invJ
-            dl_k = -s_k * max(ᶠlg_fv[k].J * F_fv[k].u³, z)
+            s_k = Δt * ᶜinvJ_fv[k]
+            dl_k = -s_k * max(JF_fv[k], z)
             l_k = dl_k * inv_u_fv[k - 1]
-            χL_fv[k] = muladd(-l_k, χL_fv[k - 1], ρχ0_fv[k])
+            χL_prev = muladd(-l_k, χL_prev, ρχ0_fv[k])
+            χL_fv[k] = χL_prev
         end
-        χL_fv[nz] = χL_fv[nz] * inv_u_fv[nz]
+        χL_next = χL_fv[nz] * inv_u_fv[nz]
+        χL_fv[nz] = χL_next
         for k in (nz - 1):-1:1
-            s_k = Δt * ᶜlg_fv[k].invJ
-            du_k = -s_k * max(-(ᶠlg_fv[k + 1].J * F_fv[k + 1].u³), z)
-            χL_fv[k] = muladd(-du_k, χL_fv[k + 1], χL_fv[k]) * inv_u_fv[k]
+            s_k = Δt * ᶜinvJ_fv[k]
+            du_k = -s_k * max(-JF_fv[k + 1], z)
+            χL_next = muladd(-du_k, χL_next, χL_fv[k]) * inv_u_fv[k]
+            χL_fv[k] = χL_next
         end
     end
     return nothing
 end
 
-@inline function _compute_raw_antidiff_transfers!(
+@inline function _compute_raw_antidiff_cached!(
     Φ_fv,
     χL_fv,
-    F_fv,
-    ρ_new_fv,
-    ᶜlg_fv,
-    ᶠlg_fv,
-    Δt,
+    JF_fv,
+    dt_JF_wC_fv,
+    ᶜJ_fv,
     nz::Int,
 )
-    FT = typeof(Δt)
+    FT = eltype(Φ_fv)
     z = zero(FT)
-    o = one(FT)
     @inbounds Φ_fv[1] = z
     @inbounds for f in 2:nz
-        JF_f = ᶠlg_fv[f].J * F_fv[f].u³
-        c_f = _vt_face_courant(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, f, nz)
-        w_C_f = ifelse(c_f > o, inv(c_f), o)
-        Δχ_f = _upwind3_antidiff_delta(JF_f, f, nz, χL_fv, ᶜlg_fv)
-        Φ_fv[f] = Δt * JF_f * w_C_f * Δχ_f
+        JF_f = JF_fv[f]
+        Δχ_f = _upwind3_antidiff_delta_j(JF_f, f, nz, χL_fv, ᶜJ_fv)
+        Φ_fv[f] = dt_JF_wC_fv[f] * Δχ_f
     end
     @inbounds Φ_fv[nz + 1] = z
     return nothing
 end
 
 """
-    _narrow_face_fct_limiter!(α_fv, Φ_fv, χL_fv, ρχ0_fv, F_fv, ρ_new_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz, is_specific_χ0)
+    _narrow_face_fct_limiter_cached!(α_fv, Φ_fv, χL_fv, ρχ0_fv, ρ0_fv, c_fv, ρ_new_fv, ᶜJ_fv, nz, is_specific_χ0)
 
 Intersect `α_fv[2:nz]` in place with the Zalesak FCT face limiters of a scalar
 whose low-order solution is `χL_fv` and whose pre-transport profile is either
-extensive (`ρχ0_fv / ρ0_k` when `is_specific_χ0 == false`) or already specific
+extensive (`ρχ0_fv / ρ0_fv` when `is_specific_χ0 == false`) or already specific
 (`ρχ0_fv` when `is_specific_χ0 == true`, as for `q_vap⁰`).
 """
-@inline function _narrow_face_fct_limiter!(
+@inline function _narrow_face_fct_limiter_cached!(
     α_fv,
     Φ_fv,
     χL_fv,
     ρχ0_fv,
-    F_fv,
+    ρ0_fv,
+    c_fv,
     ρ_new_fv,
-    ᶜlg_fv,
-    ᶠlg_fv,
-    Δt::FT,
+    ᶜJ_fv,
     nz::Int,
     ::Val{is_specific_χ0},
-) where {FT <: AbstractFloat, is_specific_χ0}
+) where {is_specific_χ0}
+    FT = eltype(α_fv)
     z = zero(FT)
     o = one(FT)
-    @inbounds for k in 1:nz
-        km = max(1, k - 1)
-        kp = min(nz, k + 1)
+    @inbounds begin
+        c_bot = c_fv[1]
+        Φ_bot = Φ_fv[1]
+        χL_km = χL_fv[1]
+        χL_k = χL_km
+        prev_sub1 = false
+        χ0_k = z
+        χ0_kp = z
+        for k in 1:nz
+            χL_kp = k < nz ? χL_fv[k + 1] : χL_k
+            χ_max = max(χL_km, χL_k, χL_kp)
+            χ_min = min(χL_km, χL_k, χL_kp)
 
-        χL_km = χL_fv[km]
-        χL_k = χL_fv[k]
-        χL_kp = χL_fv[kp]
-        χ_max = max(χL_km, χL_k, χL_kp)
-        χ_min = min(χL_km, χL_k, χL_kp)
-
-        c_bot = _vt_face_courant(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, k, nz)
-        c_top =
-            _vt_face_courant(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, k + 1, nz)
-        if max(c_bot, c_top) <= o
-            if is_specific_χ0
-                χ0_km = ρχ0_fv[km]
-                χ0_k = ρχ0_fv[k]
-                χ0_kp = ρχ0_fv[kp]
+            c_top = c_fv[k + 1]
+            if max(c_bot, c_top) <= o
+                if is_specific_χ0
+                    if prev_sub1
+                        χ0_km = χ0_k
+                        χ0_k = χ0_kp
+                        χ0_kp = k < nz ? ρχ0_fv[k + 1] : χ0_k
+                    else
+                        km = max(1, k - 1)
+                        χ0_km = ρχ0_fv[km]
+                        χ0_k = k == km ? χ0_km : ρχ0_fv[k]
+                        χ0_kp = k < nz ? ρχ0_fv[k + 1] : χ0_k
+                        prev_sub1 = true
+                    end
+                else
+                    if prev_sub1
+                        χ0_km = χ0_k
+                        χ0_k = χ0_kp
+                        χ0_kp = k < nz ? (ρχ0_fv[k + 1] / ρ0_fv[k + 1]) : χ0_k
+                    else
+                        km = max(1, k - 1)
+                        χ0_km = ρχ0_fv[km] / ρ0_fv[km]
+                        χ0_k = k == km ? χ0_km : (ρχ0_fv[k] / ρ0_fv[k])
+                        χ0_kp = k < nz ? (ρχ0_fv[k + 1] / ρ0_fv[k + 1]) : χ0_k
+                        prev_sub1 = true
+                    end
+                end
+                χ_max = max(χ_max, χ0_km, χ0_k, χ0_kp)
+                χ_min = min(χ_min, χ0_km, χ0_k, χ0_kp)
             else
-                χ0_km =
-                    ρχ0_fv[km] /
-                    _vt_rho0_k(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, km)
-                χ0_k =
-                    ρχ0_fv[k] /
-                    _vt_rho0_k(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, k)
-                χ0_kp =
-                    ρχ0_fv[kp] /
-                    _vt_rho0_k(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, kp)
+                prev_sub1 = false
             end
-            χ_max = max(χ_max, χ0_km, χ0_k, χ0_kp)
-            χ_min = min(χ_min, χ0_km, χ0_k, χ0_kp)
-        end
 
-        M_k = ᶜlg_fv[k].J * ρ_new_fv[k]
-        Q_plus = M_k * max(z, χ_max - χL_k)
-        Q_minus = M_k * max(z, χL_k - χ_min)
+            M_k = ᶜJ_fv[k] * ρ_new_fv[k]
+            Q_plus = M_k * max(z, χ_max - χL_k)
+            Q_minus = M_k * max(z, χL_k - χ_min)
 
-        Φ_bot = Φ_fv[k]
-        Φ_top = Φ_fv[k + 1]
-        P_plus = max(z, Φ_bot) - min(z, Φ_top)
-        P_minus = max(z, Φ_top) - min(z, Φ_bot)
+            Φ_top = Φ_fv[k + 1]
+            P_plus = max(z, Φ_bot) - min(z, Φ_top)
+            P_minus = max(z, Φ_top) - min(z, Φ_bot)
 
-        R_plus = _vt_fct_ratio(P_plus, Q_plus)
-        R_minus = _vt_fct_ratio(P_minus, Q_minus)
+            R_plus = _vt_fct_ratio(P_plus, Q_plus)
+            R_minus = _vt_fct_ratio(P_minus, Q_minus)
 
-        if k >= 2
-            R_for_bot = ifelse(Φ_bot >= z, R_plus, R_minus)
-            α_fv[k] = min(α_fv[k], R_for_bot)
-        end
-        if k <= nz - 1
-            R_for_top = ifelse(Φ_top >= z, R_minus, R_plus)
-            α_fv[k + 1] = min(α_fv[k + 1], R_for_top)
+            if k >= 2
+                R_for_bot = ifelse(Φ_bot >= z, R_plus, R_minus)
+                α_fv[k] = min(α_fv[k], R_for_bot)
+            end
+            if k <= nz - 1
+                R_for_top = ifelse(Φ_top >= z, R_minus, R_plus)
+                α_fv[k + 1] = min(α_fv[k + 1], R_for_top)
+            end
+
+            χL_km = χL_k
+            χL_k = χL_kp
+            c_bot = c_top
+            Φ_bot = Φ_top
         end
     end
     return nothing
 end
 
-@inline function _apply_limited_antidiff_update!(
+@inline function _apply_limited_antidiff_update_cached!(
     ρχ_fv,
     χL_fv,
     Φ_fv,
     α_fv,
     ρ_new_fv,
-    ᶜlg_fv,
+    ᶜinvJ_fv,
     nz::Int,
 )
-    @inbounds for k in 1:nz
-        invJ_k = ᶜlg_fv[k].invJ
-        flux_diff = muladd(α_fv[k], Φ_fv[k], -α_fv[k + 1] * Φ_fv[k + 1])
-        ρχ_fv[k] = muladd(ρ_new_fv[k], χL_fv[k], flux_diff * invJ_k)
+    @inbounds begin
+        α_bot = α_fv[1]
+        Φ_bot = Φ_fv[1]
+        for k in 1:nz
+            α_top = α_fv[k + 1]
+            Φ_top = Φ_fv[k + 1]
+            flux_diff = muladd(α_bot, Φ_bot, -α_top * Φ_top)
+            ρχ_fv[k] = muladd(ρ_new_fv[k], χL_fv[k], flux_diff * ᶜinvJ_fv[k])
+            α_bot = α_top
+            Φ_bot = Φ_top
+        end
     end
     return nothing
 end
 
-@inline function _transport_single_scalar_column!(
+@inline function _apply_unlimited_antidiff_update_cached!(
+    ρχ_fv,
+    χL_fv,
+    Φ_fv,
+    ρ_new_fv,
+    ᶜinvJ_fv,
+    nz::Int,
+)
+    @inbounds begin
+        Φ_bot = Φ_fv[1]
+        for k in 1:nz
+            Φ_top = Φ_fv[k + 1]
+            flux_diff = Φ_bot - Φ_top
+            ρχ_fv[k] = muladd(ρ_new_fv[k], χL_fv[k], flux_diff * ᶜinvJ_fv[k])
+            Φ_bot = Φ_top
+        end
+    end
+    return nothing
+end
+
+@inline function _transport_single_scalar_cached!(
     ρχ_fv,
     χL_fv,
     Φ_fv,
     α_fv,
-    F_fv,
-    ρ_new_fv,
     inv_u_fv,
-    ᶜlg_fv,
-    ᶠlg_fv,
+    JF_fv,
+    dt_JF_wC_fv,
+    ρ0_fv,
+    c_fv,
+    ρ_new_fv,
+    ᶜJ_fv,
+    ᶜinvJ_fv,
     Δt,
     nz::Int,
-    upw_code::Int8,
-)
+    ::Val{C},
+) where {C}
     FT = typeof(Δt)
-    if upw_code == _UPW_NONE
+    if C == _UPW_NONE
         # Central reconstruction `-Δt ᶜadvdivᵥ(ᶠF̃ * ᶠinterp(χ⁰))` on `(ρχ)⁰`,
         # preserving `χ ≡ 1` to round-off when `ρ⁰ = ρ^{n+1} + Δt ᶜadvdivᵥ(ᶠF̃)`.
         z = zero(FT)
-        @inbounds Φ_fv[1] = z
-        @inbounds for f in 2:nz
-            JF_f = ᶠlg_fv[f].J * F_fv[f].u³
-            χ0_lo =
-                ρχ_fv[f - 1] /
-                _vt_rho0_k(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, f - 1)
-            χ0_hi =
-                ρχ_fv[f] /
-                _vt_rho0_k(ρ_new_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, f)
-            Φ_fv[f] = Δt * JF_f * FT(0.5) * (χ0_lo + χ0_hi)
-        end
-        @inbounds Φ_fv[nz + 1] = z
-        @inbounds for k in 1:nz
-            invJ_k = ᶜlg_fv[k].invJ
-            ρχ_fv[k] = ρχ_fv[k] - (Φ_fv[k + 1] - Φ_fv[k]) * invJ_k
+        @inbounds if nz >= 1
+            Φ_bot = z
+            χ0_lo = ρχ_fv[1] / ρ0_fv[1]
+            for f in 2:nz
+                χ0_hi = ρχ_fv[f] / ρ0_fv[f]
+                Φ_top = Δt * JF_fv[f] * FT(0.5) * (χ0_lo + χ0_hi)
+                ρχ_fv[f - 1] = ρχ_fv[f - 1] - (Φ_top - Φ_bot) * ᶜinvJ_fv[f - 1]
+                Φ_bot = Φ_top
+                χ0_lo = χ0_hi
+            end
+            ρχ_fv[nz] = ρχ_fv[nz] - (z - Φ_bot) * ᶜinvJ_fv[nz]
         end
         return nothing
     end
 
-    _thomas_solve_m!(χL_fv, ρχ_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
+    _thomas_solve_m_cached!(χL_fv, ρχ_fv, inv_u_fv, JF_fv, ᶜinvJ_fv, Δt, nz)
 
-    if upw_code == _UPW_FIRST_ORDER || nz < 2
+    if C == _UPW_FIRST_ORDER || nz < 2
         @inbounds for k in 1:nz
             ρχ_fv[k] = ρ_new_fv[k] * χL_fv[k]
         end
         return nothing
     end
 
-    _compute_raw_antidiff_transfers!(
-        Φ_fv,
-        χL_fv,
-        F_fv,
-        ρ_new_fv,
-        ᶜlg_fv,
-        ᶠlg_fv,
-        Δt,
-        nz,
-    )
+    _compute_raw_antidiff_cached!(Φ_fv, χL_fv, JF_fv, dt_JF_wC_fv, ᶜJ_fv, nz)
+
+    if C == _UPW_THIRD_ORDER
+        _apply_unlimited_antidiff_update_cached!(
+            ρχ_fv,
+            χL_fv,
+            Φ_fv,
+            ρ_new_fv,
+            ᶜinvJ_fv,
+            nz,
+        )
+        return nothing
+    end
+
     o = one(FT)
     @inbounds for f in 1:(nz + 1)
         α_fv[f] = o
     end
-    if upw_code == _UPW_VANLEER
-        _narrow_face_fct_limiter!(
-            α_fv,
-            Φ_fv,
-            χL_fv,
-            ρχ_fv,
-            F_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            ᶠlg_fv,
-            Δt,
-            nz,
-            Val(false),
-        )
-    end
-    _apply_limited_antidiff_update!(
+    _narrow_face_fct_limiter_cached!(
+        α_fv,
+        Φ_fv,
+        χL_fv,
+        ρχ_fv,
+        ρ0_fv,
+        c_fv,
+        ρ_new_fv,
+        ᶜJ_fv,
+        nz,
+        Val(false),
+    )
+    _apply_limited_antidiff_update_cached!(
         ρχ_fv,
         χL_fv,
         Φ_fv,
         α_fv,
         ρ_new_fv,
-        ᶜlg_fv,
+        ᶜinvJ_fv,
         nz,
     )
     return nothing
@@ -763,9 +833,9 @@ end
     _unpack_vt_yc(Yc)
 
 Unpack composite center state `Y.c` into leaf scalar `Field`s and homogeneous
-tuples of leaf `Field`s (`()` when a moisture or condensate group is absent, as
-under `DryModel`) so `DataLayouts.foreach_column` kernel arguments stay flat and
-within GPU tuple-specialization limits on warped grids.
+tuples of leaf `Field`s (`()` when a moisture, condensate, or TKE group is
+absent, as under `DryModel`) so `DataLayouts.foreach_column` kernel arguments
+stay flat and within GPU tuple-specialization limits on warped grids.
 """
 @generated function _unpack_vt_yc(Yc::Fields.Field)
     YcEl = eltype(Yc)
@@ -793,371 +863,758 @@ within GPU tuple-specialization limits on warped grids.
             cond = ($(cond_exprs...),),
             indiv = ($(indiv_exprs...),),
             passive = ($(pass_exprs...),),
-            ρtke = $(has_tke ? :(Yc.ρtke) : :nothing),
+            ρtke = $(has_tke ? :(Yc.ρtke) : :(())),
         )
     end
 end
 
-"""
-    _vt_gm_thermo_column!(...)
+@inline _uvwxuvw_cond_slots(_m, ::Val{0}) = ()
+@inline _uvwxuvw_cond_slots(m, ::Val{1}) = (m.components.data.:3,)
+@inline _uvwxuvw_cond_slots(m, ::Val{2}) =
+    (m.components.data.:3, m.components.data.:4)
+@inline _uvwxuvw_cond_slots(m, ::Val{3}) =
+    (m.components.data.:3, m.components.data.:4, m.components.data.:5)
+@inline _uvwxuvw_cond_slots(m, ::Val{4}) = (
+    m.components.data.:3,
+    m.components.data.:4,
+    m.components.data.:5,
+    m.components.data.:6,
+)
 
-Project `ᶜD_raw` per column, integrate `ᶠF̃`, factor the grid-mean implicit
-donor-cell M-matrix into `c_work_cols[1]` (`inv_u`), and advance grid-mean
-`(ρχ_e, ρq_tot, cond)` in a two-pass Zalesak FCT sweep (narrowing a single
-shared face limiter `α_fv` across `{χ_e, q_tot, q_c, q_vap}` in pass 1 before
-applying the limited antidiffusive fluxes identically in pass 2).
+@inline _vt_first_order_cond!(
+    ::Tuple{},
+    _χL_fv,
+    _inv_u_fv,
+    _JF_fv,
+    _ᶜinvJ_fv,
+    _ρ_new_fv,
+    _Δt,
+    _nz::Int,
+) = nothing
+
+@inline function _vt_first_order_cond!(
+    cond_cols::Tuple,
+    χL_fv,
+    inv_u_fv,
+    JF_fv,
+    ᶜinvJ_fv,
+    ρ_new_fv,
+    Δt,
+    nz::Int,
+)
+    ρqc_fv = Fields.field_values(first(cond_cols))
+    _thomas_solve_m_cached!(χL_fv, ρqc_fv, inv_u_fv, JF_fv, ᶜinvJ_fv, Δt, nz)
+    @inbounds for k in 1:nz
+        ρqc_fv[k] = ρ_new_fv[k] * χL_fv[k]
+    end
+    return _vt_first_order_cond!(
+        Base.tail(cond_cols),
+        χL_fv,
+        inv_u_fv,
+        JF_fv,
+        ᶜinvJ_fv,
+        ρ_new_fv,
+        Δt,
+        nz,
+    )
+end
+
+@inline _vt_third_order_cond!(
+    ::Tuple{},
+    _χL_fv,
+    _Φ_fv,
+    _inv_u_fv,
+    _JF_fv,
+    _dt_JF_wC_fv,
+    _ρ_new_fv,
+    _ᶜJ_fv,
+    _ᶜinvJ_fv,
+    _Δt,
+    _nz::Int,
+) = nothing
+
+@inline function _vt_third_order_cond!(
+    cond_cols::Tuple,
+    χL_fv,
+    Φ_fv,
+    inv_u_fv,
+    JF_fv,
+    dt_JF_wC_fv,
+    ρ_new_fv,
+    ᶜJ_fv,
+    ᶜinvJ_fv,
+    Δt,
+    nz::Int,
+)
+    ρqc_fv = Fields.field_values(first(cond_cols))
+    _thomas_solve_m_cached!(χL_fv, ρqc_fv, inv_u_fv, JF_fv, ᶜinvJ_fv, Δt, nz)
+    _compute_raw_antidiff_cached!(Φ_fv, χL_fv, JF_fv, dt_JF_wC_fv, ᶜJ_fv, nz)
+    _apply_unlimited_antidiff_update_cached!(
+        ρqc_fv,
+        χL_fv,
+        Φ_fv,
+        ρ_new_fv,
+        ᶜinvJ_fv,
+        nz,
+    )
+    return _vt_third_order_cond!(
+        Base.tail(cond_cols),
+        χL_fv,
+        Φ_fv,
+        inv_u_fv,
+        JF_fv,
+        dt_JF_wC_fv,
+        ρ_new_fv,
+        ᶜJ_fv,
+        ᶜinvJ_fv,
+        Δt,
+        nz,
+    )
+end
+
+@inline _vt_pass1_cond!(
+    ::Tuple{},
+    ::Tuple{},
+    ::Tuple{},
+    _α_fv,
+    _inv_u_fv,
+    _JF_fv,
+    _dt_JF_wC_fv,
+    _ρ0_fv,
+    _c_fv,
+    _ρ_new_fv,
+    _ᶜJ_fv,
+    _ᶜinvJ_fv,
+    _q_vap_L_fv,
+    _q_vap_0_fv,
+    _Δt,
+    _nz::Int,
+    _has_q_tot::Bool,
+) = nothing
+
+@inline function _vt_pass1_cond!(
+    cond_cols::Tuple,
+    χL_cond_cols::Tuple,
+    Φ_cond_cols::Tuple,
+    α_fv,
+    inv_u_fv,
+    JF_fv,
+    dt_JF_wC_fv,
+    ρ0_fv,
+    c_fv,
+    ρ_new_fv,
+    ᶜJ_fv,
+    ᶜinvJ_fv,
+    q_vap_L_fv,
+    q_vap_0_fv,
+    Δt,
+    nz::Int,
+    has_q_tot::Bool,
+)
+    ρqc_fv = Fields.field_values(first(cond_cols))
+    χL_c_fv = Fields.field_values(first(χL_cond_cols))
+    Φ_c_fv = Fields.field_values(first(Φ_cond_cols))
+
+    _thomas_solve_m_cached!(χL_c_fv, ρqc_fv, inv_u_fv, JF_fv, ᶜinvJ_fv, Δt, nz)
+    _compute_raw_antidiff_cached!(
+        Φ_c_fv,
+        χL_c_fv,
+        JF_fv,
+        dt_JF_wC_fv,
+        ᶜJ_fv,
+        nz,
+    )
+    _narrow_face_fct_limiter_cached!(
+        α_fv,
+        Φ_c_fv,
+        χL_c_fv,
+        ρqc_fv,
+        ρ0_fv,
+        c_fv,
+        ρ_new_fv,
+        ᶜJ_fv,
+        nz,
+        Val(false),
+    )
+    if has_q_tot
+        @inbounds for k in 1:nz
+            q_vap_L_fv[k] -= χL_c_fv[k]
+            q_vap_0_fv[k] -= ρqc_fv[k]
+        end
+    end
+    return _vt_pass1_cond!(
+        Base.tail(cond_cols),
+        Base.tail(χL_cond_cols),
+        Base.tail(Φ_cond_cols),
+        α_fv,
+        inv_u_fv,
+        JF_fv,
+        dt_JF_wC_fv,
+        ρ0_fv,
+        c_fv,
+        ρ_new_fv,
+        ᶜJ_fv,
+        ᶜinvJ_fv,
+        q_vap_L_fv,
+        q_vap_0_fv,
+        Δt,
+        nz,
+        has_q_tot,
+    )
+end
+
+@inline _vt_pass2_cond!(
+    ::Tuple{},
+    ::Tuple{},
+    ::Tuple{},
+    _α_fv,
+    _ρ_new_fv,
+    _ᶜinvJ_fv,
+    _nz::Int,
+) = nothing
+
+@inline function _vt_pass2_cond!(
+    cond_cols::Tuple,
+    χL_cond_cols::Tuple,
+    Φ_cond_cols::Tuple,
+    α_fv,
+    ρ_new_fv,
+    ᶜinvJ_fv,
+    nz::Int,
+)
+    ρqc_fv = Fields.field_values(first(cond_cols))
+    χL_c_fv = Fields.field_values(first(χL_cond_cols))
+    Φ_c_fv = Fields.field_values(first(Φ_cond_cols))
+    _apply_limited_antidiff_update_cached!(
+        ρqc_fv,
+        χL_c_fv,
+        Φ_c_fv,
+        α_fv,
+        ρ_new_fv,
+        ᶜinvJ_fv,
+        nz,
+    )
+    return _vt_pass2_cond!(
+        Base.tail(cond_cols),
+        Base.tail(χL_cond_cols),
+        Base.tail(Φ_cond_cols),
+        α_fv,
+        ρ_new_fv,
+        ᶜinvJ_fv,
+        nz,
+    )
+end
+
+struct _VTGmThermoSweep{FT, C} <: ColumnSweep
+    Δt::FT
+end
+
 """
-@inline function _vt_gm_thermo_column!(
+    (_VTGmThermoSweep{FT, C})(...)
+
+Project `ᶜD_raw` per column, integrate `ᶠF̃`, cache face invariants and `inv_u`,
+advance grid-mean `(ρχ_e, ρq_tot, cond)` with static upwind mode `C` (caching
+pass-1 `(χL, Φ)` in `UVWxUVW` scratch slots under `_UPW_VANLEER` so pass 2
+applies the limited fluxes without re-solving), and advance `ρtke` in the same
+column pass.
+"""
+@inline function (op::_VTGmThermoSweep{FT, C})(
     ρ_col,
     ρe_col,
     ρqt_col,
     cond_cols,
-    ᶜlg_col,
-    ᶠlg_col,
+    ρtke_col,
+    geom_cols,
     ᶜΦ_col,
     ᶜD_raw_col,
-    ᶠF̃_col,
-    f_work_cols,
-    c_work_cols,
-    Δt,
-    eh_code::Int8,
-)
-    FT = typeof(Δt)
-    inv_u_fv = Fields.field_values(c_work_cols[1])
-    χL_fv = Fields.field_values(c_work_cols[2])
-    q_vap_L_fv = Fields.field_values(c_work_cols[3])
-    q_vap_0_fv = Fields.field_values(c_work_cols[4])
-    α_fv = Fields.field_values(f_work_cols[1])
-    Φ_fv = Fields.field_values(f_work_cols[2])
+    inv_cols,
+    work_cols,
+) where {FT, C}
+    Δt = op.Δt
+    ᶜJ_col, ᶠJ_col = geom_cols
+    ᶠF̃_col, ᶜinv_u_col, ᶜρ0_col, ᶜinvJ_col, ᶠJF_col, ᶠc_col, ᶠdt_JF_wC_col =
+        inv_cols
 
-    _factor_inv_u_column!(
-        inv_u_fv,
+    inv_u_fv = Fields.field_values(ᶜinv_u_col)
+    ρ0_fv = Fields.field_values(ᶜρ0_col)
+    ᶜinvJ_fv = Fields.field_values(ᶜinvJ_col)
+    JF_fv = Fields.field_values(ᶠJF_col)
+    c_fv = Fields.field_values(ᶠc_col)
+    dt_JF_wC_fv = Fields.field_values(ᶠdt_JF_wC_col)
+
+    _factor_column_invariants!(
         ᶠF̃_col,
+        inv_u_fv,
+        ρ0_fv,
+        ᶜinvJ_fv,
+        JF_fv,
+        c_fv,
+        dt_JF_wC_fv,
         ᶜD_raw_col,
         ρ_col,
-        ᶜlg_col,
-        ᶠlg_col,
+        ᶜJ_col,
+        ᶠJ_col,
         Δt,
     )
-    eh_code == _UPW_NONE && return nothing
 
     ρ_new_fv = Fields.field_values(ρ_col)
-    ρe_fv = Fields.field_values(ρe_col)
-    Φ_grav_fv = Fields.field_values(ᶜΦ_col)
-    ᶜlg_fv = Fields.field_values(ᶜlg_col)
-    ᶠlg_fv = Fields.field_values(ᶠlg_col)
-    F_fv = Fields.field_values(ᶠF̃_col)
+    ᶜJ_fv = Fields.field_values(ᶜJ_col)
     nz = Spaces.nlevels(axes(ρ_col))
     has_q_tot = !(ρqt_col isa Tuple{})
     has_cond = !isempty(cond_cols)
+    has_tke = !(ρtke_col isa Tuple{})
 
-    if eh_code == _UPW_FIRST_ORDER || nz < 2
-        _thomas_solve_m!(χL_fv, ρe_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
-        @inbounds for k in 1:nz
-            ρe_fv[k] = ρ_new_fv[k] * (χL_fv[k] + Φ_grav_fv[k])
-        end
-        if has_q_tot
-            ρqt_fv = Fields.field_values(ρqt_col)
-            _thomas_solve_m!(
-                χL_fv,
-                ρqt_fv,
+    ᶠα_col,
+    ᶠΦ_tmp_col,
+    ᶜq_vap_L_col,
+    ᶜq_vap_0_col,
+    ᶜχL_e_col,
+    ᶜχL_qt_col,
+    ᶜχL_cond_cols,
+    ᶠΦ_e_col,
+    ᶠΦ_qt_col,
+    ᶠΦ_cond_cols =
+        work_cols
+    α_fv = Fields.field_values(ᶠα_col)
+    Φ_tmp_fv = Fields.field_values(ᶠΦ_tmp_col)
+    χL_e_fv = Fields.field_values(ᶜχL_e_col)
+
+    if C != _UPW_NONE
+        ρe_fv = Fields.field_values(ρe_col)
+        Φ_grav_fv = Fields.field_values(ᶜΦ_col)
+
+        if C == _UPW_FIRST_ORDER || nz < 2
+            _thomas_solve_m_cached!(
+                χL_e_fv,
+                ρe_fv,
                 inv_u_fv,
-                F_fv,
-                ᶜlg_fv,
-                ᶠlg_fv,
+                JF_fv,
+                ᶜinvJ_fv,
                 Δt,
                 nz,
             )
             @inbounds for k in 1:nz
-                ρqt_fv[k] = ρ_new_fv[k] * χL_fv[k]
+                ρe_fv[k] = ρ_new_fv[k] * (χL_e_fv[k] + Φ_grav_fv[k])
             end
-        end
-        unrolled_foreach(cond_cols) do ρqc_col
-            ρqc_fv = Fields.field_values(ρqc_col)
-            _thomas_solve_m!(
-                χL_fv,
-                ρqc_fv,
-                inv_u_fv,
-                F_fv,
-                ᶜlg_fv,
-                ᶠlg_fv,
-                Δt,
-                nz,
-            )
-            @inbounds for k in 1:nz
-                ρqc_fv[k] = ρ_new_fv[k] * χL_fv[k]
+            if has_q_tot
+                ρqt_fv = Fields.field_values(ρqt_col)
+                _thomas_solve_m_cached!(
+                    χL_e_fv,
+                    ρqt_fv,
+                    inv_u_fv,
+                    JF_fv,
+                    ᶜinvJ_fv,
+                    Δt,
+                    nz,
+                )
+                @inbounds for k in 1:nz
+                    ρqt_fv[k] = ρ_new_fv[k] * χL_e_fv[k]
+                end
             end
-        end
-        return nothing
-    end
-
-    # Pass 1: narrow the shared face limiter `α_fv` across `{χ_e, q_tot, q_c, q_vap}`.
-    o = one(FT)
-    @inbounds for f in 1:(nz + 1)
-        α_fv[f] = o
-    end
-
-    if eh_code == _UPW_VANLEER
-        _thomas_solve_m!(χL_fv, ρe_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
-        _compute_raw_antidiff_transfers!(
-            Φ_fv,
-            χL_fv,
-            F_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            ᶠlg_fv,
-            Δt,
-            nz,
-        )
-        _narrow_face_fct_limiter!(
-            α_fv,
-            Φ_fv,
-            χL_fv,
-            ρe_fv,
-            F_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            ᶠlg_fv,
-            Δt,
-            nz,
-            Val(false),
-        )
-
-        if has_q_tot
-            ρqt_fv = Fields.field_values(ρqt_col)
-            _thomas_solve_m!(
-                χL_fv,
-                ρqt_fv,
+            _vt_first_order_cond!(
+                cond_cols,
+                χL_e_fv,
                 inv_u_fv,
-                F_fv,
-                ᶜlg_fv,
-                ᶠlg_fv,
-                Δt,
-                nz,
-            )
-            _compute_raw_antidiff_transfers!(
-                Φ_fv,
-                χL_fv,
-                F_fv,
+                JF_fv,
+                ᶜinvJ_fv,
                 ρ_new_fv,
-                ᶜlg_fv,
-                ᶠlg_fv,
                 Δt,
                 nz,
             )
-            _narrow_face_fct_limiter!(
+        elseif C == _UPW_THIRD_ORDER
+            _thomas_solve_m_cached!(
+                χL_e_fv,
+                ρe_fv,
+                inv_u_fv,
+                JF_fv,
+                ᶜinvJ_fv,
+                Δt,
+                nz,
+            )
+            _compute_raw_antidiff_cached!(
+                Φ_tmp_fv,
+                χL_e_fv,
+                JF_fv,
+                dt_JF_wC_fv,
+                ᶜJ_fv,
+                nz,
+            )
+            _apply_unlimited_antidiff_update_cached!(
+                ρe_fv,
+                χL_e_fv,
+                Φ_tmp_fv,
+                ρ_new_fv,
+                ᶜinvJ_fv,
+                nz,
+            )
+            @inbounds for k in 1:nz
+                ρe_fv[k] = muladd(ρ_new_fv[k], Φ_grav_fv[k], ρe_fv[k])
+            end
+            if has_q_tot
+                ρqt_fv = Fields.field_values(ρqt_col)
+                _thomas_solve_m_cached!(
+                    χL_e_fv,
+                    ρqt_fv,
+                    inv_u_fv,
+                    JF_fv,
+                    ᶜinvJ_fv,
+                    Δt,
+                    nz,
+                )
+                _compute_raw_antidiff_cached!(
+                    Φ_tmp_fv,
+                    χL_e_fv,
+                    JF_fv,
+                    dt_JF_wC_fv,
+                    ᶜJ_fv,
+                    nz,
+                )
+                _apply_unlimited_antidiff_update_cached!(
+                    ρqt_fv,
+                    χL_e_fv,
+                    Φ_tmp_fv,
+                    ρ_new_fv,
+                    ᶜinvJ_fv,
+                    nz,
+                )
+            end
+            _vt_third_order_cond!(
+                cond_cols,
+                χL_e_fv,
+                Φ_tmp_fv,
+                inv_u_fv,
+                JF_fv,
+                dt_JF_wC_fv,
+                ρ_new_fv,
+                ᶜJ_fv,
+                ᶜinvJ_fv,
+                Δt,
+                nz,
+            )
+        else
+            # `_UPW_VANLEER`: cache `(χL, Φ)` per species in pass 1 while narrowing
+            # `α_fv` across `{χ_e, q_tot, q_c, q_vap}`, then apply in pass 2.
+            Φ_e_fv = Fields.field_values(ᶠΦ_e_col)
+            χL_qt_fv = Fields.field_values(ᶜχL_qt_col)
+            Φ_qt_fv = Fields.field_values(ᶠΦ_qt_col)
+            q_vap_L_fv = Fields.field_values(ᶜq_vap_L_col)
+            q_vap_0_fv = Fields.field_values(ᶜq_vap_0_col)
+
+            o = one(FT)
+            @inbounds for f in 1:(nz + 1)
+                α_fv[f] = o
+            end
+
+            _thomas_solve_m_cached!(
+                χL_e_fv,
+                ρe_fv,
+                inv_u_fv,
+                JF_fv,
+                ᶜinvJ_fv,
+                Δt,
+                nz,
+            )
+            _compute_raw_antidiff_cached!(
+                Φ_e_fv,
+                χL_e_fv,
+                JF_fv,
+                dt_JF_wC_fv,
+                ᶜJ_fv,
+                nz,
+            )
+            _narrow_face_fct_limiter_cached!(
                 α_fv,
-                Φ_fv,
-                χL_fv,
-                ρqt_fv,
-                F_fv,
+                Φ_e_fv,
+                χL_e_fv,
+                ρe_fv,
+                ρ0_fv,
+                c_fv,
                 ρ_new_fv,
-                ᶜlg_fv,
-                ᶠlg_fv,
-                Δt,
+                ᶜJ_fv,
                 nz,
                 Val(false),
             )
-            if has_cond
-                @inbounds for k in 1:nz
-                    q_vap_L_fv[k] = χL_fv[k]
-                    q_vap_0_fv[k] = ρqt_fv[k]
-                end
-            end
-        end
 
-        if has_cond
-            unrolled_foreach(cond_cols) do ρqc_col
-                ρqc_fv = Fields.field_values(ρqc_col)
-                _thomas_solve_m!(
-                    χL_fv,
-                    ρqc_fv,
+            if has_q_tot
+                ρqt_fv = Fields.field_values(ρqt_col)
+                _thomas_solve_m_cached!(
+                    χL_qt_fv,
+                    ρqt_fv,
                     inv_u_fv,
-                    F_fv,
-                    ᶜlg_fv,
-                    ᶠlg_fv,
+                    JF_fv,
+                    ᶜinvJ_fv,
                     Δt,
                     nz,
                 )
-                _compute_raw_antidiff_transfers!(
-                    Φ_fv,
-                    χL_fv,
-                    F_fv,
-                    ρ_new_fv,
-                    ᶜlg_fv,
-                    ᶠlg_fv,
-                    Δt,
+                _compute_raw_antidiff_cached!(
+                    Φ_qt_fv,
+                    χL_qt_fv,
+                    JF_fv,
+                    dt_JF_wC_fv,
+                    ᶜJ_fv,
                     nz,
                 )
-                _narrow_face_fct_limiter!(
+                _narrow_face_fct_limiter_cached!(
                     α_fv,
-                    Φ_fv,
-                    χL_fv,
-                    ρqc_fv,
-                    F_fv,
+                    Φ_qt_fv,
+                    χL_qt_fv,
+                    ρqt_fv,
+                    ρ0_fv,
+                    c_fv,
                     ρ_new_fv,
-                    ᶜlg_fv,
-                    ᶠlg_fv,
-                    Δt,
+                    ᶜJ_fv,
                     nz,
                     Val(false),
                 )
-                if has_q_tot
+                if has_cond
                     @inbounds for k in 1:nz
-                        q_vap_L_fv[k] -= χL_fv[k]
-                        q_vap_0_fv[k] -= ρqc_fv[k]
+                        q_vap_L_fv[k] = χL_qt_fv[k]
+                        q_vap_0_fv[k] = ρqt_fv[k]
                     end
                 end
             end
 
-            if has_q_tot
-                @inbounds for k in 1:nz
-                    q_vap_0_fv[k] /= _vt_rho0_k(
-                        ρ_new_fv,
-                        F_fv,
-                        ᶜlg_fv,
-                        ᶠlg_fv,
-                        Δt,
-                        k,
-                    )
-                end
-                _compute_raw_antidiff_transfers!(
-                    Φ_fv,
-                    q_vap_L_fv,
-                    F_fv,
-                    ρ_new_fv,
-                    ᶜlg_fv,
-                    ᶠlg_fv,
-                    Δt,
-                    nz,
-                )
-                _narrow_face_fct_limiter!(
+            if has_cond
+                _vt_pass1_cond!(
+                    cond_cols,
+                    ᶜχL_cond_cols,
+                    ᶠΦ_cond_cols,
                     α_fv,
-                    Φ_fv,
+                    inv_u_fv,
+                    JF_fv,
+                    dt_JF_wC_fv,
+                    ρ0_fv,
+                    c_fv,
+                    ρ_new_fv,
+                    ᶜJ_fv,
+                    ᶜinvJ_fv,
                     q_vap_L_fv,
                     q_vap_0_fv,
-                    F_fv,
-                    ρ_new_fv,
-                    ᶜlg_fv,
-                    ᶠlg_fv,
                     Δt,
                     nz,
-                    Val(true),
+                    has_q_tot,
+                )
+                if has_q_tot
+                    @inbounds for k in 1:nz
+                        q_vap_0_fv[k] /= ρ0_fv[k]
+                    end
+                    _compute_raw_antidiff_cached!(
+                        Φ_tmp_fv,
+                        q_vap_L_fv,
+                        JF_fv,
+                        dt_JF_wC_fv,
+                        ᶜJ_fv,
+                        nz,
+                    )
+                    _narrow_face_fct_limiter_cached!(
+                        α_fv,
+                        Φ_tmp_fv,
+                        q_vap_L_fv,
+                        q_vap_0_fv,
+                        ρ0_fv,
+                        c_fv,
+                        ρ_new_fv,
+                        ᶜJ_fv,
+                        nz,
+                        Val(true),
+                    )
+                end
+            end
+
+            # Pass 2: apply the shared face limiter `α_fv` to cached `(χL, Φ)`.
+            _apply_limited_antidiff_update_cached!(
+                ρe_fv,
+                χL_e_fv,
+                Φ_e_fv,
+                α_fv,
+                ρ_new_fv,
+                ᶜinvJ_fv,
+                nz,
+            )
+            @inbounds for k in 1:nz
+                ρe_fv[k] = muladd(ρ_new_fv[k], Φ_grav_fv[k], ρe_fv[k])
+            end
+
+            if has_q_tot
+                _apply_limited_antidiff_update_cached!(
+                    Fields.field_values(ρqt_col),
+                    χL_qt_fv,
+                    Φ_qt_fv,
+                    α_fv,
+                    ρ_new_fv,
+                    ᶜinvJ_fv,
+                    nz,
+                )
+            end
+
+            if has_cond
+                _vt_pass2_cond!(
+                    cond_cols,
+                    ᶜχL_cond_cols,
+                    ᶠΦ_cond_cols,
+                    α_fv,
+                    ρ_new_fv,
+                    ᶜinvJ_fv,
+                    nz,
                 )
             end
         end
     end
 
-    # Pass 2: apply the shared face limiter `α_fv` identically to `{χ_e, q_tot, q_c}`.
-    _thomas_solve_m!(χL_fv, ρe_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
-    _compute_raw_antidiff_transfers!(
-        Φ_fv,
-        χL_fv,
-        F_fv,
-        ρ_new_fv,
-        ᶜlg_fv,
-        ᶠlg_fv,
-        Δt,
-        nz,
-    )
-    _apply_limited_antidiff_update!(
-        ρe_fv,
-        χL_fv,
-        Φ_fv,
-        α_fv,
-        ρ_new_fv,
-        ᶜlg_fv,
-        nz,
-    )
-    @inbounds for k in 1:nz
-        ρe_fv[k] = muladd(ρ_new_fv[k], Φ_grav_fv[k], ρe_fv[k])
-    end
-
-    if has_q_tot
-        ρqt_fv = Fields.field_values(ρqt_col)
-        _thomas_solve_m!(χL_fv, ρqt_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
-        _compute_raw_antidiff_transfers!(
-            Φ_fv,
-            χL_fv,
-            F_fv,
+    if has_tke
+        tke_mode =
+            C == _UPW_FIRST_ORDER ? Val(_UPW_FIRST_ORDER) : Val(_UPW_VANLEER)
+        _transport_single_scalar_cached!(
+            Fields.field_values(ρtke_col),
+            χL_e_fv,
+            Φ_tmp_fv,
+            α_fv,
+            inv_u_fv,
+            JF_fv,
+            dt_JF_wC_fv,
+            ρ0_fv,
+            c_fv,
             ρ_new_fv,
-            ᶜlg_fv,
-            ᶠlg_fv,
+            ᶜJ_fv,
+            ᶜinvJ_fv,
             Δt,
             nz,
-        )
-        _apply_limited_antidiff_update!(
-            ρqt_fv,
-            χL_fv,
-            Φ_fv,
-            α_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            nz,
+            tke_mode,
         )
     end
+end
 
-    unrolled_foreach(cond_cols) do ρqc_col
-        ρqc_fv = Fields.field_values(ρqc_col)
-        _thomas_solve_m!(χL_fv, ρqc_fv, inv_u_fv, F_fv, ᶜlg_fv, ᶠlg_fv, Δt, nz)
-        _compute_raw_antidiff_transfers!(
-            Φ_fv,
-            χL_fv,
-            F_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            ᶠlg_fv,
-            Δt,
-            nz,
-        )
-        _apply_limited_antidiff_update!(
-            ρqc_fv,
-            χL_fv,
-            Φ_fv,
-            α_fv,
-            ρ_new_fv,
-            ᶜlg_fv,
-            nz,
-        )
-    end
+@noinline function _launch_vt_gm_thermo!(
+    ::Val{C},
+    unp,
+    geom,
+    ᶜΦ,
+    ᶜD_raw,
+    invariants,
+    thermo_work,
+    Δt_ft::FT,
+) where {FT, C}
+    DataLayouts.foreach_column(
+        _VTGmThermoSweep{FT, C}(Δt_ft),
+        unp.ρ,
+        unp.ρe_tot,
+        unp.ρq_tot,
+        unp.cond,
+        unp.ρtke,
+        geom,
+        ᶜΦ,
+        ᶜD_raw,
+        invariants,
+        thermo_work;
+        shmem = Val(:none),
+    )
+    return nothing
+end
+
+struct _VTExtensiveSweep{FT, C} <: ColumnSweep
+    Δt::FT
+end
+
+@inline function (op::_VTExtensiveSweep{FT, C})(
+    ρs_col,
+    ρ_col,
+    geom_cols,
+    inv_cols,
+    ext_work_cols,
+) where {FT, C}
+    ᶜJ_col, _ᶠJ_col = geom_cols
+    _ᶠF̃_col, ᶜinv_u_col, ᶜρ0_col, ᶜinvJ_col, ᶠJF_col, ᶠc_col, ᶠdt_JF_wC_col =
+        inv_cols
+    ᶠα_col, ᶠΦ_col, ᶜχL_col = ext_work_cols
+    nz = Spaces.nlevels(axes(ρ_col))
+    _transport_single_scalar_cached!(
+        Fields.field_values(ρs_col),
+        Fields.field_values(ᶜχL_col),
+        Fields.field_values(ᶠΦ_col),
+        Fields.field_values(ᶠα_col),
+        Fields.field_values(ᶜinv_u_col),
+        Fields.field_values(ᶠJF_col),
+        Fields.field_values(ᶠdt_JF_wC_col),
+        Fields.field_values(ᶜρ0_col),
+        Fields.field_values(ᶠc_col),
+        Fields.field_values(ρ_col),
+        Fields.field_values(ᶜJ_col),
+        Fields.field_values(ᶜinvJ_col),
+        op.Δt,
+        nz,
+        Val(C),
+    )
+end
+
+@noinline function _launch_vt_extensive!(
+    ::Val{C},
+    ρs_field,
+    ρ_field,
+    geom,
+    invariants,
+    ext_work,
+    Δt_ft::FT,
+) where {FT, C}
+    DataLayouts.foreach_column(
+        _VTExtensiveSweep{FT, C}(Δt_ft),
+        ρs_field,
+        ρ_field,
+        geom,
+        invariants,
+        ext_work;
+        shmem = Val(:none),
+    )
     return nothing
 end
 
 @inline function _vt_dispatch_extensive!(
     ρs_field,
     ρ_field,
-    ᶜlg,
-    ᶠlg,
-    ᶠF̃,
-    f_work,
-    c_work_2,
+    geom,
+    invariants,
+    ext_work,
     Δt_ft,
     upw_code::Int8,
 )
-    DataLayouts.foreach_column(
-        ρs_field,
-        ρ_field,
-        ᶜlg,
-        ᶠlg,
-        ᶠF̃,
-        f_work,
-        c_work_2;
-        shmem = Val(:none),
-    ) do ρs_c, ρ_c, lg_c, flg_c, F_c, fw_c, cw_c
-        nz = Spaces.nlevels(axes(ρ_c))
-        _transport_single_scalar_column!(
-            Fields.field_values(ρs_c),
-            Fields.field_values(cw_c[2]),
-            Fields.field_values(fw_c[2]),
-            Fields.field_values(fw_c[1]),
-            Fields.field_values(F_c),
-            Fields.field_values(ρ_c),
-            Fields.field_values(cw_c[1]),
-            Fields.field_values(lg_c),
-            Fields.field_values(flg_c),
+    if upw_code == _UPW_VANLEER
+        _launch_vt_extensive!(
+            Val(_UPW_VANLEER),
+            ρs_field,
+            ρ_field,
+            geom,
+            invariants,
+            ext_work,
             Δt_ft,
-            nz,
-            upw_code,
+        )
+    elseif upw_code == _UPW_FIRST_ORDER
+        _launch_vt_extensive!(
+            Val(_UPW_FIRST_ORDER),
+            ρs_field,
+            ρ_field,
+            geom,
+            invariants,
+            ext_work,
+            Δt_ft,
+        )
+    elseif upw_code == _UPW_NONE
+        _launch_vt_extensive!(
+            Val(_UPW_NONE),
+            ρs_field,
+            ρ_field,
+            geom,
+            invariants,
+            ext_work,
+            Δt_ft,
+        )
+    else
+        _launch_vt_extensive!(
+            Val(_UPW_THIRD_ORDER),
+            ρs_field,
+            ρ_field,
+            geom,
+            invariants,
+            ext_work,
+            Δt_ft,
         )
     end
     return nothing
@@ -1186,12 +1643,12 @@ Steps:
     `ᶠF̃_i`.
  3. Mass-project `D` against `ρ^{n+1}`, integrate `ᶠF̃` (`ᶜadvdivᵥ(ᶠF̃) = -D` with
     zero boundary fluxes), factor the tridiagonal M-matrix
-    `diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)` once per column into `ᶜtemp_scalar`,
+    `diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)` and face Courant invariants once per column,
     advance `{χ_e, q_tot, q_lcl, q_icl, q_rai, q_sno}` with a shared face
     Zalesak FCT factor (including `q_vap = q_tot - Σ q_c` in the bounds),
-    reconstruct `(ρe_tot)^{n+1} = ρ^{n+1} χ_e^{n+1} + ρ^{n+1} Φ`, and advance
-    all active number concentrations, rime species, `ρtke`, and passive tracers
-    reusing `inv_u`.
+    reconstruct `(ρe_tot)^{n+1} = ρ^{n+1} χ_e^{n+1} + ρ^{n+1} Φ`, advance `ρtke`
+    in the same column sweep, and advance all active number concentrations, rime
+    species, and passive tracers reusing the cached column invariants.
  4. For `PrognosticEDMFX`, `sgsʲs` stays unchanged here and advances under
     `u₃ʲ` in `column_physics_step.jl`.
 """
@@ -1257,78 +1714,100 @@ function step_vertical_scalar_transport!(
     unp = _unpack_vt_yc(Y.c)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
+    geom = (ᶜlg.J, ᶠlg.J)
+
     ᶠF̃ = p.scratch.ᶠF̃
-    f_work = (p.scratch.ᶠtemp_scalar, p.scratch.ᶠtemp_scalar_2)
-    c_work = (
+    ᶠu_inv = p.scratch.ᶠtemp_UVW
+    ᶜm_cache = p.scratch.ᶜtemp_UVWxUVW
+    ᶠm_cache = p.scratch.ᶠtemp_UVWxUVW
+    invariants = (
+        ᶠF̃,
         p.scratch.ᶜtemp_scalar,
-        p.scratch.ᶜtemp_scalar_3,
-        p.scratch.ᶜtemp_scalar_4,
-        p.scratch.ᶜtemp_scalar_5,
+        p.scratch.ᶜtemp_scalar_6,
+        ᶜm_cache.components.data.:7,
+        ᶠu_inv.components.data.:1,
+        ᶠu_inv.components.data.:2,
+        ᶠu_inv.components.data.:3,
     )
 
-    DataLayouts.foreach_column(
-        unp.ρ,
-        unp.ρe_tot,
-        unp.ρq_tot,
-        unp.cond,
-        ᶜlg,
-        ᶠlg,
-        p.core.ᶜΦ,
-        ᶜD_raw,
-        ᶠF̃,
-        f_work,
-        c_work;
-        shmem = Val(:none),
-    ) do ρ_c, ρe_c, ρqt_c, cond_c, lg_c, flg_c, Φ_c, D_c, F_c, fw_c, cw_c
-        _vt_gm_thermo_column!(
-            ρ_c,
-            ρe_c,
-            ρqt_c,
-            cond_c,
-            lg_c,
-            flg_c,
-            Φ_c,
-            D_c,
-            F_c,
-            fw_c,
-            cw_c,
+    n_cond = Val(length(unp.cond))
+    thermo_work = (
+        p.scratch.ᶠtemp_scalar,
+        p.scratch.ᶠtemp_scalar_2,
+        p.scratch.ᶜtemp_scalar_4,
+        p.scratch.ᶜtemp_scalar_5,
+        ᶜm_cache.components.data.:1,
+        ᶜm_cache.components.data.:2,
+        _uvwxuvw_cond_slots(ᶜm_cache, n_cond),
+        ᶠm_cache.components.data.:1,
+        ᶠm_cache.components.data.:2,
+        _uvwxuvw_cond_slots(ᶠm_cache, n_cond),
+    )
+
+    if eh_code == _UPW_VANLEER
+        _launch_vt_gm_thermo!(
+            Val(_UPW_VANLEER),
+            unp,
+            geom,
+            p.core.ᶜΦ,
+            ᶜD_raw,
+            invariants,
+            thermo_work,
             Δt_ft,
-            eh_code,
+        )
+    elseif eh_code == _UPW_FIRST_ORDER
+        _launch_vt_gm_thermo!(
+            Val(_UPW_FIRST_ORDER),
+            unp,
+            geom,
+            p.core.ᶜΦ,
+            ᶜD_raw,
+            invariants,
+            thermo_work,
+            Δt_ft,
+        )
+    elseif eh_code == _UPW_NONE
+        _launch_vt_gm_thermo!(
+            Val(_UPW_NONE),
+            unp,
+            geom,
+            p.core.ᶜΦ,
+            ᶜD_raw,
+            invariants,
+            thermo_work,
+            Δt_ft,
+        )
+    else
+        _launch_vt_gm_thermo!(
+            Val(_UPW_THIRD_ORDER),
+            unp,
+            geom,
+            p.core.ᶜΦ,
+            ᶜD_raw,
+            invariants,
+            thermo_work,
+            Δt_ft,
         )
     end
 
-    # The wave core does not transport the number and rime species or `ρtke`,
-    # so `:none` has no central implicit transport to keep for them; they take
-    # the limited scheme then.
+    # The wave core does not transport the number and rime species, so `:none`
+    # has no central implicit transport to keep for them; they take the limited
+    # scheme then.
     indiv_code = eh_code == _UPW_NONE ? _UPW_VANLEER : eh_code
-    c_work_2 = (p.scratch.ᶜtemp_scalar, p.scratch.ᶜtemp_scalar_3)
+    ext_work = (
+        p.scratch.ᶠtemp_scalar,
+        p.scratch.ᶠtemp_scalar_2,
+        p.scratch.ᶜtemp_scalar_3,
+    )
     unrolled_foreach(unp.indiv) do ρm_field
         _vt_dispatch_extensive!(
             ρm_field,
             unp.ρ,
-            ᶜlg,
-            ᶠlg,
-            ᶠF̃,
-            f_work,
-            c_work_2,
+            geom,
+            invariants,
+            ext_work,
             Δt_ft,
             indiv_code,
-        )
-    end
-
-    if !isnothing(unp.ρtke)
-        tke_code =
-            eh_code == _UPW_FIRST_ORDER ? _UPW_FIRST_ORDER : _UPW_VANLEER
-        _vt_dispatch_extensive!(
-            unp.ρtke,
-            unp.ρ,
-            ᶜlg,
-            ᶠlg,
-            ᶠF̃,
-            f_work,
-            c_work_2,
-            Δt_ft,
-            tke_code,
         )
     end
 
@@ -1336,11 +1815,9 @@ function step_vertical_scalar_transport!(
         _vt_dispatch_extensive!(
             ρp_field,
             unp.ρ,
-            ᶜlg,
-            ᶠlg,
-            ᶠF̃,
-            f_work,
-            c_work_2,
+            geom,
+            invariants,
+            ext_work,
             Δt_ft,
             tr_code,
         )

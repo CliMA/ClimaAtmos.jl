@@ -293,7 +293,12 @@ end
 # Physical horizontal velocity at cell `k`: the covariant basis tilts with the
 # terrain, so the `UV` components combine `uₕ` with the center-interpolated
 # `u₃`, as in `ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))`.
-@inline function _cell_physical_uv(ᶜuₕ_fv, ᶠu₃_fv, ᶜlg_fv, k)
+Base.@propagate_inbounds @inline function _cell_physical_uv(
+    ᶜuₕ_fv,
+    ᶠu₃_fv,
+    ᶜlg_fv,
+    k,
+)
     lg = ᶜlg_fv[k]
     ᶜu₃ = (ᶠu₃_fv[k] + ᶠu₃_fv[k + 1]) / 2
     return Geometry.UVVector(ᶜuₕ_fv[k], lg) + Geometry.UVVector(ᶜu₃, lg)
@@ -335,152 +340,215 @@ keeps the physical horizontal velocity fixed.
     ᶠlg_fv = Fields.field_values(geom_col.ᶠlg)
     ᶠw_u_fv = Fields.field_values(weights_col.ᶠw_u)
 
-    diag_fv = Fields.field_values(scratch_col.diag)
     upper_fv = Fields.field_values(scratch_col.upper)
-    lower_fv = Fields.field_values(scratch_col.lower)
     rhs1_fv = Fields.field_values(scratch_col.rhs1)
     rhs2_fv = Fields.field_values(scratch_col.rhs2)
-    sol1_fv = Fields.field_values(scratch_col.sol1)
-    sol2_fv = Fields.field_values(scratch_col.sol2)
 
     nz = Spaces.nlevels(axes(Yc_col.ρ))
+
+    γ_drag = zero(FT)
+    f_rem_1 = zero(FT)
+    f_rem_2 = zero(FT)
+    x1_next = zero(FT)
+    x2_next = zero(FT)
+    upper_prev = zero(FT)
+    rhs1_prev = zero(FT)
+    rhs2_prev = zero(FT)
+    G_bot = zero(FT)
 
     @inbounds for k in 1:nz
         J_k = ᶜlg_fv[k].J
         ρ_k = ᶜρ_fv[k]
         G_top = k < nz ? face_conductance(ᶠlg_fv[k + 1], ᶠw_u_fv[k + 1]) : zero(FT)
-        G_bot = k > 1 ? face_conductance(ᶠlg_fv[k], ᶠw_u_fv[k]) : zero(FT)
 
-        diag_fv[k] = J_k * ρ_k + Δt * (G_top + G_bot)
-        if k < nz
-            upper_fv[k] = -Δt * G_top
-        end
-        if k > 1
-            lower_fv[k - 1] = -Δt * G_bot
-        end
+        diag_k = J_k * ρ_k + Δt * (G_top + G_bot)
         uv_k = _cell_physical_uv(ᶜuₕ_fv, ᶠu₃_fv, ᶜlg_fv, k)
-        rhs1_fv[k] = J_k * ρ_k * uv_k.components.data[1]
-        rhs2_fv[k] = J_k * ρ_k * uv_k.components.data[2]
-    end
+        rhs1_k = J_k * ρ_k * uv_k.components.data[1]
+        rhs2_k = J_k * ρ_k * uv_k.components.data[2]
 
-    γ_drag = zero(FT)
-    f_rem_1 = zero(FT)
-    f_rem_2 = zero(FT)
-    sfc_factor = zero(FT)
+        if k == 1 && sw.has_sfc
+            sfc_factor = surface_c3_flux_factor(ᶠlg_fv[1])
+            # Physical components of the horizontal stress in cell 1.
+            τ_old = Fields.field_values(sfc_col.ρ_flux_uₕ)[]
+            f_old = Geometry.UVVector(
+                C12(τ_old.components.data[1], τ_old.components.data[2]),
+                ᶜlg_fv[1],
+            )
+            f_old_1 = f_old.components.data[1]
+            f_old_2 = f_old.components.data[2]
 
-    if sw.has_sfc
-        sfc_factor = surface_c3_flux_factor(ᶠlg_fv[1])
-        # Physical components of the horizontal stress in cell 1.
-        τ_old = Fields.field_values(sfc_col.ρ_flux_uₕ)[]
-        f_old = Geometry.UVVector(
-            C12(τ_old.components.data[1], τ_old.components.data[2]),
-            ᶜlg_fv[1],
-        )
-        f_old_1 = f_old.components.data[1]
-        f_old_2 = f_old.components.data[2]
-
-        if sw.is_standalone
-            uv_1 = _cell_physical_uv(ᶜuₕ_fv, ᶠu₃_fv, ᶜlg_fv, 1)
-            u1_old = uv_1.components.data[1]
-            u2_old = uv_1.components.data[2]
-            u_sq = u1_old * u1_old + u2_old * u2_old
-            dot_fu = f_old_1 * u1_old + f_old_2 * u2_old
-            if u_sq > ε && dot_fu < zero(FT)
-                # Implicit Robin drag linearization: f_new = f_rem - γ * u_new[1]
-                γ_drag = -dot_fu / u_sq
-                f_rem_1 = f_old_1 + γ_drag * u1_old
-                f_rem_2 = f_old_2 + γ_drag * u2_old
-                diag_fv[1] += Δt * sfc_factor * γ_drag
-                rhs1_fv[1] += Δt * sfc_factor * f_rem_1
-                rhs2_fv[1] += Δt * sfc_factor * f_rem_2
+            if sw.is_standalone
+                u1_old = uv_k.components.data[1]
+                u2_old = uv_k.components.data[2]
+                u_sq = u1_old * u1_old + u2_old * u2_old
+                dot_fu = f_old_1 * u1_old + f_old_2 * u2_old
+                if u_sq > ε && dot_fu < zero(FT)
+                    # Implicit Robin drag linearization: f_new = f_rem - γ * u_new[1]
+                    γ_drag = -dot_fu / u_sq
+                    f_rem_1 = f_old_1 + γ_drag * u1_old
+                    f_rem_2 = f_old_2 + γ_drag * u2_old
+                    diag_k += Δt * sfc_factor * γ_drag
+                    rhs1_k += Δt * sfc_factor * f_rem_1
+                    rhs2_k += Δt * sfc_factor * f_rem_2
+                else
+                    rhs1_k += Δt * sfc_factor * f_old_1
+                    rhs2_k += Δt * sfc_factor * f_old_2
+                end
             else
-                rhs1_fv[1] += Δt * sfc_factor * f_old_1
-                rhs2_fv[1] += Δt * sfc_factor * f_old_2
+                rhs1_k += Δt * sfc_factor * f_old_1
+                rhs2_k += Δt * sfc_factor * f_old_2
             end
-        else
-            rhs1_fv[1] += Δt * sfc_factor * f_old_1
-            rhs2_fv[1] += Δt * sfc_factor * f_old_2
         end
+
+        if nz == 1
+            w = inv(diag_k)
+            x1_next = rhs1_k * w
+            x2_next = rhs2_k * w
+            Δuv = Geometry.UVVector(
+                x1_next - uv_k.components.data[1],
+                x2_next - uv_k.components.data[2],
+            )
+            ᶜuₕ_fv[1] = ᶜuₕ_fv[1] + C12(Δuv, ᶜlg_fv[1])
+        elseif k == 1
+            w = inv(diag_k)
+            upper_prev = (-Δt * G_top) * w
+            rhs1_prev = rhs1_k * w
+            rhs2_prev = rhs2_k * w
+            upper_fv[1] = upper_prev
+            rhs1_fv[1] = rhs1_prev
+            rhs2_fv[1] = rhs2_prev
+        elseif k < nz
+            l_k = -Δt * G_bot
+            w = inv(diag_k - l_k * upper_prev)
+            upper_prev = (-Δt * G_top) * w
+            rhs1_prev = (rhs1_k - l_k * rhs1_prev) * w
+            rhs2_prev = (rhs2_k - l_k * rhs2_prev) * w
+            upper_fv[k] = upper_prev
+            rhs1_fv[k] = rhs1_prev
+            rhs2_fv[k] = rhs2_prev
+        else
+            l_nz = -Δt * G_bot
+            w_nz = inv(diag_k - l_nz * upper_prev)
+            x1_next = (rhs1_k - l_nz * rhs1_prev) * w_nz
+            x2_next = (rhs2_k - l_nz * rhs2_prev) * w_nz
+            Δuv = Geometry.UVVector(
+                x1_next - uv_k.components.data[1],
+                x2_next - uv_k.components.data[2],
+            )
+            ᶜuₕ_fv[nz] = ᶜuₕ_fv[nz] + C12(Δuv, ᶜlg_fv[nz])
+        end
+        G_bot = G_top
     end
 
-    column_thomas_solve_2!(
-        sol1_fv, sol2_fv, rhs1_fv, rhs2_fv, diag_fv, upper_fv, lower_fv, nz,
-    )
-
-    @inbounds for k in 1:nz
-        uv_k = _cell_physical_uv(ᶜuₕ_fv, ᶠu₃_fv, ᶜlg_fv, k)
-        Δuv = Geometry.UVVector(
-            sol1_fv[k] - uv_k.components.data[1],
-            sol2_fv[k] - uv_k.components.data[2],
-        )
-        ᶜuₕ_fv[k] = ᶜuₕ_fv[k] + C12(Δuv, ᶜlg_fv[k])
+    if nz > 1
+        @inbounds for k in (nz - 1):-1:1
+            u_k = upper_fv[k]
+            x1_next = rhs1_fv[k] - u_k * x1_next
+            x2_next = rhs2_fv[k] - u_k * x2_next
+            lg_k = ᶜlg_fv[k]
+            uv_k = _cell_physical_uv(ᶜuₕ_fv, ᶠu₃_fv, ᶜlg_fv, k)
+            Δuv = Geometry.UVVector(
+                x1_next - uv_k.components.data[1],
+                x2_next - uv_k.components.data[2],
+            )
+            ᶜuₕ_fv[k] = ᶜuₕ_fv[k] + C12(Δuv, lg_k)
+        end
     end
 
     if sw.has_sfc && sw.is_standalone && γ_drag > zero(FT)
-        τ_old = Fields.field_values(sfc_col.ρ_flux_uₕ)[]
-        f_new = C12(
-            Geometry.UVVector(
-                f_rem_1 - γ_drag * sol1_fv[1],
-                f_rem_2 - γ_drag * sol2_fv[1],
-            ),
-            ᶜlg_fv[1],
-        )
-        Fields.field_values(sfc_col.ρ_flux_uₕ)[] = typeof(τ_old)(
-            SA.SMatrix{1, 2, FT, 2}(
-                f_new.components.data[1],
-                f_new.components.data[2],
-            ),
-            axes(τ_old),
-        )
+        @inbounds begin
+            τ_old = Fields.field_values(sfc_col.ρ_flux_uₕ)[]
+            f_new = C12(
+                Geometry.UVVector(
+                    f_rem_1 - γ_drag * x1_next,
+                    f_rem_2 - γ_drag * x2_next,
+                ),
+                ᶜlg_fv[1],
+            )
+            Fields.field_values(sfc_col.ρ_flux_uₕ)[] = typeof(τ_old)(
+                SA.SMatrix{1, 2, FT, 2}(
+                    f_new.components.data[1],
+                    f_new.components.data[2],
+                ),
+                axes(τ_old),
+            )
+        end
     end
 
     if DiffuseU₃ && nz > 1
         # Unknowns are `w` on the interior faces `f = j + 1`, `j = 1:(nz - 1)`;
         # the flux `2ρνₜ g³³ ∂w/∂ξ³` lives at centers, as in `ᶠdiffdivᵥ_u₃`.
         ᶜw_w_fv = Fields.field_values(weights_col.ᶜw_w)
+        sol2_fv = Fields.field_values(scratch_col.sol2)
         nf = nz - 1
-        w_bot = _face_physical_w(ᶠu₃_fv[1], ᶠlg_fv[1])
-        w_top = _face_physical_w(ᶠu₃_fv[nz + 1], ᶠlg_fv[nz + 1])
-        @inbounds for j in 1:nf
-            f = j + 1
-            G_bot = face_conductance(ᶜlg_fv[f - 1], 2 * ᶜw_w_fv[f - 1])
-            G_top = face_conductance(ᶜlg_fv[f], 2 * ᶜw_w_fv[f])
-            Jρ_f = ᶠlg_fv[f].J * (ᶜρ_fv[f - 1] + ᶜρ_fv[f]) / 2
-            diag_fv[j] = Jρ_f + Δt * (G_top + G_bot)
-            if j < nf
-                upper_fv[j] = -Δt * G_top
+        @inbounds begin
+            w_bot = _face_physical_w(ᶠu₃_fv[1], ᶠlg_fv[1])
+            w_top = _face_physical_w(ᶠu₃_fv[nz + 1], ᶠlg_fv[nz + 1])
+            G_bot_w = face_conductance(ᶜlg_fv[1], 2 * ᶜw_w_fv[1])
+            u_w_prev = zero(FT)
+            r_w_prev = zero(FT)
+            x_w_next = zero(FT)
+            for j in 1:nf
+                f = j + 1
+                G_top_w = face_conductance(ᶜlg_fv[f], 2 * ᶜw_w_fv[f])
+                Jρ_f = ᶠlg_fv[f].J * (ᶜρ_fv[f - 1] + ᶜρ_fv[f]) / 2
+                diag_j = Jρ_f + Δt * (G_top_w + G_bot_w)
+                w_f_cur = _face_physical_w(ᶠu₃_fv[f], ᶠlg_fv[f])
+                rhs_j = Jρ_f * w_f_cur
+                if j == 1
+                    rhs_j += Δt * G_bot_w * w_bot
+                end
+                if j == nf
+                    rhs_j += Δt * G_top_w * w_top
+                end
+                if nf == 1
+                    x_w_next = rhs_j / diag_j
+                    Δu₃ = C3(Geometry.WVector(x_w_next - w_f_cur), ᶠlg_fv[f])
+                    ᶠu₃_fv[f] = ᶠu₃_fv[f] + Δu₃
+                    sol2_fv[1] = Δu₃.components.data[1]
+                elseif j == 1
+                    w = inv(diag_j)
+                    u_w_prev = (-Δt * G_top_w) * w
+                    r_w_prev = rhs_j * w
+                    upper_fv[1] = u_w_prev
+                    rhs1_fv[1] = r_w_prev
+                elseif j < nf
+                    l_j = -Δt * G_bot_w
+                    w = inv(diag_j - l_j * u_w_prev)
+                    u_w_prev = (-Δt * G_top_w) * w
+                    r_w_prev = (rhs_j - l_j * r_w_prev) * w
+                    upper_fv[j] = u_w_prev
+                    rhs1_fv[j] = r_w_prev
+                else
+                    l_nf = -Δt * G_bot_w
+                    x_w_next = (rhs_j - l_nf * r_w_prev) / (diag_j - l_nf * u_w_prev)
+                    Δu₃ = C3(Geometry.WVector(x_w_next - w_f_cur), ᶠlg_fv[f])
+                    ᶠu₃_fv[f] = ᶠu₃_fv[f] + Δu₃
+                    sol2_fv[nf] = Δu₃.components.data[1]
+                end
+                G_bot_w = G_top_w
             end
-            if j > 1
-                lower_fv[j - 1] = -Δt * G_bot
+            if nf > 1
+                # `Δu₃` per interior face, kept in `sol2` for the `uₕ` update below.
+                for j in (nf - 1):-1:1
+                    f = j + 1
+                    x_w_next = rhs1_fv[j] - upper_fv[j] * x_w_next
+                    Δw = x_w_next - _face_physical_w(ᶠu₃_fv[f], ᶠlg_fv[f])
+                    Δu₃ = C3(Geometry.WVector(Δw), ᶠlg_fv[f])
+                    ᶠu₃_fv[f] = ᶠu₃_fv[f] + Δu₃
+                    sol2_fv[j] = Δu₃.components.data[1]
+                end
             end
-            rhs = Jρ_f * _face_physical_w(ᶠu₃_fv[f], ᶠlg_fv[f])
-            if j == 1
-                rhs += Δt * G_bot * w_bot
+            # `C12` of the `w` increment cancels the `UV` part of `C3(Δu₃)`, so
+            # the physical horizontal velocity stays fixed; it is zero on flat
+            # coordinates.
+            for k in 1:nz
+                Δu₃_bot = k > 1 ? sol2_fv[k - 1] : zero(FT)
+                Δu₃_top = k < nz ? sol2_fv[k] : zero(FT)
+                lg = ᶜlg_fv[k]
+                Δw_c = Geometry.WVector(C3((Δu₃_bot + Δu₃_top) / 2), lg)
+                ᶜuₕ_fv[k] = ᶜuₕ_fv[k] + C12(Δw_c, lg)
             end
-            if j == nf
-                rhs += Δt * G_top * w_top
-            end
-            rhs1_fv[j] = rhs
-        end
-        column_thomas_solve!(sol1_fv, rhs1_fv, diag_fv, upper_fv, lower_fv, nf)
-
-        # `Δu₃` per interior face, kept in `sol2` for the `uₕ` update below.
-        @inbounds for j in 1:nf
-            f = j + 1
-            Δw = sol1_fv[j] - _face_physical_w(ᶠu₃_fv[f], ᶠlg_fv[f])
-            Δu₃ = C3(Geometry.WVector(Δw), ᶠlg_fv[f])
-            ᶠu₃_fv[f] = ᶠu₃_fv[f] + Δu₃
-            sol2_fv[j] = Δu₃.components.data[1]
-        end
-        # `C12` of the `w` increment cancels the `UV` part of `C3(Δu₃)`, so
-        # the physical horizontal velocity stays fixed; it is zero on flat
-        # coordinates.
-        @inbounds for k in 1:nz
-            Δu₃_bot = k > 1 ? sol2_fv[k - 1] : zero(FT)
-            Δu₃_top = k < nz ? sol2_fv[k] : zero(FT)
-            lg = ᶜlg_fv[k]
-            Δw_c = Geometry.WVector(C3((Δu₃_bot + Δu₃_top) / 2), lg)
-            ᶜuₕ_fv[k] = ᶜuₕ_fv[k] + C12(Δw_c, lg)
         end
     end
 
@@ -1240,12 +1308,9 @@ function step_vertical_diffusion_and_surface!(Y, p, t, Δt)
         ᶜlg = Fields.local_geometry_field(Y.c)
         mom_geom = (; ᶜlg, ᶠlg)
         mom_scratch = (;
-            diag = p.scratch.ᶜtemp_scalar_3,
             upper = p.scratch.ᶜtemp_scalar_4,
-            lower = p.scratch.ᶜtemp_scalar_5,
             rhs1 = p.scratch.ᶜtemp_scalar_6,
             rhs2 = p.scratch.ᶜtemp_scalar_7,
-            sol1 = p.scratch.ᶜtemp_UVWxUVW.components.data.:1,
             sol2 = p.scratch.ᶜtemp_UVWxUVW.components.data.:2,
         )
         if has_smag
@@ -1633,7 +1698,7 @@ end
     χ_buoyant = zero(FT),
 )
 
-@inline function _edmf_updraft_matrix_row(
+Base.@propagate_inbounds @inline function _edmf_updraft_matrix_row(
     V1_fv,
     G1_fv,
     ε_k,
@@ -3498,7 +3563,7 @@ function (w::EDMFUpdraftPicardSweep{
     ᶜz_fv = Fields.field_values(geom_col.ᶜlg.coordinates.z)
     ᶠlg_fv = Fields.field_values(geom_col.ᶠlg)
     ᶠz_fv = Fields.field_values(geom_col.ᶠlg.coordinates.z)
-    z_sfc_val = ᶠz_fv[1]
+    z_sfc_val = @inbounds ᶠz_fv[1]
     ᶠdz_fv = Fields.field_values(geom_col.ᶠdz)
     ᶜΦ_fv = Fields.field_values(geom_col.ᶜΦ)
     ᶠgradΦ_fv = Fields.field_values(geom_col.ᶠgradᵥ_ᶜΦ)
@@ -3565,17 +3630,19 @@ function (w::EDMFUpdraftPicardSweep{
     ρη_L_fv = Fields.field_values(ct123_c.:(3))
 
     # Surface scalar BC values (single-level horizontal fields)
-    E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
-    mse_buoy = Fields.field_values(edmf_col.sfc_mse_buoy)[]
-    qt_buoy = HasQ ? Fields.field_values(edmf_col.sfc_qt_buoy)[] : zero(FT)
-    JF_sfc_h =
-        sw.has_sfc ?
-        surface_c3_flux_factor(ᶠlg_fv[1]) *
-        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_h_tot)[]) : zero(FT)
-    JF_sfc_q =
-        (sw.has_sfc && HasQ) ?
-        surface_c3_flux_factor(ᶠlg_fv[1]) *
-        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_q_tot)[]) : zero(FT)
+    @inbounds begin
+        E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
+        mse_buoy = Fields.field_values(edmf_col.sfc_mse_buoy)[]
+        qt_buoy = HasQ ? Fields.field_values(edmf_col.sfc_qt_buoy)[] : zero(FT)
+        JF_sfc_h =
+            sw.has_sfc ?
+            surface_c3_flux_factor(ᶠlg_fv[1]) *
+            _c3_scalar(Fields.field_values(sfc_col.ρ_flux_h_tot)[]) : zero(FT)
+        JF_sfc_q =
+            (sw.has_sfc && HasQ) ?
+            surface_c3_flux_factor(ᶠlg_fv[1]) *
+            _c3_scalar(Fields.field_values(sfc_col.ρ_flux_q_tot)[]) : zero(FT)
+    end
 
     # Save clamped entry states, with `ρa⁰ ≥ 10⁻⁴ ρ` as in the `ρa¹` solve.
     @inbounds for k in 1:nz
@@ -3670,11 +3737,13 @@ function (w::EDMFUpdraftPicardSweep{
             end
         end
 
-        ρ1_1_p = max(ᶜρ1_fv[1], ε)
-        r_sfc_p =
-            sw.has_sfc ?
-            edmfx_sfc_relaxation_rate(E_sfc, ρa1_in[1], ρ1_1_p, sw.a_min) :
-            zero(FT)
+        @inbounds begin
+            ρ1_1_p = max(ᶜρ1_fv[1], ε)
+            r_sfc_p =
+                sw.has_sfc ?
+                edmfx_sfc_relaxation_rate(E_sfc, ρa1_in[1], ρ1_1_p, sw.a_min) :
+                zero(FT)
+        end
 
         mse1_p = diag0_fv
         qt1_p = upper0_fv
@@ -4062,22 +4131,24 @@ function (w::EDMFTwoStreamScalarSweep{
     A0_qt_fv = Fields.field_values(st_f.:(9))
     A0_η_fv = Fields.field_values(c123_f.:(2))
 
-    E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
-    mse_buoy = Fields.field_values(edmf_col.sfc_mse_buoy)[]
-    qt_buoy = HasQ ? Fields.field_values(edmf_col.sfc_qt_buoy)[] : zero(FT)
-    JF_sfc_h =
-        sw.has_sfc ?
-        surface_c3_flux_factor(ᶠlg_fv[1]) *
-        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_h_tot)[]) : zero(FT)
-    JF_sfc_q =
-        (sw.has_sfc && HasQ) ?
-        surface_c3_flux_factor(ᶠlg_fv[1]) *
-        _c3_scalar(Fields.field_values(sfc_col.ρ_flux_q_tot)[]) : zero(FT)
+    @inbounds begin
+        E_sfc = max(zero(FT), Fields.field_values(edmf_col.sfc_mf_src)[])
+        mse_buoy = Fields.field_values(edmf_col.sfc_mse_buoy)[]
+        qt_buoy = HasQ ? Fields.field_values(edmf_col.sfc_qt_buoy)[] : zero(FT)
+        JF_sfc_h =
+            sw.has_sfc ?
+            surface_c3_flux_factor(ᶠlg_fv[1]) *
+            _c3_scalar(Fields.field_values(sfc_col.ρ_flux_h_tot)[]) : zero(FT)
+        JF_sfc_q =
+            (sw.has_sfc && HasQ) ?
+            surface_c3_flux_factor(ᶠlg_fv[1]) *
+            _c3_scalar(Fields.field_values(sfc_col.ρ_flux_q_tot)[]) : zero(FT)
 
-    ρ1_1 = max(ᶜρ1_fv[1], ε)
-    r_sfc_1 =
-        sw.has_sfc ?
-        edmfx_sfc_relaxation_rate(E_sfc, ρa1_in[1], ρ1_1, sw.a_min) : zero(FT)
+        ρ1_1 = max(ᶜρ1_fv[1], ε)
+        r_sfc_1 =
+            sw.has_sfc ?
+            edmfx_sfc_relaxation_rate(E_sfc, ρa1_in[1], ρ1_1, sw.a_min) : zero(FT)
+    end
 
     # ── Step 2: Face diffusive conductances + decoupled scalar solves ──
     @inbounds for f in 1:(nz + 1)
@@ -5372,12 +5443,9 @@ function step_edmf_and_env_turbulence!(
         mom_geom = (; ᶜlg = Fields.local_geometry_field(Y.c), ᶠlg)
         mom_weights = (; ᶠw_u)
         mom_scratch = (;
-            diag = p.scratch.ᶜtemp_scalar_3,
             upper = p.scratch.ᶜtemp_scalar_4,
-            lower = p.scratch.ᶜtemp_scalar_5,
             rhs1 = p.scratch.ᶜtemp_scalar_6,
             rhs2 = p.scratch.ᶜtemp_scalar_7,
-            sol1 = p.scratch.ᶜtemp_UVWxUVW.components.data.:1,
             sol2 = p.scratch.ᶜtemp_UVWxUVW.components.data.:2,
         )
         sw_mom = MomentumVDiffColumnSweep{false, FT}(
@@ -5552,7 +5620,7 @@ end
     ᶜρtke_fv = Fields.field_values(Yc_col.ρtke)
     ᶜJ_fv = Fields.field_values(geom_col.ᶜJ)
     ᶜz_fv = Fields.field_values(geom_col.ᶜz)
-    z_sfc_val = Fields.field_values(geom_col.z_sfc)[]
+    z_sfc_val = @inbounds Fields.field_values(geom_col.z_sfc)[]
     ᶠlg_fv = Fields.field_values(geom_col.ᶠlg)
     ᶜlg_fv = Fields.field_values(geom_col.ᶜlg)
     ᶠK_u_fv = Fields.field_values(tke_pre_col.ᶠK_u)
@@ -5560,162 +5628,183 @@ end
     ᶠbg_fv = Fields.field_values(tke_pre_col.ᶠbuoygrad)
     ᶜl_mix_fv = Fields.field_values(tke_pre_col.ᶜl_mix)
     ᶜshear_fv = Fields.field_values(tke_pre_col.ᶜshear_prod)
-    ρtke_flux_c3 = Fields.field_values(sfc_col.ρtke_flux)[]
+    ρtke_flux_c3 = @inbounds Fields.field_values(sfc_col.ρtke_flux)[]
 
-    diag_fv = Fields.field_values(scratch_col.diag)
+    ᶜρa1_fv = HasEDMF ? Fields.field_values(Yc_col.sgsʲs.:(1).ρa) : ᶜρ_fv
+    ᶜρ1_fv = HasEDMF ? Fields.field_values(edmf_col.ᶜρ1) : ᶜρ_fv
+    ᶜu1_fv = HasEDMF ? Fields.field_values(edmf_col.ᶜu1) : ᶜρ_fv
+    ᶜu0_fv = HasEDMF ? Fields.field_values(edmf_col.ᶜu0) : ᶜρ_fv
+    ᶠu31_fv = HasEDMF ? Fields.field_values(Yf_col.sgsʲs.:(1).u₃) : ᶠK_u_fv
+    ᶜρ_diff1_fv = HasEDMF ? Fields.field_values(edmf_col.ᶜρ_diff1) : ᶜρ_fv
+    ᶠgradΦ_fv = HasEDMF ? Fields.field_values(geom_col.ᶠgradᵥ_ᶜΦ) : ᶠK_u_fv
+    ᶠuh3_fv = HasEDMF ? Fields.field_values(geom_col.ᶠuₕ³) : ᶠK_u_fv
+
     upper_fv = Fields.field_values(scratch_col.upper)
-    lower_fv = Fields.field_values(scratch_col.lower)
     rhs_fv = Fields.field_values(scratch_col.rhs)
-    sol_fv = Fields.field_values(scratch_col.sol)
 
     nz = Spaces.nlevels(axes(Yc_col.ρ))
 
-    @inbounds for k in 1:nz
-        J_k = ᶜJ_fv[k]
-        ρ_k = ᶜρ_fv[k]
-        ρtke_k = max(zero(FT), ᶜρtke_fv[k])
-        tke_k = ρtke_k / max(ρ_k, ε)
-
-        ρ_top = k < nz ? (ρ_k + ᶜρ_fv[k + 1]) / 2 : zero(FT)
-        ρ_bot = k > 1 ? (ᶜρ_fv[k - 1] + ρ_k) / 2 : zero(FT)
-        G_top =
-            (sw.has_diff && k < nz) ?
-            face_conductance(ᶠlg_fv[k + 1], ρ_top * ᶠK_u_fv[k + 1]) : zero(FT)
-        G_bot =
-            (sw.has_diff && k > 1) ?
-            face_conductance(ᶠlg_fv[k], ρ_bot * ᶠK_u_fv[k]) : zero(FT)
-
-        # Split buoyancy gradient into positive production (RHS) and negative
-        # buoyancy destruction (Patankar sink on diagonal) across every cell.
-        bg_top = ᶠbg_fv[k + 1]
-        bg_bot = ᶠbg_fv[k]
-        K_h_top = ᶠK_h_fv[k + 1]
-        K_h_bot = ᶠK_h_fv[k]
-        P_buoy =
-            FT(0.5) *
-            ρ_k *
-            (K_h_top * max(zero(FT), -bg_top) + K_h_bot * max(zero(FT), -bg_bot))
-        D_buoy =
-            FT(0.5) *
-            ρ_k *
-            (K_h_top * max(zero(FT), bg_top) + K_h_bot * max(zero(FT), bg_bot))
-
-        l_safe = max(ᶜl_mix_fv[k], one(FT))
-        # D_diss / tke = c_d * ρ * √tke / max(l_mix, 1)
-        sink_diss = sw.has_diff ? sw.c_d * ρ_k * sqrt(tke_k) / l_safe : zero(FT)
-        sink_buoy = D_buoy / max(tke_k, ε_tke)
-        sink_coeff = sink_diss + sink_buoy
-
-        diag_fv[k] = J_k * ρ_k + Δt * (G_top + G_bot) + Δt * J_k * sink_coeff
-        if k < nz
-            upper_fv[k] = -Δt * G_top
+    @inbounds begin
+        sfc_tke_rhs = if sw.has_diff
+            sfc_factor = surface_c3_flux_factor(ᶠlg_fv[1])
+            Δt * sfc_factor * max(zero(FT), _c3_scalar(ρtke_flux_c3))
+        else
+            zero(FT)
         end
-        if k > 1
-            lower_fv[k - 1] = -Δt * G_bot
-        end
+        bg_bot = ᶠbg_fv[1]
+        K_h_bot = ᶠK_h_fv[1]
+        P_buoy_bot = K_h_bot * max(zero(FT), -bg_bot)
+        D_buoy_bot = K_h_bot * max(zero(FT), bg_bot)
 
-        prod_k = ρ_k * max(zero(FT), ᶜshear_fv[k]) + P_buoy
+        G_bot = zero(FT)
+        upper_prev = zero(FT)
+        rhs_prev = zero(FT)
+        x_next = zero(FT)
+        bit_prev = zero(FT)
+        bit_prev_valid = false
 
-        if HasEDMF
-            ρa1_k = Fields.field_values(Yc_col.sgsʲs.:(1).ρa)[k]
-            ρ1_k = max(Fields.field_values(edmf_col.ᶜρ1)[k], ε)
-            a1_k = draft_area(ρa1_k, ρ1_k)
-            a0_k = max(zero(FT), one(FT) - a1_k)
-            u1_k = Fields.field_values(edmf_col.ᶜu1)[k]
-            u0_k = Fields.field_values(edmf_col.ᶜu0)[k]
-            Δw_k = get_physical_w(u1_k - u0_k, ᶜlg_fv[k])
+        for k in 1:nz
+            J_k = ᶜJ_fv[k]
+            ρ_k = ᶜρ_fv[k]
+            ρtke_k = max(zero(FT), ᶜρtke_fv[k])
+            tke_k = ρtke_k / max(ρ_k, ε)
 
-            if sw.has_nh_drag
-                drag_coeff = pressure_drag_coefficient(
-                    sw.α_d,
-                    sw.scale_height,
-                    a1_k,
-                    a0_k,
-                    sw.a_min,
-                    sw.a_max,
-                    ᶜz_fv[k],
-                    z_sfc_val,
-                    sw.c_R,
-                    sw.R_max,
-                )
-                prod_k += ρa1_k * a0_k * drag_coeff * abs(Δw_k)^3
+            G_top = if sw.has_diff && k < nz
+                ρ_top = (ρ_k + ᶜρ_fv[k + 1]) / 2
+                face_conductance(ᶠlg_fv[k + 1], ρ_top * ᶠK_u_fv[k + 1])
+            else
+                zero(FT)
             end
 
-            # Detrainment shear-mixing production
-            ᶠu31_fv = Fields.field_values(Yf_col.sgsʲs.:(1).u₃)
-            ᶜρ_diff1_fv = Fields.field_values(edmf_col.ᶜρ_diff1)
-            ᶠgradΦ_fv = Fields.field_values(geom_col.ᶠgradᵥ_ᶜΦ)
-            w_f_top = k < nz ? get_physical_w(ᶠu31_fv[k + 1], ᶠlg_fv[k + 1]) : zero(FT)
-            w_f_bot = k > 1 ? get_physical_w(ᶠu31_fv[k], ᶠlg_fv[k]) : zero(FT)
-            vb_top =
-                k < nz ?
-                vertical_buoyancy_acceleration(
-                    (ᶜρ_diff1_fv[k] + ᶜρ_diff1_fv[k + 1]) / 2,
-                    _c3_scalar(ᶠgradΦ_fv[k + 1]),
-                    ᶠlg_fv[k + 1],
-                ) : zero(FT)
-            vb_bot =
-                k > 1 ?
-                vertical_buoyancy_acceleration(
-                    (ᶜρ_diff1_fv[k - 1] + ᶜρ_diff1_fv[k]) / 2,
-                    _c3_scalar(ᶠgradΦ_fv[k]),
-                    ᶠlg_fv[k],
-                ) : zero(FT)
-            bit_k =
-                FT(0.5) * (
-                    (
-                        k < nz ?
+            # Split buoyancy gradient into positive production (RHS) and negative
+            # buoyancy destruction (Patankar sink on diagonal) across every cell.
+            bg_top = ᶠbg_fv[k + 1]
+            K_h_top = ᶠK_h_fv[k + 1]
+            P_buoy_top = K_h_top * max(zero(FT), -bg_top)
+            D_buoy_top = K_h_top * max(zero(FT), bg_top)
+            P_buoy = FT(0.5) * ρ_k * (P_buoy_top + P_buoy_bot)
+            D_buoy = FT(0.5) * ρ_k * (D_buoy_top + D_buoy_bot)
+            P_buoy_bot = P_buoy_top
+            D_buoy_bot = D_buoy_top
+
+            l_safe = max(ᶜl_mix_fv[k], one(FT))
+            # D_diss / tke = c_d * ρ * √tke / max(l_mix, 1)
+            sink_diss = sw.has_diff ? sw.c_d * ρ_k * sqrt(tke_k) / l_safe : zero(FT)
+            sink_buoy = D_buoy / max(tke_k, ε_tke)
+            sink_coeff = sink_diss + sink_buoy
+
+            diag_k = J_k * ρ_k + Δt * (G_top + G_bot) + Δt * J_k * sink_coeff
+            prod_k = ρ_k * max(zero(FT), ᶜshear_fv[k]) + P_buoy
+
+            if HasEDMF
+                ρa1_k = ᶜρa1_fv[k]
+                if ρa1_k > zero(FT)
+                    ρ1_k = max(ᶜρ1_fv[k], ε)
+                    a1_k = draft_area(ρa1_k, ρ1_k)
+                    a0_k = max(zero(FT), one(FT) - a1_k)
+                    Δw_k = get_physical_w(ᶜu1_fv[k] - ᶜu0_fv[k], ᶜlg_fv[k])
+
+                    if sw.has_nh_drag
+                        drag_coeff = pressure_drag_coefficient(
+                            sw.α_d,
+                            sw.scale_height,
+                            a1_k,
+                            a0_k,
+                            sw.a_min,
+                            sw.a_max,
+                            ᶜz_fv[k],
+                            z_sfc_val,
+                            sw.c_R,
+                            sw.R_max,
+                        )
+                        prod_k += ρa1_k * a0_k * drag_coeff * abs(Δw_k)^3
+                    end
+
+                    bit_top = if k < nz
+                        w_f_top = get_physical_w(ᶠu31_fv[k + 1], ᶠlg_fv[k + 1])
+                        vb_top = vertical_buoyancy_acceleration(
+                            (ᶜρ_diff1_fv[k] + ᶜρ_diff1_fv[k + 1]) / 2,
+                            _c3_scalar(ᶠgradΦ_fv[k + 1]),
+                            ᶠlg_fv[k + 1],
+                        )
                         detr_buoy_inv_time_scale(
-                            w_f_top,
-                            vb_top,
-                            sw.entr_detr_buoy_inv_tau_max,
-                        ) : zero(FT)
-                    ) +
-                    (
-                        k > 1 ?
-                        detr_buoy_inv_time_scale(
-                            w_f_bot,
-                            vb_bot,
-                            sw.entr_detr_buoy_inv_tau_max,
-                        ) : zero(FT)
+                            w_f_top, vb_top, sw.entr_detr_buoy_inv_tau_max,
+                        )
+                    else
+                        zero(FT)
+                    end
+                    bit_bot = if k > 1
+                        if bit_prev_valid
+                            bit_prev
+                        else
+                            w_f_bot = get_physical_w(ᶠu31_fv[k], ᶠlg_fv[k])
+                            vb_bot = vertical_buoyancy_acceleration(
+                                (ᶜρ_diff1_fv[k - 1] + ᶜρ_diff1_fv[k]) / 2,
+                                _c3_scalar(ᶠgradΦ_fv[k]),
+                                ᶠlg_fv[k],
+                            )
+                            detr_buoy_inv_time_scale(
+                                w_f_bot, vb_bot, sw.entr_detr_buoy_inv_tau_max,
+                            )
+                        end
+                    else
+                        zero(FT)
+                    end
+                    bit_prev = bit_top
+                    bit_prev_valid = true
+                    bit_k = FT(0.5) * (bit_top + bit_bot)
+                    div_mf = _draft_mass_flux_divergence(
+                        ᶠu31_fv, ᶠuh3_fv, ᶠlg_fv, ᶜρa1_fv, J_k, k, nz,
                     )
-                )
-            div_mf = _draft_mass_flux_divergence(
-                ᶠu31_fv,
-                Fields.field_values(geom_col.ᶠuₕ³),
-                ᶠlg_fv,
-                Fields.field_values(Yc_col.sgsʲs.:(1).ρa),
-                J_k,
-                k,
-                nz,
-            )
-            detr_k = compute_detrainment(
-                sw.turbconv_params,
-                a1_k,
-                ρa1_k,
-                bit_k,
-                div_mf,
-                area_bounding_entr_detr(sw.turbconv_params, a1_k),
-                sw.detr_model,
-            )
-            prod_k += FT(0.5) * max(zero(FT), detr_k) * ρa1_k * (Δw_k * Δw_k)
+                    detr_k = compute_detrainment(
+                        sw.turbconv_params,
+                        a1_k,
+                        ρa1_k,
+                        bit_k,
+                        div_mf,
+                        area_bounding_entr_detr(sw.turbconv_params, a1_k),
+                        sw.detr_model,
+                    )
+                    prod_k += FT(0.5) * max(zero(FT), detr_k) * ρa1_k * (Δw_k * Δw_k)
+                else
+                    bit_prev_valid = false
+                end
+            end
+
+            rhs_k = J_k * ρtke_k + Δt * J_k * prod_k
+            if k == 1
+                rhs_k += sfc_tke_rhs
+            end
+
+            if nz == 1
+                ᶜρtke_fv[1] = ρ_k * max(zero(FT), rhs_k / diag_k)
+            elseif k == 1
+                w = inv(diag_k)
+                upper_prev = (-Δt * G_top) * w
+                rhs_prev = rhs_k * w
+                upper_fv[1] = upper_prev
+                rhs_fv[1] = rhs_prev
+            elseif k < nz
+                l_k = -Δt * G_bot
+                w = inv(diag_k - l_k * upper_prev)
+                upper_prev = (-Δt * G_top) * w
+                rhs_prev = (rhs_k - l_k * rhs_prev) * w
+                upper_fv[k] = upper_prev
+                rhs_fv[k] = rhs_prev
+            else
+                l_nz = -Δt * G_bot
+                x_next = (rhs_k - l_nz * rhs_prev) / (diag_k - l_nz * upper_prev)
+                ᶜρtke_fv[nz] = ρ_k * max(zero(FT), x_next)
+            end
+            G_bot = G_top
         end
 
-        rhs_fv[k] = J_k * ρtke_k + Δt * J_k * prod_k
-    end
-
-    # Surface TKE flux at bottom face
-    if sw.has_diff
-        @inbounds begin
-            sfc_factor = surface_c3_flux_factor(ᶠlg_fv[1])
-            rhs_fv[1] += Δt * sfc_factor * max(zero(FT), _c3_scalar(ρtke_flux_c3))
+        if nz > 1
+            for k in (nz - 1):-1:1
+                x_next = rhs_fv[k] - upper_fv[k] * x_next
+                ᶜρtke_fv[k] = ᶜρ_fv[k] * max(zero(FT), x_next)
+            end
         end
-    end
-
-    column_thomas_solve!(sol_fv, rhs_fv, diag_fv, upper_fv, lower_fv, nz)
-
-    @inbounds for k in 1:nz
-        ᶜρtke_fv[k] = ᶜρ_fv[k] * max(zero(FT), sol_fv[k])
     end
 
     return nothing
@@ -5773,11 +5862,8 @@ function step_prognostic_tke!(Y, p, Δt; refresh_diffusivities::Bool = true)
     detr_model = has_edmf ? p.atmos.edmfx_model.detr_model : nothing
 
     scratch = (;
-        diag = p.scratch.ᶜtemp_scalar_3,
         upper = p.scratch.ᶜtemp_scalar_4,
-        lower = p.scratch.ᶜtemp_scalar_5,
         rhs = p.scratch.ᶜtemp_scalar_6,
-        sol = p.scratch.ᶜtemp_scalar_7,
     )
 
     sw = TKEColumnSweep{
