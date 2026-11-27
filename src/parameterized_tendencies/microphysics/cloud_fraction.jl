@@ -1110,6 +1110,85 @@ end
     )
 end
 
+struct _CovCFPrecomputed{FT}
+    cf_zero::FT
+    inv_sqrt2π::FT
+    two_c_σ::FT
+    sqrt_two_c_σ::FT
+    r_v_θ_sq::FT
+    one_minus_w_eq::FT
+    c_trunc::FT
+    c_finite::Bool
+    cdf_neg_c::FT
+    exp_neg_c2_half::FT
+    Z_trunc::FT
+    s_trunc::FT
+end
+
+function _CovCFPrecomputed(
+    c_σ::FT,
+    r_v_θ::FT,
+    c_trunc::FT,
+    w_eq::FT,
+) where {FT}
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    cf_zero = normal_cdf(_compute_z(zero(FT)))
+    two_c_σ = FT(2) * c_σ
+    sqrt_two_c_σ = sqrt(two_c_σ)
+    r_v_θ_sq = r_v_θ^2
+    one_minus_w_eq = one(FT) - w_eq
+    c_finite = isfinite(c_trunc)
+    c_fin = ifelse(c_finite, c_trunc, one(FT))
+    φc = exp(-c_fin^2 / 2) * inv_sqrt2π
+    cdf_neg_c = c_finite ? normal_cdf(-c_fin) : zero(FT)
+    exp_neg_c2_half = c_finite ? exp(-c_fin^2 / 2) : zero(FT)
+    Z_trunc = c_finite ? (one(FT) - 2 * cdf_neg_c) : one(FT)
+    s_trunc = c_finite ? sqrt(Z_trunc / (Z_trunc - 2 * c_fin * φc)) : one(FT)
+    return _CovCFPrecomputed{FT}(
+        cf_zero,
+        inv_sqrt2π,
+        two_c_σ,
+        sqrt_two_c_σ,
+        r_v_θ_sq,
+        one_minus_w_eq,
+        c_trunc,
+        c_finite,
+        cdf_neg_c,
+        exp_neg_c2_half,
+        Z_trunc,
+        s_trunc,
+    )
+end
+
+struct _PrecipFractionColumnSweep{FT}
+    f_decay::FT
+    q_min::FT
+end
+
+function (sw::_PrecipFractionColumnSweep{FT})(ᶜpf, ᶜcf, ᶜq_precip) where {FT}
+    z_FT = zero(FT)
+    one_FT = one(FT)
+    ᶜpf_fv = Fields.field_values(ᶜpf)
+    ᶜcf_fv = Fields.field_values(ᶜcf)
+    ᶜqp_fv = Fields.field_values(ᶜq_precip)
+    nc = Spaces.nlevels(axes(ᶜpf))
+    a_p_above = -one_FT
+    @inbounds for k in nc:-1:1
+        q_precip = ᶜqp_fv[k]
+        cf_fin = ᶜcf_fv[k]
+        a_p_above = ifelse(
+            q_precip > sw.q_min,
+            ifelse(
+                a_p_above < z_FT,
+                max(cf_fin, z_FT),
+                min(one_FT, max(max(cf_fin, z_FT), sw.f_decay * a_p_above)),
+            ),
+            z_FT,
+        )
+        ᶜpf_fv[k] = a_p_above
+    end
+end
+
 struct CovCacheCloudFractionEDMFColumnSweep{
     UsesHGrad,
     HasTKE,
@@ -1163,6 +1242,142 @@ struct CovCacheCloudFractionEDMFColumnSweep{
     α_min::FT
     α_max::FT
     f_decay::FT
+    pre::_CovCFPrecomputed{FT}
+end
+
+@inline function CovCacheCloudFractionEDMFColumnSweep{
+    UsesHGrad,
+    HasTKE,
+    DiagCorr,
+    HasDisp,
+    UseCurv,
+    HasAlpha,
+    Is0M,
+    UseUpdraftAlpha,
+    HasSGSMoments,
+    HasPF,
+    HasCF0,
+    IsNonEq,
+    IsQuad,
+    VT,
+    VMP,
+    TCM,
+    MPM,
+    TCP,
+    SFP,
+    SBM,
+    SFL,
+    FT,
+}(
+    vthermo::VT,
+    vτ_mp::VMP,
+    turbconv_model::TCM,
+    microphysics_model::MPM,
+    turbconv_params::TCP,
+    sf_params::SFP,
+    scale_blending_method::SBM,
+    σ_floor::SFL,
+    vkc::FT,
+    c_σ::FT,
+    r_v_θ::FT,
+    ℓ_h_q²::FT,
+    ℓ_h_θ²::FT,
+    ℓ_h_θq::FT,
+    κ_b_per_tke::FT,
+    c_b_κ_min::FT,
+    τ_0::FT,
+    r_max::FT,
+    corr_fallback::FT,
+    A::FT,
+    w_eq::FT,
+    q_min::FT,
+    c_d::FT,
+    c_trunc::FT,
+    Δx_h_filter::FT,
+    c_u::FT,
+    α_min::FT,
+    α_max::FT,
+    f_decay::FT,
+) where {
+    UsesHGrad,
+    HasTKE,
+    DiagCorr,
+    HasDisp,
+    UseCurv,
+    HasAlpha,
+    Is0M,
+    UseUpdraftAlpha,
+    HasSGSMoments,
+    HasPF,
+    HasCF0,
+    IsNonEq,
+    IsQuad,
+    VT,
+    VMP,
+    TCM,
+    MPM,
+    TCP,
+    SFP,
+    SBM,
+    SFL,
+    FT,
+}
+    pre = _CovCFPrecomputed(c_σ, r_v_θ, c_trunc, w_eq)
+    return CovCacheCloudFractionEDMFColumnSweep{
+        UsesHGrad,
+        HasTKE,
+        DiagCorr,
+        HasDisp,
+        UseCurv,
+        HasAlpha,
+        Is0M,
+        UseUpdraftAlpha,
+        HasSGSMoments,
+        HasPF,
+        HasCF0,
+        IsNonEq,
+        IsQuad,
+        VT,
+        VMP,
+        TCM,
+        MPM,
+        TCP,
+        SFP,
+        SBM,
+        SFL,
+        FT,
+    }(
+        vthermo,
+        vτ_mp,
+        turbconv_model,
+        microphysics_model,
+        turbconv_params,
+        sf_params,
+        scale_blending_method,
+        σ_floor,
+        vkc,
+        c_σ,
+        r_v_θ,
+        ℓ_h_q²,
+        ℓ_h_θ²,
+        ℓ_h_θq,
+        κ_b_per_tke,
+        c_b_κ_min,
+        τ_0,
+        r_max,
+        corr_fallback,
+        A,
+        w_eq,
+        q_min,
+        c_d,
+        c_trunc,
+        Δx_h_filter,
+        c_u,
+        α_min,
+        α_max,
+        f_decay,
+        pre,
+    )
 end
 
 @inline function _cov_cache_scalar_step(
@@ -1173,6 +1388,7 @@ end
     },
     cf_in::FT,
     lvl,
+    inv,
 ) where {
     UsesHGrad, HasTKE, DiagCorr, HasDisp, UseCurv, HasAlpha,
     Is0M, UseUpdraftAlpha, HasSGSMoments, HasPF, HasCF0, IsNonEq, IsQuad,
@@ -1182,6 +1398,7 @@ end
     one_FT = one(FT)
     eps_FT = eps(FT)
     ϵ_num_FT = ϵ_numerics(FT)
+    pre = sw.pre
 
     buoygrad = blended_N²(lvl.bg_c, cf_in, lvl.∂θ∂z, lvl.∂q∂z)
     prandtl = turbulent_prandtl_number(sw.turbconv_params, buoygrad, lvl.srn_k)
@@ -1204,55 +1421,55 @@ end
     l_mix = get_mixing_length_field(ml, Val(:master))
 
     if HasTKE
-        l_mix_disp = buoyancy_bounded_mixing_length(
-            l_mix, sw.κ_b_per_tke * lvl.tke_pos, lvl.N²_disp,
-        )
-        τ_turb = turbulent_lagrangian_time(l_mix_disp, sw.κ_b_per_tke * lvl.tke_pos)
+        l_mix_disp = buoyancy_bounded_mixing_length(l_mix, inv.κ_b_eff, lvl.N²_disp)
+        τ_turb = turbulent_lagrangian_time(l_mix_disp, inv.κ_b_eff)
         l_d = displacement_length(
             l_mix_disp,
             floor_displacement_length(
-                sw.c_b_κ_min, lvl.N²_disp, τ_turb, sw.τ_0, lvl.z_k - lvl.z_sfc, lvl.Δz_k,
+                sw.c_b_κ_min, lvl.N²_disp, τ_turb, sw.τ_0, inv.z_agl, lvl.Δz_k,
             ),
-            lvl.z_k - lvl.z_sfc,
+            inv.z_agl,
         )
     else
         l_mix_disp = one_FT
         l_d = displacement_length(
             l_mix,
             floor_displacement_length(
-                sw.c_b_κ_min, lvl.N²_disp, FT(Inf), sw.τ_0, lvl.z_k - lvl.z_sfc,
-                lvl.Δz_k,
+                sw.c_b_κ_min, lvl.N²_disp, FT(Inf), sw.τ_0, inv.z_agl, lvl.Δz_k,
             ),
-            lvl.z_k - lvl.z_sfc,
+            inv.z_agl,
         )
     end
 
-    ℓ_v_q² = 2 * sw.c_σ * l_d^2
-    ℓ_v_θ² = sw.r_v_θ^2 * ℓ_v_q²
+    ℓ_v_q² = pre.two_c_σ * l_d^2
+    ℓ_v_θ² = pre.r_v_θ_sq * ℓ_v_q²
     ℓ_v_θq = sw.r_v_θ * ℓ_v_q²
 
-    q_rel_cap² = (sw.r_max * lvl.q_mean)^2
     q′q′_raw = displacement_covariance(sw.ℓ_h_q², ℓ_v_q², lvl.inv_q, lvl.∂q∂z, lvl.∂q∂z)
     T′T′ =
-        lvl.∂T_∂θ^2 *
+        inv.∂T_∂θ² *
         displacement_covariance(sw.ℓ_h_θ², ℓ_v_θ², lvl.inv_θ, lvl.∂θ∂z, lvl.∂θ∂z)
     T′q′ = if DiagCorr
         tqp =
             lvl.∂T_∂θ *
             displacement_covariance(sw.ℓ_h_θq, ℓ_v_θq, lvl.inv_θq, lvl.∂θ∂z, lvl.∂q∂z)
-        tqp * sqrt(min(one_FT, q_rel_cap² / max(q′q′_raw, eps_FT^2)))
+        tqp * sqrt(min(one_FT, inv.q_rel_cap² / max(q′q′_raw, eps_FT^2)))
     else
         z_FT
     end
     disp_S = if HasDisp
-        χ_k = sw.r_v_θ * lvl.γ_k * lvl.∂T_∂θ
         displacement_curvature_coefficients(
-            sqrt(2 * sw.c_σ) * l_d, χ_k, lvl.∂q∂z, lvl.∂θ∂z, lvl.d²q_dz², lvl.d²θ_dz²,
+            pre.sqrt_two_c_σ * l_d,
+            inv.χ_k,
+            lvl.∂q∂z,
+            lvl.∂θ∂z,
+            lvl.d²q_dz²,
+            lvl.d²θ_dz²,
         )
     else
         (; lin = z_FT, curv = z_FT)
     end
-    q′q′ = min(q′q′_raw, q_rel_cap²)
+    q′q′ = min(q′q′_raw, inv.q_rel_cap²)
     corr_Tq = if DiagCorr
         sgs_correlation_Tq(T′T′, q′q′, T′q′, lvl.T_mean, lvl.q_mean, sw.corr_fallback)
     else
@@ -1263,26 +1480,35 @@ end
     var_S = (σ_q - lvl.γ_k * σ_T)^2 + 2 * lvl.γ_k * σ_T * σ_q * (one_FT - corr_c)
     σ_S = max(sqrt(var_S), ϵ_num_FT)
 
-    α_val = if HasAlpha
-        α_eq = if Is0M
-            one_FT / sw.A
+    if HasAlpha
+        α_eq, q_c_eq = if Is0M
+            (one_FT / sw.A, z_FT)
         else
-            sgs_variance_fidelity(
-                sw.A, lvl.τ_mp_k, sw.c_d, lvl.tke_pos, HasTKE ? l_mix_disp : one_FT,
-                sw.w_eq, lvl.q_c, lvl.mu_S_raw, σ_S, sw.q_min, disp_S.lin,
-                disp_S.curv, sw.c_trunc,
+            inv_τ_turb =
+                inv.c_d_sqrt_tke / max(HasTKE ? l_mix_disp : one_FT, one_FT)
+            Da = ifelse(
+                inv_τ_turb > z_FT,
+                sw.A * lvl.τ_mp_k * inv_τ_turb,
+                z_FT,
             )
+            α_Da = one_FT / (one_FT + Da)
+            q_c_eq_loc = _equilibrium_condensate_pre(
+                lvl.mu_S_raw, σ_S, disp_S.lin, disp_S.curv, pre,
+            )
+            r = inv.q_c_plus_min / (q_c_eq_loc + sw.q_min)
+            (α_Da * (r / (sw.w_eq + pre.one_minus_w_eq * r)), q_c_eq_loc)
         end
-        if UseUpdraftAlpha
+        α_val = if UseUpdraftAlpha
             α_up = clamp(sw.c_u * lvl.q_c_up / max(σ_S, ϵ_num_FT), sw.α_min, sw.α_max)
             (one_FT - lvl.W_up) * α_eq + lvl.W_up * α_up
         else
             α_eq
         end
     else
-        one_FT
+        q_c_eq = z_FT
+        α_val = one_FT
     end
-    return (; buoygrad, l_mix, q′q′, T′T′, T′q′, corr_Tq, disp_S, σ_S, α = α_val)
+    return (; buoygrad, l_mix, q′q′, T′T′, T′q′, corr_Tq, disp_S, σ_S, α = α_val, q_c_eq)
 end
 
 @inline function _picard_cov_aitken_step(
@@ -1304,26 +1530,65 @@ end
     Is0M, UseUpdraftAlpha, HasSGSMoments, HasPF, HasCF0, IsNonEq, IsQuad,
     VT, VMP, TCM, MPM, TCP, SFP, SBM, SFL, FT,
 }
-    c1 = c0
-    cf_in = c0
-    iter = 1
+    pre = sw.pre
+    inv = (;
+        z_agl = lvl.z_k - lvl.z_sfc,
+        κ_b_eff = sw.κ_b_per_tke * lvl.tke_pos,
+        q_rel_cap² = (sw.r_max * lvl.q_mean)^2,
+        ∂T_∂θ² = lvl.∂T_∂θ^2,
+        χ_k = sw.r_v_θ * lvl.γ_k * lvl.∂T_∂θ,
+        c_d_sqrt_tke = sw.c_d * sqrt(max(lvl.tke_pos, z_FT)),
+        q_c_plus_min = q_c + sw.q_min,
+    )
+    if q_c <= z_FT
+        cf_in = a_env_k * pre.cf_zero + up_cf_sum
+        c1 = cf_in
+        iter = 3
+    else
+        c1 = c0
+        cf_in = c0
+        iter = 1
+    end
     while true
-        st = _cov_cache_scalar_step(sw, cf_in, lvl)
+        st = _cov_cache_scalar_step(sw, cf_in, lvl, inv)
         iter == 3 && return (st, cf_in)
         σ_it = IsQuad ? st.σ_S : ϵ_num_FT
-        c_env = _compute_cloud_fraction(
-            q_c, mu_S_k, σ_it, st.α, sw.σ_floor, z_FT, z_FT, sw.c_trunc,
+        q_c_eq_it = if !HasDisp && HasAlpha && !Is0M && IsQuad && (mu_S_k == lvl.mu_S_raw)
+            st.q_c_eq
+        else
+            _truncated_displacement_condensate_pre(mu_S_k, σ_it, pre)
+        end
+        c_env = _compute_cloud_fraction_given_eq(
+            q_c, mu_S_k, σ_it, st.α, sw.σ_floor, q_c_eq_it, pre.cf_zero,
         )
         c_new = a_env_k * c_env + up_cf_sum
         if iter == 1
+            c_new === c0 && return (st, c0)
             c1 = c_new
             cf_in = c_new
         else
-            cf_in = _aitken_picard_helper(c0, c1, c_new)
+            cf_acc = _aitken_picard_helper(c0, c1, c_new)
+            cf_acc === c1 && return (st, c1)
+            cf_in = cf_acc
         end
         iter += 1
     end
 end
+
+struct _CovCacheCFEDMFPointOp{SW, OFV, YFV, EFV, GFV, MFV, COL}
+    sw::SW
+    out_fv::OFV
+    yc_fv::YFV
+    env_fv::EFV
+    grad_fv::GFV
+    geom_fv::MFV
+    col::COL
+end
+
+@inline (op::_CovCacheCFEDMFPointOp)(idx, _) =
+    _cov_cache_cf_edmf_point!(
+        op.sw, op.out_fv, op.yc_fv, op.env_fv, op.grad_fv, op.geom_fv, op.col, idx[1],
+    )
 
 function (sw::CovCacheCloudFractionEDMFColumnSweep{
     UsesHGrad, HasTKE, DiagCorr, HasDisp, UseCurv, HasAlpha,
@@ -1340,77 +1605,113 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
     Is0M, UseUpdraftAlpha, HasSGSMoments, HasPF, HasCF0, IsNonEq, IsQuad,
     VT, VMP, TCM, MPM, TCP, SFP, SBM, SFL, FT,
 }
+    z_FT = zero(FT)
+    out_fv = (;
+        ᶜbuoy_fv = Fields.field_values(o.ᶜbuoygrad),
+        ᶜlmix_fv = Fields.field_values(o.ᶜl_mix),
+        ᶜqq_fv = Fields.field_values(o.ᶜq′q′),
+        ᶜTT_fv = Fields.field_values(o.ᶜT′T′),
+        ᶜTq_fv = Fields.field_values(o.ᶜT′q′),
+        ᶜcorr_fv = Fields.field_values(o.ᶜcorr_Tq),
+        ᶜα_fv = Fields.field_values(o.ᶜα),
+        ᶜdisp_fv = Fields.field_values(o.ᶜdisp_S),
+        ᶜcf_fv = Fields.field_values(o.ᶜcloud_fraction),
+        ᶜcf0_fv = Fields.field_values(o.ᶜcloud_fraction⁰),
+        ᶜmom_fv = Fields.field_values(o.ᶜsgs_moments),
+        ᶜq_precip_fv = Fields.field_values(o.ᶜq_precip),
+    )
+
+    Yc_ρ_fv = Fields.field_values(Yc.ρ)
+    Yc_ρtke_fv = HasTKE ? Fields.field_values(Yc.ρtke) : Yc_ρ_fv
+    yc_fv = (;
+        Yc_ρ_fv,
+        Yc_sgs_fv = Fields.field_values(Yc.sgsʲs),
+        Yc_ρtke_fv,
+        Yc_ρql_fv = IsNonEq ? Fields.field_values(Yc.ρq_lcl) : Yc_ρ_fv,
+        Yc_ρqi_fv = IsNonEq ? Fields.field_values(Yc.ρq_icl) : Yc_ρ_fv,
+        Yc_ρqr_fv = IsNonEq ? Fields.field_values(Yc.ρq_rai) : Yc_ρ_fv,
+        Yc_ρqs_fv = IsNonEq ? Fields.field_values(Yc.ρq_sno) : Yc_ρ_fv,
+    )
+
+    env_fv = (;
+        ᶜT0_fv = Fields.field_values(env.ᶜT⁰),
+        ᶜp_fv = Fields.field_values(env.ᶜp),
+        ᶜqt0_fv = Fields.field_values(env.ᶜq_tot_nonneg⁰),
+        ᶜql0_fv = Fields.field_values(env.ᶜq_liq⁰),
+        ᶜqi0_fv = Fields.field_values(env.ᶜq_ice⁰),
+        ᶜρʲs_fv = Fields.field_values(env.ᶜρʲs),
+        ᶜTʲs_fv = Fields.field_values(env.ᶜTʲs),
+        ᶜqtʲs_fv = Fields.field_values(env.ᶜq_tot_nonnegʲs),
+        ᶜql_totʲs_fv = Fields.field_values(env.ᶜq_liqʲs),
+        ᶜqi_totʲs_fv = Fields.field_values(env.ᶜq_iceʲs),
+    )
+
+    grad_fv = (;
+        ᶜbg_fv = Fields.field_values(grad.ᶜbg_coeffs),
+        ᶜgθ_fv = Fields.field_values(grad.ᶜgradᵥ_θ_liq_ice),
+        ᶜgq_fv = Fields.field_values(grad.ᶜgradᵥ_q_tot),
+        ᶠdθ_fv = Fields.field_values(grad.ᶠ∂θli∂z),
+        ᶠdq_fv = Fields.field_values(grad.ᶠ∂qt∂z),
+        ᶜinv_q_fv = Fields.field_values(grad.ᶜinv_q),
+        ᶜinv_θ_fv = Fields.field_values(grad.ᶜinv_θ),
+        ᶜinv_θq_fv = Fields.field_values(grad.ᶜinv_θq),
+        ᶜsrn_fv = Fields.field_values(grad.ᶜstrain_rate_norm),
+    )
+
+    geom_fv = (;
+        ᶜlg_fv = Fields.field_values(geom.ᶜlg),
+        ᶜΔz_fv = Fields.field_values(geom.ᶜΔz),
+    )
+    col = (;
+        nc = Spaces.nlevels(axes(o.ᶜbuoygrad)),
+        z_sfc = Fields.field_values(geom.z_sfc)[],
+        ustar = Fields.field_values(geom.sfc_conditions.ustar)[],
+        L_mo = Fields.field_values(geom.sfc_conditions.obukhov_length)[],
+        sfc_tke = HasTKE ? specific(Yc_ρtke_fv[1], Yc_ρ_fv[1]) : z_FT,
+    )
+
+    op = _CovCacheCFEDMFPointOp(sw, out_fv, yc_fv, env_fv, grad_fv, geom_fv, col)
+    DataLayouts.foreach_point(op, out_fv.ᶜbuoy_fv; enumerate = Val(true))
+end
+
+@inline function _cov_cache_cf_edmf_point!(
+    sw::CovCacheCloudFractionEDMFColumnSweep{
+        UsesHGrad, HasTKE, DiagCorr, HasDisp, UseCurv, HasAlpha,
+        Is0M, UseUpdraftAlpha, HasSGSMoments, HasPF, HasCF0, IsNonEq, IsQuad,
+        VT, VMP, TCM, MPM, TCP, SFP, SBM, SFL, FT,
+    },
+    out_fv,
+    yc_fv,
+    env_fv,
+    grad_fv,
+    geom_fv,
+    col,
+    k::Int,
+) where {
+    UsesHGrad, HasTKE, DiagCorr, HasDisp, UseCurv, HasAlpha,
+    Is0M, UseUpdraftAlpha, HasSGSMoments, HasPF, HasCF0, IsNonEq, IsQuad,
+    VT, VMP, TCM, MPM, TCP, SFP, SBM, SFL, FT,
+}
     thp_u = _unwrapped(sw.vthermo)
     τ_mp_u = _unwrapped(sw.vτ_mp)
     z_FT = zero(FT)
-    one_FT = one(FT)
     eps_FT = eps(FT)
     ϵ_num_FT = ϵ_numerics(FT)
     fmin_FT = floatmin(FT)
     inf_FT = FT(Inf)
+    nc = col.nc
+    pre = sw.pre
 
-    ᶜbuoy_fv = Fields.field_values(o.ᶜbuoygrad)
-    ᶜlmix_fv = Fields.field_values(o.ᶜl_mix)
-    ᶜqq_fv = Fields.field_values(o.ᶜq′q′)
-    ᶜTT_fv = Fields.field_values(o.ᶜT′T′)
-    ᶜTq_fv = Fields.field_values(o.ᶜT′q′)
-    ᶜcorr_fv = Fields.field_values(o.ᶜcorr_Tq)
-    ᶜα_fv = Fields.field_values(o.ᶜα)
-    ᶜdisp_fv = Fields.field_values(o.ᶜdisp_S)
-    ᶜcf_fv = Fields.field_values(o.ᶜcloud_fraction)
-    ᶜcf0_fv = Fields.field_values(o.ᶜcloud_fraction⁰)
-    ᶜmom_fv = Fields.field_values(o.ᶜsgs_moments)
-    ᶜpf_fv = Fields.field_values(o.ᶜprecip_frac)
-
-    Yc_ρ_fv = Fields.field_values(Yc.ρ)
-    Yc_sgs_fv = Fields.field_values(Yc.sgsʲs)
-    Yc_ρtke_fv = HasTKE ? Fields.field_values(Yc.ρtke) : Yc_ρ_fv
-    Yc_ρql_fv = IsNonEq ? Fields.field_values(Yc.ρq_lcl) : Yc_ρ_fv
-    Yc_ρqi_fv = IsNonEq ? Fields.field_values(Yc.ρq_icl) : Yc_ρ_fv
-    Yc_ρqr_fv = IsNonEq ? Fields.field_values(Yc.ρq_rai) : Yc_ρ_fv
-    Yc_ρqs_fv = IsNonEq ? Fields.field_values(Yc.ρq_sno) : Yc_ρ_fv
-
-    ᶜT0_fv = Fields.field_values(env.ᶜT⁰)
-    ᶜp_fv = Fields.field_values(env.ᶜp)
-    ᶜqt0_fv = Fields.field_values(env.ᶜq_tot_nonneg⁰)
-    ᶜql0_fv = Fields.field_values(env.ᶜq_liq⁰)
-    ᶜqi0_fv = Fields.field_values(env.ᶜq_ice⁰)
-    ᶜρʲs_fv = Fields.field_values(env.ᶜρʲs)
-    ᶜTʲs_fv = Fields.field_values(env.ᶜTʲs)
-    ᶜqtʲs_fv = Fields.field_values(env.ᶜq_tot_nonnegʲs)
-    ᶜql_totʲs_fv = Fields.field_values(env.ᶜq_liqʲs)
-    ᶜqi_totʲs_fv = Fields.field_values(env.ᶜq_iceʲs)
-
-    ᶜbg_fv = Fields.field_values(grad.ᶜbg_coeffs)
-    ᶜgθ_fv = Fields.field_values(grad.ᶜgradᵥ_θ_liq_ice)
-    ᶜgq_fv = Fields.field_values(grad.ᶜgradᵥ_q_tot)
-    ᶠdθ_fv = Fields.field_values(grad.ᶠ∂θli∂z)
-    ᶠdq_fv = Fields.field_values(grad.ᶠ∂qt∂z)
-    ᶜinv_q_fv = Fields.field_values(grad.ᶜinv_q)
-    ᶜinv_θ_fv = Fields.field_values(grad.ᶜinv_θ)
-    ᶜinv_θq_fv = Fields.field_values(grad.ᶜinv_θq)
-    ᶜsrn_fv = Fields.field_values(grad.ᶜstrain_rate_norm)
-
-    ᶜlg_fv = Fields.field_values(geom.ᶜlg)
-    ᶜΔz_fv = Fields.field_values(geom.ᶜΔz)
-    z_sfc = Fields.field_values(geom.z_sfc)[]
-    ustar = Fields.field_values(geom.sfc_conditions.ustar)[]
-    L_mo = Fields.field_values(geom.sfc_conditions.obukhov_length)[]
-    sfc_tke = HasTKE ? specific(Yc_ρtke_fv[1], Yc_ρ_fv[1]) : z_FT
-
-    nc = Spaces.nlevels(axes(o.ᶜbuoygrad))
-    a_p_above = -one_FT
-
-    @inbounds for k in nc:-1:1
-        ρ_gm = Yc_ρ_fv[k]
-        sgsʲs_k = Yc_sgs_fv[k]
+    @inbounds begin
+        ρ_gm = yc_fv.Yc_ρ_fv[k]
+        sgsʲs_k = yc_fv.Yc_sgs_fv[k]
         ρa⁰_k = ρa⁰(ρ_gm, sgsʲs_k, sw.turbconv_model)
 
-        T_mean = ᶜT0_fv[k]
-        p_k = ᶜp_fv[k]
-        q_mean = ᶜqt0_fv[k]
-        q_liq0_k = ᶜql0_fv[k]
-        q_ice0_k = ᶜqi0_fv[k]
+        T_mean = env_fv.ᶜT0_fv[k]
+        p_k = env_fv.ᶜp_fv[k]
+        q_mean = env_fv.ᶜqt0_fv[k]
+        q_liq0_k = env_fv.ᶜql0_fv[k]
+        q_ice0_k = env_fv.ᶜqi0_fv[k]
         ρ_env = max(
             eps_FT,
             TD.air_density(thp_u, T_mean, p_k, q_mean, q_liq0_k, q_ice0_k),
@@ -1420,28 +1721,28 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
             ql_e = max(
                 z_FT,
                 specific_env_value(
-                    @name(q_lcl), Yc_ρql_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
+                    @name(q_lcl), yc_fv.Yc_ρql_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
                     sw.turbconv_model,
                 ),
             )
             qi_e = max(
                 z_FT,
                 specific_env_value(
-                    @name(q_icl), Yc_ρqi_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
+                    @name(q_icl), yc_fv.Yc_ρqi_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
                     sw.turbconv_model,
                 ),
             )
             qr_e = max(
                 z_FT,
                 specific_env_value(
-                    @name(q_rai), Yc_ρqr_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
+                    @name(q_rai), yc_fv.Yc_ρqr_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
                     sw.turbconv_model,
                 ),
             )
             qs_e = max(
                 z_FT,
                 specific_env_value(
-                    @name(q_sno), Yc_ρqs_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
+                    @name(q_sno), yc_fv.Yc_ρqs_fv[k], ρ_gm, sgsʲs_k, ρa⁰_k,
                     sw.turbconv_model,
                 ),
             )
@@ -1453,22 +1754,22 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
         q_cloud = max(z_FT, q_cloud_raw)
         q_c = q_lcl + q_icl
 
-        bg_c = ᶜbg_fv[k]
-        lg_k = ᶜlg_fv[k]
+        bg_c = grad_fv.ᶜbg_fv[k]
+        lg_k = geom_fv.ᶜlg_fv[k]
         z_k = lg_k.coordinates.z
-        Δz_k = ᶜΔz_fv[k]
+        Δz_k = geom_fv.ᶜΔz_fv[k]
         Δ_f_k = resolvability_filter_scale(sw.Δx_h_filter, Δz_k)
-        ∂q∂z = projected_vector_data(C3, ᶜgq_fv[k], lg_k)
-        ∂θ∂z = projected_vector_data(C3, ᶜgθ_fv[k], lg_k)
+        ∂q∂z = projected_vector_data(C3, grad_fv.ᶜgq_fv[k], lg_k)
+        ∂θ∂z = projected_vector_data(C3, grad_fv.ᶜgθ_fv[k], lg_k)
 
         # Match `BottomBiasedF2C(bottom = SetValue(1 + half))` and
         # `TopBiasedF2C(top = SetValue(nc - half))`.
         k_lo = nc >= 2 ? (k == 1 ? 2 : k) : 2
         k_hi = nc >= 2 ? (k == nc ? nc : k + 1) : 1
-        f_θ_lo = ᶠdθ_fv[k_lo]
-        f_θ_hi = ᶠdθ_fv[k_hi]
-        f_q_lo = ᶠdq_fv[k_lo]
-        f_q_hi = ᶠdq_fv[k_hi]
+        f_θ_lo = grad_fv.ᶠdθ_fv[k_lo]
+        f_θ_hi = grad_fv.ᶠdθ_fv[k_hi]
+        f_q_lo = grad_fv.ᶠdq_fv[k_lo]
+        f_q_hi = grad_fv.ᶠdq_fv[k_hi]
         N²_disp = max(
             dry_N²(bg_c, f_θ_lo, f_q_lo),
             dry_N²(bg_c, f_θ_hi, f_q_hi),
@@ -1494,13 +1795,13 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
             z_FT
         end
 
-        tke_k = HasTKE ? specific(Yc_ρtke_fv[k], ρ_gm) : z_FT
+        tke_k = HasTKE ? specific(yc_fv.Yc_ρtke_fv[k], ρ_gm) : z_FT
         tke_pos = max(tke_k, z_FT)
-        srn_k = ᶜsrn_fv[k]
+        srn_k = grad_fv.ᶜsrn_fv[k]
         if UsesHGrad
-            inv_q = ᶜinv_q_fv[k]
-            inv_θq = ᶜinv_θq_fv[k]
-            inv_θ = ᶜinv_θ_fv[k]
+            inv_q = grad_fv.ᶜinv_q_fv[k]
+            inv_θq = grad_fv.ᶜinv_θq_fv[k]
+            inv_θ = grad_fv.ᶜinv_θ_fv[k]
         else
             inv_q = z_FT
             inv_θq = z_FT
@@ -1510,11 +1811,11 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
         a_env_k = draft_area(ρa⁰_k, ρ_env)
         up_cf_sum, af, aq, afL, a_sum = _updraft_cf_and_fidelity_terms(
             sgsʲs_k,
-            ᶜρʲs_fv[k],
-            ᶜTʲs_fv[k],
-            ᶜqtʲs_fv[k],
-            ᶜql_totʲs_fv[k],
-            ᶜqi_totʲs_fv[k],
+            env_fv.ᶜρʲs_fv[k],
+            env_fv.ᶜTʲs_fv[k],
+            env_fv.ᶜqtʲs_fv[k],
+            env_fv.ᶜql_totʲs_fv[k],
+            env_fv.ᶜqi_totʲs_fv[k],
             thp_u,
             sw.microphysics_model,
             sw.turbconv_params,
@@ -1527,38 +1828,43 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
 
         lvl = (;
             bg_c, ∂θ∂z, ∂q∂z, N²_disp, d²q_dz², d²θ_dz²,
-            z_k, z_sfc, Δz_k, Δ_f_k, ustar, L_mo, sfc_tke, tke_k, tke_pos, srn_k,
+            z_k, z_sfc = col.z_sfc, Δz_k, Δ_f_k,
+            ustar = col.ustar, L_mo = col.L_mo, sfc_tke = col.sfc_tke,
+            tke_k, tke_pos, srn_k,
             inv_q, inv_θq, inv_θ, T_mean, q_mean, ∂T_∂θ, γ_k,
             q_c, mu_S_raw, τ_mp_k, q_c_up, W_up,
         )
 
         st3, c_ait = _picard_cov_aitken_step(
-            sw, ᶜcf_fv[k], q_c, mu_S_k, a_env_k, up_cf_sum, ϵ_num_FT, z_FT, lvl,
+            sw, out_fv.ᶜcf_fv[k], q_c, mu_S_k, a_env_k, up_cf_sum, ϵ_num_FT, z_FT, lvl,
         )
 
-        ᶜbuoy_fv[k] = st3.buoygrad
-        ᶜlmix_fv[k] = st3.l_mix
-        ᶜqq_fv[k] = st3.q′q′
-        ᶜTT_fv[k] = st3.T′T′
+        out_fv.ᶜbuoy_fv[k] = st3.buoygrad
+        out_fv.ᶜlmix_fv[k] = st3.l_mix
+        out_fv.ᶜqq_fv[k] = st3.q′q′
+        out_fv.ᶜTT_fv[k] = st3.T′T′
         if DiagCorr
-            ᶜTq_fv[k] = st3.T′q′
+            out_fv.ᶜTq_fv[k] = st3.T′q′
         end
-        ᶜcorr_fv[k] = st3.corr_Tq
+        out_fv.ᶜcorr_fv[k] = st3.corr_Tq
         if HasAlpha
-            ᶜα_fv[k] = st3.α
+            out_fv.ᶜα_fv[k] = st3.α
         end
         if HasDisp
-            ᶜdisp_fv[k] = st3.disp_S
+            out_fv.ᶜdisp_fv[k] = st3.disp_S
         end
 
         if HasSGSMoments
             lin_mom = UseCurv ? st3.disp_S.lin : z_FT
             curv_mom = UseCurv ? st3.disp_S.curv : z_FT
-            sgs_mom, σ_fin = if IsQuad
+            sgs_mom, σ_fin, q_c_eq_fin = if IsQuad
                 σ3 = st3.σ_S
                 λ_lag = _continuous_lagrange(q_c, max(st3.α * σ3, ϵ_num_FT))
+                can_reuse =
+                    HasAlpha && !Is0M && (!HasDisp || UseCurv) && (mu_S_k == lvl.mu_S_raw)
                 q_c_eq =
-                    equilibrium_condensate(mu_S_k, σ3, lin_mom, curv_mom, sw.c_trunc)
+                    can_reuse ? st3.q_c_eq :
+                    _equilibrium_condensate_pre(mu_S_k, σ3, lin_mom, curv_mom, pre)
                 λ_eq_fit = _continuous_lagrange(q_c_eq, σ3)
                 λ_eq_trunc = ifelse(
                     isinf(sw.c_trunc),
@@ -1566,36 +1872,29 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
                     ifelse(q_c_eq > z_FT, λ_eq_fit, -inf_FT),
                 )
                 λ_eq = ifelse(iszero(curv_mom), λ_eq_trunc, λ_eq_fit)
-                ((; sigma_S = σ3, λ_lagrange = λ_lag, λ_eq), σ3)
+                ((; sigma_S = σ3, λ_lagrange = λ_lag, λ_eq), σ3, q_c_eq)
             else
-                (_gridmean_sgs_moments(q_c, q_cloud, q_sat_k), ϵ_num_FT)
+                (
+                    _gridmean_sgs_moments(q_c, q_cloud, q_sat_k),
+                    ϵ_num_FT,
+                    _equilibrium_condensate_pre(mu_S_k, ϵ_num_FT, lin_mom, curv_mom, pre),
+                )
             end
-            ᶜmom_fv[k] = sgs_mom
-            cf_env_fin = _compute_cloud_fraction(
-                q_c, mu_S_k, σ_fin, st3.α, sw.σ_floor, lin_mom, curv_mom, sw.c_trunc,
+            out_fv.ᶜmom_fv[k] = sgs_mom
+            cf_env_fin = _compute_cloud_fraction_given_eq(
+                q_c, mu_S_k, σ_fin, st3.α, sw.σ_floor, q_c_eq_fin, pre.cf_zero,
             )
             if HasCF0
-                ᶜcf0_fv[k] = cf_env_fin
+                out_fv.ᶜcf0_fv[k] = cf_env_fin
             end
-            cf_fin = a_env_k * cf_env_fin + up_cf_sum
-            ᶜcf_fv[k] = cf_fin
+            out_fv.ᶜcf_fv[k] = a_env_k * cf_env_fin + up_cf_sum
             if HasPF
-                a_p_above = ifelse(
-                    q_precip > sw.q_min,
-                    ifelse(
-                        a_p_above < z_FT,
-                        max(cf_fin, z_FT),
-                        min(one_FT, max(max(cf_fin, z_FT), sw.f_decay * a_p_above)),
-                    ),
-                    z_FT,
-                )
-                ᶜpf_fv[k] = a_p_above
+                out_fv.ᶜq_precip_fv[k] = q_precip
             end
         else
-            ᶜcf_fv[k] = c_ait
+            out_fv.ᶜcf_fv[k] = c_ait
         end
     end
-    return nothing
 end
 
 function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
@@ -1700,10 +1999,11 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
     ᶜcloud_fraction⁰ = has_cf0 ? p.precomputed.ᶜcloud_fraction⁰ : ᶜcloud_fraction
     ᶜsgs_moments = has_sgs_moments ? p.precomputed.ᶜsgs_moments : ᶜcorr_Tq
     ᶜprecip_frac = has_pf ? p.precomputed.ᶜprecip_frac : ᶜcloud_fraction
+    ᶜq_precip = has_pf ? p.scratch.ᶜtemp_scalar_7 : ᶜcloud_fraction
 
     out = (;
         ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
-        ᶜcloud_fraction, ᶜcloud_fraction⁰, ᶜsgs_moments, ᶜprecip_frac,
+        ᶜcloud_fraction, ᶜcloud_fraction⁰, ᶜsgs_moments, ᶜq_precip,
     )
     env_in = (;
         ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
@@ -1762,8 +2062,23 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
     )
     DataLayouts.foreach_column(
         sw, out, Y.c, env_in, grad_in, geom_in;
-        shmem = Val(:none),
+        shmem = Val(0),
     )
+    if has_pf
+        if dev isa ClimaComms.CUDADevice
+            _precip_fraction_sweep!(
+                ᶜprecip_frac, ᶜcloud_fraction, ᶜq_precip, f_decay, q_min,
+            )
+        else
+            DataLayouts.foreach_column(
+                _PrecipFractionColumnSweep(f_decay, q_min),
+                ᶜprecip_frac,
+                ᶜcloud_fraction,
+                ᶜq_precip;
+                shmem = Val(:none),
+            )
+        end
+    end
     return nothing
 end
 
@@ -1962,12 +2277,41 @@ loop of `set_covariance_cache!`.
 Expected saturation excess `E[max(0, S)] = μ_S Φ(z) + σ_S φ(z)` with
 `z = μ_S / σ_S` for a Gaussian saturation excess `S ~ N(μ_S, σ_S²)`.
 """
-@inline function truncated_gaussian_condensate(mu_S, sigma_S)
+@inline function _truncated_gaussian_condensate_pre(mu_S, sigma_S, inv_sqrt2π)
     FT = typeof(mu_S)
-    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     σ = max(FT(sigma_S), ϵ_numerics(FT))
     z = mu_S / σ
     return max(zero(FT), mu_S * normal_cdf(z) + σ * exp(-z^2 / 2) * inv_sqrt2π)
+end
+
+@inline function truncated_gaussian_condensate(mu_S, sigma_S)
+    FT = typeof(mu_S)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    return _truncated_gaussian_condensate_pre(mu_S, sigma_S, inv_sqrt2π)
+end
+
+@inline function _truncated_displacement_core(
+    mu_S, sigma_S, c, s_trunc, cdf_neg_c, exp_neg_c2_half, Z_trunc, inv_sqrt2π,
+)
+    FT = typeof(mu_S)
+    σ = max(sigma_S, ϵ_numerics(FT)) * s_trunc
+    a = clamp(-mu_S / σ, -c, c)
+    # Upper-tail differences vanish cleanly where `a` is clamped to `c`.
+    I₀ = normal_cdf(-a) - cdf_neg_c
+    I₁ = (exp(-a^2 / 2) - exp_neg_c2_half) * inv_sqrt2π
+    return max(zero(FT), (mu_S * I₀ + σ * I₁) / Z_trunc)
+end
+
+@inline function _truncated_displacement_condensate_pre(
+    mu_S,
+    sigma_S,
+    pre::_CovCFPrecomputed,
+)
+    pre.c_finite || return _truncated_gaussian_condensate_pre(mu_S, sigma_S, pre.inv_sqrt2π)
+    return _truncated_displacement_core(
+        mu_S, sigma_S, pre.c_trunc, pre.s_trunc, pre.cdf_neg_c,
+        pre.exp_neg_c2_half, pre.Z_trunc, pre.inv_sqrt2π,
+    )
 end
 
 """
@@ -2005,18 +2349,22 @@ The factors that depend on `c` alone keep the parameter's type.
 """
 @inline function truncated_displacement_condensate(mu_S, sigma_S, c)
     FT = typeof(mu_S)
-    isfinite(c) || return truncated_gaussian_condensate(mu_S, sigma_S)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    Z = one(c) - 2 * normal_cdf(-c)
-    σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
-    a = clamp(-mu_S / σ, -c, c)
-    # Upper-tail differences, accurate where `a` approaches `c`. Each difference
-    # takes the same expression at both ends, so it vanishes exactly where `a`
-    # is clamped to `c`.
-    I₀ = normal_cdf(-a) - normal_cdf(-c)
-    I₁ = (exp(-a^2 / 2) - exp(-c^2 / 2)) * inv_sqrt2π
-    return max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
+    isfinite(c) || return _truncated_gaussian_condensate_pre(mu_S, sigma_S, inv_sqrt2π)
+    cdf_neg_c = normal_cdf(-c)
+    Z = one(c) - 2 * cdf_neg_c
+    return _truncated_displacement_core(
+        mu_S, sigma_S, c, truncated_displacement_scale(c),
+        cdf_neg_c, exp(-c^2 / 2), Z, inv_sqrt2π,
+    )
 end
+
+@inline _equilibrium_condensate_pre(mu_S, sigma_S, lin, curv, pre::_CovCFPrecomputed) =
+    ifelse(
+        iszero(curv),
+        _truncated_displacement_condensate_pre(mu_S, sigma_S, pre),
+        displacement_condensate(mu_S, sigma_S, lin, curv),
+    )
 
 """
     equilibrium_condensate(mu_S, sigma_S, lin, curv, c)
@@ -2539,6 +2887,25 @@ harmonic mean of the two widths, over which the truncated-Gaussian relation
 spreads the whole condensate. Where `q_c ≤ q_c_eq` or `μ_S ≥ 0`, `C` reduces
 to `q_c / σ_aug`. Without condensate, the cloud fraction is zero.
 """
+@inline function _compute_cloud_fraction_given_eq(
+    q_c,
+    mu_S,
+    sigma_S,
+    α,
+    σ_floor,
+    q_c_eq,
+    cf_zero,
+)
+    FT = typeof(mu_S)
+    FT(q_c) <= zero(FT) && return cf_zero
+    δ_sub = max(zero(FT), -FT(mu_S))
+    σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_floor, δ_sub)
+    q_c_eq_part = min(FT(q_c), FT(q_c_eq))
+    q_c_neq_part = max(zero(FT), FT(q_c) - FT(q_c_eq))
+    σ_neq = sqrt(σ_aug^2 + δ_sub^2)
+    return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
+end
+
 @inline function _compute_cloud_fraction(
     q_c,
     mu_S,
@@ -2550,15 +2917,13 @@ to `q_c / σ_aug`. Without condensate, the cloud fraction is zero.
     c = oftype(mu_S, 3),
 )
     FT = typeof(mu_S)
-    FT(q_c) <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
-    δ_sub = max(zero(FT), -FT(mu_S))
-    σ_aug = _sgs_augmented_sigma(FT(sigma_S), α, σ_floor, δ_sub)
+    cf_zero = normal_cdf(_compute_z(zero(FT)))
+    FT(q_c) <= zero(FT) && return cf_zero
     q_c_eq =
         equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
-    q_c_eq_part = min(FT(q_c), q_c_eq)
-    q_c_neq_part = max(zero(FT), FT(q_c) - q_c_eq)
-    σ_neq = sqrt(σ_aug^2 + δ_sub^2)
-    return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
+    return _compute_cloud_fraction_given_eq(
+        q_c, mu_S, sigma_S, α, σ_floor, q_c_eq, cf_zero,
+    )
 end
 
 """

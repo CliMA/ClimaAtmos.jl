@@ -289,8 +289,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         Y.c,
         drafts,
         ᶜh_tot,
-        ᶜK;
-        shmem = Val(:none),
+        ᶜK,
     ) do Yc, drafts, ᶜh_tot, ᶜK
         unrolled_foreach(drafts) do (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ)
             @inline
