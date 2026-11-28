@@ -388,11 +388,9 @@ No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
 `EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`.
 """
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
-    FT = eltype(p.params)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
-    (zero_FT, ϵ) = (zero(FT), ϵ_numerics(FT))
     a_max = CAP.max_area(CAP.turbconv_params(p.params))
     # The SGS tracers whose grid-mean densities are prognostic
     χ_names = unrolled_filter(
@@ -405,6 +403,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         (Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j))
     end
     DataLayouts.foreach_column(Y.c, drafts, ᶜh_tot, ᶜK) do Yc, drafts, ᶜh_tot, ᶜK
+        (zero_FT, ϵ) = (zero(eltype(ᶜK)), ϵ_numerics(eltype(ᶜK)))
         for (ᶜsgsʲ, ᶠu₃ʲ, ᶜρʲ) in drafts
             # Clip the area fraction ρa/ρʲ to [0, a_max] using the updraft
             # density ρʲ, and the vertical velocity to non-negative values, with zero velocity

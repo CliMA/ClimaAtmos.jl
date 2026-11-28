@@ -1,4 +1,4 @@
-484
+485
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+485
+- More fused loops (the implicit-stage precomputed quantities, water advection,
+  hyperdiffusion, explicit vertical advection, the microphysics Jacobian, surface
+  and boundary statements) change the order of floating-point operations.
+
 484
 - Move energy/humidity/condensate upwinding into the Newton residual (2 Newton
   iterations by default) and delete the post-Newton advection correction.

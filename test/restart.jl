@@ -116,7 +116,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜT′T′,
             :ᶜq′q′,
             :ᶜcorr_Tq,
-            :ᶜT′q′,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -177,7 +176,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜT′T′,
             :ᶜq′q′,
             :ᶜcorr_Tq,
-            :ᶜT′q′,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

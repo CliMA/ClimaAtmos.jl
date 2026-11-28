@@ -819,19 +819,16 @@ function set_horizontal_diffusivities!(Y, p)
 end
 
 """
-    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
-    ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    h_eff(thermo_params, T, q_tot, q_liq, q_ice)
 
-Write `h_eff + Φ` or `h_eff - h_d(T)` into the center field `ᶜout` and return
-it, where
+Return the mass-weighted specific enthalpy of the diffusing water,
 
-    h_eff = (h_v q_v + h_l q_l + h_i q_i) / max(q_v + q_l + q_i, ε)
+    h_eff = (h_v q_v + h_l q_l + h_i q_i) / max(q_v + q_l + q_i, ε),
 
-is the mass-weighted specific enthalpy of the diffusing water
-`ᶜq_water = (q_t, q_l, q_i)` (`ᶜdiffusing_water_phases`, or its value in a
-PROPHET subdomain), with the vapor `q_v = q_t - q_l - q_i`. Every specific
-humidity is clipped at zero, so a limiter undershoot cannot change the sign of
-the weights or of the denominator.
+with `(q_tot, q_liq, q_ice)` the total, liquid, and ice water that diffuses
+(`ᶜdiffusing_water_phases`, or its value in a PROPHET subdomain) and the vapor
+`q_v = q_tot - q_liq - q_ice`. Every specific humidity is clipped at zero, so a
+limiter undershoot cannot change the sign of the weights or of the denominator.
 
 `h_eff + Φ` is the coefficient of the aggregate water Laplacian gradient in the
 fourth-order enthalpy hyperdiffusion flux
@@ -840,30 +837,7 @@ fourth-order enthalpy hyperdiffusion flux
 counterpart in the hyperdiffusion of updraft moist static energy `mseʲ`, where
 diffusing water replaces dry air at constant specific mass, so the geopotential
 cancels and a reference-temperature shift shifts the coefficient by
-`C_water - C_d`.
-
-The result is written into a field rather than returned lazily because every
-caller passes it to a divergence operator, where the nested expression exceeds
-GPU kernel parameter limits.
-"""
-@inline function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
-    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
-    @. ᶜout = h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) + ᶜΦ
-    return ᶜout
-end
-@inline function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
-    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
-    @. ᶜout =
-        h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) -
-        TD.enthalpy_dry(thermo_params, ᶜT)
-    return ᶜout
-end
-
-"""
-    h_eff(thermo_params, T, q_tot, q_liq, q_ice)
-
-Return the mass-weighted specific enthalpy `h_eff` of the diffusing water.
-Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
+`C_water - C_d`. Called from `apply_hyperdiffusion_tendency!`.
 """
 @inline function h_eff(thermo_params, T, q_tot, q_liq, q_ice)
     FT = typeof(T)
@@ -1335,13 +1309,13 @@ end
 # the process; pick whichever 1M mp carries the active formation. With
 # `sgs_cloud_species_constant_timescales > 0`, the constant timescales of the
 # phases replace the relaxation times of the processes.
-cloud_species_blend_params(p) = (;
-    thermo_params = CAP.thermodynamics_params(p.params),
-    cmp = CAP.cloud_formation_1m_params(p.params),
-    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params)),
-    constant_timescales = CAP.sgs_cloud_species_constant_timescales(p.params) > 0,
-    τ_liquid = CAP.condensation_evaporation_timescale(p.params),
-    τ_ice = CAP.sublimation_deposition_timescale(p.params),
+@inline cloud_species_blend_params(params) = (;
+    thermo_params = CAP.thermodynamics_params(params),
+    cmp = CAP.cloud_formation_1m_params(params),
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(params)),
+    constant_timescales = CAP.sgs_cloud_species_constant_timescales(params) > 0,
+    τ_liquid = CAP.condensation_evaporation_timescale(params),
+    τ_ice = CAP.sublimation_deposition_timescale(params),
 )
 
 """
@@ -1457,10 +1431,12 @@ twice.
         fused ? Base.materialize(ᶜsensitivities_lazy) : ᶜsensitivities_lazy
     ᶜc_qt = materialize_into!(ᶜc_qt_out, (@inline @. lazy(first(ᶜsensitivities))))
     ᶜc_sl = materialize_into!(ᶜc_sl_out, (@inline @. lazy(last(ᶜsensitivities))))
-    @. ᶜρχₜ -= ᶜdiffdivᵥ(
-        -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
-        ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),
-    )
+    ᶠλ_lazy = @inline @. lazy(ᶠinterp(ᶜλ))
+    ᶠλ = fused ? Base.materialize(ᶠλ_lazy) : ᶠλ_lazy
+    ᶠF_eq_lazy =
+        @inline @. lazy(ᶠλ * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl))
+    ᶠF_eq = fused ? Base.materialize(ᶠF_eq_lazy) : ᶠF_eq_lazy
+    @. ᶜρχₜ -= ᶜdiffdivᵥ(-((1 - ᶠλ) * ᶠw * ᶠgradᵥ(ᶜq_μ)) + ᶠF_eq)
     return nothing
 end
 
@@ -1652,7 +1628,7 @@ function add_blended_cloud_species_diffusionᵥ!(
     (; microphysics_model) = p.atmos
     (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜl_mix, ᶜp, ᶜsgs_moments) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    blend_params = cloud_species_blend_params(p)
+    blend_params = cloud_species_blend_params(p.params)
     cloud_names = unrolled_filter(
         ((χ_name, ρχ_name),) ->
             !isnothing(cloud_species_phase(χ_name)) &&
@@ -1863,7 +1839,7 @@ remainder `q_t - q_l - q_i`.
 With a non-equilibrium scheme, these are `(q_tot - q_rai - q_sno, q_lcl, q_icl)`,
 since rain and snow sediment rather than follow the turbulent flow at the scales
 of the boundary-layer and PROPHET closures; the same tuple weights the
-fourth-order hyperdiffusive water enthalpy (`ᶜh_eff_plus_Φ!`). With `precipitation = true`, used by
+fourth-order hyperdiffusive water enthalpy (`h_eff`). With `precipitation = true`, used by
 the LES closures, whose subgrid eddies carry falling precipitation as well, they
 are `(q_tot, q_lcl + q_rai, q_icl + q_sno)`. With an equilibrium scheme, they
 are `q_tot` and the diagnostic `ᶜq_liq` and `ᶜq_ice` in either case. In dry
