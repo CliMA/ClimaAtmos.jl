@@ -1044,16 +1044,17 @@ end
     end
 end
 
-@inline function _rain_evap_geom_factor(
-    mp::CMP.Microphysics1MParams,
+@inline function _precip_vent_geom_factor(
+    precip_phase,
+    vel_phase,
+    aps,
     ρ::FT,
     n0::FT,
     v0::FT,
     λ_inv::FT,
 ) where {FT <: AbstractFloat}
-    (; mass, vent) = mp.precip.rain
-    (; χv, ve, Δv, gamma_vent) = mp.terminal_velocity.rain
-    aps = mp.air_properties
+    (; mass, vent) = precip_phase
+    (; χv, ve, Δv, gamma_vent) = vel_phase
     (; ν_air) = aps
     (; r0) = mass
     return 4 * FT(π) * n0 / ρ * λ_inv^2 *
@@ -1066,27 +1067,37 @@ end
            )
 end
 
-@inline function _snow_subl_geom_factor(
+@inline _rain_evap_geom_factor(
     mp::CMP.Microphysics1MParams,
     ρ::FT,
     n0::FT,
     v0::FT,
     λ_inv::FT,
-) where {FT <: AbstractFloat}
-    (; mass, vent) = mp.precip.snow
-    (; χv, ve, Δv, gamma_vent) = mp.terminal_velocity.snow
-    aps = mp.air_properties
-    (; ν_air) = aps
-    (; r0) = mass
-    return 4 * FT(π) * n0 / ρ * λ_inv^2 *
-           (
-               vent.a +
-               vent.b * CMU.precomputed(CM1._cbrt_schmidt, aps) /
-               _pos_pow_frac(r0 / max(λ_inv, floatmin(FT)), (ve + Δv) / FT(2)) *
-               sqrt(2 * v0 * χv / ν_air * λ_inv) *
-               gamma_vent
-           )
-end
+) where {FT <: AbstractFloat} = _precip_vent_geom_factor(
+    mp.precip.rain,
+    mp.terminal_velocity.rain,
+    mp.air_properties,
+    ρ,
+    n0,
+    v0,
+    λ_inv,
+)
+
+@inline _snow_subl_geom_factor(
+    mp::CMP.Microphysics1MParams,
+    ρ::FT,
+    n0::FT,
+    v0::FT,
+    λ_inv::FT,
+) where {FT <: AbstractFloat} = _precip_vent_geom_factor(
+    mp.precip.snow,
+    mp.terminal_velocity.snow,
+    mp.air_properties,
+    ρ,
+    n0,
+    v0,
+    λ_inv,
+)
 
 @inline function _coupled_1m_source_terms_with_qsat(
     mp::CMP.Microphysics1MParams,

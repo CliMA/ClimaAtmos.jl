@@ -126,8 +126,9 @@ function temporary_quantities(
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
         # DSS buffer for scalar center fields (used by `hgrad_invariant!` and
         # `vertical_transport_step.jl`), plus two extra buffers so the three
-        # horizontal-gradient invariants in `set_covariance_cache_and_cloud_fraction!`
-        # batch into a single `Spaces.weighted_dss!`; `nothing` when no DSS is needed.
+        # horizontal-gradient invariants in
+        # `set_covariance_cache_and_cloud_fraction!` batch into one
+        # `Spaces.weighted_dss!`; `nothing` when no DSS is needed.
         ᶜscalar_dss_buffer = do_dss(center_space) ?
                              Spaces.create_dss_buffer(Fields.Field(FT, center_space)) :
                              nothing,

@@ -83,10 +83,10 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
-    # A moist `QuadratureCloud` under `PrognosticEDMFX` updates covariance cache,
-    # Picard cloud fraction, SGS moments, and precipitation overlap in a single
-    # scalar-register column sweep without materializing `cloud_env_state`.
-    # Other models keep the modular Picard path.
+    # A moist `QuadratureCloud` under `PrognosticEDMFX` updates covariance
+    # cache, Picard cloud fraction, SGS moments, and precipitation overlap in a
+    # single scalar-register column sweep without materializing
+    # `cloud_env_state`. Other models keep the modular Picard path.
     fused = cloud_model isa QuadratureCloud && microphysics_model isa MoistMicrophysics
     is_edmf = turbconv_model isa PrognosticEDMFX
     if fused && is_edmf && uses_covariances(p.atmos)
@@ -1587,7 +1587,14 @@ end
 
 @inline (op::_CovCacheCFEDMFPointOp)(idx, _) =
     _cov_cache_cf_edmf_point!(
-        op.sw, op.out_fv, op.yc_fv, op.env_fv, op.grad_fv, op.geom_fv, op.col, idx[1],
+        op.sw,
+        op.out_fv,
+        op.yc_fv,
+        op.env_fv,
+        op.grad_fv,
+        op.geom_fv,
+        op.col,
+        Int(idx[1]),
     )
 
 function (sw::CovCacheCloudFractionEDMFColumnSweep{
@@ -1662,7 +1669,7 @@ function (sw::CovCacheCloudFractionEDMFColumnSweep{
         ᶜlg_fv = Fields.field_values(geom.ᶜlg),
         ᶜΔz_fv = Fields.field_values(geom.ᶜΔz),
     )
-    col = (;
+    col = @inbounds (;
         nc = Spaces.nlevels(axes(o.ᶜbuoygrad)),
         z_sfc = Fields.field_values(geom.z_sfc)[],
         ustar = Fields.field_values(geom.sfc_conditions.ustar)[],
@@ -1897,6 +1904,165 @@ end
     end
 end
 
+@noinline function _launch_cov_cache_cf_edmf!(
+    ::Val{UseCurv},
+    vτ_mp,
+    ::Val{Flags},
+    vthermo,
+    turbconv_model,
+    microphysics_model,
+    turbconv_params,
+    sf_params,
+    scale_blending_method,
+    σ_floor,
+    scalars,
+    out,
+    Yc,
+    env_in,
+    grad_in,
+    geom_in,
+) where {UseCurv, Flags}
+    (
+        uses_hgrad,
+        has_tke,
+        diag_corr,
+        has_disp,
+        has_α,
+        is_0m,
+        use_updraft_α,
+        has_sgs_moments,
+        has_pf,
+        has_cf0,
+        is_noneq,
+        is_quad,
+    ) = Flags
+    FT = typeof(scalars.vkc)
+    sw = CovCacheCloudFractionEDMFColumnSweep{
+        uses_hgrad,
+        has_tke,
+        diag_corr,
+        has_disp,
+        UseCurv,
+        has_α,
+        is_0m,
+        use_updraft_α,
+        has_sgs_moments,
+        has_pf,
+        has_cf0,
+        is_noneq,
+        is_quad,
+        typeof(vthermo),
+        typeof(vτ_mp),
+        typeof(turbconv_model),
+        typeof(microphysics_model),
+        typeof(turbconv_params),
+        typeof(sf_params),
+        typeof(scale_blending_method),
+        typeof(σ_floor),
+        FT,
+    }(
+        vthermo,
+        vτ_mp,
+        turbconv_model,
+        microphysics_model,
+        turbconv_params,
+        sf_params,
+        scale_blending_method,
+        σ_floor,
+        scalars.vkc,
+        scalars.c_σ,
+        scalars.r_v_θ,
+        scalars.ℓ_h_q²,
+        scalars.ℓ_h_θ²,
+        scalars.ℓ_h_θq,
+        scalars.κ_b_per_tke,
+        scalars.c_b_κ_min,
+        scalars.τ_0,
+        scalars.r_max,
+        scalars.corr_fallback,
+        scalars.A,
+        scalars.w_eq,
+        scalars.q_min,
+        scalars.c_d,
+        scalars.c_trunc,
+        scalars.Δx_h_filter,
+        scalars.c_u,
+        scalars.α_min,
+        scalars.α_max,
+        scalars.f_decay,
+    )
+    DataLayouts.foreach_column(
+        sw,
+        out,
+        Yc,
+        env_in,
+        grad_in,
+        geom_in;
+        shmem = Val(0),
+    )
+    return nothing
+end
+
+@inline function _dispatch_cov_cache_cf_edmf!(
+    use_curvature::Bool,
+    vτ_mp,
+    flags,
+    vthermo,
+    turbconv_model,
+    microphysics_model,
+    turbconv_params,
+    sf_params,
+    scale_blending_method,
+    σ_floor,
+    scalars,
+    out,
+    Yc,
+    env_in,
+    grad_in,
+    geom_in,
+)
+    if use_curvature
+        _launch_cov_cache_cf_edmf!(
+            Val(true),
+            vτ_mp,
+            flags,
+            vthermo,
+            turbconv_model,
+            microphysics_model,
+            turbconv_params,
+            sf_params,
+            scale_blending_method,
+            σ_floor,
+            scalars,
+            out,
+            Yc,
+            env_in,
+            grad_in,
+            geom_in,
+        )
+    else
+        _launch_cov_cache_cf_edmf!(
+            Val(false),
+            vτ_mp,
+            flags,
+            vthermo,
+            turbconv_model,
+            microphysics_model,
+            turbconv_params,
+            sf_params,
+            scale_blending_method,
+            σ_floor,
+            scalars,
+            out,
+            Yc,
+            env_in,
+            grad_in,
+            geom_in,
+        )
+    end
+    return nothing
+end
+
 function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
     Y, p, thermo_params, ::Val{uses_hgrad},
 ) where {uses_hgrad}
@@ -1961,14 +2127,6 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
     uses_1m_times =
         microphysics_model isa NonEquilibriumMicrophysics1M &&
         CAP.sgs_cloud_species_constant_timescales(p.params) <= 0
-    τ_mp_raw = if uses_1m_times
-        CAP.cloud_formation_1m_params(p.params)
-    else
-        ConstantMicrophysicsTimescales(
-            FT(CAP.condensation_evaporation_timescale(p.params)),
-            FT(CAP.sublimation_deposition_timescale(p.params)),
-        )
-    end
     w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
     q_min = FT(TD.Parameters.q_min(thermo_params))
     c_d = FT(tke_dissipation_coefficient(turbconv_params))
@@ -1983,7 +2141,6 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
 
     dev = ClimaComms.device(Y.c)
     vthermo = _fold(dev, thermo_params)
-    vτ_mp = _fold(dev, τ_mp_raw)
 
     (;
         ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜcorr_Tq, ᶜcloud_fraction,
@@ -2022,22 +2179,7 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
         z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half),
         sfc_conditions,
     )
-    sw = CovCacheCloudFractionEDMFColumnSweep{
-        uses_hgrad, has_tke, diag_corr, has_disp, use_curvature, has_α,
-        is_0m, use_updraft_α, has_sgs_moments, has_pf, has_cf0, is_noneq, is_quad,
-        typeof(vthermo), typeof(vτ_mp), typeof(turbconv_model),
-        typeof(microphysics_model),
-        typeof(turbconv_params), typeof(sf_params), typeof(scale_blending_method),
-        typeof(σ_floor), FT,
-    }(
-        vthermo,
-        vτ_mp,
-        turbconv_model,
-        microphysics_model,
-        turbconv_params,
-        sf_params,
-        scale_blending_method,
-        σ_floor,
+    scalars = (;
         vkc,
         c_σ,
         r_v_θ,
@@ -2060,10 +2202,67 @@ function _set_covariance_cache_and_cloud_fraction_fused_edmf!(
         α_max,
         f_decay,
     )
-    DataLayouts.foreach_column(
-        sw, out, Y.c, env_in, grad_in, geom_in;
-        shmem = Val(0),
-    )
+    flags = Val((
+        uses_hgrad,
+        has_tke,
+        diag_corr,
+        has_disp,
+        has_α,
+        is_0m,
+        use_updraft_α,
+        has_sgs_moments,
+        has_pf,
+        has_cf0,
+        is_noneq,
+        is_quad,
+    ))
+    if uses_1m_times
+        vτ_mp = _fold(dev, CAP.cloud_formation_1m_params(p.params))
+        _dispatch_cov_cache_cf_edmf!(
+            use_curvature,
+            vτ_mp,
+            flags,
+            vthermo,
+            turbconv_model,
+            microphysics_model,
+            turbconv_params,
+            sf_params,
+            scale_blending_method,
+            σ_floor,
+            scalars,
+            out,
+            Y.c,
+            env_in,
+            grad_in,
+            geom_in,
+        )
+    else
+        vτ_mp = _fold(
+            dev,
+            ConstantMicrophysicsTimescales(
+                FT(CAP.condensation_evaporation_timescale(p.params)),
+                FT(CAP.sublimation_deposition_timescale(p.params)),
+            ),
+        )
+        _dispatch_cov_cache_cf_edmf!(
+            use_curvature,
+            vτ_mp,
+            flags,
+            vthermo,
+            turbconv_model,
+            microphysics_model,
+            turbconv_params,
+            sf_params,
+            scale_blending_method,
+            σ_floor,
+            scalars,
+            out,
+            Y.c,
+            env_in,
+            grad_in,
+            geom_in,
+        )
+    end
     if has_pf
         if dev isa ClimaComms.CUDADevice
             _precip_fraction_sweep!(

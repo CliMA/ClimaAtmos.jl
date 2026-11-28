@@ -197,22 +197,6 @@ upper levels.
     return α_proj
 end
 
-@inline function _project_and_integrate_mass_flux_column!(
-    ᶠF_col,
-    ᶜD_raw_col,
-    ᶜρ_new_col,
-    ᶜlg_col,
-    ᶠlg_col,
-)
-    return _project_and_integrate_mass_flux_column_j!(
-        ᶠF_col,
-        ᶜD_raw_col,
-        ᶜρ_new_col,
-        ᶜlg_col.J,
-        ᶠlg_col.J,
-    )
-end
-
 struct _StageEnergyFluxColumnAccum{FT} <: ColumnSweep
     w_i::FT
 end
@@ -458,11 +442,11 @@ const _UPW_THIRD_ORDER = Int8(3)
     end
 end
 
-# Project `ᶜD_raw_col` onto `ᶠF̃_col`, cache face invariants `(JF, c_f, Δt * JF * w_C)`
-# and pre-transport density `ρ⁰`, and factor the implicit donor-cell M-matrix
-# `M = diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)` into `inv_u_fv`. Each `J_k`-weighted
-# column sum equals `J_k ρ^{n+1}_k > 0`, making `M` a strict nonsingular M-matrix
-# with positive Thomas upper pivots `u_curr`.
+# Project `ᶜD_raw_col` onto `ᶠF̃_col`, cache face invariants
+# `(JF, c_f, Δt * JF * w_C)` and pre-transport density `ρ⁰`, and factor the
+# implicit donor-cell M-matrix `M = diag(ρ^{n+1}) + Δt ∂_z^{up}(F̃)` into
+# `inv_u_fv`. Each `J_k`-weighted column sum equals `J_k ρ^{n+1}_k > 0`, making
+# `M` a strict nonsingular M-matrix with positive Thomas upper pivots `u_curr`.
 @inline function _factor_column_invariants!(
     ᶠF̃_col,
     inv_u_fv,
@@ -1292,8 +1276,9 @@ column pass.
                 nz,
             )
         else
-            # `_UPW_VANLEER`: cache `(χL, Φ)` per species in pass 1 while narrowing
-            # `α_fv` across `{χ_e, q_tot, q_c, q_vap}`, then apply in pass 2.
+            # `_UPW_VANLEER`: cache `(χL, Φ)` per species in pass 1 while
+            # narrowing `α_fv` across `{χ_e, q_tot, q_c, q_vap}`, then apply in
+            # pass 2.
             Φ_e_fv = Fields.field_values(ᶠΦ_e_col)
             χL_qt_fv = Fields.field_values(ᶜχL_qt_col)
             Φ_qt_fv = Fields.field_values(ᶠΦ_qt_col)

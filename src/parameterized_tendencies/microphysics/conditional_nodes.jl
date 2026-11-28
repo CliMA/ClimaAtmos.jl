@@ -87,7 +87,8 @@ end
 
 Upper tail probability `Q(z) = 1 − Φ(z)` of the standard normal with
 relative accuracy in the tail: for `z ≥ 2` the Laplace continued fraction
-`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms
+`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` evaluated to 20 levels in
+`Float32` (relative error below `4 × 10⁻⁷`) and 32 levels in `Float64`
 (`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), otherwise
 `normal_cdf(−z)`, whose absolute error of `7.5 × 10⁻⁸` is a relative error
 below `4 × 10⁻⁶` there. The conditional moments of a tail interval are

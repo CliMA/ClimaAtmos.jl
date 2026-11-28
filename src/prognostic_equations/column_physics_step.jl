@@ -383,7 +383,8 @@ keeps the physical horizontal velocity fixed.
                 u_sq = u1_old * u1_old + u2_old * u2_old
                 dot_fu = f_old_1 * u1_old + f_old_2 * u2_old
                 if u_sq > ε && dot_fu < zero(FT)
-                    # Implicit Robin drag linearization: f_new = f_rem - γ * u_new[1]
+                    # Implicit Robin drag linearization:
+                    # `f_new = f_rem - γ * u_new[1]`.
                     γ_drag = -dot_fu / u_sq
                     f_rem_1 = f_old_1 + γ_drag * u1_old
                     f_rem_2 = f_old_2 + γ_drag * u2_old
@@ -529,7 +530,8 @@ keeps the physical horizontal velocity fixed.
                 G_bot_w = G_top_w
             end
             if nf > 1
-                # `Δu₃` per interior face, kept in `sol2` for the `uₕ` update below.
+                # `Δu₃` per interior face, kept in `sol2` for the `uₕ` update
+                # below.
                 for j in (nf - 1):-1:1
                     f = j + 1
                     x_w_next = rhs1_fv[j] - upper_fv[j] * x_w_next
@@ -2325,20 +2327,6 @@ function _solve_and_commit_edmf_var!(
     )
     return nothing
 end
-
-# Face mean of the enthalpy of a water phase in excess of dry air,
-# `h(T) - h_d(T)`, between the cells at `T_lo` and `T_hi`; `enthalpy` is
-# `TD.enthalpy_vapor`, `TD.enthalpy_liquid`, or `TD.enthalpy_ice`.
-@inline _face_mean_enthalpy_excess(enthalpy::F, tps, T_lo, T_hi) where {F} =
-    (
-        (enthalpy(tps, T_lo) - TD.enthalpy_dry(tps, T_lo)) +
-        (enthalpy(tps, T_hi) - TD.enthalpy_dry(tps, T_hi))
-    ) / 2
-
-# Environment specific value `(ρχ - ρa¹ χ¹⁺) / ρa⁰` as the residual of the grid
-# mean and the non-negative updraft value, with `ρa⁰` floored at `ε`.
-@inline _env_residual_value(ρχ, ρa1, χ1, ρa0, ε) =
-    (ρχ - ρa1 * max(zero(χ1), χ1)) / max(ρa0, ε)
 
 # Contravariant draft velocity `u³¹ = uₕ³ + g³³ u₃¹` at face `f`, built from
 # the same `uₕ³` as the grid-mean `u³`, so that `u³¹ - u³ = g³³ (u₃¹ - u₃)`
@@ -4192,7 +4180,6 @@ function (w::EDMFTwoStreamScalarSweep{
     )
 
     ᶜp_fv = Fields.field_values(pre_col.ᶜp)
-    ᶜT0_fv = Fields.field_values(edmf_col.ᶜT0)
     ᶜT1_fv = Fields.field_values(pre_col.ᶜT1)
     jf_extra_fv = Fields.field_values(c123_f.:(3))
 
@@ -4837,7 +4824,7 @@ end
     uv_f = scratch_v_col.uv_f.components.data
     c123_f = scratch_v_col.c123_f.components.data
 
-    # `uv_f.:(1)` preserves `W1_rel_fv` written by `EDMFTwoStreamColumnSweep`.
+    # `uv_f.:(1)` preserves `W1_rel_fv` written by `EDMFUpdraftPicardSweep`.
     α_face_fv = Fields.field_values(uv_f.:(1))
     Φ1_fv = Fields.field_values(uv_f.:(2))
     G0_fv = Fields.field_values(uv_f.:(5))
@@ -5676,8 +5663,8 @@ end
                 zero(FT)
             end
 
-            # Split buoyancy gradient into positive production (RHS) and negative
-            # buoyancy destruction (Patankar sink on diagonal) across every cell.
+            # Split buoyancy gradient into positive production (RHS) and
+            # negative buoyancy destruction (Patankar sink on diagonal).
             bg_top = ᶠbg_fv[k + 1]
             K_h_top = ᶠK_h_fv[k + 1]
             P_buoy_top = K_h_top * max(zero(FT), -bg_top)
