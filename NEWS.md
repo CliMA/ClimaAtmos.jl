@@ -123,6 +123,16 @@ main
   precipitation (and the slab ocean's share of it) is sampled by the first
   `cache!` call of each implicit stage, so the column-plus-slab water budget
   closes.
+- ![][badge-🚀performance] ![][badge-💥breaking] The parameter structs, and the
+  model structs with float parameters (e.g., hyperdiffusion, sponges, and
+  topography), are defined with `ClimaParams.@params`. In the default "type"
+  mode of ClimaParams, they are singletons that hold their values in a type
+  parameter, so GPU kernels do not allocate any registers or parameter memory
+  for them. Read parameter values with `getproperty`, since `getfield` returns
+  `nothing` in "type" mode. Workflows that construct many parameter sets should
+  set the `CLIMA_PARAMS_MODE` preference of ClimaParams to `"bits"`, which keeps
+  parameter values in struct fields and avoids recompilation for every new set
+  of values.
 
 0.43.0
 ------

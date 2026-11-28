@@ -724,7 +724,7 @@ summary_string(x, depth) =
         field =
             x isa Tuple ? ':' * string(i) : string(fieldname(typeof(x), i))
         ('\n' * "  "^(depth + 1) * field * " = ") *
-        (summary_string(getfield(x, i), depth + 1) * ',')
+        (summary_string(getproperty(x, fieldname(typeof(x), i)), depth + 1) * ',')
     end *
     ('\n' * "  "^depth * ')')
 

@@ -272,7 +272,10 @@ end
         α_SO4 = FT(0.18),
         α_q_liq = FT(0.09),
     )
-    with_α(k) = merge(cmc, (; aml = merge(aml, map(α -> k * α, α_active))))
+    with_α(k) = CA.Parameters.CloudParameters(;
+        (name => getproperty(cmc, name) for name in propertynames(cmc) if name != :aml)...,
+        aml = merge(aml, map(α -> k * α, α_active)),
+    )
     cmc_active = with_α(1)
     @test @inferred(
         RRTMGPI.ml_N_cloud_liquid_droplets(

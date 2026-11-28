@@ -61,7 +61,7 @@ they are treated as scalars inside `@.` expressions.
   - `grav`: Gravitational acceleration [m/s²].
   - `MSLP`: Mean sea-level pressure, used as the reference surface pressure [Pa].
 """
-struct HeldSuarezForcingParams{FT}
+CP.@params struct HeldSuarezForcingParams{FT}
     ΔT_y::FT
     day::FT
     σ_b::FT

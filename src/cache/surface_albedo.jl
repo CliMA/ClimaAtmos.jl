@@ -35,7 +35,7 @@ while the YAML configuration path constructs it from the ClimaParams parameter
 
   - `α`: Surface albedo for both direct and diffuse shortwave radiation [-].
 """
-@kwdef struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
+CP.@params struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
     α::FT
 end
 
@@ -58,7 +58,8 @@ surface, `α = α_s + (1 - α_s) R_sub`. Whitecap foam reflectance is omitted.
     as the fraction of the light transmitted into the ocean that returns to the
     atmosphere; broadband values for the open ocean are about 0.005–0.01 [-].
   - `wave_slope`: Function of wind speed returning the mean wave-slope distribution
-    width of the Cox-Munk model (J11 eq. 2) [-].
+    width of the Cox-Munk model (J11 eq. 2) [-]. It must be a bits type (e.g., a
+    function without captured variables), unless `CLIMA_PARAMS_MODE` is `"bits"`.
 
 # Constructor
 
@@ -66,7 +67,7 @@ The keyword constructor supplies the J11 regression coefficients and
 `R_sub = 0` as defaults, so `RegressionFunctionAlbedo{FT}()` is the
 standard usage.
 """
-struct RegressionFunctionAlbedo{FT, F <: Function} <: SurfaceAlbedoModel
+CP.@params struct RegressionFunctionAlbedo{FT, F <: Function} <: SurfaceAlbedoModel
     n::FT                           # relative refractive index of water and air (n = n_w/n_a) TODO: f(wavelength) for a spectrally dependent scheme
     n0::FT                          # refractive index of water for visible light
     p::SA.SVector{11, FT}           # regression coefficients of J11 for eq. 4

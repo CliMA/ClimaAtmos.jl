@@ -14,7 +14,7 @@ import Thermodynamics as TD
         @test params.thermodynamics_params isa CAP.TD.Parameters.ThermodynamicsParameters
         @test params.turbconv_params isa CAP.TurbulenceConvectionParameters
         @test params.sgs_quadrature_params isa CAP.SGSQuadratureParameters
-        @test params.microphysics_cloud_params isa NamedTuple
+        @test params.microphysics_cloud_params isa CAP.CloudParameters
         @test params.microphysics_cloud_params.liquid isa CAP.CM.Parameters.CloudLiquid
 
         # Verify physical constants (sanity check for Earth, would need to be changed for other planets)
@@ -24,6 +24,36 @@ import Thermodynamics as TD
         @test CAP.planet_radius(params) ≈ FT(6.371e6) rtol = 0.01
         # Gravity ~ 9.81 m/s^2
         @test CAP.grav(params) ≈ FT(9.81) rtol = 0.01
+    end
+end
+
+@testset "Parameter structs defined with ClimaParams.@params" begin
+    # The printed form of a struct, evaluated where ClimaAtmos is loaded
+    reconstructed(x) = Base.eval(
+        Module(),
+        Expr(:toplevel, :(import ClimaAtmos), Meta.parse(sprint(CA.show_value, x))),
+    )
+    for FT in (Float32, Float64)
+        params = CA.ClimaAtmosParameters(FT)
+        turbconv_model = CA.PrognosticEDMFX(; area_fraction = FT(1e-5))
+        vertical_diffusion = CA.DecayWithHeightDiffusion{FT}(;
+            disable_momentum_vertical_diffusion = false,
+            H = FT(8000),
+            D₀ = FT(5),
+        )
+        structs = (
+            params,
+            CAP.microphysics_cloud_params(params),
+            CA.sgs_microphysics_options(params),
+            CA.cloud_fraction_floor(params),
+            turbconv_model,
+            vertical_diffusion,
+        )
+        @test all(x -> Base.issingletontype(typeof(x)), structs) ==
+              (CP.CLIMA_PARAMS_MODE == "type")
+        @test turbconv_model.a_half == FT(1e-5)
+        @test reconstructed(turbconv_model) == turbconv_model
+        @test reconstructed(vertical_diffusion) == vertical_diffusion
     end
 end
 

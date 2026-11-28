@@ -94,6 +94,11 @@ jobs:
         with:
           prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
           hash: ${{ hashFiles('Project.toml') }}
+      # Temporary: remove when the parameter packages with `@params` are
+      # released. Julia 1.10 ignores the [sources] of Project.toml.
+      - if: matrix.version == '1.10'
+        run: using Pkg; Pkg.add([PackageSpec(; url = "https://github.com/CliMA/" * name * ".jl", rev) for (name, rev) in (("Thermodynamics", "dy/params_macro"), ("SurfaceFluxes", "dy/params_macro"))])
+        shell: julia --color=yes --project=. {0}
       - uses: julia-actions/julia-buildpkg@v1
       # ClimaCore v1.0.9 allocates in a zero-allocation test with bounds checking on.
       - run: julia --project -e 'using Pkg; Pkg.pin(name = "ClimaCore", version = "1.0.8")'

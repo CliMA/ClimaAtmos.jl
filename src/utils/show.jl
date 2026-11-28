@@ -20,6 +20,56 @@
 ### ----------------------- ###
 
 """
+    is_params_type(T)
+
+Whether `T` is a struct defined with `ClimaParams.@params` in its "type" mode,
+whose fields are all `nothing` and whose last type parameter holds their values.
+"""
+is_params_type(T::DataType) =
+    fieldcount(T) > 0 && !isempty(T.parameters) && T.parameters[end] isa Tuple &&
+    all(==(Nothing), fieldtypes(T))
+is_params_type(_) = false
+
+"""
+    print_type(io::IO, T)
+
+Print the type `T` to `io` without the type parameters that hold the values of
+the structs defined with `ClimaParams.@params` (see `is_params_type`).
+"""
+function print_type(io::IO, T)
+    T isa DataType && !isempty(T.parameters) || return show(io, T)
+    params = is_params_type(T) ? T.parameters[1:(end - 1)] : T.parameters
+    show(io, T.name.wrapper)
+    isempty(params) && return
+    print(io, "{")
+    for (i, param) in enumerate(params)
+        i > 1 && print(io, ", ")
+        param isa Type ? print_type(io, param) : show(io, param)
+    end
+    print(io, "}")
+end
+
+"""
+    show_value(io::IO, x)
+
+Show `x` with `show`, unless it is a struct defined with `ClimaParams.@params`,
+which is printed as a call of its keyword constructor with the type parameters
+that do not hold its values (e.g., `ClimaAtmos.ViscousSponge{Float32}(zd = ...)`),
+so that the output reconstructs it in either `CLIMA_PARAMS_MODE`.
+"""
+function show_value(io::IO, x)
+    is_params_type(typeof(x)) || return show(io, x)
+    print_type(io, typeof(x))
+    print(io, "(")
+    for (i, name) in enumerate(fieldnames(typeof(x)))
+        i > 1 && print(io, ", ")
+        print(io, name, " = ")
+        show_value(io, getproperty(x, name))
+    end
+    print(io, ")")
+end
+
+"""
     verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 
 Print the type name of `x` to `io`, followed by one line per field.
@@ -50,19 +100,22 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
     compact = get(io, :compact, false)::Bool
     typename = typeof(x).name.name  # name without module prefix
     keys = fieldnames(typeof(x))
-    vals = [getfield(x, k) for k in keys]
+    vals = [getproperty(x, k) for k in keys]
     print(io, "$(typename)")
     if compact
         print(io, "(")
         for (k, v) in zip(keys, vals)
-            print(io, "$k = ", v, ",")
+            print(io, "$k = ")
+            show_value(io, v)
+            print(io, ",")
             k == keys[end] || print(io, " ")
         end
         print(io, ")")
     else
         for (k, v) in zip(keys, vals)
             prefix = k == keys[end] ? "└─ " : "├─ "
-            print(io, "\n  " * prefix * "$k = ", v)
+            print(io, "\n  " * prefix * "$k = ")
+            show_value(io, v)
         end
     end
 end
@@ -84,7 +137,7 @@ by its fields in parentheses.
 # Keyword Arguments
 
   - `with_kwargs = true`: Print the fields as keyword arguments, as required by
-    structs defined with `@kwdef`.
+    structs defined with `@kwdef` or `ClimaParams.@params`.
   - `skip_fields_by_value = ()`: Values whose fields are omitted. Because the
     output must still reconstruct an equivalent instance, list only values that
     are the corresponding fields' defaults.
@@ -101,7 +154,7 @@ function parseable_show_with_fields_no_type_header(io::IO, x;
 )
     typename = typeof(x).name.wrapper  # name with module prefix, e.g. ClimaAtmos.QuadratureCloud
     keys = fieldnames(typeof(x))
-    vals = [getfield(x, k) for k in keys]
+    vals = [getproperty(x, k) for k in keys]
     show(io, typename)
     print(io, "(")
     printed_first_arg = false
@@ -109,7 +162,7 @@ function parseable_show_with_fields_no_type_header(io::IO, x;
         v ∈ skip_fields_by_value && continue
         printed_first_arg && print(io, ", ")
         with_kwargs && print(io, "$k = ")
-        show(io, v)
+        show_value(io, v)
         printed_first_arg = true
     end
     print(io, ")")
@@ -156,6 +209,12 @@ Base.show(io::IO, x::AtmosWater) =
     parseable_show_with_fields_no_type_header(io, x; skip_fields_by_value = (nothing,))
 Base.show(io::IO, x::AtmosRadiation) =
     parseable_show_with_fields_no_type_header(io, x; skip_fields_by_value = (nothing,))
+function Base.show(io::IO, x::PrognosticEDMFX{N, TKE}) where {N, TKE}
+    show(io, PrognosticEDMFX)
+    print(io, "(n_updrafts = $N, prognostic_tke = $TKE, area_fraction = ")
+    show(io, x.a_half)
+    print(io, ")")
+end
 Base.show(io::IO, x::AtmosTurbconv) = parseable_show_with_fields_no_type_header(
     io, x; skip_fields_by_value = (nothing, Explicit()),
 )
@@ -173,7 +232,7 @@ function Base.show(io::IO, x::AtmosModel)
         v === nothing && continue
         printed_first_arg && print(io, ", ")
         print(io, "$k = ")
-        show(io, v)
+        show_value(io, v)
         printed_first_arg = true
     end
     print(io, ")")
@@ -193,7 +252,8 @@ function Base.show(io::IO, ::MIME"text/plain", model::AtmosModel)
     print(io, "AtmosModel")
     for (i, (k, v)) in enumerate(entries)
         prefix = i == length(entries) ? "└─ " : "├─ "
-        print(io, "\n  " * prefix * "$k = ", v)
+        print(io, "\n  " * prefix * "$k = ")
+        v isa Union{AbstractString, Symbol} ? print(io, v) : show_value(io, v)
     end
 end
 
@@ -258,7 +318,7 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
         prop = getproperty(numerics, pn)
         # Most numerics options are encoded in the type, but the `Bool` switches
         # carry their setting in the value, so print that instead.
-        shown = prop isa Bool ? prop : typeof(prop)
+        shown = prop isa Bool ? prop : sprint(print_type, typeof(prop))
         s = string(
             "  ", # needed for some reason
             getproperty(bufs, pn),
@@ -275,8 +335,8 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     end
 end
 
-summary_type(prop) = typeof(prop)
-summary_type(::NonEquilibriumMicrophysics1M) = NonEquilibriumMicrophysics1M
+summary_type(prop) = sprint(print_type, typeof(prop))
+summary_type(::NonEquilibriumMicrophysics1M) = string(NonEquilibriumMicrophysics1M)
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))
